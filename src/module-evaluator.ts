@@ -103,8 +103,9 @@ export class ModuleEvaluator {
     const pass = results.filter(r => r.status === 'pass').length;
     const fail = results.filter(r => r.status === 'fail').length;
     const manual = results.filter(r => r.status === 'manual').length;
-    
-    return `${pass} passed, ${fail} failed, ${manual} require manual review`;
+    const notApplicable = results.filter(r => r.status === 'not_applicable').length;
+
+    return `${pass} passed, ${fail} failed, ${manual} require manual review, ${notApplicable} not applicable`;
   }
 
   /**

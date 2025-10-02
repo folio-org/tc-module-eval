@@ -1,6 +1,6 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { BaseSectionEvaluator } from './base/section-evaluator';
+import { BaseSectionEvaluator } from '../base/section-evaluator';
 import { CriterionResult, EvaluationStatus, CriterionFunction } from '../../types';
 import { ADMINISTRATIVE_CRITERIA } from '../../criteria-definitions';
 

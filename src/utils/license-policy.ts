@@ -23,6 +23,7 @@ import { LicenseCategoriesConfig, SpecialExceptionsConfig, LicenseVariationsConf
 export enum LicenseCategory {
   A = 'A', // Compatible licenses
   B = 'B', // Conditional licenses (require labeling)
+  B_WCL = 'B-WCL', // Conditional licenses with weak copyleft (require labeling)
   X = 'X'  // Prohibited licenses
 }
 

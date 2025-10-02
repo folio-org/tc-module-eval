@@ -150,6 +150,7 @@ export class ReportGenerator {
         .stat-card.pass { border-left-color: #28a745; }
         .stat-card.fail { border-left-color: #dc3545; }
         .stat-card.manual { border-left-color: #ffc107; }
+        .stat-card.not_applicable { border-left-color: #6c757d; }
         
         .stat-number {
             font-size: 2rem;
@@ -190,6 +191,7 @@ export class ReportGenerator {
         .criterion-header.pass { background: #d4edda; color: #155724; }
         .criterion-header.fail { background: #f8d7da; color: #721c24; }
         .criterion-header.manual { background: #fff3cd; color: #856404; }
+        .criterion-header.not_applicable { background: #e9ecef; color: #495057; }
         
         .status-badge {
             padding: 4px 8px;
@@ -202,6 +204,7 @@ export class ReportGenerator {
         .status-badge.pass { background: #28a745; color: white; }
         .status-badge.fail { background: #dc3545; color: white; }
         .status-badge.manual { background: #ffc107; color: #212529; }
+        .status-badge.not_applicable { background: #6c757d; color: white; }
         
         .criterion-content {
             padding: 15px;
@@ -274,6 +277,10 @@ export class ReportGenerator {
                 <div class="stat-number">${stats.manual}</div>
                 <div class="stat-label">Manual Review</div>
             </div>
+            <div class="stat-card not_applicable">
+                <div class="stat-number">${stats.notApplicable}</div>
+                <div class="stat-label">Not Applicable</div>
+            </div>
             <div class="stat-card">
                 <div class="stat-number">${stats.total}</div>
                 <div class="stat-label">Total Criteria</div>
@@ -322,15 +329,17 @@ export class ReportGenerator {
    * @param result Evaluation result
    * @returns Stats object
    */
-  private calculateStats(result: EvaluationResult): { pass: number; fail: number; manual: number; total: number } {
+  private calculateStats(result: EvaluationResult): { pass: number; fail: number; manual: number; notApplicable: number; total: number } {
     const pass = result.criteria.filter(c => c.status === EvaluationStatus.PASS).length;
     const fail = result.criteria.filter(c => c.status === EvaluationStatus.FAIL).length;
     const manual = result.criteria.filter(c => c.status === EvaluationStatus.MANUAL).length;
-    
+    const notApplicable = result.criteria.filter(c => c.status === EvaluationStatus.NOT_APPLICABLE).length;
+
     return {
       pass,
       fail,
       manual,
+      notApplicable,
       total: result.criteria.length
     };
   }

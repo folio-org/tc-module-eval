@@ -94,7 +94,7 @@ describe('JavaEvaluator', () => {
         expect(result).toHaveProperty('criterionId');
         expect(result).toHaveProperty('status');
         expect(result).toHaveProperty('evidence');
-        expect(['pass', 'fail', 'manual']).toContain(result.status);
+        expect(['pass', 'fail', 'manual', 'not_applicable']).toContain(result.status);
       });
     });
 

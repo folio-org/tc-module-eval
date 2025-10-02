@@ -142,6 +142,7 @@ Each criterion is automatically assigned:
 
 - Node.js 18.x or later
 - Yarn 1.22.x or later
+- Maven 3.x or later (required for evaluating Java modules)
 
 ### Local Development Setup
 

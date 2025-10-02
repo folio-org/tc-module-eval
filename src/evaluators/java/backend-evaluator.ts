@@ -1,4 +1,4 @@
-import { BaseSectionEvaluator } from './base/section-evaluator';
+import { BaseSectionEvaluator } from '../base/section-evaluator';
 import { CriterionResult, CriterionFunction } from '../../types';
 import { BACKEND_CRITERIA } from '../../criteria-definitions';
 
@@ -49,70 +49,70 @@ export class BackendEvaluator extends BaseSectionEvaluator {
   }
 
   // STUB IMPLEMENTATIONS - Framework provides structure but evaluation logic not yet implemented
-  // All methods below currently return MANUAL status and require detailed implementation
+  // All methods below currently return NOT_APPLICABLE status and require detailed implementation
   // Future implementation will analyze code, APIs, and configurations to determine PASS/FAIL status
 
   private async evaluateB001(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B001', 'API design and RESTful principles - stub implementation');
+    return this.createNotApplicableResult('B001', 'API design and RESTful principles');
   }
 
   private async evaluateB002(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B002', 'Database design and schema management - stub implementation');
+    return this.createNotApplicableResult('B002', 'Database design and schema management');
   }
 
   private async evaluateB003(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B003', 'Error handling and validation - stub implementation');
+    return this.createNotApplicableResult('B003', 'Error handling and validation');
   }
 
   private async evaluateB004(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B004', 'Authentication and authorization - stub implementation');
+    return this.createNotApplicableResult('B004', 'Authentication and authorization');
   }
 
   private async evaluateB005(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B005', 'Data persistence and transactions - stub implementation');
+    return this.createNotApplicableResult('B005', 'Data persistence and transactions');
   }
 
   private async evaluateB006(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B006', 'Caching strategy - stub implementation');
+    return this.createNotApplicableResult('B006', 'Caching strategy');
   }
 
   private async evaluateB007(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B007', 'Event-driven architecture - stub implementation');
+    return this.createNotApplicableResult('B007', 'Event-driven architecture');
   }
 
   private async evaluateB008(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B008', 'Microservice architecture compliance - stub implementation');
+    return this.createNotApplicableResult('B008', 'Microservice architecture compliance');
   }
 
   private async evaluateB009(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B009', 'Health checks and monitoring endpoints - stub implementation');
+    return this.createNotApplicableResult('B009', 'Health checks and monitoring endpoints');
   }
 
   private async evaluateB010(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B010', 'Scalability and load handling - stub implementation');
+    return this.createNotApplicableResult('B010', 'Scalability and load handling');
   }
 
   private async evaluateB011(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B011', 'Data migration and backward compatibility - stub implementation');
+    return this.createNotApplicableResult('B011', 'Data migration and backward compatibility');
   }
 
   private async evaluateB012(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B012', 'Environment configuration - stub implementation');
+    return this.createNotApplicableResult('B012', 'Environment configuration');
   }
 
   private async evaluateB013(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B013', 'Dependency injection and IoC - stub implementation');
+    return this.createNotApplicableResult('B013', 'Dependency injection and IoC');
   }
 
   private async evaluateB014(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B014', 'API versioning strategy - stub implementation');
+    return this.createNotApplicableResult('B014', 'API versioning strategy');
   }
 
   private async evaluateB015(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B015', 'Resource management - stub implementation');
+    return this.createNotApplicableResult('B015', 'Resource management');
   }
 
   private async evaluateB016(repoPath: string): Promise<CriterionResult> {
-    return this.createManualReviewResult('B016', 'Integration testing - stub implementation');
+    return this.createNotApplicableResult('B016', 'Integration testing');
   }
 }

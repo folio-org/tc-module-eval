@@ -298,7 +298,10 @@ export function getCriteriaForLanguage(language: string): readonly string[] {
     case 'react':
       return [...ADMINISTRATIVE_CRITERIA, ...SHARED_CRITERIA, ...FRONTEND_CRITERIA];
     default:
-      return SHARED_CRITERIA; // Default to shared criteria for unknown languages
+      throw new Error(
+        `Unsupported language: ${language}. ` +
+        `Supported languages are: java, javascript, typescript, react`
+      );
   }
 }
 

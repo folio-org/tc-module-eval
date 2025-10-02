@@ -10,7 +10,7 @@ export { JavaEvaluator } from './evaluators/java-evaluator';
 export { AdministrativeEvaluator } from './evaluators/java/administrative-evaluator';
 export { SharedEvaluator } from './evaluators/java/shared-evaluator';
 export { BackendEvaluator } from './evaluators/java/backend-evaluator';
-export { BaseSectionEvaluator } from './evaluators/java/base/section-evaluator';
+export { BaseSectionEvaluator } from './evaluators/base/section-evaluator';
 
 // Export types
 export {

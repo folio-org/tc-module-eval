@@ -4,13 +4,15 @@
  * FRAMEWORK USAGE NOTES:
  * - PASS: Criterion automatically verified as meeting requirements
  * - FAIL: Criterion automatically verified as NOT meeting requirements
- * - MANUAL: Requires human review (current default for most stub implementations)
+ * - MANUAL: Requires human review (e.g., errors during evaluation, non-automatable criteria)
+ * - NOT_APPLICABLE: Evaluation logic not yet implemented (stub)
  *
  */
 export enum EvaluationStatus {
   PASS = 'pass',
   FAIL = 'fail',
-  MANUAL = 'manual'
+  MANUAL = 'manual',
+  NOT_APPLICABLE = 'not_applicable'
 }
 
 /**

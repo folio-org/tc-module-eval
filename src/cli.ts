@@ -175,12 +175,14 @@ function printEvaluationSummary(result: EvaluationResult): void {
   const stats = {
     pass: result.criteria.filter(c => c.status === 'pass').length,
     fail: result.criteria.filter(c => c.status === 'fail').length,
-    manual: result.criteria.filter(c => c.status === 'manual').length
+    manual: result.criteria.filter(c => c.status === 'manual').length,
+    notApplicable: result.criteria.filter(c => c.status === 'not_applicable').length
   };
 
   console.log(`   ✅ Passed: ${stats.pass}`);
   console.log(`   ❌ Failed: ${stats.fail}`);
-  console.log(`   ⚠️ Manual Review: ${stats.manual}`);
+  console.log(`   ⚠️  Manual Review: ${stats.manual}`);
+  console.log(`   ⚪ Not Applicable: ${stats.notApplicable}`);
 }
 
 // Handle case where no command is provided
