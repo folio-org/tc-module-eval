@@ -264,11 +264,26 @@ export function checkLicenseCompliance(
           reason: `Unknown license '${license}' - requires manual review`
         });
       } else if (category === LicenseCategory.X) {
-        // Category X - prohibited
-        issues.push({
-          dependency,
-          reason: `License '${license}' is in Category X (prohibited)`
-        });
+        // Category X - prohibited, but check for LGPL special exceptions
+        const isLGPL = license.toLowerCase().includes('lgpl') ||
+                       license.toLowerCase().includes('lesser general public');
+
+        if (isLGPL && isSpecialException(dependency.name)) {
+          // LGPL with special exception - must be documented in README
+          if (!isDocumentedInReadme(dependency, readmeContent)) {
+            issues.push({
+              dependency,
+              reason: `LGPL license '${license}' requires documentation in README (special exception: ${dependency.name})`
+            });
+          }
+          // If documented, it passes - no issue added
+        } else {
+          // All other Category X licenses are prohibited
+          issues.push({
+            dependency,
+            reason: `License '${license}' is in Category X (prohibited)`
+          });
+        }
       } else if (category === LicenseCategory.B) {
         // Category B - requires documentation
         if (!isDocumentedInReadme(dependency, readmeContent)) {

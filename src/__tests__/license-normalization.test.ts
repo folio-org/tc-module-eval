@@ -117,8 +117,8 @@ describe('License Name Normalization', () => {
       // BSD License from mod-search
       expect(getLicenseCategoryNormalized('(BSD-2-Clause) PostgreSQL JDBC Driver (org.postgresql')).toBe(LicenseCategory.A);
 
-      // LGPL License from mod-search (should be Category B)
-      expect(getLicenseCategoryNormalized('(GNU Lesser General Public License, Version 2.1) MARC4J (org.marc4j')).toBe(LicenseCategory.B);
+      // LGPL License from mod-search (should be Category X)
+      expect(getLicenseCategoryNormalized('(GNU Lesser General Public License, Version 2.1) MARC4J (org.marc4j')).toBe(LicenseCategory.X);
     });
 
     // Test exact matches still work
@@ -126,7 +126,7 @@ describe('License Name Normalization', () => {
       expect(getLicenseCategoryNormalized('Apache-2.0')).toBe(LicenseCategory.A);
       expect(getLicenseCategoryNormalized('MIT')).toBe(LicenseCategory.A);
       expect(getLicenseCategoryNormalized('BSD-2-Clause')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('LGPL-2.1')).toBe(LicenseCategory.B);
+      expect(getLicenseCategoryNormalized('LGPL-2.1')).toBe(LicenseCategory.X);
       expect(getLicenseCategoryNormalized('GPL-2.0')).toBe(LicenseCategory.X);
     });
 
@@ -140,7 +140,7 @@ describe('License Name Normalization', () => {
     test('should fall back to normalization when exact match fails', () => {
       expect(getLicenseCategoryNormalized('Apache License Version 2.0')).toBe(LicenseCategory.A);
       expect(getLicenseCategoryNormalized('MIT License')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('GNU Lesser General Public License, Version 2.1')).toBe(LicenseCategory.B);
+      expect(getLicenseCategoryNormalized('GNU Lesser General Public License, Version 2.1')).toBe(LicenseCategory.X);
     });
   });
 
@@ -162,7 +162,7 @@ describe('License Name Normalization', () => {
         LicenseCategory.A,
         LicenseCategory.A, // MIT
         LicenseCategory.A, // BSD
-        LicenseCategory.B  // LGPL
+        LicenseCategory.X  // LGPL
       ];
 
       problematicLicenses.forEach((license, index) => {
