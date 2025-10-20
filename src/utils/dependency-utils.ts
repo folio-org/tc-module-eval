@@ -11,14 +11,15 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseString } from 'xml2js';
-import { Dependency, ComplianceResult, ComplianceIssue } from '../types';
+import { Dependency, ComplianceResult, ComplianceIssue, EvaluationStatus } from '../types';
 import {
   LicenseCategory,
   getLicenseCategory,
   getLicenseCategoryNormalized,
   isSpecialException,
   isLicenseInCategory,
-  getLicensesInCategory
+  getLicensesInCategory,
+  normalizeLicenseName
 } from './license-policy';
 
 const execAsync = promisify(exec);
@@ -251,9 +252,36 @@ export function checkLicenseCompliance(
       });
       continue;
     }
-    
-    // Check each license for the dependency
+
+    // Collect all licenses for this dependency, splitting any dual licenses
+    const allLicenses: string[] = [];
     for (const license of dependency.licenses) {
+      // Split dual licenses (e.g., "Apache-2.0|MIT" -> ["Apache-2.0", "MIT"])
+      const splitLicenses = splitDualLicenses(license);
+      allLicenses.push(...splitLicenses);
+    }
+
+    // If we have multiple licenses (dual-licensed), use OR logic evaluation
+    if (allLicenses.length > 1) {
+      const evaluation = evaluateMultipleLicenses(allLicenses, dependency, readmeContent);
+
+      // Only add an issue if the evaluation failed
+      if (evaluation.status === EvaluationStatus.FAIL) {
+        issues.push({
+          dependency,
+          reason: evaluation.reason
+        });
+      } else if (evaluation.status === EvaluationStatus.MANUAL) {
+        issues.push({
+          dependency,
+          reason: evaluation.reason
+        });
+      }
+      // If PASS, no issue added
+    } else {
+      // Single license - use existing logic
+      const license = allLicenses[0];
+
       // Try normalized license lookup first for better matching
       const category = getLicenseCategoryNormalized(license);
 
@@ -284,7 +312,7 @@ export function checkLicenseCompliance(
             reason: `License '${license}' is in Category X (prohibited)`
           });
         }
-      } else if (category === LicenseCategory.B) {
+      } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
         // Category B - requires documentation
         if (!isDocumentedInReadme(dependency, readmeContent)) {
           // Check for special exceptions
@@ -500,10 +528,16 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
 
   const depName = `${parsed.groupId}:${parsed.artifactId}`;
 
+  // Split dual licenses on pipe separator
+  // Example: "Apache-2.0|MIT" becomes ["Apache-2.0", "MIT"]
+  const licenses = isNonEmptyString(licenseName) && licenseName.includes('|')
+    ? licenseName.split('|').map(l => l.trim()).filter(isNonEmptyString)
+    : licenseName ? [licenseName] : [];
+
   return {
     name: depName,
     version: parsed.version,
-    licenses: [licenseName]
+    licenses
   };
 }
 
@@ -688,4 +722,183 @@ function isDocumentedInReadme(dependency: Dependency, readmeContent: string): bo
 
   // Check for Category B license documentation using dynamic detection
   return isCategoryBLicenseDocumented(dependency, readmeContent);
+}
+
+/**
+ * Split a license string that may contain multiple licenses separated by pipe character
+ * Also normalizes each individual license
+ * @param license - License string that may contain pipe-separated licenses
+ * @returns Array of normalized individual licenses
+ */
+function splitDualLicenses(license: string): string[] {
+  if (!isNonEmptyString(license)) {
+    return [];
+  }
+
+  // Check if license contains pipe separator
+  if (license.includes('|')) {
+    // Split on pipe and normalize each license
+    return license
+      .split('|')
+      .map(l => l.trim())
+      .filter(isNonEmptyString)
+      .map(l => {
+        const normalized = normalizeLicenseName(l);
+        return normalized || l; // Use original if normalization returns empty
+      });
+  }
+
+  // Single license - normalize and return
+  const normalized = normalizeLicenseName(license);
+  return [normalized || license];
+}
+
+/**
+ * Evaluation result for a single license
+ */
+interface LicenseEvaluation {
+  license: string;
+  category?: LicenseCategory;
+  status: EvaluationStatus;
+  reason: string;
+}
+
+/**
+ * Evaluate multiple licenses using OR logic:
+ * - If ANY license is Category A -> PASS
+ * - If ANY Category B is documented -> PASS
+ * - If ANY is unknown but another is Category A -> PASS (known license wins)
+ * - Otherwise follow standard rules
+ *
+ * @param licenses - Array of license names to evaluate
+ * @param dependency - The dependency being evaluated
+ * @param readmeContent - README content for Category B documentation check
+ * @returns Best evaluation result based on OR logic
+ */
+function evaluateMultipleLicenses(
+  licenses: string[],
+  dependency: Dependency,
+  readmeContent: string
+): LicenseEvaluation {
+  if (!Array.isArray(licenses) || licenses.length === 0) {
+    return {
+      license: 'Unknown',
+      status: EvaluationStatus.MANUAL,
+      reason: 'No license information available'
+    };
+  }
+
+  const evaluations: LicenseEvaluation[] = [];
+
+  // Evaluate each license
+  for (const license of licenses) {
+    const category = getLicenseCategoryNormalized(license);
+
+    if (!category) {
+      // Unknown license
+      evaluations.push({
+        license,
+        status: EvaluationStatus.MANUAL,
+        reason: `Unknown license '${license}'`
+      });
+    } else if (category === LicenseCategory.A) {
+      // Category A - automatically passes
+      evaluations.push({
+        license,
+        category,
+        status: EvaluationStatus.PASS,
+        reason: `Category A license '${license}' is approved`
+      });
+    } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
+      // Category B - check documentation
+      // Create a temporary dependency with just this single license for documentation check
+      const singleLicenseDep: Dependency = {
+        ...dependency,
+        licenses: [license]
+      };
+
+      if (isDocumentedInReadme(singleLicenseDep, readmeContent)) {
+        evaluations.push({
+          license,
+          category,
+          status: EvaluationStatus.PASS,
+          reason: `Category B license '${license}' is documented in README`
+        });
+      } else {
+        evaluations.push({
+          license,
+          category,
+          status: EvaluationStatus.FAIL,
+          reason: `Category B license '${license}' not documented in README`
+        });
+      }
+    } else if (category === LicenseCategory.X) {
+      // Category X - check for LGPL special exceptions
+      const isLGPL = license.toLowerCase().includes('lgpl') ||
+                     license.toLowerCase().includes('lesser general public');
+
+      if (isLGPL && isSpecialException(dependency.name)) {
+        // Create a temporary dependency with just this single license for documentation check
+        const singleLicenseDep: Dependency = {
+          ...dependency,
+          licenses: [license]
+        };
+
+        if (isDocumentedInReadme(singleLicenseDep, readmeContent)) {
+          evaluations.push({
+            license,
+            category,
+            status: EvaluationStatus.PASS,
+            reason: `LGPL license '${license}' with special exception is documented`
+          });
+        } else {
+          evaluations.push({
+            license,
+            category,
+            status: EvaluationStatus.FAIL,
+            reason: `LGPL license '${license}' requires documentation (special exception: ${dependency.name})`
+          });
+        }
+      } else {
+        evaluations.push({
+          license,
+          category,
+          status: EvaluationStatus.FAIL,
+          reason: `License '${license}' is in Category X (prohibited)`
+        });
+      }
+    }
+  }
+
+  // Apply OR logic: find the best outcome
+  // Priority: PASS > MANUAL > FAIL
+
+  // If ANY license passes, the dependency passes
+  const passed = evaluations.find(e => e.status === EvaluationStatus.PASS);
+  if (passed) {
+    return passed;
+  }
+
+  // If we have manual review needed and no failures, return manual
+  const hasUnknown = evaluations.some(e => e.status === EvaluationStatus.MANUAL);
+  if (hasUnknown && !evaluations.some(e => e.status === EvaluationStatus.FAIL)) {
+    return {
+      license: licenses.join(' | '),
+      status: EvaluationStatus.MANUAL,
+      reason: `Unknown licenses require manual review: ${evaluations.filter(e => e.status === EvaluationStatus.MANUAL).map(e => e.license).join(', ')}`
+    };
+  }
+
+  // Return the first failure
+  const failed = evaluations.find(e => e.status === EvaluationStatus.FAIL);
+  if (failed) {
+    return failed;
+  }
+
+  // Fallback (shouldn't reach here)
+  return evaluations[0] || {
+    license: licenses.join(' | '),
+    status: EvaluationStatus.MANUAL,
+    reason: 'Unable to evaluate licenses'
+  };
 }
