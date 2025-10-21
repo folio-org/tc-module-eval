@@ -59,6 +59,19 @@ function isValidDependency(dep: Partial<Dependency>): dep is Dependency {
 }
 
 /**
+ * Check if a license string represents an LGPL license
+ * @param license - License name to check
+ * @returns True if license is LGPL variant
+ */
+function isLGPLLicense(license: string): boolean {
+  if (!isNonEmptyString(license)) {
+    return false;
+  }
+  const lower = license.toLowerCase();
+  return lower.includes('lgpl') || lower.includes('lesser general public');
+}
+
+/**
  * Parse Maven coordinates (groupId:artifactId:version)
  * @param coordinates - Coordinate string to parse
  * @returns Parsed coordinate parts or null if invalid
@@ -261,17 +274,22 @@ export function checkLicenseCompliance(
       allLicenses.push(...splitLicenses);
     }
 
+    // Check if we have any valid licenses after splitting
+    if (allLicenses.length === 0) {
+      issues.push({
+        dependency,
+        reason: 'No valid license information available'
+      });
+      continue;
+    }
+
     // If we have multiple licenses (dual-licensed), use OR logic evaluation
     if (allLicenses.length > 1) {
       const evaluation = evaluateMultipleLicenses(allLicenses, dependency, readmeContent);
 
-      // Only add an issue if the evaluation failed
-      if (evaluation.status === EvaluationStatus.FAIL) {
-        issues.push({
-          dependency,
-          reason: evaluation.reason
-        });
-      } else if (evaluation.status === EvaluationStatus.MANUAL) {
+      // Add an issue if the evaluation failed or requires manual review
+      if (evaluation.status === EvaluationStatus.FAIL ||
+          evaluation.status === EvaluationStatus.MANUAL) {
         issues.push({
           dependency,
           reason: evaluation.reason
@@ -279,7 +297,7 @@ export function checkLicenseCompliance(
       }
       // If PASS, no issue added
     } else {
-      // Single license - use existing logic
+      // Single license
       const license = allLicenses[0];
 
       // Try normalized license lookup first for better matching
@@ -293,10 +311,7 @@ export function checkLicenseCompliance(
         });
       } else if (category === LicenseCategory.X) {
         // Category X - prohibited, but check for LGPL special exceptions
-        const isLGPL = license.toLowerCase().includes('lgpl') ||
-                       license.toLowerCase().includes('lesser general public');
-
-        if (isLGPL && isSpecialException(dependency.name)) {
+        if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
           // LGPL with special exception - must be documented in README
           if (!isDocumentedInReadme(dependency, readmeContent)) {
             issues.push({
@@ -528,11 +543,9 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
 
   const depName = `${parsed.groupId}:${parsed.artifactId}`;
 
-  // Split dual licenses on pipe separator
+  // Split and normalize dual licenses
   // Example: "Apache-2.0|MIT" becomes ["Apache-2.0", "MIT"]
-  const licenses = isNonEmptyString(licenseName) && licenseName.includes('|')
-    ? licenseName.split('|').map(l => l.trim()).filter(isNonEmptyString)
-    : licenseName ? [licenseName] : [];
+  const licenses = splitDualLicenses(licenseName);
 
   return {
     name: depName,
@@ -802,13 +815,13 @@ function evaluateMultipleLicenses(
         reason: `Unknown license '${license}'`
       });
     } else if (category === LicenseCategory.A) {
-      // Category A - automatically passes
-      evaluations.push({
+      // Category A - automatically passes and wins in OR logic, so return immediately
+      return {
         license,
         category,
         status: EvaluationStatus.PASS,
         reason: `Category A license '${license}' is approved`
-      });
+      };
     } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
       // Category B - check documentation
       // Create a temporary dependency with just this single license for documentation check
@@ -834,10 +847,7 @@ function evaluateMultipleLicenses(
       }
     } else if (category === LicenseCategory.X) {
       // Category X - check for LGPL special exceptions
-      const isLGPL = license.toLowerCase().includes('lgpl') ||
-                     license.toLowerCase().includes('lesser general public');
-
-      if (isLGPL && isSpecialException(dependency.name)) {
+      if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
         // Create a temporary dependency with just this single license for documentation check
         const singleLicenseDep: Dependency = {
           ...dependency,
