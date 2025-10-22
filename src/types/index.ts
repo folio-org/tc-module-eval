@@ -153,6 +153,25 @@ export interface ComplianceResult {
 }
 
 /**
+ * Represents an error or warning during dependency extraction
+ */
+export interface DependencyExtractionError {
+  source: string;      // e.g., "maven-parser", "gradle-parser", "path-validation"
+  message: string;     // Human-readable error message
+  error?: Error;       // Original error for debugging/logging
+}
+
+/**
+ * Result of dependency extraction including success data and error information
+ * Allows callers to distinguish between "no dependencies found" (valid) and "extraction failed" (error)
+ */
+export interface DependencyExtractionResult {
+  dependencies: Dependency[];               // Successfully extracted dependencies
+  errors: DependencyExtractionError[];      // Fatal errors that prevented extraction
+  warnings: DependencyExtractionError[];    // Non-fatal issues (e.g., "no build file found")
+}
+
+/**
  * Configuration interfaces for external JSON files used by license policy
  */
 

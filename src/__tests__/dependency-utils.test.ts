@@ -2,7 +2,8 @@
  * Tests for dependency analysis utilities
  */
 
-import { getDependencies, checkLicenseCompliance } from '../utils/dependency-utils';
+import { getDependencies } from '../utils/dependency-orchestrator';
+import { checkLicenseCompliance } from '../utils/license-compliance';
 import { LicenseCategory } from '../utils/license-policy';
 import { Dependency, ComplianceResult } from '../types';
 import * as fs from 'fs';
@@ -423,27 +424,32 @@ describe('Dependency Utils', () => {
   });
 
   describe('getDependencies', () => {
-    
+
     beforeEach(() => {
       jest.clearAllMocks();
     });
 
-    it('should return empty array when no build files found', async () => {
+    it('should return empty dependencies with warning when no build files found', async () => {
       mockFs.existsSync.mockReturnValue(false);
-      
+
       const result = await getDependencies('/fake/path');
-      
-      expect(result).toEqual([]);
+
+      expect(result.dependencies).toEqual([]);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings[0].message).toContain('does not exist');
     });
 
-    it('should handle errors gracefully', async () => {
+    it('should return error when path validation fails', async () => {
       mockFs.existsSync.mockImplementation(() => {
         throw new Error('File system error');
       });
 
       const result = await getDependencies('/fake/path');
 
-      expect(result).toEqual([]);
+      expect(result.dependencies).toEqual([]);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0].source).toBe('dependency-orchestrator');
     });
 
   });
@@ -454,7 +460,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:dual-lib',
           version: '1.0.0',
-          licenses: ['Apache-2.0|MIT']
+          licenses: ['Apache-2.0', 'MIT']
         }
       ];
 
@@ -470,7 +476,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:mixed-lib',
           version: '1.0.0',
-          licenses: ['Apache-2.0|GPL-3.0']
+          licenses: ['Apache-2.0', 'GPL-3.0']
         }
       ];
 
@@ -487,7 +493,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:dual-b-lib',
           version: '1.0.0',
-          licenses: ['MPL-2.0|EPL-2.0']
+          licenses: ['MPL-2.0', 'EPL-2.0']
         }
       ];
 
@@ -504,7 +510,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:b-x-lib',
           version: '1.0.0',
-          licenses: ['MPL-2.0|GPL-3.0']
+          licenses: ['MPL-2.0', 'GPL-3.0']
         }
       ];
 
@@ -521,7 +527,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:unknown-mix',
           version: '1.0.0',
-          licenses: ['Apache-2.0|SomeUnknownLicense']
+          licenses: ['Apache-2.0', 'SomeUnknownLicense']
         }
       ];
 
@@ -538,17 +544,17 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:dual-a',
           version: '1.0.0',
-          licenses: ['Apache-2.0|MIT']
+          licenses: ['Apache-2.0', 'MIT']
         },
         {
           name: 'org.example:dual-b',
           version: '1.0.0',
-          licenses: ['MPL-2.0|Apache-2.0']
+          licenses: ['MPL-2.0', 'Apache-2.0']
         },
         {
           name: 'org.example:dual-x',
           version: '1.0.0',
-          licenses: ['GPL-3.0|LGPL-2.1']
+          licenses: ['GPL-3.0', 'LGPL-2.1']
         }
       ];
 
@@ -566,7 +572,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:triple-lib',
           version: '1.0.0',
-          licenses: ['Apache-2.0|MIT|BSD-3-Clause']
+          licenses: ['Apache-2.0', 'MIT', 'BSD-3-Clause']
         }
       ];
 
@@ -599,7 +605,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:a-b-mix',
           version: '1.0.0',
-          licenses: ['Apache-2.0|MPL-2.0']
+          licenses: ['Apache-2.0', 'MPL-2.0']
         }
       ];
 
@@ -616,7 +622,7 @@ describe('Dependency Utils', () => {
         {
           name: 'org.example:previously-configured-dual',
           version: '1.0.0',
-          licenses: ['MPL-2.0|Apache-2.0']
+          licenses: ['MPL-2.0', 'Apache-2.0']
         }
       ];
 
@@ -626,6 +632,62 @@ describe('Dependency Utils', () => {
       // Apache-2.0 is Category A, so it should pass without documentation
       expect(result.compliant).toBe(true);
       expect(result.issues).toHaveLength(0);
+    });
+
+    it('should detect parser contract violation when licenses contain pipe separator', () => {
+      const dependencies: Dependency[] = [
+        {
+          name: 'org.example:unsplit-licenses',
+          version: '1.0.0',
+          licenses: ['Apache-2.0|MIT'] // Parser failed to split!
+        }
+      ];
+
+      const readmeContent = 'No license documentation';
+      const result = checkLicenseCompliance(dependencies, readmeContent);
+
+      // Should fail due to parser contract violation
+      expect(result.compliant).toBe(false);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].reason).toContain('Parser error');
+      expect(result.issues[0].reason).toContain('not properly split');
+    });
+
+    it('should detect parser contract violation when licenses contain OR separator', () => {
+      const dependencies: Dependency[] = [
+        {
+          name: 'org.example:npm-style-unsplit',
+          version: '1.0.0',
+          licenses: ['MIT OR Apache-2.0'] // npm/SPDX format - parser should split!
+        }
+      ];
+
+      const readmeContent = 'No license documentation';
+      const result = checkLicenseCompliance(dependencies, readmeContent);
+
+      // Should fail due to parser contract violation
+      expect(result.compliant).toBe(false);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].reason).toContain('Parser error');
+      expect(result.issues[0].reason).toContain('separators');
+    });
+
+    it('should detect parser contract violation when licenses contain AND separator', () => {
+      const dependencies: Dependency[] = [
+        {
+          name: 'org.example:spdx-and-unsplit',
+          version: '1.0.0',
+          licenses: ['LGPL-2.1 AND MIT'] // SPDX format - parser should split!
+        }
+      ];
+
+      const readmeContent = 'No license documentation';
+      const result = checkLicenseCompliance(dependencies, readmeContent);
+
+      // Should fail due to parser contract violation
+      expect(result.compliant).toBe(false);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].reason).toContain('Parser error');
     });
   });
 
