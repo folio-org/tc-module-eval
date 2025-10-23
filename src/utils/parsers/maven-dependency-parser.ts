@@ -145,12 +145,18 @@ function splitDualLicenses(license: string): string[] {
       .filter(isNonEmptyString)
       .map(l => {
         const normalized = normalizeLicenseName(l);
+        if (!normalized) {
+          console.warn(`License normalization failed for "${l}", using original value.`);
+        }
         return normalized || l; // Use original if normalization returns empty
       });
   }
 
   // Single license - normalize and return
   const normalized = normalizeLicenseName(license);
+  if (!normalized) {
+    console.warn(`License normalization failed for "${license}", using original value.`);
+  }
   return [normalized || license];
 }
 
