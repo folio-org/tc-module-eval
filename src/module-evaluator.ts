@@ -35,12 +35,12 @@ export class ModuleEvaluator {
    */
   async evaluateModule(repositoryUrl: string): Promise<EvaluationResult> {
     let repoPath = '';
-    
+
     try {
       console.log(`Starting evaluation of: ${repositoryUrl}`);
-      
+
       // Clone the repository
-      repoPath = await this.gitUtils.cloneRepository(repositoryUrl);
+      repoPath = await this.gitUtils.cloneRepository(repositoryUrl, this.config.branch);
       
       // Determine appropriate evaluator
       const evaluator = await this.selectEvaluator(repoPath);

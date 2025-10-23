@@ -54,6 +54,7 @@ export interface EvaluationConfig {
   outputDir?: string;
   skipCleanup?: boolean;
   criteriaFilter?: string[];
+  branch?: string;
 }
 
 /**

@@ -9,6 +9,7 @@ import * as os from 'os';
 export class GitUtils {
   private tempDir: string;
   private timeoutMs: number;
+  private repoName: string = '';
 
   constructor(tempDir?: string, timeoutMs: number = 120000) {
     this.tempDir = tempDir || path.join(os.tmpdir(), 'folio-eval');
@@ -18,9 +19,10 @@ export class GitUtils {
   /**
    * Clone a repository to a temporary directory
    * @param repositoryUrl GitHub URL of the repository
+   * @param branch Optional branch name to clone (defaults to repository's default branch)
    * @returns Promise<string> Path to the cloned repository
    */
-  async cloneRepository(repositoryUrl: string): Promise<string> {
+  async cloneRepository(repositoryUrl: string, branch?: string): Promise<string> {
     const repoName = this.extractRepoName(repositoryUrl);
     const clonePath = path.join(this.tempDir, repoName, Date.now().toString());
 
@@ -32,10 +34,63 @@ export class GitUtils {
         block: this.timeoutMs
       }
     });
-    await git.clone(repositoryUrl, clonePath);
 
-    console.log(`Repository cloned to: ${clonePath}`);
-    return clonePath;
+    try {
+      // Clone with branch if specified
+      if (branch) {
+        await git.clone(repositoryUrl, clonePath, ['--branch', branch]);
+        console.log(`Repository cloned to: ${clonePath} (branch: ${branch})`);
+      } else {
+        await git.clone(repositoryUrl, clonePath);
+        console.log(`Repository cloned to: ${clonePath}`);
+      }
+
+      // Store repo name for later use
+      this.repoName = repoName;
+
+      return clonePath;
+    } catch (error: any) {
+      // Clean up the partially created directory
+      await fs.remove(clonePath).catch(() => {
+        // Ignore cleanup errors
+      });
+
+      // Provide more helpful error messages
+      const errorMessage = error.message || String(error);
+
+      if (branch && (errorMessage.includes('Remote branch') || errorMessage.includes('not found'))) {
+        throw new Error(
+          `Failed to clone branch '${branch}' from repository.\n` +
+          `The branch may not exist or you may have a typo in the branch name.\n` +
+          `Repository: ${repositoryUrl}\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      if (errorMessage.includes('Could not resolve host') || errorMessage.includes('not found')) {
+        throw new Error(
+          `Failed to access repository: ${repositoryUrl}\n` +
+          `The repository may not exist, may be private, or there may be a network issue.\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        throw new Error(
+          `Repository clone timed out after ${this.timeoutMs / 1000} seconds.\n` +
+          `The repository may be too large or there may be network issues.\n` +
+          `Repository: ${repositoryUrl}\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      // Generic git error with original message
+      throw new Error(
+        `Failed to clone repository: ${repositoryUrl}\n` +
+        (branch ? `Branch: ${branch}\n` : '') +
+        `Git error: ${errorMessage}`
+      );
+    }
   }
 
   /**
@@ -45,6 +100,7 @@ export class GitUtils {
   async cleanup(repoPath: string): Promise<void> {
     if (await fs.pathExists(repoPath)) {
       await fs.remove(repoPath);
+      this.repoName = '';
       console.log(`Cleaned up: ${repoPath}`);
     }
   }
@@ -65,9 +121,9 @@ export class GitUtils {
    * @returns Basic repository info
    */
   async getRepoInfo(repoPath: string): Promise<{ name: string; hasPackageJson: boolean; hasPomXml: boolean; hasBuildGradle: boolean }> {
-    // Get the repository name from the parent directory (since repoPath includes timestamp)
-    // Path structure: /temp/folio-eval/mod-search/timestamp
-    const name = path.basename(path.dirname(repoPath));
+    // Use stored repo name if available, otherwise fall back to path extraction
+    // (fallback maintained for backward compatibility)
+    const name = this.repoName || path.basename(path.dirname(repoPath));
     const hasPackageJson = await fs.pathExists(path.join(repoPath, 'package.json'));
     const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));
     const hasBuildGradle = await fs.pathExists(path.join(repoPath, 'build.gradle')) ||

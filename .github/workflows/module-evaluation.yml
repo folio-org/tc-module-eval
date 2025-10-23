@@ -8,6 +8,11 @@ on:
         required: true
         type: string
         default: 'https://github.com/folio-org/mod-users'
+      branch:
+        description: 'Branch name to evaluate (leave empty for repository default branch)'
+        required: false
+        type: string
+        default: ''
       output_format:
         description: 'Report output format'
         required: false
@@ -39,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout tech-council repository
+      - name: Checkout tc-module-eval repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -50,13 +55,19 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package.json'
 
+      - name: Get cache key components
+        id: cache-keys
+        run: |
+          echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+
       - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package.json') }}
+          # Weekly cache key allows all runs in the same week to share cached dependencies
+          key: ${{ runner.os }}-npm-folio-deps-${{ steps.cache-keys.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-npm-folio-deps-
 
       - name: Set up JDK for Maven/Gradle
         uses: actions/setup-java@v4
@@ -68,9 +79,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          # Weekly cache key allows all runs in the same week to share cached dependencies
+          key: ${{ runner.os }}-maven-folio-deps-${{ steps.cache-keys.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            ${{ runner.os }}-maven-folio-deps-
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -78,9 +90,10 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          # Weekly cache key allows all runs in the same week to share cached dependencies
+          key: ${{ runner.os }}-gradle-folio-deps-${{ steps.cache-keys.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
+            ${{ runner.os }}-gradle-folio-deps-
 
       - name: Install CLI dependencies
         run: npm install
@@ -99,6 +112,11 @@ jobs:
 
           # Add output directory
           ARGS="$ARGS --output $OUTPUT_DIR"
+
+          # Add branch if provided
+          if [ -n "${{ inputs.branch }}" ]; then
+            ARGS="$ARGS --branch ${{ inputs.branch }}"
+          fi
 
           # Add output format options
           case "${{ inputs.output_format }}" in
@@ -132,6 +150,7 @@ jobs:
         run: |
           echo "🚀 Starting FOLIO Module Evaluation..."
           echo "Repository: ${{ inputs.repository_url }}"
+          echo "Branch: ${{ inputs.branch || '(default)' }}"
           echo "Output format: ${{ inputs.output_format }}"
           echo "Output directory: ${{ inputs.custom_output_dir }}"
           echo "Criteria filter: ${{ inputs.criteria_filter }}"
@@ -140,6 +159,19 @@ jobs:
 
           # Run the evaluation
           node dist/cli.js evaluate ${{ steps.prepare-args.outputs.cli_args }}
+
+      - name: Cleanup Maven/Gradle artifacts before caching
+        run: |
+          echo "🧹 Cleaning up build tool artifacts..."
+          # Wait for any Maven/Gradle processes to complete
+          sleep 2
+          # Remove Maven temporary files and locks
+          rm -rf ~/.m2/repository/.cache/tycho || true
+          find ~/.m2/repository -name "*.lastUpdated" -delete 2>/dev/null || true
+          find ~/.m2/repository -name "_remote.repositories" -delete 2>/dev/null || true
+          # Sync filesystem to flush all pending writes
+          sync
+          echo "✅ Cleanup complete"
 
       - name: Display evaluation summary
         run: |
