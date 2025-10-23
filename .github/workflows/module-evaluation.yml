@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout tech-council repository
+      - name: Checkout tc-module-eval repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -50,13 +50,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package.json'
 
+      - name: Get cache key components
+        id: cache-keys
+        run: |
+          echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+          echo "run=${{ github.run_number }}" >> $GITHUB_OUTPUT
+
       - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package.json') }}
+          # Dynamic key ensures cache grows with each evaluation
+          # Restores most recent cache from this week, accumulating dependencies
+          key: ${{ runner.os }}-npm-folio-deps-${{ steps.cache-keys.outputs.week }}-${{ steps.cache-keys.outputs.run }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-npm-folio-deps-${{ steps.cache-keys.outputs.week }}-
+            ${{ runner.os }}-npm-folio-deps-
 
       - name: Set up JDK for Maven/Gradle
         uses: actions/setup-java@v4
@@ -68,11 +77,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          # Static key: Most FOLIO modules share common dependencies
-          # Cache is shared across all evaluations for faster builds
-          key: ${{ runner.os }}-maven-folio-deps
+          # Dynamic key ensures cache grows with each evaluation
+          # Restores most recent cache from this week, accumulating dependencies
+          key: ${{ runner.os }}-maven-folio-deps-${{ steps.cache-keys.outputs.week }}-${{ steps.cache-keys.outputs.run }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            ${{ runner.os }}-maven-folio-deps-${{ steps.cache-keys.outputs.week }}-
+            ${{ runner.os }}-maven-folio-deps-
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -80,11 +90,12 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          # Static key: Most FOLIO modules share common dependencies
-          # Cache is shared across all evaluations for faster builds
-          key: ${{ runner.os }}-gradle-folio-deps
+          # Dynamic key ensures cache grows with each evaluation
+          # Restores most recent cache from this week, accumulating dependencies
+          key: ${{ runner.os }}-gradle-folio-deps-${{ steps.cache-keys.outputs.week }}-${{ steps.cache-keys.outputs.run }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
+            ${{ runner.os }}-gradle-folio-deps-${{ steps.cache-keys.outputs.week }}-
+            ${{ runner.os }}-gradle-folio-deps-
 
       - name: Install CLI dependencies
         run: npm install
