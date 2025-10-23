@@ -68,7 +68,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          # Static key: Most FOLIO modules share common dependencies
+          # Cache is shared across all evaluations for faster builds
+          key: ${{ runner.os }}-maven-folio-deps
           restore-keys: |
             ${{ runner.os }}-maven-
 
@@ -78,7 +80,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          # Static key: Most FOLIO modules share common dependencies
+          # Cache is shared across all evaluations for faster builds
+          key: ${{ runner.os }}-gradle-folio-deps
           restore-keys: |
             ${{ runner.os }}-gradle-
 
