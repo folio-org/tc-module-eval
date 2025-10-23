@@ -18,9 +18,10 @@ export class GitUtils {
   /**
    * Clone a repository to a temporary directory
    * @param repositoryUrl GitHub URL of the repository
+   * @param branch Optional branch name to clone (defaults to repository's default branch)
    * @returns Promise<string> Path to the cloned repository
    */
-  async cloneRepository(repositoryUrl: string): Promise<string> {
+  async cloneRepository(repositoryUrl: string, branch?: string): Promise<string> {
     const repoName = this.extractRepoName(repositoryUrl);
     const clonePath = path.join(this.tempDir, repoName, Date.now().toString());
 
@@ -32,10 +33,60 @@ export class GitUtils {
         block: this.timeoutMs
       }
     });
-    await git.clone(repositoryUrl, clonePath);
 
-    console.log(`Repository cloned to: ${clonePath}`);
-    return clonePath;
+    try {
+      // Clone with branch if specified
+      if (branch) {
+        await git.clone(repositoryUrl, clonePath, ['--branch', branch]);
+        console.log(`Repository cloned to: ${clonePath} (branch: ${branch})`);
+      } else {
+        await git.clone(repositoryUrl, clonePath);
+        console.log(`Repository cloned to: ${clonePath}`);
+      }
+
+      return clonePath;
+    } catch (error: any) {
+      // Clean up the partially created directory
+      await fs.remove(clonePath).catch(() => {
+        // Ignore cleanup errors
+      });
+
+      // Provide more helpful error messages
+      const errorMessage = error.message || String(error);
+
+      if (branch && (errorMessage.includes('Remote branch') || errorMessage.includes('not found'))) {
+        throw new Error(
+          `Failed to clone branch '${branch}' from repository.\n` +
+          `The branch may not exist or you may have a typo in the branch name.\n` +
+          `Repository: ${repositoryUrl}\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      if (errorMessage.includes('Could not resolve host') || errorMessage.includes('not found')) {
+        throw new Error(
+          `Failed to access repository: ${repositoryUrl}\n` +
+          `The repository may not exist, may be private, or there may be a network issue.\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        throw new Error(
+          `Repository clone timed out after ${this.timeoutMs / 1000} seconds.\n` +
+          `The repository may be too large or there may be network issues.\n` +
+          `Repository: ${repositoryUrl}\n` +
+          `Git error: ${errorMessage}`
+        );
+      }
+
+      // Generic git error with original message
+      throw new Error(
+        `Failed to clone repository: ${repositoryUrl}\n` +
+        (branch ? `Branch: ${branch}\n` : '') +
+        `Git error: ${errorMessage}`
+      );
+    }
   }
 
   /**

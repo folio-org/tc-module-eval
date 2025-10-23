@@ -8,6 +8,11 @@ on:
         required: true
         type: string
         default: 'https://github.com/folio-org/mod-users'
+      branch:
+        description: 'Branch name to evaluate (leave empty for repository default branch)'
+        required: false
+        type: string
+        default: ''
       output_format:
         description: 'Report output format'
         required: false
@@ -115,6 +120,11 @@ jobs:
           # Add output directory
           ARGS="$ARGS --output $OUTPUT_DIR"
 
+          # Add branch if provided
+          if [ -n "${{ inputs.branch }}" ]; then
+            ARGS="$ARGS --branch ${{ inputs.branch }}"
+          fi
+
           # Add output format options
           case "${{ inputs.output_format }}" in
             "json-only")
@@ -147,6 +157,7 @@ jobs:
         run: |
           echo "🚀 Starting FOLIO Module Evaluation..."
           echo "Repository: ${{ inputs.repository_url }}"
+          echo "Branch: ${{ inputs.branch || '(default)' }}"
           echo "Output format: ${{ inputs.output_format }}"
           echo "Output directory: ${{ inputs.custom_output_dir }}"
           echo "Criteria filter: ${{ inputs.criteria_filter }}"

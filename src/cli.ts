@@ -18,6 +18,7 @@ program
   .description('Evaluate a FOLIO module repository')
   .argument('<repository-url>', 'GitHub URL of the repository to evaluate')
   .option('-o, --output <dir>', 'Output directory for reports', './reports')
+  .option('-b, --branch <name>', 'Branch name to evaluate (defaults to repository default branch)')
   .option('--json-only', 'Generate only JSON report')
   .option('--html-only', 'Generate only HTML report')
   .option('--temp-dir <dir>', 'Temporary directory for cloning repositories')
@@ -32,6 +33,10 @@ program
 
       logEvaluationStart(repositoryUrl, options.output, criteriaFilter);
 
+      if (options.branch) {
+        console.log(`🌿 Branch: ${options.branch}`);
+      }
+
       const evaluator = new ModuleEvaluator(config);
       const result = await evaluator.evaluateModule(repositoryUrl);
 
@@ -44,8 +49,9 @@ program
       console.log('\n🎉 Done!');
 
     } catch (error) {
-      console.error('❌ Error during evaluation:');
-      console.error(error instanceof Error ? error.message : String(error));
+      console.error('\n❌ Evaluation failed:\n');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(errorMessage);
       process.exit(1);
     }
   });
@@ -104,6 +110,9 @@ program
     console.log('');
     console.log('   # Keep cloned repository for inspection');
     console.log('   folio-eval evaluate <repo-url> --no-cleanup');
+    console.log('');
+    console.log('   # Evaluate a specific branch');
+    console.log('   folio-eval evaluate <repo-url> --branch feature-branch');
   });
 
 function parseCriteriaFilter(options: any): string[] | undefined {
@@ -128,7 +137,8 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     tempDir: options.tempDir,
     outputDir: options.output,
     skipCleanup: !options.cleanup,
-    criteriaFilter
+    criteriaFilter,
+    branch: options.branch
   };
 }
 
@@ -137,7 +147,7 @@ function logEvaluationStart(repositoryUrl: string, outputDir: string, criteriaFi
     console.log(`🎯 Evaluating specific criteria: ${criteriaFilter.join(', ')}`);
   }
 
-  console.log(` Output directory: ${outputDir}`);
+  console.log(`📁 Output directory: ${outputDir}`);
   console.log(`🔗 Repository URL: ${repositoryUrl}`);
 }
 
