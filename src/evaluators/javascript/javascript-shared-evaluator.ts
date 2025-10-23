@@ -48,10 +48,6 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
     return await evaluator(repoPath);
   }
 
-  // STUB IMPLEMENTATIONS - Framework provides structure but evaluation logic not yet implemented
-  // All methods below currently return MANUAL/NOT_APPLICABLE status and require detailed implementation
-  // Future implementation will analyze repository files with JavaScript-specific logic
-
   /**
    * S001: Apache 2.0 license check
    * Uses LicenseUtils which checks LICENSE files (universal) and build configs (language-specific)

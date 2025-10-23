@@ -33,7 +33,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 
 // npm-specific constants
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
-const FOLIO_NPM_REGISTRY = 'https://repository.folio.org/repository/npm-folio';
+const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
 const HTTP_TIMEOUT = 10000; // 10 seconds
 const MAX_CONCURRENT_REQUESTS = 10; // Limit concurrent HTTP requests to avoid overwhelming registry
 const NPM_BUILD_FILES = ['package.json'];
@@ -383,7 +383,7 @@ async function fetchNpmLicense(
   // Tier 2: For @folio/* packages, try FOLIO registry
   if (packageName.startsWith('@folio/')) {
     try {
-      const folioData = await fetchNpmPackageData(packageName, FOLIO_NPM_REGISTRY);
+      const folioData = await fetchNpmPackageData(packageName, FOLIO_NPM_REGISTRY_URL);
       const folioResult = extractLicenseFromRegistryData(folioData);
 
       if (folioResult) {

@@ -48,10 +48,6 @@ export class JavaSharedEvaluator extends BaseSectionEvaluator {
     return await evaluator(repoPath);
   }
 
-  // STUB IMPLEMENTATIONS - Framework provides structure but evaluation logic not yet implemented
-  // All methods below currently return MANUAL status and require detailed implementation
-  // Future implementation will analyze repository files to determine PASS/FAIL status
-
   private async evaluateS001(repoPath: string): Promise<CriterionResult> {
     return await LicenseUtils.checkApache2License(repoPath, 'S001');
   }

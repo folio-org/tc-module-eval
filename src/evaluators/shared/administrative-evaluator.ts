@@ -7,9 +7,6 @@ import { ADMINISTRATIVE_CRITERIA } from '../../criteria-definitions';
 /**
  * Evaluator for Administrative criteria (A001)
  * Handles administrative requirements for FOLIO modules
- *
- * This evaluator is truly language-agnostic as administrative criteria
- * do not depend on implementation language.
  */
 export class AdministrativeEvaluator extends BaseSectionEvaluator {
   readonly sectionName = 'Administrative';

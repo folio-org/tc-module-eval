@@ -8,9 +8,6 @@ import { FrontendEvaluator } from './javascript/frontend-evaluator';
 /**
  * JavaScript/UI module evaluator for FOLIO UI modules
  * Uses composition of section-specific evaluators for comprehensive evaluation
- *
- * This evaluator handles FOLIO UI modules built with React/Stripes.
- * It evaluates Administrative (A001), Shared/Common (S001-S014), and Frontend (F001-F007) criteria.
  */
 export class JavaScriptEvaluator implements LanguageEvaluator {
   private readonly administrativeEvaluator: AdministrativeEvaluator;
@@ -18,7 +15,6 @@ export class JavaScriptEvaluator implements LanguageEvaluator {
   private readonly frontendEvaluator: FrontendEvaluator;
 
   constructor() {
-    // Use language-agnostic administrative evaluator and JavaScript-specific shared evaluator
     this.administrativeEvaluator = new AdministrativeEvaluator();
     this.sharedEvaluator = new JavaScriptSharedEvaluator();
     this.frontendEvaluator = new FrontendEvaluator();

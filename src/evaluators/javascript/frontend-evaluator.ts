@@ -39,10 +39,6 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
     return await evaluator(repoPath);
   }
 
-  // STUB IMPLEMENTATIONS - Framework provides structure but evaluation logic not yet implemented
-  // All methods below currently return NOT_APPLICABLE status and require detailed implementation
-  // Future implementation will analyze package.json, UI components, tests, and configurations
-
   /**
    * F001: API interface requirements in package.json
    * Check if package.json properly declares stripes dependencies and interfaces
