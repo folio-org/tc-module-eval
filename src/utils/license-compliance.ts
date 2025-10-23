@@ -25,6 +25,7 @@ import {
   getLicenseCategoryNormalized,
   isSpecialException
 } from './license-policy';
+import { isNonEmptyString, isValidDependency } from './type-guards';
 
 /**
  * Evaluation result for a single license
@@ -34,24 +35,6 @@ interface LicenseEvaluation {
   category?: LicenseCategory;
   status: EvaluationStatus;
   reason: string;
-}
-
-/**
- * Type guard to check if a value is a non-empty string
- * @param value - Value to check
- * @returns True if value is a non-empty string
- */
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-/**
- * Type guard to check if a dependency object is valid
- * @param dep - Dependency object to validate
- * @returns True if dependency has required fields
- */
-function isValidDependency(dep: Partial<Dependency>): dep is Dependency {
-  return isNonEmptyString(dep.name) && isNonEmptyString(dep.version);
 }
 
 /**
