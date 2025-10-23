@@ -1,7 +1,8 @@
 import { BaseSectionEvaluator } from '../base/section-evaluator';
 import { CriterionResult, EvaluationStatus, CriterionFunction } from '../../types';
 import { LicenseUtils } from '../../utils/license-utils';
-import { getDependencies, checkLicenseCompliance } from '../../utils/dependency-utils';
+import { getDependencies } from '../../utils/dependency-orchestrator';
+import { checkLicenseCompliance } from '../../utils/license-compliance';
 import { SHARED_CRITERIA } from '../../criteria-definitions';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -65,14 +66,35 @@ export class SharedEvaluator extends BaseSectionEvaluator {
   private async evaluateS003(repoPath: string): Promise<CriterionResult> {
     try {
       // Extract dependencies from the repository
-      const dependencies = await getDependencies(repoPath);
-      
-      if (dependencies.length === 0) {
+      const extractionResult = await getDependencies(repoPath);
+      const { dependencies, errors, warnings } = extractionResult;
+
+      // Check if there were fatal errors during extraction
+      if (errors.length > 0) {
+        const errorDetails = errors
+          .map(e => `  - [${e.source}] ${e.message}`)
+          .join('\n');
+
         return {
           criterionId: 'S003',
           status: EvaluationStatus.MANUAL,
-          evidence: 'No dependencies found or unable to extract dependency information',
-          details: 'Could not analyze third-party dependencies. This may be due to build tool configuration issues or the repository not containing dependency information.'
+          evidence: `Failed to extract dependencies due to ${errors.length} error(s)`,
+          details: `Dependency extraction errors:\n${errorDetails}\n\nManual review required to verify third-party license compliance.`
+        };
+      }
+
+      // If no dependencies found but no errors, could be valid (project has no dependencies)
+      if (dependencies.length === 0) {
+        // Include warnings if present
+        const warningInfo = warnings.length > 0
+          ? `\n\nWarnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
+          : '';
+
+        return {
+          criterionId: 'S003',
+          status: EvaluationStatus.MANUAL,
+          evidence: 'No third-party dependencies found',
+          details: `Repository appears to have no third-party dependencies. This is uncommon and may indicate a library project, configuration-only project, or build tool detection issue. Manual review required to confirm compliance.${warningInfo}`
         };
       }
 
@@ -90,23 +112,28 @@ export class SharedEvaluator extends BaseSectionEvaluator {
 
       // Check license compliance according to ASF policy
       const complianceResult = checkLicenseCompliance(dependencies, readmeContent);
-      
+
       // Generate evidence summary
       const dependencyCount = dependencies.length;
       const licenseInfo = dependencies
         .filter(d => d.licenses && d.licenses.length > 0)
         .map(d => `${d.name}:${d.version} (${d.licenses!.join(', ')})`)
         .join('; ');
-      
+
       const evidence = `Found ${dependencyCount} dependencies. ` +
         (licenseInfo ? `Licenses: ${licenseInfo}` : 'No license information available for analysis.');
+
+      // Include warnings in details if present
+      const warningInfo = warnings.length > 0
+        ? `\n\nExtraction warnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
+        : '';
 
       if (complianceResult.compliant) {
         return {
           criterionId: 'S003',
           status: EvaluationStatus.PASS,
           evidence: evidence,
-          details: 'All third-party dependencies comply with ASF 3rd Party License Policy. No Category X licenses found, and all Category B licenses are properly documented.'
+          details: `All third-party dependencies comply with ASF 3rd Party License Policy. No Category X licenses found, and all Category B licenses are properly documented.${warningInfo}`
         };
       } else {
         // Generate detailed compliance issues
@@ -118,7 +145,7 @@ export class SharedEvaluator extends BaseSectionEvaluator {
           criterionId: 'S003',
           status: EvaluationStatus.FAIL,
           evidence: evidence,
-          details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy: \n${issueDetails}\n\n`
+          details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
         };
       }
 
