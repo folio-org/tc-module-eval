@@ -1,8 +1,8 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { LanguageEvaluator, CriterionResult } from '../types';
-import { AdministrativeEvaluator } from './java/administrative-evaluator';
-import { SharedEvaluator } from './java/shared-evaluator';
+import { AdministrativeEvaluator } from './shared/administrative-evaluator';
+import { JavaSharedEvaluator } from './java/java-shared-evaluator';
 import { BackendEvaluator } from './java/backend-evaluator';
 
 /**
@@ -15,12 +15,12 @@ import { BackendEvaluator } from './java/backend-evaluator';
  */
 export class JavaEvaluator implements LanguageEvaluator {
   private readonly administrativeEvaluator: AdministrativeEvaluator;
-  private readonly sharedEvaluator: SharedEvaluator;
+  private readonly sharedEvaluator: JavaSharedEvaluator;
   private readonly backendEvaluator: BackendEvaluator;
 
   constructor() {
     this.administrativeEvaluator = new AdministrativeEvaluator();
-    this.sharedEvaluator = new SharedEvaluator();
+    this.sharedEvaluator = new JavaSharedEvaluator();
     this.backendEvaluator = new BackendEvaluator();
   }
   

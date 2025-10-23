@@ -33,6 +33,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 
 // npm-specific constants
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
+const FOLIO_NPM_REGISTRY = 'https://repository.folio.org/repository/npm-folio';
 const HTTP_TIMEOUT = 10000; // 10 seconds
 const MAX_CONCURRENT_REQUESTS = 10; // Limit concurrent HTTP requests to avoid overwhelming registry
 const NPM_BUILD_FILES = ['package.json'];
@@ -217,12 +218,13 @@ async function processBatched<T>(
  * Fetch raw package data from npm registry
  * Handles HTTP request/response details and returns raw JSON string
  * @param packageName - Name of the npm package
+ * @param registryUrl - npm registry URL to query (defaults to public npm registry)
  * @returns Promise resolving to raw JSON string from npm registry
  * @throws Error if HTTP request fails or times out
  */
-function fetchNpmPackageData(packageName: string): Promise<string> {
+function fetchNpmPackageData(packageName: string, registryUrl: string = NPM_REGISTRY_URL): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = `${NPM_REGISTRY_URL}/${encodeURIComponent(packageName)}`;
+    const url = `${registryUrl}/${encodeURIComponent(packageName)}`;
 
     const request = https.get(url, { timeout: HTTP_TIMEOUT }, (response) => {
       let data = '';
@@ -252,56 +254,30 @@ function fetchNpmPackageData(packageName: string): Promise<string> {
 }
 
 /**
- * Fetch license information for an npm package from npm registry
- * Uses https://registry.npmjs.org/{package} API
+ * Attempt to read license from local node_modules package
+ * Fallback when npm registry is unavailable or package not found in registry
+ * @param repoPath - Path to repository root
  * @param packageName - Name of the npm package
- * @param versionSpec - Version specifier from package.json
- * @returns Promise resolving to license information (always as an array)
+ * @returns Promise resolving to license information or null if not found
  */
-async function fetchNpmLicense(
-  packageName: string,
-  versionSpec: string
-): Promise<{ licenses: string[] }> {
-  // Check cache first
-  const cacheKey = `${packageName}:${versionSpec}`;
-  if (licenseCache.has(cacheKey)) {
-    return licenseCache.get(cacheKey)!;
-  }
-
+async function readLicenseFromNodeModules(
+  repoPath: string,
+  packageName: string
+): Promise<{ licenses: string[] } | null> {
   try {
-    // Fetch package data from npm registry
-    const data = await fetchNpmPackageData(packageName);
+    // Sanitize package name to prevent path traversal
+    const safeName = packageName.replace(/\.\./g, '');
+    const nodeModulesPath = path.join(repoPath, 'node_modules', safeName, 'package.json');
 
-    // Parse JSON response
-    const packageData = JSON.parse(data);
-
-    // Clean the version specifier to match against registry data
-    const cleanVersion = cleanVersionSpec(versionSpec);
-
-    // Try to get specific version info
-    let versionData = packageData.versions?.[cleanVersion];
-
-    // Fallback to latest version if specific version not found
-    if (!versionData) {
-      const latestVersion = packageData['dist-tags']?.latest;
-      if (latestVersion) {
-        versionData = packageData.versions?.[latestVersion];
-      }
+    if (!fs.existsSync(nodeModulesPath)) {
+      return null;
     }
 
-    if (!versionData) {
-      const result = { licenses: ['Unknown'] };
-      licenseCache.set(cacheKey, result);
-      return result;
-    }
-
-    // Handle different license field formats
-    const licenseField = versionData.license;
+    const packageJson = JSON.parse(fs.readFileSync(nodeModulesPath, 'utf-8'));
+    const licenseField = packageJson.license;
 
     if (!licenseField) {
-      const result = { licenses: ['Unknown'] };
-      licenseCache.set(cacheKey, result);
-      return result;
+      return null;
     }
 
     // License can be a string or an object
@@ -313,25 +289,124 @@ async function fetchNpmLicense(
       // Handle object format: { type: "MIT", url: "..." }
       licenseString = licenseField.type;
     } else {
-      const result = { licenses: ['Unknown'] };
-      licenseCache.set(cacheKey, result);
-      return result;
+      return null;
     }
 
     // Split SPDX expressions into individual licenses
     const licenses = splitSpdxLicenses(licenseString);
 
-    const result = { licenses };
-    licenseCache.set(cacheKey, result);
-    return result;
-
+    return { licenses };
   } catch (error) {
-    // Handle all errors (HTTP, parsing, etc.)
-    console.warn(`Error fetching/parsing npm license for ${packageName}:`, error);
-    const result = { licenses: ['Unknown'] };
-    licenseCache.set(cacheKey, result);
-    return result;
+    // Silently return null if we can't read from node_modules
+    return null;
   }
+}
+
+/**
+ * Fetch license information for an npm package from npm registry
+ * Uses https://registry.npmjs.org/{package} API
+ * @param packageName - Name of the npm package
+ * @param versionSpec - Version specifier from package.json
+ * @param repoPath - Path to repository root (for node_modules fallback)
+ * @returns Promise resolving to license information (always as an array)
+ */
+async function fetchNpmLicense(
+  packageName: string,
+  versionSpec: string,
+  repoPath: string
+): Promise<{ licenses: string[] }> {
+  // Check cache first
+  const cacheKey = `${packageName}:${versionSpec}`;
+  if (licenseCache.has(cacheKey)) {
+    return licenseCache.get(cacheKey)!;
+  }
+
+  // Helper function to extract license from registry data
+  const extractLicenseFromRegistryData = (data: string): { licenses: string[] } | null => {
+    try {
+      const packageData = JSON.parse(data);
+      const cleanVersion = cleanVersionSpec(versionSpec);
+
+      // Try to get specific version info
+      let versionData = packageData.versions?.[cleanVersion];
+
+      // Fallback to latest version if specific version not found
+      if (!versionData) {
+        const latestVersion = packageData['dist-tags']?.latest;
+        if (latestVersion) {
+          versionData = packageData.versions?.[latestVersion];
+        }
+      }
+
+      if (!versionData || !versionData.license) {
+        return null;
+      }
+
+      // Handle different license field formats
+      const licenseField = versionData.license;
+      let licenseString: string;
+
+      if (typeof licenseField === 'string') {
+        licenseString = licenseField;
+      } else if (typeof licenseField === 'object' && licenseField.type) {
+        licenseString = licenseField.type;
+      } else {
+        return null;
+      }
+
+      // Split SPDX expressions into individual licenses
+      const licenses = splitSpdxLicenses(licenseString);
+      return { licenses };
+    } catch (parseError) {
+      return null;
+    }
+  };
+
+  // THREE-TIER FALLBACK STRATEGY:
+  // 1. Try public npm registry
+  // 2. For @folio/* packages, try FOLIO registry
+  // 3. Fall back to node_modules
+
+  try {
+    // Tier 1: Try public npm registry
+    const publicData = await fetchNpmPackageData(packageName);
+    const publicResult = extractLicenseFromRegistryData(publicData);
+
+    if (publicResult) {
+      licenseCache.set(cacheKey, publicResult);
+      return publicResult;
+    }
+  } catch (publicError) {
+    // Public registry failed, continue to next tier
+  }
+
+  // Tier 2: For @folio/* packages, try FOLIO registry
+  if (packageName.startsWith('@folio/')) {
+    try {
+      const folioData = await fetchNpmPackageData(packageName, FOLIO_NPM_REGISTRY);
+      const folioResult = extractLicenseFromRegistryData(folioData);
+
+      if (folioResult) {
+        licenseCache.set(cacheKey, folioResult);
+        return folioResult;
+      }
+    } catch (folioError) {
+      // FOLIO registry failed, continue to next tier
+    }
+  }
+
+  // Tier 3: Fall back to node_modules
+  const nodeModulesResult = await readLicenseFromNodeModules(repoPath, packageName);
+  if (nodeModulesResult) {
+    licenseCache.set(cacheKey, nodeModulesResult);
+    return nodeModulesResult;
+  }
+
+  // All tiers failed - return Unknown
+  console.warn(`Unable to fetch license for ${packageName} from registries or node_modules`);
+  const unknownResult = { licenses: ['Unknown'] };
+  licenseCache.set(cacheKey, unknownResult);
+  return unknownResult;
 }
 
 /**
@@ -477,7 +552,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
       const licenseTasks = depsToFetch.map(({ name, version, key }) => {
         return async () => {
           try {
-            const licenseInfo = await fetchNpmLicense(name, version);
+            const licenseInfo = await fetchNpmLicense(name, version, validatedPath);
             return {
               key,
               name,
