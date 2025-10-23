@@ -277,7 +277,7 @@ function evaluateMultipleLicenses(
 
   // If we have manual review needed and no failures, return manual
   const hasUnknown = evaluations.some(e => e.status === EvaluationStatus.MANUAL);
-  if (hasUnknown && !evaluations.some(e => e.status === EvaluationStatus.FAIL)) {
+  if (hasUnknown) {
     return {
       license: licenses.join(' | '),
       status: EvaluationStatus.MANUAL,
