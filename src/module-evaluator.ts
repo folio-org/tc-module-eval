@@ -1,5 +1,6 @@
 import { GitUtils } from './utils/git';
 import { JavaEvaluator } from './evaluators/java-evaluator';
+import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
 import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
 import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitions';
 
@@ -21,7 +22,8 @@ export class ModuleEvaluator {
 
     // Register available evaluators
     this.evaluators = [
-      new JavaEvaluator()
+      new JavaEvaluator(),
+      new JavaScriptEvaluator()
       // Additional evaluators can be added here in the future
     ];
   }

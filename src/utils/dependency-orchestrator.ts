@@ -13,24 +13,8 @@ import * as fs from 'fs';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../types';
 import { getMavenDependencies, hasMavenProject } from './parsers/maven-dependency-parser';
 import { getGradleDependencies, hasGradleProject } from './parsers/gradle-dependency-parser';
-
-/**
- * Type guard to check if a value is a non-empty string
- * @param value - Value to check
- * @returns True if value is a non-empty string
- */
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-/**
- * Type guard to check if a dependency object is valid
- * @param dep - Dependency object to validate
- * @returns True if dependency has required fields
- */
-function isValidDependency(dep: Partial<Dependency>): dep is Dependency {
-  return isNonEmptyString(dep.name) && isNonEmptyString(dep.version);
-}
+import { getNpmDependencies, hasNpmProject } from './parsers/npm-dependency-parser';
+import { isNonEmptyString, isValidDependency } from './type-guards';
 
 /**
  * Remove duplicate dependencies based on name and version
@@ -67,7 +51,8 @@ function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
  * Automatically detects project type and dispatches to appropriate parsers:
  * - Maven projects (pom.xml)
  * - Gradle projects (build.gradle, build.gradle.kts)
- * - Future: npm (package.json), Go (go.mod), etc.
+ * - npm/Node.js projects (package.json)
+ * - Future: Go (go.mod) etc.
  *
  * @param repoPath - Path to the cloned repository
  * @returns Promise resolving to extraction result with dependencies and errors
@@ -96,9 +81,10 @@ export async function getDependencies(repoPath: string): Promise<DependencyExtra
       return { dependencies: [], errors, warnings };
     }
 
-    // Check for Maven and Gradle projects once
+    // Check for Maven, Gradle, and npm projects once
     const hasMaven = await hasMavenProject(repoPath);
     const hasGradle = await hasGradleProject(repoPath);
+    const hasNpm = await hasNpmProject(repoPath);
 
     if (hasMaven) {
       const mavenResult = await getMavenDependencies(repoPath);
@@ -114,16 +100,22 @@ export async function getDependencies(repoPath: string): Promise<DependencyExtra
       warnings.push(...gradleResult.warnings);
     }
 
+    if (hasNpm) {
+      const npmResult = await getNpmDependencies(repoPath);
+      dependencies.push(...npmResult.dependencies.filter(isValidDependency));
+      errors.push(...npmResult.errors);
+      warnings.push(...npmResult.warnings);
+    }
+
     // If no build tools found, add a warning
-    if (dependencies.length === 0 && errors.length === 0 && !hasMaven && !hasGradle) {
+    if (dependencies.length === 0 && errors.length === 0 && !hasMaven && !hasGradle && !hasNpm) {
       warnings.push({
         source: 'dependency-orchestrator',
-        message: 'No supported build tools found (Maven, Gradle). Future support: npm, Go, Rust.'
+        message: 'No supported build tools found (Maven, Gradle, npm). Future support: Go.'
       });
     }
 
     // Future: Add more parsers here
-    // - npm/yarn (package.json)
     // - Go (go.mod)
     // - Rust (Cargo.toml)
     // etc.
