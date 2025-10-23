@@ -141,6 +141,19 @@ jobs:
           # Run the evaluation
           node dist/cli.js evaluate ${{ steps.prepare-args.outputs.cli_args }}
 
+      - name: Cleanup Maven/Gradle artifacts before caching
+        run: |
+          echo "🧹 Cleaning up build tool artifacts..."
+          # Wait for any Maven/Gradle processes to complete
+          sleep 2
+          # Remove Maven temporary files and locks
+          rm -rf ~/.m2/repository/.cache/tycho || true
+          find ~/.m2/repository -name "*.lastUpdated" -delete 2>/dev/null || true
+          find ~/.m2/repository -name "_remote.repositories" -delete 2>/dev/null || true
+          # Sync filesystem to flush all pending writes
+          sync
+          echo "✅ Cleanup complete"
+
       - name: Display evaluation summary
         run: |
           echo "📊 Evaluation completed!"
