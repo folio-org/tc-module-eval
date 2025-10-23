@@ -9,6 +9,7 @@ import * as os from 'os';
 export class GitUtils {
   private tempDir: string;
   private timeoutMs: number;
+  private repoName: string = '';
 
   constructor(tempDir?: string, timeoutMs: number = 120000) {
     this.tempDir = tempDir || path.join(os.tmpdir(), 'folio-eval');
@@ -43,6 +44,9 @@ export class GitUtils {
         await git.clone(repositoryUrl, clonePath);
         console.log(`Repository cloned to: ${clonePath}`);
       }
+
+      // Store repo name for later use
+      this.repoName = repoName;
 
       return clonePath;
     } catch (error: any) {
@@ -96,6 +100,7 @@ export class GitUtils {
   async cleanup(repoPath: string): Promise<void> {
     if (await fs.pathExists(repoPath)) {
       await fs.remove(repoPath);
+      this.repoName = '';
       console.log(`Cleaned up: ${repoPath}`);
     }
   }
@@ -116,9 +121,9 @@ export class GitUtils {
    * @returns Basic repository info
    */
   async getRepoInfo(repoPath: string): Promise<{ name: string; hasPackageJson: boolean; hasPomXml: boolean; hasBuildGradle: boolean }> {
-    // Get the repository name from the parent directory (since repoPath includes timestamp)
-    // Path structure: /temp/folio-eval/mod-search/timestamp
-    const name = path.basename(path.dirname(repoPath));
+    // Use stored repo name if available, otherwise fall back to path extraction
+    // (fallback maintained for backward compatibility)
+    const name = this.repoName || path.basename(path.dirname(repoPath));
     const hasPackageJson = await fs.pathExists(path.join(repoPath, 'package.json'));
     const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));
     const hasBuildGradle = await fs.pathExists(path.join(repoPath, 'build.gradle')) ||
