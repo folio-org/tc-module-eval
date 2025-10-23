@@ -27,11 +27,6 @@ on:
         required: false
         type: string
         default: ''
-      custom_output_dir:
-        description: 'Custom output directory for reports'
-        required: false
-        type: string
-        default: './reports'
 
 jobs:
   evaluate-module:
@@ -100,10 +95,7 @@ jobs:
         id: prepare-args
         run: |
           ARGS="${{ inputs.repository_url }}"
-
-          # Normalize output directory (remove leading ./ if present)
-          OUTPUT_DIR="${{ inputs.custom_output_dir }}"
-          OUTPUT_DIR="${OUTPUT_DIR#./}"  # Remove leading ./
+          OUTPUT_DIR="reports"
 
           # Add output directory
           ARGS="$ARGS --output $OUTPUT_DIR"
@@ -132,9 +124,9 @@ jobs:
           fi
 
           echo "cli_args=$ARGS" >> $GITHUB_OUTPUT
-          echo "normalized_output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
+          echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
           echo "Prepared CLI arguments: $ARGS"
-          echo "Normalized output directory: $OUTPUT_DIR"
+          echo "Output directory: $OUTPUT_DIR"
 
       - name: Run module evaluation
         run: |
@@ -142,7 +134,6 @@ jobs:
           echo "Repository: ${{ inputs.repository_url }}"
           echo "Branch: ${{ inputs.branch || '(default)' }}"
           echo "Output format: ${{ inputs.output_format }}"
-          echo "Output directory: ${{ inputs.custom_output_dir }}"
           echo "Criteria filter: ${{ inputs.criteria_filter }}"
           echo ""
 
@@ -166,12 +157,12 @@ jobs:
         run: |
           echo "📊 Evaluation completed!"
           echo ""
-          echo "📁 Generated files in ${{ steps.prepare-args.outputs.normalized_output_dir }}:"
-          find ${{ steps.prepare-args.outputs.normalized_output_dir }} -type f -name "*.html" -o -name "*.json" | head -20
+          echo "📁 Generated files in ${{ steps.prepare-args.outputs.output_dir }}:"
+          find ${{ steps.prepare-args.outputs.output_dir }} -type f -name "*.html" -o -name "*.json" | head -20
           echo ""
 
           # Show JSON summary if available
-          JSON_FILE=$(find ${{ steps.prepare-args.outputs.normalized_output_dir }} -name "*.json" | head -1)
+          JSON_FILE=$(find ${{ steps.prepare-args.outputs.output_dir }} -name "*.json" | head -1)
           if [ -f "$JSON_FILE" ]; then
             echo "📈 Evaluation Summary:"
             # Extract key metrics from JSON using jq if available, otherwise use basic tools
@@ -193,6 +184,6 @@ jobs:
         if: always()
         with:
           name: folio-module-evaluation-reports
-          path: ${{ steps.prepare-args.outputs.normalized_output_dir }}/
+          path: ${{ steps.prepare-args.outputs.output_dir }}/
           retention-days: 90
           if-no-files-found: warn
