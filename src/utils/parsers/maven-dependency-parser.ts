@@ -43,6 +43,7 @@ const execAsync = promisify(exec);
 
 // Maven-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
+const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
@@ -265,6 +266,15 @@ function isTimeoutError(error: any): boolean {
 }
 
 /**
+ * Check if an error is caused by maxBuffer overflow
+ * @param error - Error object to check
+ * @returns True if error was caused by buffer overflow
+ */
+function isMaxBufferError(error: any): boolean {
+  return error.message && error.message.toLowerCase().includes('maxbuffer');
+}
+
+/**
  * Parse Maven dependency:list output
  * @param output - Output from mvn dependency:list command
  * @returns Array of parsed dependencies (without license information)
@@ -338,7 +348,8 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
       'mvn license:add-third-party -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=true',
       {
         cwd: validatedPath,
-        timeout: COMMAND_TIMEOUT
+        timeout: COMMAND_TIMEOUT,
+        maxBuffer: MAX_BUFFER
       }
     );
 
@@ -361,13 +372,38 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
 
     const { stdout: depsOutput } = await execAsync(
       `mvn dependency:list -DoutputFile=${MAVEN_DEPENDENCIES_PATH}`,
-      { cwd: validatedPath, timeout: COMMAND_TIMEOUT }
+      {
+        cwd: validatedPath,
+        timeout: COMMAND_TIMEOUT,
+        maxBuffer: MAX_BUFFER
+      }
     );
 
     const dependencies = parseMavenDependencyList(depsOutput);
     return { dependencies, errors, warnings };
 
   } catch (error) {
+    // Check if this is a maxBuffer error
+    if (isMaxBufferError(error)) {
+      const bufferSizeMB = MAX_BUFFER / (1024 * 1024);
+      const bufferMessage =
+        `Maven build output exceeded buffer size (${bufferSizeMB}MB). This indicates:\n` +
+        `- Very large project with extensive dependency tree\n` +
+        `- Highly verbose Maven output during dependency downloads\n` +
+        `Note: The build may have completed successfully, but output was truncated. ` +
+        `Check the generated THIRD-PARTY.txt file manually if needed.`;
+
+      console.error('Maven dependency extraction exceeded buffer:');
+      console.error(`  Buffer size: ${bufferSizeMB}MB`);
+
+      errors.push({
+        source: 'maven-parser',
+        message: bufferMessage,
+        error: error instanceof Error ? error : new Error(String(error))
+      });
+      return { dependencies: [], errors, warnings };
+    }
+
     // Check if this is a timeout error
     if (isTimeoutError(error)) {
       const timeoutMinutes = COMMAND_TIMEOUT / 60000;
