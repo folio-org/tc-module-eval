@@ -138,11 +138,23 @@ export interface Dependency {
 }
 
 /**
+ * License issue types for structured compliance reporting
+ */
+export enum LicenseIssueType {
+  CATEGORY_X_VIOLATION = 'CATEGORY_X_VIOLATION',
+  UNKNOWN_LICENSE = 'UNKNOWN_LICENSE',
+  UNDOCUMENTED_CATEGORY_B = 'UNDOCUMENTED_CATEGORY_B',
+  NO_LICENSE_INFO = 'NO_LICENSE_INFO',
+  PARSER_ERROR = 'PARSER_ERROR'
+}
+
+/**
  * Represents a compliance issue with a specific dependency
  */
 export interface ComplianceIssue {
   dependency: Dependency;
-  reason: string; // e.g., "License 'GPL-3.0' is in Category X", "Category B license not documented in README"
+  reason: string; // Human-readable description
+  issueType: LicenseIssueType; // Structured type for programmatic handling
 }
 
 /**
