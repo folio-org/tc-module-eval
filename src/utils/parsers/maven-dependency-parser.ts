@@ -357,9 +357,41 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
     return { dependencies, errors, warnings };
 
   } catch (error) {
+    // Log the detailed error for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    // Extract stdout and stderr from execAsync error
+    const execError = error as any; // execAsync errors have stdout/stderr properties
+    const stdout = execError.stdout || '';
+    const stderr = execError.stderr || '';
+
+    console.error('Maven dependency extraction failed:');
+    console.error('  Message:', errorMessage);
+
+    if (stdout) {
+      console.error('  Maven stdout:', stdout.substring(0, 500)); // Show first 500 chars
+    }
+
+    if (stderr) {
+      console.error('  Maven stderr:', stderr.substring(0, 500)); // Show first 500 chars
+    }
+
+    if (errorStack && !stdout && !stderr) {
+      console.error('  Stack:', errorStack);
+    }
+
+    // Build detailed error message including Maven output
+    let detailedMessage = `Failed to extract Maven dependencies: ${errorMessage}`;
+    if (stderr) {
+      detailedMessage += `\nMaven stderr: ${stderr.substring(0, 200)}`;
+    } else if (stdout) {
+      detailedMessage += `\nMaven output: ${stdout.substring(0, 200)}`;
+    }
+
     errors.push({
       source: 'maven-parser',
-      message: 'Failed to extract Maven dependencies',
+      message: detailedMessage,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

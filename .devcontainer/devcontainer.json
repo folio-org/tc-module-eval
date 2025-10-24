@@ -1,0 +1,77 @@
+{
+  "name": "FOLIO Module Evaluator",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "${localEnv:TZ:America/Los_Angeles}",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0",
+      "MAVEN_VERSION": "3.9.9",
+      "GRADLE_VERSION": "8.12"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens",
+        "firsttris.vscode-jest-runner",
+        "orta.vscode-jest",
+        "ms-vscode.vscode-typescript-next",
+        "redhat.java",
+        "vscjava.vscode-java-debug",
+        "vscjava.vscode-maven"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          },
+          "zsh": {
+            "path": "zsh"
+          }
+        },
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "jest.autoRun": "off",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-21",
+            "path": "/usr/lib/jvm/temurin-21-jdk-amd64",
+            "default": true
+          }
+        ]
+      }
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=folio-eval-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=folio-eval-yarn-cache-${devcontainerId},target=/home/node/.yarn,type=volume",
+    "source=folio-eval-maven-cache-${devcontainerId},target=/home/node/.m2,type=volume"
+  ],
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "JAVA_HOME": "/usr/lib/jvm/temurin-21-jdk-amd64",
+    "MAVEN_HOME": "/opt/maven",
+    "GRADLE_HOME": "/opt/gradle"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "yarn install",
+  "postStartCommand": "mkdir -p /home/node/.m2/repository",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    }
+  }
+}

@@ -8,7 +8,21 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 **Note**: Dependency analysis includes all transitive dependencies for Maven and npm projects.
 
-## Installation
+## Security
+
+**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm) on cloned repositories. Malicious build files (pom.xml, build.gradle, package.json) can execute arbitrary code with your user's permissions.
+
+### For Local Development: Use Devcontainer
+
+For local development, use the provided devcontainer configuration in `.devcontainer/`. The container provides isolation with all required tools (Node.js, Java 21, Maven, Gradle).
+
+Use any devcontainer-compatible tool (VS Code, JetBrains IDEs, GitHub Codespaces, devcontainer CLI, or Docker directly).
+
+**Note**: Running this tool in containers as part of CI/CD pipelines is appropriate and expected, as CI systems already provide isolation.
+
+## Local Installation (Advanced)
+
+**Note**: Only install locally if you understand the security risks. The tool will execute build commands on untrusted repositories.
 
 ```bash
 # Install dependencies

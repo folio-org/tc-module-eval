@@ -21,7 +21,14 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
     // Check if there were fatal errors during extraction
     if (errors.length > 0) {
       const errorDetails = errors
-        .map(e => `  - [${e.source}] ${e.message}`)
+        .map(e => {
+          const baseMessage = `  - [${e.source}] ${e.message}`;
+          // Include the underlying error details if available and different from the main message
+          if (e.error && e.error.message && !e.message.includes(e.error.message)) {
+            return `${baseMessage}\n    Details: ${e.error.message}`;
+          }
+          return baseMessage;
+        })
         .join('\n');
 
       return {
