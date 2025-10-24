@@ -303,6 +303,31 @@ export class ReportGenerator {
   }
 
   /**
+   * Escape HTML special characters to prevent XSS
+   * @param text Text to escape
+   * @returns Escaped text
+   */
+  private escapeHtml(text: string): string {
+    const htmlEscapes: { [key: string]: string } = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
+  }
+
+  /**
+   * Convert plain text to HTML with line breaks
+   * @param text Plain text with newlines
+   * @returns HTML with <br> tags
+   */
+  private textToHtml(text: string): string {
+    return this.escapeHtml(text).replace(/\n/g, '<br>');
+  }
+
+  /**
    * Generate HTML for criteria results
    * @param result Evaluation result
    * @returns string HTML content for criteria
@@ -316,9 +341,9 @@ export class ReportGenerator {
             </div>
             <div class="criterion-content">
                 <div class="evidence">
-                    <strong>Evidence:</strong> ${criterion.evidence}
+                    <strong>Evidence:</strong> ${this.escapeHtml(criterion.evidence)}
                 </div>
-                ${criterion.details ? `<div class="details">${criterion.details}</div>` : ''}
+                ${criterion.details ? `<div class="details">${this.textToHtml(criterion.details)}</div>` : ''}
             </div>
         </div>
     `).join('');

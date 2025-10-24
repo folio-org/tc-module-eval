@@ -6,6 +6,8 @@ A CLI for evaluating FOLIO modules against technical council criteria.
 
 This tool provides a modular, extensible framework for automatically evaluating FOLIO modules against acceptance criteria. It currently supports Java modules with a pluggable architecture for adding support for additional programming languages.
 
+**Note**: Dependency analysis includes all transitive dependencies for Maven and npm projects.
+
 ## Installation
 
 ```bash

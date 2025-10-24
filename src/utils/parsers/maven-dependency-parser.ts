@@ -324,7 +324,7 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
   try {
     // Execute Maven license plugin to generate third-party report
     const { stdout } = await execAsync(
-      'mvn license:add-third-party -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=false',
+      'mvn license:add-third-party -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=true',
       {
         cwd: validatedPath,
         timeout: COMMAND_TIMEOUT

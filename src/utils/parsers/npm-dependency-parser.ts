@@ -2,10 +2,11 @@
  * npm-specific dependency parsing utilities
  *
  * Handles extraction of third-party dependencies from Node.js/npm projects including:
- * - package.json parsing
- * - npm registry license lookup
+ * - Running yarn install to get all dependencies
+ * - Using license-checker-rseidelsohn to extract license information
  * - SPDX license expression parsing (dual/multi-licenses)
- * - npm-specific dual license format (SPDX: "MIT OR Apache-2.0")
+ * - All transitive dependencies included
+ * - FOLIO registry support for @folio/* scoped packages
  *
  * PARSER CONTRACT IMPLEMENTATION:
  * This parser fulfills the license-compliance.ts contract by:
@@ -16,67 +17,52 @@
  * npm uses SPDX license expressions where ' OR ' separates alternatives in dual licensing.
  * The splitSpdxLicenses() function handles this npm-specific format.
  *
- * SECURITY NOTES:
- * - No shell command execution (unlike Maven/Gradle parsers)
+ * FOLIO REGISTRY SUPPORT:
+ * - Creates .npmrc with @folio scope pointing to repository.folio.org if not present
+ * - Respects existing .npmrc configuration in the repository
+ *
+ * ERROR HANDLING POLICY (Graceful Degradation):
+ * This parser attempts to provide partial results when possible:
+ * - Primary: yarn install + license-checker (full transitive deps with licenses)
+ * - Fallback: package.json parsing (direct deps only, no license info)
+ * - Fatal errors only: Invalid repository path, missing package.json
+ * - Warnings vs Errors: Recoverable failures go to warnings, fatal to errors
+ *
+ * SECURITY: This module installs dependencies from untrusted repositories.
+ * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
- * - HTTP request timeout enforcement (10 seconds)
- * - Graceful handling of network failures
- * - npm registry API calls use HTTPS by default
+ * - Command timeout enforcement (120 seconds for install, 60 for license check)
+ * - --ignore-scripts flag prevents preinstall/postinstall/etc scripts from executing
+ * - Repository path is validated before command execution
+ *
+ * Remaining risks:
+ * - Network access during npm dependency resolution
+ * - Disk space consumption from dependencies
+ *
+ * Production deployment should use containerization or isolated environments.
  */
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as https from 'https';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 
+const execAsync = promisify(exec);
+
+// Get path to license-checker binary in our project's node_modules
+// __dirname will be dist/utils/parsers after compilation, so go up to project root
+const projectRoot = path.resolve(__dirname, '../../..');
+const licenseCheckerBin = path.join(projectRoot, 'node_modules/.bin/license-checker-rseidelsohn');
+
 // npm-specific constants
-const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
-const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
-const HTTP_TIMEOUT = 10000; // 10 seconds
-const MAX_CONCURRENT_REQUESTS = 10; // Limit concurrent HTTP requests to avoid overwhelming registry
+const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
+const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const NPM_BUILD_FILES = ['package.json'];
+const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
 
-// Directories to exclude when scanning for package.json files in subdirectories
-// These are common directories that should not be scanned for dependencies
-const EXCLUDED_SUBDIRS = [
-  'node_modules',  // npm dependencies
-  '.git',          // git metadata
-  'test',          // test directories
-  'tests',
-  '__tests__',
-  'dist',          // build artifacts
-  'build',
-  'coverage',      // test coverage reports
-  '.next',         // Next.js build cache
-  '.cache',        // various caches
-  'target',        // Maven build directory
-  'bin',           // binaries
-  'obj',           // object files
-  '.idea',         // IDE directories
-  '.vscode'
-];
-
-// Cache for npm license lookups to avoid repeated API calls
-const licenseCache = new Map<string, { licenses: string[] }>();
-
-/**
- * Safely read file contents
- * @param filePath - Path to file
- * @returns File contents or null if file doesn't exist or can't be read
- */
-function safeReadFile(filePath: string): string | null {
-  try {
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (error) {
-    console.warn(`Failed to read file ${filePath}:`, error);
-    return null;
-  }
-}
 
 /**
  * Validate and sanitize a repository path
@@ -174,265 +160,123 @@ function splitSpdxLicenses(license: string): string[] {
   return [normalized || cleaned];
 }
 
+
 /**
- * Clean npm version specifier to get actual version number
- * Removes common npm version prefixes like ^, ~, >, <, =, >=, <=
- * @param versionSpec - npm version specifier (e.g., "^1.2.3", "~2.0.0")
- * @returns Cleaned version number
+ * Parse license-checker-rseidelsohn JSON output
+ * @param jsonOutput - JSON string from license-checker-rseidelsohn
+ * @returns Array of parsed dependencies
  */
-function cleanVersionSpec(versionSpec: string): string {
-  if (!isNonEmptyString(versionSpec)) {
-    return '';
+function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
+  if (!isNonEmptyString(jsonOutput)) {
+    return [];
   }
 
-  // Remove version range operators
-  return versionSpec
-    .replace(/^[\^~>=<]+/, '')
-    .trim();
-}
-
-/**
- * Process an array of async tasks with concurrency control
- * Prevents overwhelming the npm registry or system resources with too many parallel requests
- * @param tasks - Array of async functions to execute
- * @param concurrencyLimit - Maximum number of tasks to run concurrently
- * @returns Promise resolving to array of results
- */
-async function processBatched<T>(
-  tasks: Array<() => Promise<T>>,
-  concurrencyLimit: number
-): Promise<T[]> {
-  const results: T[] = [];
-
-  // Process tasks in batches
-  for (let i = 0; i < tasks.length; i += concurrencyLimit) {
-    const batch = tasks.slice(i, i + concurrencyLimit);
-    const batchResults = await Promise.all(batch.map(task => task()));
-    results.push(...batchResults);
-  }
-
-  return results;
-}
-
-/**
- * Fetch raw package data from npm registry
- * Handles HTTP request/response details and returns raw JSON string
- * @param packageName - Name of the npm package
- * @param registryUrl - npm registry URL to query (defaults to public npm registry)
- * @returns Promise resolving to raw JSON string from npm registry
- * @throws Error if HTTP request fails or times out
- */
-function fetchNpmPackageData(packageName: string, registryUrl: string = NPM_REGISTRY_URL): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = `${registryUrl}/${encodeURIComponent(packageName)}`;
-
-    const request = https.get(url, { timeout: HTTP_TIMEOUT }, (response) => {
-      let data = '';
-
-      response.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      response.on('end', () => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`npm registry returned ${response.statusCode} for ${packageName}`));
-          return;
-        }
-        resolve(data);
-      });
-    });
-
-    request.on('error', (error) => {
-      reject(new Error(`Error fetching npm data for ${packageName}: ${error.message}`));
-    });
-
-    request.on('timeout', () => {
-      request.destroy();
-      reject(new Error(`Timeout fetching npm data for ${packageName}`));
-    });
-  });
-}
-
-/**
- * Attempt to read license from local node_modules package
- * Fallback when npm registry is unavailable or package not found in registry
- * @param repoPath - Path to repository root
- * @param packageName - Name of the npm package
- * @returns Promise resolving to license information or null if not found
- */
-async function readLicenseFromNodeModules(
-  repoPath: string,
-  packageName: string
-): Promise<{ licenses: string[] } | null> {
   try {
-    // Sanitize package name to prevent path traversal
-    const safeName = packageName.replace(/\.\./g, '');
-    const nodeModulesPath = path.join(repoPath, 'node_modules', safeName, 'package.json');
+    const licenseData = JSON.parse(jsonOutput);
+    const dependencies: Dependency[] = [];
 
-    if (!fs.existsSync(nodeModulesPath)) {
-      return null;
-    }
+    for (const [packageKey, packageInfo] of Object.entries(licenseData)) {
+      // packageKey format: "package-name@version" or "@scope/package-name@version"
+      // For scoped packages, we need to find the last @ which separates name from version
+      let name: string;
+      let version: string;
 
-    const packageJson = JSON.parse(fs.readFileSync(nodeModulesPath, 'utf-8'));
-    const licenseField = packageJson.license;
-
-    if (!licenseField) {
-      return null;
-    }
-
-    // License can be a string or an object
-    let licenseString: string;
-
-    if (typeof licenseField === 'string') {
-      licenseString = licenseField;
-    } else if (typeof licenseField === 'object' && licenseField.type) {
-      // Handle object format: { type: "MIT", url: "..." }
-      licenseString = licenseField.type;
-    } else {
-      return null;
-    }
-
-    // Split SPDX expressions into individual licenses
-    const licenses = splitSpdxLicenses(licenseString);
-
-    return { licenses };
-  } catch (error) {
-    // Silently return null if we can't read from node_modules
-    return null;
-  }
-}
-
-/**
- * Fetch license information for an npm package from npm registry
- * Uses https://registry.npmjs.org/{package} API
- * @param packageName - Name of the npm package
- * @param versionSpec - Version specifier from package.json
- * @param repoPath - Path to repository root (for node_modules fallback)
- * @returns Promise resolving to license information (always as an array)
- */
-async function fetchNpmLicense(
-  packageName: string,
-  versionSpec: string,
-  repoPath: string
-): Promise<{ licenses: string[] }> {
-  // Check cache first
-  const cacheKey = `${packageName}:${versionSpec}`;
-  if (licenseCache.has(cacheKey)) {
-    return licenseCache.get(cacheKey)!;
-  }
-
-  // Helper function to extract license from registry data
-  const extractLicenseFromRegistryData = (data: string): { licenses: string[] } | null => {
-    try {
-      const packageData = JSON.parse(data);
-      const cleanVersion = cleanVersionSpec(versionSpec);
-
-      // Try to get specific version info
-      let versionData = packageData.versions?.[cleanVersion];
-
-      // Fallback to latest version if specific version not found
-      if (!versionData) {
-        const latestVersion = packageData['dist-tags']?.latest;
-        if (latestVersion) {
-          versionData = packageData.versions?.[latestVersion];
+      if (packageKey.startsWith('@')) {
+        // Scoped package: @scope/package-name@version
+        // Find the second @ which is the version separator
+        const secondAtIndex = packageKey.indexOf('@', 1);
+        if (secondAtIndex === -1) {
+          continue;
         }
-      }
-
-      if (!versionData || !versionData.license) {
-        return null;
-      }
-
-      // Handle different license field formats
-      const licenseField = versionData.license;
-      let licenseString: string;
-
-      if (typeof licenseField === 'string') {
-        licenseString = licenseField;
-      } else if (typeof licenseField === 'object' && licenseField.type) {
-        licenseString = licenseField.type;
+        name = packageKey.substring(0, secondAtIndex);
+        version = packageKey.substring(secondAtIndex + 1);
       } else {
-        return null;
+        // Regular package: package-name@version
+        const atIndex = packageKey.indexOf('@');
+        if (atIndex === -1) {
+          continue;
+        }
+        name = packageKey.substring(0, atIndex);
+        version = packageKey.substring(atIndex + 1);
       }
 
-      // Split SPDX expressions into individual licenses
-      const licenses = splitSpdxLicenses(licenseString);
-      return { licenses };
-    } catch (parseError) {
-      return null;
-    }
-  };
-
-  // THREE-TIER FALLBACK STRATEGY:
-  // 1. Try public npm registry
-  // 2. For @folio/* packages, try FOLIO registry
-  // 3. Fall back to node_modules
-
-  try {
-    // Tier 1: Try public npm registry
-    const publicData = await fetchNpmPackageData(packageName);
-    const publicResult = extractLicenseFromRegistryData(publicData);
-
-    if (publicResult) {
-      licenseCache.set(cacheKey, publicResult);
-      return publicResult;
-    }
-  } catch (publicError) {
-    // Public registry failed, continue to next tier
-  }
-
-  // Tier 2: For @folio/* packages, try FOLIO registry
-  if (packageName.startsWith('@folio/')) {
-    try {
-      const folioData = await fetchNpmPackageData(packageName, FOLIO_NPM_REGISTRY_URL);
-      const folioResult = extractLicenseFromRegistryData(folioData);
-
-      if (folioResult) {
-        licenseCache.set(cacheKey, folioResult);
-        return folioResult;
+      if (!isNonEmptyString(name) || !isNonEmptyString(version)) {
+        continue;
       }
-    } catch (folioError) {
-      // FOLIO registry failed, continue to next tier
+
+      // Extract licenses from license-checker output
+      const info = packageInfo as any;
+      let licenses: string[] = [];
+
+      if (info.licenses) {
+        const licenseField = info.licenses;
+
+        if (typeof licenseField === 'string') {
+          // Split SPDX expressions and normalize
+          licenses = splitSpdxLicenses(licenseField);
+        } else if (Array.isArray(licenseField)) {
+          // Already an array, but still need to split SPDX expressions
+          licenses = licenseField.flatMap(l => splitSpdxLicenses(String(l)));
+        }
+      }
+
+      const dependency: Dependency = {
+        name: name.trim(),
+        version: version.trim(),
+        licenses: licenses.length > 0 ? licenses : undefined
+      };
+
+      if (isValidDependency(dependency)) {
+        dependencies.push(dependency);
+      }
     }
-  }
 
-  // Tier 3: Fall back to node_modules
-  const nodeModulesResult = await readLicenseFromNodeModules(repoPath, packageName);
-  if (nodeModulesResult) {
-    licenseCache.set(cacheKey, nodeModulesResult);
-    return nodeModulesResult;
+    return dependencies;
+  } catch (error) {
+    console.warn('Failed to parse license-checker output:', error);
+    return [];
   }
-
-  // All tiers failed - return Unknown
-  console.warn(`Unable to fetch license for ${packageName} from registries or node_modules`);
-  const unknownResult = { licenses: ['Unknown'] };
-  licenseCache.set(cacheKey, unknownResult);
-  return unknownResult;
 }
 
 /**
- * Parse package.json file and extract dependency information
- * @param packageJsonPath - Path to package.json file
- * @returns Object containing dependencies and devDependencies
+ * Fallback: Extract direct dependencies from package.json without license information
+ * Used when license-checker fails but we still want to report what dependencies exist
+ *
+ * GRACEFUL DEGRADATION: This provides partial results (dependencies without licenses)
+ * which is better than no results at all. License compliance evaluator will mark
+ * dependencies without license info as requiring manual review.
+ *
+ * @param repoPath - Validated repository path
+ * @returns Array of dependencies without license information (only direct deps, not transitive)
  */
-function parsePackageJson(packageJsonPath: string): {
-  dependencies: Record<string, string>;
-  devDependencies: Record<string, string>;
-} | null {
-  const content = safeReadFile(packageJsonPath);
-  if (!content) {
-    return null;
+function extractFromPackageJson(repoPath: string): Dependency[] {
+  const packageJsonPath = path.join(repoPath, 'package.json');
+
+  if (!fs.existsSync(packageJsonPath)) {
+    return [];
   }
 
   try {
-    const packageData = JSON.parse(content);
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const dependencies: Dependency[] = [];
 
-    return {
-      dependencies: packageData.dependencies || {},
-      devDependencies: packageData.devDependencies || {}
-    };
+    // Extract from dependencies (production)
+    if (packageJson.dependencies && typeof packageJson.dependencies === 'object') {
+      for (const [name, version] of Object.entries(packageJson.dependencies)) {
+        if (isNonEmptyString(name) && isNonEmptyString(String(version))) {
+          dependencies.push({
+            name,
+            version: String(version).replace(/^[\^~>=<]/, ''), // Remove version prefix
+            licenses: undefined  // No license info available in fallback mode
+          });
+        }
+      }
+    }
+
+    return dependencies;
   } catch (error) {
-    console.warn(`Failed to parse package.json at ${packageJsonPath}:`, error);
-    return null;
+    console.error('Failed to parse package.json:', error);
+    return [];
   }
 }
 
@@ -449,17 +293,16 @@ export async function hasNpmProject(repoPath: string): Promise<boolean> {
 }
 
 /**
- * Extract dependencies from npm/Node.js project
- * Reads package.json and fetches license information from npm registry
+ * Extract dependencies from npm/Node.js project using license-checker-rseidelsohn
+ * Runs yarn install and license-checker to get all dependencies including transitives
  * @param repoPath - Path to npm project
  * @returns Promise resolving to extraction result with dependencies and errors
  */
 export async function getNpmDependencies(repoPath: string): Promise<DependencyExtractionResult> {
   const errors: DependencyExtractionError[] = [];
   const warnings: DependencyExtractionError[] = [];
-  const dependencies: Dependency[] = [];
 
-  // Validate repository path
+  // SECURITY: Validate and sanitize repository path before executing commands
   const validatedPath = validateRepoPath(repoPath);
   if (!validatedPath) {
     errors.push({
@@ -471,152 +314,80 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
   }
 
   try {
-    // Look for package.json files
-    const packageJsonPaths: string[] = [];
-
-    // Check root directory
-    const rootPackageJson = path.join(validatedPath, 'package.json');
-    if (fs.existsSync(rootPackageJson)) {
-      packageJsonPaths.push(rootPackageJson);
+    // Configure FOLIO registry for @folio scoped packages if .npmrc doesn't exist
+    const npmrcPath = path.join(validatedPath, '.npmrc');
+    if (!fs.existsSync(npmrcPath)) {
+      console.log('Creating .npmrc with FOLIO registry configuration...');
+      fs.writeFileSync(
+        npmrcPath,
+        `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`,
+        'utf-8'
+      );
     }
 
-    // Also check subdirectories for plugin projects (similar to Python script)
-    // Exclude common directories like node_modules, test directories, build artifacts, etc.
-    try {
-      const entries = fs.readdirSync(validatedPath, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          // Skip excluded directories and hidden directories (starting with .)
-          const dirName = entry.name;
-          if (EXCLUDED_SUBDIRS.includes(dirName) || dirName.startsWith('.')) {
-            continue;
-          }
+    // Step 1: Run yarn install to get all dependencies including transitives
+    // SECURITY: --ignore-scripts prevents execution of preinstall/postinstall/etc scripts
+    console.log('Running yarn install...');
+    await execAsync('yarn install --production --ignore-scripts', {
+      cwd: validatedPath,
+      timeout: INSTALL_TIMEOUT
+    });
 
-          const subPackageJson = path.join(validatedPath, dirName, 'package.json');
-          if (fs.existsSync(subPackageJson)) {
-            packageJsonPaths.push(subPackageJson);
-          }
-        }
+    // Step 2: Run license-checker-rseidelsohn to extract license information
+    // Use absolute path to binary from our project's node_modules
+    console.log('Running license-checker-rseidelsohn...');
+    const { stdout } = await execAsync(
+      `"${licenseCheckerBin}" --json --production`,
+      {
+        cwd: validatedPath,
+        timeout: LICENSE_CHECK_TIMEOUT
       }
-    } catch (error) {
-      // Ignore errors reading subdirectories
-    }
+    );
 
-    if (packageJsonPaths.length === 0) {
-      warnings.push({
-        source: 'npm-parser',
-        message: 'No package.json files found in repository'
-      });
-      return { dependencies: [], errors, warnings };
-    }
-
-    // Track unique dependencies (by name:version)
-    const uniqueDeps = new Map<string, Dependency>();
-
-    // Process all package.json files found
-    for (const packageJsonPath of packageJsonPaths) {
-      const packageData = parsePackageJson(packageJsonPath);
-
-      if (!packageData) {
-        warnings.push({
-          source: 'npm-parser',
-          message: `Failed to parse ${packageJsonPath}`
-        });
-        continue;
-      }
-
-      // Combine dependencies and devDependencies
-      const allDeps = {
-        ...packageData.dependencies,
-        ...packageData.devDependencies
-      };
-
-      // Collect dependencies to fetch (skip duplicates)
-      const depsToFetch: Array<{ name: string; version: string; key: string }> = [];
-      for (const [depName, versionSpec] of Object.entries(allDeps)) {
-        if (!isNonEmptyString(depName) || !isNonEmptyString(versionSpec)) {
-          continue;
-        }
-
-        const depKey = `${depName}:${versionSpec}`;
-        if (uniqueDeps.has(depKey)) {
-          continue;
-        }
-
-        depsToFetch.push({ name: depName, version: versionSpec, key: depKey });
-      }
-
-      // Fetch all licenses with controlled concurrency
-      // This is much faster than sequential fetches while preventing overwhelming the npm registry
-      // Maximum of MAX_CONCURRENT_REQUESTS parallel requests at a time
-      const licenseTasks = depsToFetch.map(({ name, version, key }) => {
-        return async () => {
-          try {
-            const licenseInfo = await fetchNpmLicense(name, version, validatedPath);
-            return {
-              key,
-              name,
-              version,
-              licenseInfo,
-              error: null
-            };
-          } catch (error) {
-            return {
-              key,
-              name,
-              version,
-              licenseInfo: null,
-              error: error instanceof Error ? error : new Error(String(error))
-            };
-          }
-        };
-      });
-
-      // Process license fetches in batches with concurrency control
-      const fetchResults = await processBatched(licenseTasks, MAX_CONCURRENT_REQUESTS);
-
-      // Process results and add to uniqueDeps map
-      for (const result of fetchResults) {
-        if (result.error) {
-          warnings.push({
-            source: 'npm-parser',
-            message: `Failed to fetch license for ${result.name}@${result.version}`,
-            error: result.error
-          });
-
-          // Add dependency without license info
-          const dependency: Dependency = {
-            name: result.name,
-            version: result.version,
-            licenses: undefined
-          };
-
-          if (isValidDependency(dependency)) {
-            uniqueDeps.set(result.key, dependency);
-          }
-        } else if (result.licenseInfo) {
-          const dependency: Dependency = {
-            name: result.name,
-            version: result.version,
-            licenses: result.licenseInfo.licenses
-          };
-
-          if (isValidDependency(dependency)) {
-            uniqueDeps.set(result.key, dependency);
-          }
-        }
-      }
-    }
-
-    // Convert map to array
-    dependencies.push(...Array.from(uniqueDeps.values()));
+    // Step 3: Parse the JSON output
+    const dependencies = parseLicenseCheckerOutput(stdout);
 
     return { dependencies, errors, warnings };
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Failed to extract npm dependencies via license-checker:', errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
+
+    // GRACEFUL DEGRADATION: Attempt to extract dependencies from package.json
+    // This provides partial results (direct deps without licenses) instead of complete failure
+    warnings.push({
+      source: 'npm-parser',
+      message: `License-checker approach failed, attempting fallback to package.json: ${errorMessage}`,
+      error: error instanceof Error ? error : new Error(String(error))
+    });
+
+    try {
+      const dependencies = extractFromPackageJson(validatedPath);
+      if (dependencies.length > 0) {
+        console.log(`Extracted ${dependencies.length} direct dependencies from package.json (without license info)`);
+        warnings.push({
+          source: 'npm-parser',
+          message: 'Using fallback: extracted direct dependencies from package.json without license information. License compliance will require manual review.',
+          error: new Error('Partial extraction - transitive dependencies and licenses unavailable')
+        });
+        return { dependencies, errors, warnings };
+      }
+    } catch (fallbackError) {
+      console.error('Fallback extraction also failed:', fallbackError);
+      errors.push({
+        source: 'npm-parser',
+        message: 'Both license-checker and package.json extraction failed',
+        error: fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError))
+      });
+    }
+
+    // Complete failure - no results available
     errors.push({
       source: 'npm-parser',
-      message: 'Failed to extract npm dependencies',
+      message: `Failed to extract npm dependencies: ${errorMessage}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

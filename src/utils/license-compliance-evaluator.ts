@@ -1,4 +1,4 @@
-import { CriterionResult, EvaluationStatus } from '../types';
+import { CriterionResult, EvaluationStatus, LicenseIssueType } from '../types';
 import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
 import * as fs from 'fs';
@@ -90,11 +90,45 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
         .map(issue => `• ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
         .join('\n');
 
+      // Determine if issues are failures or require manual review
+      // Category X (prohibited) licenses should FAIL
+      // Unknown licenses and undocumented Category B should be MANUAL
+      const hasCategoryXViolation = complianceResult.issues.some(issue =>
+        issue.issueType === LicenseIssueType.CATEGORY_X_VIOLATION
+      );
+
+      const allIssuesAreManualReview = complianceResult.issues.every(issue =>
+        issue.issueType === LicenseIssueType.UNKNOWN_LICENSE ||
+        issue.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B ||
+        issue.issueType === LicenseIssueType.NO_LICENSE_INFO
+      );
+
+      // If there's a Category X violation, it's an automatic FAIL
+      if (hasCategoryXViolation) {
+        return {
+          criterionId: 'S003',
+          status: EvaluationStatus.FAIL,
+          evidence: evidence,
+          details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+        };
+      }
+
+      // If all issues are manual review items (unknown licenses, undocumented Category B)
+      if (allIssuesAreManualReview) {
+        return {
+          criterionId: 'S003',
+          status: EvaluationStatus.MANUAL,
+          evidence: evidence,
+          details: `Third-party license compliance issues require manual review. Please verify these dependencies comply with ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+        };
+      }
+
+      // Default to MANUAL for safety (mixed issues or unexpected patterns)
       return {
         criterionId: 'S003',
-        status: EvaluationStatus.FAIL,
+        status: EvaluationStatus.MANUAL,
         evidence: evidence,
-        details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+        details: `Third-party license compliance issues found. Please review these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
       };
     }
 
