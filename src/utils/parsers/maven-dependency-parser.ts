@@ -20,7 +20,7 @@
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
  * - Directory traversal attack prevention through path.resolve()
- * - Command timeout enforcement (120 seconds)
+ * - Command timeout enforcement (300 seconds / 5 minutes)
  * - Repository path is validated before command execution
  *
  * Remaining risks:
@@ -42,7 +42,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 const execAsync = promisify(exec);
 
 // Maven-specific constants
-const COMMAND_TIMEOUT = 120000; // 120 seconds
+const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
@@ -254,6 +254,17 @@ function parseMavenThirdPartyFile(content: string): Dependency[] {
 }
 
 /**
+ * Check if an error is caused by command timeout
+ * @param error - Error object to check
+ * @returns True if error was caused by timeout
+ */
+function isTimeoutError(error: any): boolean {
+  return error.killed === true ||
+         error.signal === 'SIGTERM' ||
+         (error.message && error.message.toLowerCase().includes('timeout'));
+}
+
+/**
  * Parse Maven dependency:list output
  * @param output - Output from mvn dependency:list command
  * @returns Array of parsed dependencies (without license information)
@@ -357,7 +368,29 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
     return { dependencies, errors, warnings };
 
   } catch (error) {
-    // Log the detailed error for debugging
+    // Check if this is a timeout error
+    if (isTimeoutError(error)) {
+      const timeoutMinutes = COMMAND_TIMEOUT / 60000;
+      const timeoutMessage =
+        `Maven build timed out after ${timeoutMinutes} minutes. This usually indicates:\n` +
+        `- Large project with many dependencies requiring longer build time\n` +
+        `- Slow network connection for dependency downloads\n` +
+        `- Maven repository connectivity issues\n` +
+        `Suggestion: The timeout is currently set to ${timeoutMinutes} minutes. ` +
+        `Consider reviewing project size, network connectivity, or Maven repository configuration.`;
+
+      console.error('Maven dependency extraction timed out:');
+      console.error(`  Timeout: ${timeoutMinutes} minutes`);
+
+      errors.push({
+        source: 'maven-parser',
+        message: timeoutMessage,
+        error: error instanceof Error ? error : new Error(String(error))
+      });
+      return { dependencies: [], errors, warnings };
+    }
+
+    // Non-timeout error - provide detailed error information
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
 
