@@ -52,11 +52,6 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 
 const execAsync = promisify(exec);
 
-// Get path to license-checker binary in our project's node_modules
-// __dirname will be dist/utils/parsers after compilation, so go up to project root
-const projectRoot = path.resolve(__dirname, '../../..');
-const licenseCheckerBin = path.join(projectRoot, 'node_modules/.bin/license-checker-rseidelsohn');
-
 // npm-specific constants
 const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
 const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
@@ -233,7 +228,7 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
 
     return dependencies;
   } catch (error) {
-    console.warn('Failed to parse license-checker output:', error);
+    console.error('Failed to parse license-checker output:', error);
     return [];
   }
 }
@@ -334,10 +329,10 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
     });
 
     // Step 2: Run license-checker-rseidelsohn to extract license information
-    // Use absolute path to binary from our project's node_modules
+    // Use npx with pinned version to ensure consistency across environments
     console.log('Running license-checker-rseidelsohn...');
     const { stdout } = await execAsync(
-      `"${licenseCheckerBin}" --json --production`,
+      'npx license-checker-rseidelsohn@4.4.2 --json --production',
       {
         cwd: validatedPath,
         timeout: LICENSE_CHECK_TIMEOUT
@@ -370,8 +365,8 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
         console.log(`Extracted ${dependencies.length} direct dependencies from package.json (without license info)`);
         warnings.push({
           source: 'npm-parser',
-          message: 'Using fallback: extracted direct dependencies from package.json without license information. License compliance will require manual review.',
-          error: new Error('Partial extraction - transitive dependencies and licenses unavailable')
+          message: '⚠️  CRITICAL: Fallback mode used - ONLY DIRECT DEPENDENCIES analyzed. All transitive dependencies are MISSING from analysis. License information unavailable. Full compliance verification is IMPOSSIBLE without manual review of all transitive dependencies.',
+          error: new Error('Partial extraction - transitive dependencies unavailable')
         });
         return { dependencies, errors, warnings };
       }

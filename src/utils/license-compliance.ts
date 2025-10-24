@@ -39,6 +39,15 @@ interface LicenseEvaluation {
 }
 
 /**
+ * Default evaluation when no specific result can be determined
+ */
+const DEFAULT_EVALUATION_FAILURE = {
+  status: EvaluationStatus.MANUAL,
+  reason: 'Unable to evaluate licenses',
+  issueType: LicenseIssueType.UNKNOWN_LICENSE
+} as const;
+
+/**
  * Check if a license string represents an LGPL license
  * @param license - License name to check
  * @returns True if license is LGPL variant
@@ -284,9 +293,7 @@ function evaluateMultipleLicenses(
   // Fallback (shouldn't reach here)
   return evaluations[0] || {
     license: licenses.join(' | '),
-    status: EvaluationStatus.MANUAL,
-    reason: 'Unable to evaluate licenses',
-    issueType: LicenseIssueType.UNKNOWN_LICENSE
+    ...DEFAULT_EVALUATION_FAILURE
   };
 }
 
@@ -353,14 +360,16 @@ export function checkLicenseCompliance(
     const unsplitLicenses = allLicenses.filter(license =>
       license.includes('|') ||
       license.includes(' OR ') ||
-      license.includes(' AND ')
+      license.includes(' AND ') ||
+      (license.includes('(') && license.includes(')')) || // Unsplit complex expressions
+      license.includes(' WITH ') // SPDX exceptions
     );
     if (unsplitLicenses.length > 0) {
       console.error(
         `Parser contract violation for ${dependency.name}: ` +
-        `Licenses contain separators ('|', 'OR', 'AND') but should be pre-split. ` +
+        `Licenses contain separators ('|', 'OR', 'AND', parentheses, 'WITH') but should be pre-split. ` +
         `Found: ${unsplitLicenses.join(', ')}. ` +
-        `Parsers must split dual/multi-licenses before passing to compliance checker.`
+        `Parsers must split dual/multi-licenses and normalize expressions before passing to compliance checker.`
       );
       issues.push({
         dependency,

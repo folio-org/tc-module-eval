@@ -689,6 +689,44 @@ describe('Dependency Utils', () => {
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].reason).toContain('Parser error');
     });
+
+    it('should detect parser contract violation when licenses contain parentheses', () => {
+      const dependencies: Dependency[] = [
+        {
+          name: 'org.example:complex-unsplit',
+          version: '1.0.0',
+          licenses: ['(MIT OR Apache-2.0)'] // Complex SPDX expression - parser should split!
+        }
+      ];
+
+      const readmeContent = 'No license documentation';
+      const result = checkLicenseCompliance(dependencies, readmeContent);
+
+      // Should fail due to parser contract violation
+      expect(result.compliant).toBe(false);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].reason).toContain('Parser error');
+      expect(result.issues[0].reason).toContain('not properly split');
+    });
+
+    it('should detect parser contract violation when licenses contain WITH keyword', () => {
+      const dependencies: Dependency[] = [
+        {
+          name: 'org.example:spdx-exception-unsplit',
+          version: '1.0.0',
+          licenses: ['Apache-2.0 WITH LLVM-exception'] // SPDX exception - parser should normalize!
+        }
+      ];
+
+      const readmeContent = 'No license documentation';
+      const result = checkLicenseCompliance(dependencies, readmeContent);
+
+      // Should fail due to parser contract violation
+      expect(result.compliant).toBe(false);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].reason).toContain('Parser error');
+      expect(result.issues[0].reason).toContain('not properly split');
+    });
   });
 
 });

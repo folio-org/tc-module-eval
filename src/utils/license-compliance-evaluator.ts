@@ -25,7 +25,8 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
           const baseMessage = `  - [${e.source}] ${e.message}`;
           // Include the underlying error details if available and different from the main message
           if (e.error && e.error.message && !e.message.includes(e.error.message)) {
-            return `${baseMessage}\n    Details: ${e.error.message}`;
+            const stackInfo = e.error.stack ? `\n    Stack: ${e.error.stack.split('\n')[1]}` : '';
+            return `${baseMessage}\n    Details: ${e.error.message}${stackInfo}`;
           }
           return baseMessage;
         })
@@ -84,7 +85,24 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
       ? `\n\nExtraction warnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
       : '';
 
+    // Check if fallback mode was used (transitive dependencies missing)
+    const hasFallbackWarning = warnings.some(w =>
+      w.message.includes('transitive dependencies unavailable') ||
+      w.message.includes('fallback') ||
+      w.message.includes('Fallback mode')
+    );
+
     if (complianceResult.compliant) {
+      // If fallback was used, force MANUAL status even if no violations found
+      if (hasFallbackWarning) {
+        return {
+          criterionId: 'S003',
+          status: EvaluationStatus.MANUAL,
+          evidence: evidence,
+          details: `License compliance check passed for analyzed dependencies, but MANUAL REVIEW REQUIRED.\n\n⚠️  WARNING: Only direct dependencies were analyzed. Transitive dependencies are unavailable and were not included in this analysis. Full license compliance cannot be verified without analyzing all transitive dependencies.${warningInfo}`
+        };
+      }
+
       return {
         criterionId: 'S003',
         status: EvaluationStatus.PASS,

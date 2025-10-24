@@ -20,7 +20,7 @@
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
  * - Directory traversal attack prevention through path.resolve()
- * - Command timeout enforcement (60 seconds)
+ * - Command timeout enforcement (120 seconds)
  * - Repository path is validated before command execution
  *
  * Remaining risks:
@@ -42,7 +42,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 const execAsync = promisify(exec);
 
 // Maven-specific constants
-const COMMAND_TIMEOUT = 60000; // 60 seconds
+const COMMAND_TIMEOUT = 120000; // 120 seconds
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 

@@ -23,6 +23,10 @@ import { Dependency } from '../types';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
+// Constants for mock Stats defaults
+const DEFAULT_MOCK_SIZE = 0;
+const DEFAULT_MOCK_DATE = new Date();
+
 // Helper to create a proper Stats mock
 function createMockStats(isDirectory: boolean = true): Partial<Stats> {
   return {
@@ -33,11 +37,11 @@ function createMockStats(isDirectory: boolean = true): Partial<Stats> {
     isCharacterDevice: jest.fn().mockReturnValue(false),
     isFIFO: jest.fn().mockReturnValue(false),
     isSocket: jest.fn().mockReturnValue(false),
-    size: 0,
-    mtime: new Date(),
-    atime: new Date(),
-    ctime: new Date(),
-    birthtime: new Date()
+    size: DEFAULT_MOCK_SIZE,
+    mtime: DEFAULT_MOCK_DATE,
+    atime: DEFAULT_MOCK_DATE,
+    ctime: DEFAULT_MOCK_DATE,
+    birthtime: DEFAULT_MOCK_DATE
   } as Partial<Stats>;
 }
 
@@ -330,7 +334,9 @@ describe('npm-dependency-parser', () => {
       // Should have warnings, not errors
       expect(result.warnings).toHaveLength(2);
       expect(result.warnings[0].message).toContain('License-checker approach failed');
-      expect(result.warnings[1].message).toContain('Using fallback');
+      expect(result.warnings[1].message).toContain('Fallback mode');
+      expect(result.warnings[1].message).toContain('ONLY DIRECT DEPENDENCIES analyzed');
+      expect(result.warnings[1].message).toContain('transitive dependencies are MISSING');
       expect(result.errors).toHaveLength(0);
     });
 
