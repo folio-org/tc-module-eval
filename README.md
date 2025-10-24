@@ -21,6 +21,21 @@ yarn global add .
 
 ## Usage
 
+### Web Interface (GitHub Actions)
+
+1. In this tc-module-eval project, click Actions and then (in the left sidebar) FOLIO Module Evaluation.  Or [load that page directly](https://github.com/folio-org/tc-module-eval/actions/workflows/module-evaluation.yml).
+
+1. Click Run Workflow.  In the popup, 
+
+    - Enter the GitHub URL of the module to evaluate.
+
+    - Click Run Workflow.
+
+1. Wait for the workflow run to complete, 1-2 minutes, then click into it.
+
+1. Under Artifacts, click to download the reports (as a zip file) for review.
+
+
 ### Command Line Interface
 
 ```bash
