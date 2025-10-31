@@ -11,6 +11,8 @@
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
     "test": "jest",
+    "test:unit": "jest --testPathIgnorePatterns='integration'",
+    "test:integration": "jest --testMatch='**/*.integration.test.ts' --runInBand",
     "clean": "rm -rf dist"
   },
   "keywords": [
