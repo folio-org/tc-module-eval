@@ -35,6 +35,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseStringPromise } from 'xml2js';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
@@ -53,6 +54,9 @@ const MAVEN_COORDINATE_PATTERN = /^(.+?):(.+?):(.+?)$/;
 
 // Maven build file patterns
 const MAVEN_BUILD_FILES = ['pom.xml'];
+
+// Valid Maven packaging types
+const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb', 'rar', 'bundle'];
 
 /**
  * Safely read file contents
@@ -105,6 +109,54 @@ function validateRepoPath(repoPath: string): string | null {
   } catch (error) {
     console.warn(`Failed to validate repository path ${repoPath}:`, error);
     return null;
+  }
+}
+
+/**
+ * Determine the Maven packaging type from pom.xml using proper XML parsing
+ * @param repoPath - Path to Maven project
+ * @returns Promise resolving to packaging type ('pom', 'jar', 'war', etc.) or 'jar' as default
+ */
+async function getMavenPackaging(repoPath: string): Promise<string> {
+  try {
+    const pomPath = path.join(repoPath, 'pom.xml');
+    if (!fs.existsSync(pomPath)) {
+      console.warn('pom.xml not found, defaulting to jar packaging');
+      return 'jar';
+    }
+
+    const pomContent = fs.readFileSync(pomPath, 'utf-8');
+
+    // Parse XML using xml2js for robust handling of XML variations
+    const parsed = await parseStringPromise(pomContent, {
+      trim: true,
+      explicitArray: true,
+      mergeAttrs: false
+    });
+
+    // Extract packaging from parsed XML
+    // Structure: parsed.project.packaging[0]
+    const packaging = parsed?.project?.packaging?.[0];
+
+    if (packaging && isNonEmptyString(packaging)) {
+      const trimmedPackaging = packaging.trim();
+
+      // Validate against known packaging types
+      if (!VALID_PACKAGING_TYPES.includes(trimmedPackaging)) {
+        console.warn(`Unknown Maven packaging type: ${trimmedPackaging}, defaulting to jar`);
+        return 'jar';
+      }
+
+      console.log(`Detected Maven packaging type: ${trimmedPackaging}`);
+      return trimmedPackaging;
+    }
+
+    // Maven defaults to 'jar' when packaging is not specified
+    console.log('No packaging specified in pom.xml, defaulting to jar');
+    return 'jar';
+  } catch (error) {
+    console.warn('Failed to parse pom.xml packaging, defaulting to jar:', error);
+    return 'jar';
   }
 }
 
@@ -343,9 +395,21 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
   }
 
   try {
+    // Determine packaging type to use correct Maven goal
+    const packaging = await getMavenPackaging(validatedPath);
+
+    // Choose appropriate goal based on packaging:
+    // - 'pom' packaging: use aggregate-add-third-party (for parent POMs in multi-module projects)
+    // - Other packaging ('jar', 'war', etc.): use add-third-party (for regular modules)
+    const mavenGoal = packaging === 'pom'
+      ? 'license:aggregate-add-third-party'
+      : 'license:add-third-party';
+
+    console.log(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
+
     // Execute Maven license plugin to generate third-party report
     const { stdout } = await execAsync(
-      'mvn license:add-third-party -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=true',
+      `mvn ${mavenGoal} -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=true`,
       {
         cwd: validatedPath,
         timeout: COMMAND_TIMEOUT,
@@ -364,23 +428,20 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
       return { dependencies, errors, warnings };
     }
 
-    // Fallback: try to parse dependency:list output
+    // THIRD-PARTY.txt was not generated despite successful Maven execution
+    // This is typically not an error - it just means there are no third-party dependencies
+    console.warn('Maven license plugin did not generate THIRD-PARTY.txt file');
+    console.warn(`Expected file location: ${thirdPartyFile}`);
+    console.warn('This may indicate: no third-party dependencies, or all dependencies are first-party');
+
     warnings.push({
       source: 'maven-parser',
-      message: 'Maven license plugin did not generate THIRD-PARTY.txt, falling back to dependency:list'
+      message: 'Maven license plugin did not generate THIRD-PARTY.txt file. ' +
+               'This typically means the project has no third-party dependencies. ' +
+               `Expected location: ${MAVEN_THIRD_PARTY_PATH}`
     });
 
-    const { stdout: depsOutput } = await execAsync(
-      `mvn dependency:list -DoutputFile=${MAVEN_DEPENDENCIES_PATH}`,
-      {
-        cwd: validatedPath,
-        timeout: COMMAND_TIMEOUT,
-        maxBuffer: MAX_BUFFER
-      }
-    );
-
-    const dependencies = parseMavenDependencyList(depsOutput);
-    return { dependencies, errors, warnings };
+    return { dependencies: [], errors, warnings };
 
   } catch (error) {
     // Check if this is a maxBuffer error

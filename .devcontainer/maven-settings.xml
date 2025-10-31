@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0
+                              http://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+  <!-- Override the default HTTP blocker to allow FOLIO repositories -->
+  <mirrors>
+    <mirror>
+      <id>maven-default-http-blocker</id>
+      <mirrorOf>external:http:*,!folio-nexus,!folio-snapshots,!apache.snapshots,!index-data-nexus</mirrorOf>
+      <name>Pseudo repository to mirror external repositories initially using HTTP.</name>
+      <url>http://0.0.0.0/</url>
+      <blocked>true</blocked>
+    </mirror>
+  </mirrors>
+
+  <profiles>
+    <!-- FOLIO Repository Profile -->
+    <profile>
+      <id>folio</id>
+      <repositories>
+        <repository>
+          <id>folio-nexus</id>
+          <name>FOLIO Maven Repository</name>
+          <url>https://repository.folio.org/repository/maven-folio/</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>folio-snapshots</id>
+          <name>FOLIO Snapshot Repository</name>
+          <url>https://repository.folio.org/repository/snapshots/</url>
+          <releases>
+            <enabled>false</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+            <updatePolicy>always</updatePolicy>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>folio-nexus</id>
+          <name>FOLIO Maven Repository</name>
+          <url>https://repository.folio.org/repository/maven-folio/</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+
+  <!-- Activate the FOLIO profile by default -->
+  <activeProfiles>
+    <activeProfile>folio</activeProfile>
+  </activeProfiles>
+
+</settings>
