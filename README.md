@@ -2,6 +2,11 @@
 
 A CLI for evaluating FOLIO modules against technical council criteria.
 
+Copyright (C) 2025-2026 The Open Library Foundation
+
+This software is distributed under the terms of the Apache License,
+Version 2.0. See the file "[LICENSE](LICENSE)" for more information.
+
 ## Overview
 
 This tool provides a modular, extensible framework for automatically evaluating FOLIO modules against acceptance criteria. It currently supports Java modules with a pluggable architecture for adding support for additional programming languages.
