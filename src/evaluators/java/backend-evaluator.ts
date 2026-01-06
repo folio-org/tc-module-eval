@@ -53,66 +53,66 @@ export class BackendEvaluator extends BaseSectionEvaluator {
   // Future implementation will analyze code, APIs, and configurations to determine PASS/FAIL status
 
   private async evaluateB001(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B001', 'API design and RESTful principles');
+    return this.createNotImplementedResult('B001', 'API design and RESTful principles');
   }
 
   private async evaluateB002(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B002', 'Database design and schema management');
+    return this.createNotImplementedResult('B002', 'Database design and schema management');
   }
 
   private async evaluateB003(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B003', 'Error handling and validation');
+    return this.createNotImplementedResult('B003', 'Error handling and validation');
   }
 
   private async evaluateB004(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B004', 'Authentication and authorization');
+    return this.createNotImplementedResult('B004', 'Authentication and authorization');
   }
 
   private async evaluateB005(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B005', 'Data persistence and transactions');
+    return this.createNotImplementedResult('B005', 'Data persistence and transactions');
   }
 
   private async evaluateB006(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B006', 'Caching strategy');
+    return this.createNotImplementedResult('B006', 'Caching strategy');
   }
 
   private async evaluateB007(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B007', 'Event-driven architecture');
+    return this.createNotImplementedResult('B007', 'Event-driven architecture');
   }
 
   private async evaluateB008(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B008', 'Microservice architecture compliance');
+    return this.createNotImplementedResult('B008', 'Microservice architecture compliance');
   }
 
   private async evaluateB009(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B009', 'Health checks and monitoring endpoints');
+    return this.createNotImplementedResult('B009', 'Health checks and monitoring endpoints');
   }
 
   private async evaluateB010(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B010', 'Scalability and load handling');
+    return this.createNotImplementedResult('B010', 'Scalability and load handling');
   }
 
   private async evaluateB011(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B011', 'Data migration and backward compatibility');
+    return this.createNotImplementedResult('B011', 'Data migration and backward compatibility');
   }
 
   private async evaluateB012(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B012', 'Environment configuration');
+    return this.createNotImplementedResult('B012', 'Environment configuration');
   }
 
   private async evaluateB013(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B013', 'Dependency injection and IoC');
+    return this.createNotImplementedResult('B013', 'Dependency injection and IoC');
   }
 
   private async evaluateB014(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B014', 'API versioning strategy');
+    return this.createNotImplementedResult('B014', 'API versioning strategy');
   }
 
   private async evaluateB015(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B015', 'Resource management');
+    return this.createNotImplementedResult('B015', 'Resource management');
   }
 
   private async evaluateB016(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('B016', 'Integration testing');
+    return this.createNotImplementedResult('B016', 'Integration testing');
   }
 }

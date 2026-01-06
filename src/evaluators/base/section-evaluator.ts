@@ -120,17 +120,17 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
   }
 
   /**
-   * Create a not applicable result for criteria with stub implementations
+   * Create a manual review result for a criterion with stub implementation
    * @param criterionId The ID of the criterion
    * @param description Brief description of what the criterion evaluates
-   * @returns CriterionResult The not applicable result
+   * @returns CriterionResult The manual review result
    */
-  protected createNotApplicableResult(criterionId: string, description: string): CriterionResult {
+  protected createNotImplementedResult(criterionId: string, description: string): CriterionResult {
     return this.createResult(
       criterionId,
-      EvaluationStatus.NOT_APPLICABLE,
+      EvaluationStatus.MANUAL,
       `${description} - evaluation logic not yet implemented`,
-      'This criterion has a stub implementation. Automated evaluation logic needs to be developed.'
+      'This criterion requires manual evaluation by a human reviewer'
     );
   }
 }
