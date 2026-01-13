@@ -4,9 +4,10 @@ A CLI for evaluating FOLIO modules against technical council criteria.
 
 ## Overview
 
-This tool provides a modular, extensible framework for automatically evaluating FOLIO modules against acceptance criteria. It currently supports Java modules with a pluggable architecture for adding support for additional programming languages.
+This tool provides a modular, extensible framework for automatically evaluating a module against
+[FOLIO module acceptance criteria](https://github.com/folio-org/tech-council/blob/master/MODULE_ACCEPTANCE_CRITERIA.MD).
 
-**Note**: Dependency analysis includes all transitive dependencies for Maven and npm projects.
+**Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 
 ## Security
 
