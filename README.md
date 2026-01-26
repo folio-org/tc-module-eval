@@ -25,7 +25,7 @@ Use any devcontainer-compatible tool (VS Code, JetBrains IDEs, GitHub Codespaces
 
 ### Web Interface (GitHub Actions)
 
-1. In this tc-module-eval project, click Actions and then (in the left sidebar) FOLIO Module Evaluation.  Or [load that page directly](https://github.com/folio-org/tc-module-eval/actions/workflows/module-evaluation.yml).
+1. In this tc-module-eval project, click Actions and then (in the left sidebar) Evaluate Remote Repository (Manual).  Or [load that page directly](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
 1. Click Run Workflow.  In the popup,
 
@@ -36,6 +36,10 @@ Use any devcontainer-compatible tool (VS Code, JetBrains IDEs, GitHub Codespaces
 1. Wait for the workflow run to complete, 1-2 minutes, then click into it.
 
 1. Under Artifacts, click to download the reports (as a zip file) for review.
+
+### Integrate with Your Repository
+
+To run evaluations from your FOLIO module repository, see [GITHUB_ACTION.md](GITHUB_ACTION.md) for setup instructions.
 
 
 ### Command Line Interface

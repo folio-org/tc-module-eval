@@ -1,4 +1,4 @@
-name: FOLIO Module Evaluation
+name: Evaluate Remote Repository (Manual)
 
 on:
   workflow_dispatch:

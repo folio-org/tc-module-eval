@@ -1,0 +1,241 @@
+name: Module Evaluation (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Branch to evaluate (defaults to triggering ref)'
+        required: false
+        type: string
+        default: ''
+      output_format:
+        description: 'Report output format: both, json-only, or html-only'
+        required: false
+        type: string
+        default: 'both'
+      criteria_filter:
+        description: 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)'
+        required: false
+        type: string
+        default: ''
+      java_version:
+        description: 'Java version to use'
+        required: false
+        type: string
+        default: '17'
+      node_version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18'
+      evaluator_ref:
+        description: 'tc-module-eval ref (branch/tag) to use'
+        required: false
+        type: string
+        default: 'master'
+    outputs:
+      report_artifact:
+        description: 'Name of the uploaded artifact containing reports'
+        value: ${{ jobs.evaluate.outputs.report_artifact }}
+      passed:
+        description: 'Number of passed criteria'
+        value: ${{ jobs.evaluate.outputs.passed }}
+      failed:
+        description: 'Number of failed criteria'
+        value: ${{ jobs.evaluate.outputs.failed }}
+      manual:
+        description: 'Number of criteria requiring manual review'
+        value: ${{ jobs.evaluate.outputs.manual }}
+
+jobs:
+  evaluate:
+    name: Evaluate Module
+    runs-on: ubuntu-latest
+    outputs:
+      report_artifact: ${{ steps.artifact-name.outputs.name }}
+      passed: ${{ steps.parse-results.outputs.passed }}
+      failed: ${{ steps.parse-results.outputs.failed }}
+      manual: ${{ steps.parse-results.outputs.manual }}
+
+    steps:
+      - name: Checkout tc-module-eval
+        uses: actions/checkout@v4
+        with:
+          repository: folio-org/tc-module-eval
+          ref: ${{ inputs.evaluator_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          architecture: 'x64'
+          cache: 'npm'
+          cache-dependency-path: 'package.json'
+
+      - name: Get cache key components
+        id: cache-keys
+        run: |
+          echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-folio-deps-${{ steps.cache-keys.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-npm-folio-deps-
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-folio-deps-${{ steps.cache-keys.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-maven-folio-deps-
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-folio-deps-${{ steps.cache-keys.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-folio-deps-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Derive repository URL and branch
+        id: derive-repo
+        run: |
+          # Build the repository URL from github context
+          REPO_URL="https://github.com/${{ github.repository }}"
+          echo "repo_url=$REPO_URL" >> $GITHUB_OUTPUT
+
+          # Determine branch: use input if provided, otherwise derive from context
+          if [ -n "${{ inputs.branch }}" ]; then
+            BRANCH="${{ inputs.branch }}"
+          elif [ -n "${{ github.head_ref }}" ]; then
+            # Pull request - use head ref
+            BRANCH="${{ github.head_ref }}"
+          else
+            # Push or other - use ref_name
+            BRANCH="${{ github.ref_name }}"
+          fi
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          echo "Repository: $REPO_URL"
+          echo "Branch: $BRANCH"
+
+      - name: Generate artifact name
+        id: artifact-name
+        run: |
+          # Create artifact name from repository name
+          REPO_NAME=$(echo "${{ github.repository }}" | sed 's/.*\///')
+          ARTIFACT_NAME="${REPO_NAME}-evaluation-reports"
+          echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Prepare CLI arguments
+        id: prepare-args
+        run: |
+          ARGS="${{ steps.derive-repo.outputs.repo_url }}"
+          OUTPUT_DIR="reports"
+
+          ARGS="$ARGS --output $OUTPUT_DIR"
+          ARGS="$ARGS --branch ${{ steps.derive-repo.outputs.branch }}"
+
+          case "${{ inputs.output_format }}" in
+            "json-only")
+              ARGS="$ARGS --json-only"
+              ;;
+            "html-only")
+              ARGS="$ARGS --html-only"
+              ;;
+          esac
+
+          if [ -n "${{ inputs.criteria_filter }}" ]; then
+            ARGS="$ARGS --criteria ${{ inputs.criteria_filter }}"
+          fi
+
+          echo "cli_args=$ARGS" >> $GITHUB_OUTPUT
+          echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
+
+      - name: Run module evaluation
+        run: |
+          echo "Starting FOLIO Module Evaluation..."
+          echo "Repository: ${{ steps.derive-repo.outputs.repo_url }}"
+          echo "Branch: ${{ steps.derive-repo.outputs.branch }}"
+          echo "Output format: ${{ inputs.output_format }}"
+          echo "Criteria filter: ${{ inputs.criteria_filter || '(all)' }}"
+          echo ""
+
+          node dist/cli.js evaluate ${{ steps.prepare-args.outputs.cli_args }}
+
+      - name: Parse evaluation results
+        id: parse-results
+        run: |
+          JSON_FILE=$(find ${{ steps.prepare-args.outputs.output_dir }} -name "*.json" | head -1)
+          if [ -f "$JSON_FILE" ]; then
+            PASSED=$(jq -r '[.criteria[] | select(.status == "pass")] | length' "$JSON_FILE")
+            FAILED=$(jq -r '[.criteria[] | select(.status == "fail")] | length' "$JSON_FILE")
+            MANUAL=$(jq -r '[.criteria[] | select(.status == "manual")] | length' "$JSON_FILE")
+          else
+            PASSED=0
+            FAILED=0
+            MANUAL=0
+          fi
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "manual=$MANUAL" >> $GITHUB_OUTPUT
+
+      - name: Write job summary
+        run: |
+          JSON_FILE=$(find ${{ steps.prepare-args.outputs.output_dir }} -name "*.json" | head -1)
+
+          echo "## FOLIO Module Evaluation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$JSON_FILE" ]; then
+            MODULE=$(jq -r '.moduleName // "N/A"' "$JSON_FILE")
+            LANGUAGE=$(jq -r '.language // "N/A"' "$JSON_FILE")
+            TOTAL=$(jq -r '.criteria | length' "$JSON_FILE")
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Module | $MODULE |" >> $GITHUB_STEP_SUMMARY
+            echo "| Language | $LANGUAGE |" >> $GITHUB_STEP_SUMMARY
+            echo "| Branch | ${{ steps.derive-repo.outputs.branch }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Criteria | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | ${{ steps.parse-results.outputs.passed }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | ${{ steps.parse-results.outputs.failed }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 👀 Manual Review | ${{ steps.parse-results.outputs.manual }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No JSON report found." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup build artifacts before caching
+        run: |
+          sleep 2
+          rm -rf ~/.m2/repository/.cache/tycho || true
+          find ~/.m2/repository -name "*.lastUpdated" -delete 2>/dev/null || true
+          find ~/.m2/repository -name "_remote.repositories" -delete 2>/dev/null || true
+          sync
+
+      - name: Upload evaluation reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ steps.artifact-name.outputs.name }}
+          path: ${{ steps.prepare-args.outputs.output_dir }}/
+          retention-days: 90
+          if-no-files-found: warn
