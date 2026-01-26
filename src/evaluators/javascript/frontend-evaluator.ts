@@ -44,7 +44,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check if package.json properly declares stripes dependencies and interfaces
    */
   private async evaluateF001(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F001',
       'API interface requirements in package.json'
     );
@@ -55,7 +55,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check for E2E tests using supported frameworks (e.g., Cypress, BigTest)
    */
   private async evaluateF002(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F002',
       'E2E tests in supported technology (Cypress, BigTest, etc.)'
     );
@@ -66,7 +66,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check if module uses react-intl for internationalization
    */
   private async evaluateF003(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F003',
       'Internationalization support via react-intl'
     );
@@ -77,7 +77,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check for accessibility compliance (automated tests, documentation)
    */
   private async evaluateF004(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F004',
       'WCAG 2.1 AA accessibility compliance'
     );
@@ -88,7 +88,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check if module uses officially supported Stripes version
    */
   private async evaluateF005(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F005',
       'Use of specified Stripes framework version'
     );
@@ -99,7 +99,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check if module follows FOLIO UI conventions and patterns
    */
   private async evaluateF006(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F006',
       'Adherence to existing FOLIO UI layouts and patterns'
     );
@@ -110,7 +110,7 @@ export class FrontendEvaluator extends BaseSectionEvaluator {
    * Check browser compatibility documentation and testing
    */
   private async evaluateF007(repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult(
+    return this.createNotImplementedResult(
       'F007',
       'Browser compatibility with latest Chrome'
     );

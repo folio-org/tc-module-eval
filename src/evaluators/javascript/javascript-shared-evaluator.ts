@@ -63,7 +63,7 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement package.json stripes metadata validation
    */
   private async evaluateS002(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S002', 'package.json and stripes metadata validation');
+    return this.createNotImplementedResult('S002', 'package.json and stripes metadata validation');
   }
 
   /**
@@ -76,15 +76,15 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
   }
 
   private async evaluateS004(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S004', 'README file evaluation');
+    return this.createNotImplementedResult('S004', 'README file evaluation');
   }
 
   private async evaluateS005(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S005', 'Version control and branching strategy');
+    return this.createNotImplementedResult('S005', 'Version control and branching strategy');
   }
 
   private async evaluateS006(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S006', 'Code quality and static analysis');
+    return this.createNotImplementedResult('S006', 'Code quality and static analysis');
   }
 
   /**
@@ -93,7 +93,7 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement package.json technology version checks
    */
   private async evaluateS007(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S007', 'Supported technologies (React, Node.js, Stripes)');
+    return this.createNotImplementedResult('S007', 'Supported technologies (React, Node.js, Stripes)');
   }
 
   /**
@@ -102,7 +102,7 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement Stripes interface usage validation
    */
   private async evaluateS008(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S008', 'FOLIO Stripes interface usage');
+    return this.createNotImplementedResult('S008', 'FOLIO Stripes interface usage');
   }
 
   /**
@@ -111,11 +111,11 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement npm package approval checking
    */
   private async evaluateS009(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S009', 'Approved npm package dependencies');
+    return this.createNotImplementedResult('S009', 'Approved npm package dependencies');
   }
 
   private async evaluateS010(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S010', 'Performance requirements');
+    return this.createNotImplementedResult('S010', 'Performance requirements');
   }
 
   /**
@@ -124,7 +124,7 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement sonar configuration validation
    */
   private async evaluateS011(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S011', 'Sonarqube security configuration');
+    return this.createNotImplementedResult('S011', 'Sonarqube security configuration');
   }
 
   /**
@@ -133,7 +133,7 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement npm/yarn validation
    */
   private async evaluateS012(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S012', 'Build tools (npm/yarn)');
+    return this.createNotImplementedResult('S012', 'Build tools (npm/yarn)');
   }
 
   /**
@@ -142,10 +142,10 @@ export class JavaScriptSharedEvaluator extends BaseSectionEvaluator {
    * TODO: Implement JavaScript test coverage extraction
    */
   private async evaluateS013(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S013', 'Unit test coverage (Jest/Istanbul)');
+    return this.createNotImplementedResult('S013', 'Unit test coverage (Jest/Istanbul)');
   }
 
   private async evaluateS014(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S014', 'Application descriptor assignment');
+    return this.createNotImplementedResult('S014', 'Application descriptor assignment');
   }
 }

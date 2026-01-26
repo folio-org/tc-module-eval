@@ -53,7 +53,7 @@ export class JavaSharedEvaluator extends BaseSectionEvaluator {
   }
 
   private async evaluateS002(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S002', 'Module descriptor validation');
+    return this.createNotImplementedResult('S002', 'Module descriptor validation');
   }
 
   private async evaluateS003(repoPath: string): Promise<CriterionResult> {
@@ -61,46 +61,46 @@ export class JavaSharedEvaluator extends BaseSectionEvaluator {
   }
 
   private async evaluateS004(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S004', 'README file evaluation');
+    return this.createNotImplementedResult('S004', 'README file evaluation');
   }
 
   private async evaluateS005(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S005', 'Version control and branching strategy');
+    return this.createNotImplementedResult('S005', 'Version control and branching strategy');
   }
 
   private async evaluateS006(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S006', 'Code quality and static analysis');
+    return this.createNotImplementedResult('S006', 'Code quality and static analysis');
   }
 
   private async evaluateS007(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S007', 'Testing requirements');
+    return this.createNotImplementedResult('S007', 'Testing requirements');
   }
 
   private async evaluateS008(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S008', 'Documentation requirements');
+    return this.createNotImplementedResult('S008', 'Documentation requirements');
   }
 
   private async evaluateS009(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S009', 'Security requirements');
+    return this.createNotImplementedResult('S009', 'Security requirements');
   }
 
   private async evaluateS010(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S010', 'Performance requirements');
+    return this.createNotImplementedResult('S010', 'Performance requirements');
   }
 
   private async evaluateS011(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S011', 'Accessibility requirements');
+    return this.createNotImplementedResult('S011', 'Accessibility requirements');
   }
 
   private async evaluateS012(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S012', 'Internationalization requirements');
+    return this.createNotImplementedResult('S012', 'Internationalization requirements');
   }
 
   private async evaluateS013(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S013', 'Configuration management');
+    return this.createNotImplementedResult('S013', 'Configuration management');
   }
 
   private async evaluateS014(_repoPath: string): Promise<CriterionResult> {
-    return this.createNotApplicableResult('S014', 'Monitoring and logging');
+    return this.createNotImplementedResult('S014', 'Monitoring and logging');
   }
 }
