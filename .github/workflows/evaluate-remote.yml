@@ -4,186 +4,47 @@ on:
   workflow_dispatch:
     inputs:
       repository_url:
-        description: 'GitHub URL of the repository to evaluate'
+        description: "GitHub URL of the repository to evaluate"
         required: true
         type: string
-        default: 'https://github.com/folio-org/mod-users'
-      branch:
-        description: 'Branch name to evaluate (leave empty for repository default branch)'
+        default: "https://github.com/folio-org/mod-users"
+      ref:
+        description: "Git ref to evaluate (leave empty for repository default)"
         required: false
         type: string
-        default: ''
+        default: ""
       output_format:
-        description: 'Report output format'
+        description: "Report output format"
         required: false
         type: choice
         options:
-          - 'both'
-          - 'json-only'
-          - 'html-only'
-        default: 'both'
+          - "both"
+          - "json-only"
+          - "html-only"
+        default: "both"
       criteria_filter:
-        description: 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005). Leave empty to evaluate all criteria.'
+        description: "Comma-separated criterion IDs (e.g., S001,S002,B005). Leave empty for all."
         required: false
         type: string
-        default: ''
+        default: ""
+      java_version:
+        description: "Java version"
+        required: false
+        type: string
+        default: "17"
+      node_version:
+        description: "Node.js version"
+        required: false
+        type: string
+        default: "18"
 
 jobs:
-  evaluate-module:
-    name: Evaluate FOLIO Module
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout tc-module-eval repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          architecture: 'x64'
-          cache: 'npm'
-          cache-dependency-path: 'package.json'
-
-      - name: Get cache key components
-        id: cache-keys
-        run: |
-          echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          # Weekly cache key allows all runs in the same week to share cached dependencies
-          key: ${{ runner.os }}-npm-folio-deps-${{ steps.cache-keys.outputs.week }}
-          restore-keys: |
-            ${{ runner.os }}-npm-folio-deps-
-
-      - name: Set up JDK for Maven/Gradle
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          # Weekly cache key allows all runs in the same week to share cached dependencies
-          key: ${{ runner.os }}-maven-folio-deps-${{ steps.cache-keys.outputs.week }}
-          restore-keys: |
-            ${{ runner.os }}-maven-folio-deps-
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          # Weekly cache key allows all runs in the same week to share cached dependencies
-          key: ${{ runner.os }}-gradle-folio-deps-${{ steps.cache-keys.outputs.week }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-folio-deps-
-
-      - name: Install CLI dependencies
-        run: npm install
-
-      - name: Build CLI
-        run: npm run build
-
-      - name: Prepare CLI arguments
-        id: prepare-args
-        run: |
-          ARGS="${{ inputs.repository_url }}"
-          OUTPUT_DIR="reports"
-
-          # Add output directory
-          ARGS="$ARGS --output $OUTPUT_DIR"
-
-          # Add branch if provided
-          if [ -n "${{ inputs.branch }}" ]; then
-            ARGS="$ARGS --branch ${{ inputs.branch }}"
-          fi
-
-          # Add output format options
-          case "${{ inputs.output_format }}" in
-            "json-only")
-              ARGS="$ARGS --json-only"
-              ;;
-            "html-only")
-              ARGS="$ARGS --html-only"
-              ;;
-            "both")
-              # Default behavior, no additional flags needed
-              ;;
-          esac
-
-          # Add criteria filter if provided
-          if [ -n "${{ inputs.criteria_filter }}" ]; then
-            ARGS="$ARGS --criteria ${{ inputs.criteria_filter }}"
-          fi
-
-          echo "cli_args=$ARGS" >> $GITHUB_OUTPUT
-          echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
-          echo "Prepared CLI arguments: $ARGS"
-          echo "Output directory: $OUTPUT_DIR"
-
-      - name: Run module evaluation
-        run: |
-          echo "🚀 Starting FOLIO Module Evaluation..."
-          echo "Repository: ${{ inputs.repository_url }}"
-          echo "Branch: ${{ inputs.branch || '(default)' }}"
-          echo "Output format: ${{ inputs.output_format }}"
-          echo "Criteria filter: ${{ inputs.criteria_filter }}"
-          echo ""
-
-          # Run the evaluation
-          node dist/cli.js evaluate ${{ steps.prepare-args.outputs.cli_args }}
-
-      - name: Cleanup Maven/Gradle artifacts before caching
-        run: |
-          echo "🧹 Cleaning up build tool artifacts..."
-          # Wait for any Maven/Gradle processes to complete
-          sleep 2
-          # Remove Maven temporary files and locks
-          rm -rf ~/.m2/repository/.cache/tycho || true
-          find ~/.m2/repository -name "*.lastUpdated" -delete 2>/dev/null || true
-          find ~/.m2/repository -name "_remote.repositories" -delete 2>/dev/null || true
-          # Sync filesystem to flush all pending writes
-          sync
-          echo "✅ Cleanup complete"
-
-      - name: Display evaluation summary
-        run: |
-          echo "📊 Evaluation completed!"
-          echo ""
-          echo "📁 Generated files in ${{ steps.prepare-args.outputs.output_dir }}:"
-          find ${{ steps.prepare-args.outputs.output_dir }} -type f -name "*.html" -o -name "*.json" | head -20
-          echo ""
-
-          # Show JSON summary if available
-          JSON_FILE=$(find ${{ steps.prepare-args.outputs.output_dir }} -name "*.json" | head -1)
-          if [ -f "$JSON_FILE" ]; then
-            echo "📈 Evaluation Summary:"
-            # Extract key metrics from JSON using jq if available, otherwise use basic tools
-            if command -v jq >/dev/null 2>&1; then
-              echo "Module: $(jq -r '.moduleName // "N/A"' "$JSON_FILE")"
-              echo "Language: $(jq -r '.language // "N/A"' "$JSON_FILE")"
-              echo "Total criteria: $(jq -r '.criteria | length' "$JSON_FILE")"
-              echo "Passed: $(jq -r '[.criteria[] | select(.status == "pass")] | length' "$JSON_FILE")"
-              echo "Failed: $(jq -r '[.criteria[] | select(.status == "fail")] | length' "$JSON_FILE")"
-              echo "Manual review: $(jq -r '[.criteria[] | select(.status == "manual")] | length' "$JSON_FILE")"
-            else
-              echo "JSON report generated: $JSON_FILE"
-              echo "Install jq in future workflow runs for detailed summary parsing"
-            fi
-          fi
-
-      - name: Upload evaluation reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: folio-module-evaluation-reports
-          path: ${{ steps.prepare-args.outputs.output_dir }}/
-          retention-days: 90
-          if-no-files-found: warn
+  evaluate:
+    uses: ./.github/workflows/evaluate.yml
+    with:
+      repository_url: ${{ inputs.repository_url }}
+      ref: ${{ inputs.ref }}
+      output_format: ${{ inputs.output_format }}
+      criteria_filter: ${{ inputs.criteria_filter }}
+      java_version: ${{ inputs.java_version }}
+      node_version: ${{ inputs.node_version }}

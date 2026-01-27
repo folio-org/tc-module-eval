@@ -23,24 +23,131 @@ Use any devcontainer-compatible tool (VS Code, JetBrains IDEs, GitHub Codespaces
 
 ## Usage
 
+### Integrate with Your FOLIO Module Repository
+
+To run evaluations from your FOLIO module repository, add this workflow file at `.github/workflows/tc-evaluation.yml`:
+
+```yaml
+name: TC Module Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to evaluate (defaults to current ref)'
+        required: false
+        type: string
+      output_format:
+        description: 'Report format'
+        required: false
+        type: choice
+        options:
+          - both
+          - json-only
+          - html-only
+        default: 'both'
+      criteria_filter:
+        description: 'Comma-separated criterion IDs (e.g., S001,S002,B005). Leave empty for all.'
+        required: false
+        type: string
+      java_version:
+        description: 'Java version'
+        required: false
+        type: string
+        default: '21'
+      node_version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '18'
+
+jobs:
+  evaluate:
+    uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
+    with:
+      ref: ${{ inputs.ref }}
+      output_format: ${{ inputs.output_format }}
+      criteria_filter: ${{ inputs.criteria_filter }}
+      java_version: ${{ inputs.java_version }}
+      node_version: ${{ inputs.node_version }}
+```
+
+This creates a workflow you can trigger manually from the Actions tab. Reports are uploaded as artifacts.
+
+#### Inputs
+
+All inputs are optional:
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `ref` | Git ref to evaluate | Triggering ref (PR head or push ref) |
+| `output_format` | Report format: `both`, `json-only`, or `html-only` | `both` |
+| `criteria_filter` | Comma-separated criterion IDs to evaluate (e.g., `S001,S002,B005`) | All criteria |
+| `java_version` | Java version for Maven/Gradle builds | `17` |
+| `node_version` | Node.js version for npm builds | `18` |
+| `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
+
+#### Outputs
+
+The workflow provides these outputs for use in downstream jobs:
+
+| Output | Description |
+|--------|-------------|
+| `report_artifact` | Name of the uploaded artifact containing reports |
+| `passed` | Number of passed criteria |
+| `failed` | Number of failed criteria |
+| `manual` | Number of criteria requiring manual review |
+
+**Note:** The `passed`, `failed`, and `manual` outputs are parsed from the JSON report. If `output_format` is `html-only`, these values will be 0.
+
+#### Examples
+
+**Evaluate Specific Criteria:**
+
+```yaml
+jobs:
+  evaluate:
+    uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
+    with:
+      criteria_filter: 'S001,S002,S003,B005'
+```
+
+**Use Evaluation Results in Downstream Job:**
+
+```yaml
+jobs:
+  evaluate:
+    uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
+
+  report:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Passed: ${{ needs.evaluate.outputs.passed }}"
+          echo "Failed: ${{ needs.evaluate.outputs.failed }}"
+          echo "Manual: ${{ needs.evaluate.outputs.manual }}"
+
+      - name: Fail if any criteria failed
+        if: needs.evaluate.outputs.failed != '0'
+        run: exit 1
+```
+
+#### Versioning
+
+- Use `@master` for the latest version
+- Use a specific commit SHA for pinned versions (e.g., `@abc1234`)
+
 ### Web Interface (GitHub Actions)
 
-1. In this tc-module-eval project, click Actions and then (in the left sidebar) Evaluate Remote Repository (Manual).  Or [load that page directly](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
+To evaluate any repository without adding a workflow to it:
 
-1. Click Run Workflow.  In the popup,
+1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-    - Enter the GitHub URL of the module to evaluate.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow.
 
-    - Click Run Workflow.
-
-1. Wait for the workflow run to complete, 1-2 minutes, then click into it.
-
-1. Under Artifacts, click to download the reports (as a zip file) for review.
-
-### Integrate with Your Repository
-
-To run evaluations from your FOLIO module repository, see [GITHUB_ACTION.md](GITHUB_ACTION.md) for setup instructions.
-
+1. Wait for the workflow to complete, then download the reports from Artifacts.
 
 ### Command Line Interface
 
