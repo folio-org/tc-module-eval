@@ -1,0 +1,50 @@
+name: Evaluate Remote Repository (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository_url:
+        description: "GitHub URL of the repository to evaluate"
+        required: true
+        type: string
+        default: "https://github.com/folio-org/mod-users"
+      ref:
+        description: "Git ref to evaluate (leave empty for repository default)"
+        required: false
+        type: string
+        default: ""
+      output_format:
+        description: "Report output format"
+        required: false
+        type: choice
+        options:
+          - "both"
+          - "json-only"
+          - "html-only"
+        default: "both"
+      criteria_filter:
+        description: "Comma-separated criterion IDs (e.g., S001,S002,B005). Leave empty for all."
+        required: false
+        type: string
+        default: ""
+      java_version:
+        description: "Java version"
+        required: false
+        type: string
+        default: "17"
+      node_version:
+        description: "Node.js version"
+        required: false
+        type: string
+        default: "18"
+
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluate.yml
+    with:
+      repository_url: ${{ inputs.repository_url }}
+      ref: ${{ inputs.ref }}
+      output_format: ${{ inputs.output_format }}
+      criteria_filter: ${{ inputs.criteria_filter }}
+      java_version: ${{ inputs.java_version }}
+      node_version: ${{ inputs.node_version }}
