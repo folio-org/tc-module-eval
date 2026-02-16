@@ -38,6 +38,9 @@ on:
         type: string
         default: "18"
 
+permissions:
+  contents: read
+
 jobs:
   evaluate:
     uses: ./.github/workflows/evaluate.yml

@@ -16,7 +16,10 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 ## Security
 
-**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm) on cloned repositories. Malicious build files (pom.xml, build.gradle, package.json) can execute arbitrary code with your user's permissions.
+**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm) on cloned repositories.
+
+- **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
+- **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege workflow `permissions` to reduce risk.
 
 ### For Local Development: Use Devcontainer
 
@@ -65,6 +68,9 @@ on:
         required: false
         type: string
         default: '18'
+
+permissions:
+  contents: read
 
 jobs:
   evaluate:
@@ -129,10 +135,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check results
+        env:
+          PASSED: ${{ needs.evaluate.outputs.passed }}
+          FAILED: ${{ needs.evaluate.outputs.failed }}
+          MANUAL: ${{ needs.evaluate.outputs.manual }}
         run: |
-          echo "Passed: ${{ needs.evaluate.outputs.passed }}"
-          echo "Failed: ${{ needs.evaluate.outputs.failed }}"
-          echo "Manual: ${{ needs.evaluate.outputs.manual }}"
+          echo "Passed: $PASSED"
+          echo "Failed: $FAILED"
+          echo "Manual: $MANUAL"
 
       - name: Fail if any criteria failed
         if: needs.evaluate.outputs.failed != '0'
