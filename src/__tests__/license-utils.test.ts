@@ -1,5 +1,6 @@
 import { LicenseUtils } from '../utils/license-utils';
 import { EvaluationStatus } from '../types';
+import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 // Mock fs-extra module
 jest.mock('fs-extra', () => ({
@@ -17,7 +18,12 @@ describe('LicenseUtils', () => {
   const mockRepoPath = '/tmp/test-repo';
 
   beforeEach(() => {
+    setLogger(new NoopLogger());
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetLogger();
   });
 
   describe('checkApache2License', () => {

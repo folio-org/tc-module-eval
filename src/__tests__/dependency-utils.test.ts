@@ -6,6 +6,7 @@ import { getDependencies } from '../utils/dependency-orchestrator';
 import { checkLicenseCompliance } from '../utils/license-compliance';
 import { LicenseCategory } from '../utils/license-policy';
 import { Dependency, ComplianceResult } from '../types';
+import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -81,6 +82,14 @@ jest.mock('../utils/license-policy', () => {
 });
 
 describe('Dependency Utils', () => {
+
+  beforeEach(() => {
+    setLogger(new NoopLogger());
+  });
+
+  afterEach(() => {
+    resetLogger();
+  });
 
   describe('checkLicenseCompliance', () => {
     

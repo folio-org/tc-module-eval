@@ -16,6 +16,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LicenseCategoriesConfig, SpecialExceptionsConfig, LicenseVariationsConfig } from '../types';
+import { getLogger } from './logger';
 
 /**
  * License categories according to ASF policy
@@ -82,14 +83,14 @@ function loadLicenseCategories(): Map<string, LicenseCategory> {
       if (Object.values(LicenseCategory).includes(category as LicenseCategory)) {
         policy.set(licenseName, category as LicenseCategory);
       } else {
-        console.warn(`Invalid license category '${category}' for license '${licenseName}'`);
+        getLogger().warn(`Invalid license category '${category}' for license '${licenseName}'`);
       }
     }
 
     licensePolicy = policy;
     return policy;
   } catch (error) {
-    console.error('Failed to load license categories configuration:', error);
+    getLogger().error('Failed to load license categories configuration:', error);
     // Return empty map as fallback
     return new Map<string, LicenseCategory>();
   }
@@ -112,7 +113,7 @@ function loadSpecialExceptionsConfig(): SpecialExceptionsConfig {
     specialExceptionsConfig = config;
     return config;
   } catch (error) {
-    console.error('Failed to load special exceptions configuration:', error);
+    getLogger().error('Failed to load special exceptions configuration:', error);
     // Return minimal fallback configuration
     return {
       exceptions: [
@@ -203,7 +204,7 @@ function loadLicenseVariations(): Map<string, string> {
     licenseVariations = variations;
     return variations;
   } catch (error) {
-    console.error('Failed to load license variations configuration:', error);
+    getLogger().error('Failed to load license variations configuration:', error);
     // Return empty map as fallback
     return new Map<string, string>();
   }

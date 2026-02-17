@@ -26,6 +26,7 @@ import {
   isSpecialException
 } from './license-policy';
 import { isNonEmptyString, isValidDependency } from './type-guards';
+import { getLogger } from './logger';
 
 /**
  * Evaluation result for a single license
@@ -313,12 +314,12 @@ export function checkLicenseCompliance(
   readmeContent: string
 ): ComplianceResult {
   if (!Array.isArray(dependencies)) {
-    console.warn('Dependencies must be an array');
+    getLogger().warn('Dependencies must be an array');
     return { compliant: false, issues: [] };
   }
 
   if (typeof readmeContent !== 'string') {
-    console.warn('README content must be a string');
+    getLogger().warn('README content must be a string');
     readmeContent = '';
   }
 
@@ -365,7 +366,7 @@ export function checkLicenseCompliance(
       license.includes(' WITH ') // SPDX exceptions
     );
     if (unsplitLicenses.length > 0) {
-      console.error(
+      getLogger().error(
         `Parser contract violation for ${dependency.name}: ` +
         `Licenses contain separators ('|', 'OR', 'AND', parentheses, 'WITH') but should be pre-split. ` +
         `Found: ${unsplitLicenses.join(', ')}. ` +

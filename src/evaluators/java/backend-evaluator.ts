@@ -1,6 +1,5 @@
 import { BaseSectionEvaluator } from '../base/section-evaluator';
-import { CriterionResult, CriterionFunction } from '../../types';
-import { BACKEND_CRITERIA } from '../../criteria-definitions';
+import { CriterionResult } from '../../types';
 
 /**
  * Evaluator for Backend criteria (B001-B016)
@@ -8,49 +7,26 @@ import { BACKEND_CRITERIA } from '../../criteria-definitions';
  */
 export class BackendEvaluator extends BaseSectionEvaluator {
   readonly sectionName = 'Backend';
-  readonly criteriaIds = Array.from(BACKEND_CRITERIA);
-
-  private evaluationMap: Map<string, CriterionFunction>;
 
   constructor() {
     super();
-    this.evaluationMap = new Map<string, CriterionFunction>([
-      ['B001', this.evaluateB001.bind(this)],
-      ['B002', this.evaluateB002.bind(this)],
-      ['B003', this.evaluateB003.bind(this)],
-      ['B004', this.evaluateB004.bind(this)],
-      ['B005', this.evaluateB005.bind(this)],
-      ['B006', this.evaluateB006.bind(this)],
-      ['B007', this.evaluateB007.bind(this)],
-      ['B008', this.evaluateB008.bind(this)],
-      ['B009', this.evaluateB009.bind(this)],
-      ['B010', this.evaluateB010.bind(this)],
-      ['B011', this.evaluateB011.bind(this)],
-      ['B012', this.evaluateB012.bind(this)],
-      ['B013', this.evaluateB013.bind(this)],
-      ['B014', this.evaluateB014.bind(this)],
-      ['B015', this.evaluateB015.bind(this)],
-      ['B016', this.evaluateB016.bind(this)]
-    ]);
+    this.criterionHandlers.set('B001', this.evaluateB001.bind(this));
+    this.criterionHandlers.set('B002', this.evaluateB002.bind(this));
+    this.criterionHandlers.set('B003', this.evaluateB003.bind(this));
+    this.criterionHandlers.set('B004', this.evaluateB004.bind(this));
+    this.criterionHandlers.set('B005', this.evaluateB005.bind(this));
+    this.criterionHandlers.set('B006', this.evaluateB006.bind(this));
+    this.criterionHandlers.set('B007', this.evaluateB007.bind(this));
+    this.criterionHandlers.set('B008', this.evaluateB008.bind(this));
+    this.criterionHandlers.set('B009', this.evaluateB009.bind(this));
+    this.criterionHandlers.set('B010', this.evaluateB010.bind(this));
+    this.criterionHandlers.set('B011', this.evaluateB011.bind(this));
+    this.criterionHandlers.set('B012', this.evaluateB012.bind(this));
+    this.criterionHandlers.set('B013', this.evaluateB013.bind(this));
+    this.criterionHandlers.set('B014', this.evaluateB014.bind(this));
+    this.criterionHandlers.set('B015', this.evaluateB015.bind(this));
+    this.criterionHandlers.set('B016', this.evaluateB016.bind(this));
   }
-
-  /**
-   * Evaluate specific backend criterion
-   * @param criterionId The ID of the criterion to evaluate
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<CriterionResult> Result of the specific criterion
-   */
-  protected async evaluateSpecificCriterion(criterionId: string, repoPath: string): Promise<CriterionResult> {
-    const evaluator = this.evaluationMap.get(criterionId);
-    if (!evaluator) {
-      throw new Error(`Unknown backend criterion: ${criterionId}`);
-    }
-    return await evaluator(repoPath);
-  }
-
-  // STUB IMPLEMENTATIONS - Framework provides structure but evaluation logic not yet implemented
-  // All methods below currently return NOT_APPLICABLE status and require detailed implementation
-  // Future implementation will analyze code, APIs, and configurations to determine PASS/FAIL status
 
   private async evaluateB001(repoPath: string): Promise<CriterionResult> {
     return this.createNotImplementedResult('B001', 'API design and RESTful principles');

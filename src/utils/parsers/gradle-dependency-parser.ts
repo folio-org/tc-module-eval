@@ -37,6 +37,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
+import { safeReadFile, validateRepoPath } from './common';
+import { getLogger } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -49,60 +51,6 @@ const GRADLE_DEPENDENCY_PATTERN = /[+\\-]+\s*(.+?):(.+?):(.+?)(\s|$)/;
 
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
-
-/**
- * Safely read file contents
- * @param filePath - Path to file
- * @returns File contents or null if file doesn't exist or can't be read
- */
-function safeReadFile(filePath: string): string | null {
-  try {
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (error) {
-    console.warn(`Failed to read file ${filePath}:`, error);
-    return null;
-  }
-}
-
-/**
- * Validate and sanitize a repository path before executing shell commands
- * SECURITY: Prevents directory traversal and validates path integrity
- * @param repoPath - Path to validate
- * @returns Validated absolute path or null if invalid
- */
-function validateRepoPath(repoPath: string): string | null {
-  try {
-    // Check for non-empty string
-    if (!isNonEmptyString(repoPath)) {
-      console.warn('Repository path is empty or invalid');
-      return null;
-    }
-
-    // Resolve to absolute path (prevents directory traversal attacks)
-    const absolutePath = path.resolve(repoPath);
-
-    // Verify path exists
-    if (!fs.existsSync(absolutePath)) {
-      console.warn(`Repository path does not exist: ${absolutePath}`);
-      return null;
-    }
-
-    // Verify it's a directory
-    const stats = fs.statSync(absolutePath);
-    if (!stats.isDirectory()) {
-      console.warn(`Repository path is not a directory: ${absolutePath}`);
-      return null;
-    }
-
-    return absolutePath;
-  } catch (error) {
-    console.warn(`Failed to validate repository path ${repoPath}:`, error);
-    return null;
-  }
-}
 
 /**
  * Parse a single dependency from Gradle license report
@@ -157,7 +105,7 @@ function parseGradleLicenseReport(content: string): Dependency[] {
 
     return dependencies;
   } catch (error) {
-    console.warn('Failed to parse Gradle license report:', error);
+    getLogger().warn('Failed to parse Gradle license report:', error);
     return [];
   }
 }
@@ -240,7 +188,7 @@ export async function getGradleDependencies(repoPath: string): Promise<Dependenc
       }
     );
 
-    console.log('Gradle license plugin output:', stdout);
+    getLogger().info('Gradle license plugin output:', stdout);
 
     // Look for generated license report
     const licenseReport = path.join(validatedPath, GRADLE_LICENSE_REPORT_PATH);

@@ -49,6 +49,8 @@ import * as path from 'path';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
+import { validateRepoPath } from './common';
+import { getLogger } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -58,43 +60,6 @@ const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
 
-
-/**
- * Validate and sanitize a repository path
- * SECURITY: Prevents directory traversal and validates path integrity
- * @param repoPath - Path to validate
- * @returns Validated absolute path or null if invalid
- */
-function validateRepoPath(repoPath: string): string | null {
-  try {
-    // Check for non-empty string
-    if (!isNonEmptyString(repoPath)) {
-      console.warn('Repository path is empty or invalid');
-      return null;
-    }
-
-    // Resolve to absolute path (prevents directory traversal attacks)
-    const absolutePath = path.resolve(repoPath);
-
-    // Verify path exists
-    if (!fs.existsSync(absolutePath)) {
-      console.warn(`Repository path does not exist: ${absolutePath}`);
-      return null;
-    }
-
-    // Verify it's a directory
-    const stats = fs.statSync(absolutePath);
-    if (!stats.isDirectory()) {
-      console.warn(`Repository path is not a directory: ${absolutePath}`);
-      return null;
-    }
-
-    return absolutePath;
-  } catch (error) {
-    console.warn(`Failed to validate repository path ${repoPath}:`, error);
-    return null;
-  }
-}
 
 /**
  * Split an SPDX license expression that may contain multiple licenses
@@ -121,8 +86,7 @@ function splitSpdxLicenses(license: string): string[] {
     cleaned = cleaned.substring(1, cleaned.length - 1).trim();
   }
 
-  // Check for SPDX ' OR ' separator (note the spaces)
-  // OR has higher precedence in our simple parser
+  // Split on ' OR ' first; recursive calls handle nested ' AND ' within operands
   if (cleaned.includes(' OR ')) {
     return cleaned
       .split(' OR ')
@@ -135,9 +99,9 @@ function splitSpdxLicenses(license: string): string[] {
       });
   }
 
-  // Check for SPDX ' AND ' separator
-  // In dual-licensing context, AND means both licenses apply
-  // For compliance checking, we treat this similarly to OR (any compliant license makes it pass)
+  // SPDX ' AND ' means all licenses apply simultaneously.
+  // We split and evaluate individually — this is a permissive simplification
+  // that may miss conjunctive compliance requirements.
   if (cleaned.includes(' AND ')) {
     return cleaned
       .split(' AND ')
@@ -228,7 +192,7 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
 
     return dependencies;
   } catch (error) {
-    console.error('Failed to parse license-checker output:', error);
+    getLogger().error('Failed to parse license-checker output:', error);
     return [];
   }
 }
@@ -270,7 +234,7 @@ function extractFromPackageJson(repoPath: string): Dependency[] {
 
     return dependencies;
   } catch (error) {
-    console.error('Failed to parse package.json:', error);
+    getLogger().error('Failed to parse package.json:', error);
     return [];
   }
 }
@@ -312,7 +276,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
     // Configure FOLIO registry for @folio scoped packages if .npmrc doesn't exist
     const npmrcPath = path.join(validatedPath, '.npmrc');
     if (!fs.existsSync(npmrcPath)) {
-      console.log('Creating .npmrc with FOLIO registry configuration...');
+      getLogger().info('Creating .npmrc with FOLIO registry configuration...');
       fs.writeFileSync(
         npmrcPath,
         `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`,
@@ -322,7 +286,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
 
     // Step 1: Run yarn install to get all dependencies including transitives
     // SECURITY: --ignore-scripts prevents execution of preinstall/postinstall/etc scripts
-    console.log('Running yarn install...');
+    getLogger().info('Running yarn install...');
     await execAsync('yarn install --production --ignore-scripts', {
       cwd: validatedPath,
       timeout: INSTALL_TIMEOUT
@@ -330,7 +294,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
 
     // Step 2: Run license-checker-rseidelsohn to extract license information
     // Use npx with pinned version to ensure consistency across environments
-    console.log('Running license-checker-rseidelsohn...');
+    getLogger().info('Running license-checker-rseidelsohn...');
     const { stdout } = await execAsync(
       'npx license-checker-rseidelsohn@4.4.2 --json --production',
       {
@@ -346,9 +310,9 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Failed to extract npm dependencies via license-checker:', errorMessage);
+    getLogger().error('Failed to extract npm dependencies via license-checker:', errorMessage);
     if (error instanceof Error && error.stack) {
-      console.error('Stack trace:', error.stack);
+      getLogger().error('Stack trace:', error.stack);
     }
 
     // GRACEFUL DEGRADATION: Attempt to extract dependencies from package.json
@@ -362,7 +326,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
     try {
       const dependencies = extractFromPackageJson(validatedPath);
       if (dependencies.length > 0) {
-        console.log(`Extracted ${dependencies.length} direct dependencies from package.json (without license info)`);
+        getLogger().info(`Extracted ${dependencies.length} direct dependencies from package.json (without license info)`);
         warnings.push({
           source: 'npm-parser',
           message: '⚠️  CRITICAL: Fallback mode used - ONLY DIRECT DEPENDENCIES analyzed. All transitive dependencies are MISSING from analysis. License information unavailable. Full compliance verification is IMPOSSIBLE without manual review of all transitive dependencies.',
@@ -371,7 +335,7 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
         return { dependencies, errors, warnings };
       }
     } catch (fallbackError) {
-      console.error('Fallback extraction also failed:', fallbackError);
+      getLogger().error('Fallback extraction also failed:', fallbackError);
       errors.push({
         source: 'npm-parser',
         message: 'Both license-checker and package.json extraction failed',
