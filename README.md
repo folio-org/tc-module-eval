@@ -19,7 +19,7 @@ This tool provides a modular, extensible framework for automatically evaluating 
 **⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm) on cloned repositories.
 
 - **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
-- **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege workflow `permissions` to reduce risk.
+- **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege [job level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and/or [workflow level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) `permissions` to reduce risk.
 
 ### For Local Development: Use Devcontainer
 
