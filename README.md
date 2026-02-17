@@ -16,7 +16,7 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 ## Security
 
-**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm) on cloned repositories.
+**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm).
 
 - **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
 - **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege [job level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and/or [workflow level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) `permissions` to reduce risk.
@@ -69,11 +69,10 @@ on:
         type: string
         default: '18'
 
-permissions:
-  contents: read
-
 jobs:
   evaluate:
+    permissions:
+      contents: read
     uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
     with:
       ref: ${{ inputs.ref }}
@@ -118,6 +117,8 @@ The workflow provides these outputs for use in downstream jobs:
 ```yaml
 jobs:
   evaluate:
+    permissions:
+      contents: read
     uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
     with:
       criteria_filter: 'S001,S002,S003,B005'
@@ -128,9 +129,12 @@ jobs:
 ```yaml
 jobs:
   evaluate:
+    permissions:
+      contents: read
     uses: folio-org/tc-module-eval/.github/workflows/evaluate.yml@master
 
   report:
+    permissions: {}
     needs: evaluate
     runs-on: ubuntu-latest
     steps:
