@@ -52,6 +52,9 @@ on:
         description: "Number of criteria requiring manual review"
         value: ${{ jobs.evaluate.outputs.manual }}
 
+permissions:
+  contents: read
+
 jobs:
   evaluate:
     name: Evaluate Module
