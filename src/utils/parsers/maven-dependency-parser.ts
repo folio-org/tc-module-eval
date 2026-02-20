@@ -39,6 +39,8 @@ import { parseStringPromise } from 'xml2js';
 import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
+import { safeReadFile, validateRepoPath } from './common';
+import { getLogger } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -59,60 +61,6 @@ const MAVEN_BUILD_FILES = ['pom.xml'];
 const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb', 'rar', 'bundle'];
 
 /**
- * Safely read file contents
- * @param filePath - Path to file
- * @returns File contents or null if file doesn't exist or can't be read
- */
-function safeReadFile(filePath: string): string | null {
-  try {
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (error) {
-    console.warn(`Failed to read file ${filePath}:`, error);
-    return null;
-  }
-}
-
-/**
- * Validate and sanitize a repository path before executing shell commands
- * SECURITY: Prevents directory traversal and validates path integrity
- * @param repoPath - Path to validate
- * @returns Validated absolute path or null if invalid
- */
-function validateRepoPath(repoPath: string): string | null {
-  try {
-    // Check for non-empty string
-    if (!isNonEmptyString(repoPath)) {
-      console.warn('Repository path is empty or invalid');
-      return null;
-    }
-
-    // Resolve to absolute path (prevents directory traversal attacks)
-    const absolutePath = path.resolve(repoPath);
-
-    // Verify path exists
-    if (!fs.existsSync(absolutePath)) {
-      console.warn(`Repository path does not exist: ${absolutePath}`);
-      return null;
-    }
-
-    // Verify it's a directory
-    const stats = fs.statSync(absolutePath);
-    if (!stats.isDirectory()) {
-      console.warn(`Repository path is not a directory: ${absolutePath}`);
-      return null;
-    }
-
-    return absolutePath;
-  } catch (error) {
-    console.warn(`Failed to validate repository path ${repoPath}:`, error);
-    return null;
-  }
-}
-
-/**
  * Determine the Maven packaging type from pom.xml using proper XML parsing
  * @param repoPath - Path to Maven project
  * @returns Promise resolving to packaging type ('pom', 'jar', 'war', etc.) or 'jar' as default
@@ -121,7 +69,7 @@ async function getMavenPackaging(repoPath: string): Promise<string> {
   try {
     const pomPath = path.join(repoPath, 'pom.xml');
     if (!fs.existsSync(pomPath)) {
-      console.warn('pom.xml not found, defaulting to jar packaging');
+      getLogger().warn('pom.xml not found, defaulting to jar packaging');
       return 'jar';
     }
 
@@ -143,19 +91,19 @@ async function getMavenPackaging(repoPath: string): Promise<string> {
 
       // Validate against known packaging types
       if (!VALID_PACKAGING_TYPES.includes(trimmedPackaging)) {
-        console.warn(`Unknown Maven packaging type: ${trimmedPackaging}, defaulting to jar`);
+        getLogger().warn(`Unknown Maven packaging type: ${trimmedPackaging}, defaulting to jar`);
         return 'jar';
       }
 
-      console.log(`Detected Maven packaging type: ${trimmedPackaging}`);
+      getLogger().info(`Detected Maven packaging type: ${trimmedPackaging}`);
       return trimmedPackaging;
     }
 
     // Maven defaults to 'jar' when packaging is not specified
-    console.log('No packaging specified in pom.xml, defaulting to jar');
+    getLogger().info('No packaging specified in pom.xml, defaulting to jar');
     return 'jar';
   } catch (error) {
-    console.warn('Failed to parse pom.xml packaging, defaulting to jar:', error);
+    getLogger().warn('Failed to parse pom.xml packaging, defaulting to jar:', error);
     return 'jar';
   }
 }
@@ -182,7 +130,7 @@ function splitDualLicenses(license: string): string[] {
       .map(l => {
         const normalized = normalizeLicenseName(l);
         if (!normalized) {
-          console.warn(`License normalization failed for "${l}", using original value.`);
+          getLogger().warn(`License normalization failed for "${l}", using original value.`);
         }
         return normalized || l; // Use original if normalization returns empty
       });
@@ -191,7 +139,7 @@ function splitDualLicenses(license: string): string[] {
   // Single license - normalize and return
   const normalized = normalizeLicenseName(license);
   if (!normalized) {
-    console.warn(`License normalization failed for "${license}", using original value.`);
+    getLogger().warn(`License normalization failed for "${license}", using original value.`);
   }
   return [normalized || license];
 }
@@ -405,7 +353,7 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
       ? 'license:aggregate-add-third-party'
       : 'license:add-third-party';
 
-    console.log(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
+    getLogger().info(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
 
     // Execute Maven license plugin to generate third-party report
     const { stdout } = await execAsync(
@@ -417,7 +365,7 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
       }
     );
 
-    console.log('Maven license plugin output:', stdout);
+    getLogger().info('Maven license plugin output:', stdout);
 
     // Parse the generated THIRD-PARTY.txt file
     const thirdPartyFile = path.join(validatedPath, MAVEN_THIRD_PARTY_PATH);
@@ -430,9 +378,9 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
 
     // THIRD-PARTY.txt was not generated despite successful Maven execution
     // This is typically not an error - it just means there are no third-party dependencies
-    console.warn('Maven license plugin did not generate THIRD-PARTY.txt file');
-    console.warn(`Expected file location: ${thirdPartyFile}`);
-    console.warn('This may indicate: no third-party dependencies, or all dependencies are first-party');
+    getLogger().warn('Maven license plugin did not generate THIRD-PARTY.txt file');
+    getLogger().warn(`Expected file location: ${thirdPartyFile}`);
+    getLogger().warn('This may indicate: no third-party dependencies, or all dependencies are first-party');
 
     warnings.push({
       source: 'maven-parser',
@@ -454,8 +402,8 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
         `Note: The build may have completed successfully, but output was truncated. ` +
         `Check the generated THIRD-PARTY.txt file manually if needed.`;
 
-      console.error('Maven dependency extraction exceeded buffer:');
-      console.error(`  Buffer size: ${bufferSizeMB}MB`);
+      getLogger().error('Maven dependency extraction exceeded buffer:');
+      getLogger().error(`  Buffer size: ${bufferSizeMB}MB`);
 
       errors.push({
         source: 'maven-parser',
@@ -476,8 +424,8 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
         `Suggestion: The timeout is currently set to ${timeoutMinutes} minutes. ` +
         `Consider reviewing project size, network connectivity, or Maven repository configuration.`;
 
-      console.error('Maven dependency extraction timed out:');
-      console.error(`  Timeout: ${timeoutMinutes} minutes`);
+      getLogger().error('Maven dependency extraction timed out:');
+      getLogger().error(`  Timeout: ${timeoutMinutes} minutes`);
 
       errors.push({
         source: 'maven-parser',
@@ -496,19 +444,19 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
     const stdout = execError.stdout || '';
     const stderr = execError.stderr || '';
 
-    console.error('Maven dependency extraction failed:');
-    console.error('  Message:', errorMessage);
+    getLogger().error('Maven dependency extraction failed:');
+    getLogger().error('  Message:', errorMessage);
 
     if (stdout) {
-      console.error('  Maven stdout:', stdout.substring(0, 500)); // Show first 500 chars
+      getLogger().error('  Maven stdout:', stdout.substring(0, 500)); // Show first 500 chars
     }
 
     if (stderr) {
-      console.error('  Maven stderr:', stderr.substring(0, 500)); // Show first 500 chars
+      getLogger().error('  Maven stderr:', stderr.substring(0, 500)); // Show first 500 chars
     }
 
     if (errorStack && !stdout && !stderr) {
-      console.error('  Stack:', errorStack);
+      getLogger().error('  Stack:', errorStack);
     }
 
     // Build detailed error message including Maven output

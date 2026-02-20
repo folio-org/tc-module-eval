@@ -1,6 +1,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { EvaluationResult, ReportOptions, EvaluationStatus } from '../types';
+import { getLogger } from './logger';
 
 /**
  * Generates HTML and JSON reports from evaluation results
@@ -55,7 +56,7 @@ export class ReportGenerator {
   private async generateJsonReport(result: EvaluationResult, outputPath: string): Promise<void> {
     const jsonContent = JSON.stringify(result, null, 2);
     await fs.writeFile(outputPath, jsonContent);
-    console.log(`JSON report generated: ${outputPath}`);
+    getLogger().info(`JSON report generated: ${outputPath}`);
   }
 
   /**
@@ -66,7 +67,7 @@ export class ReportGenerator {
   private async generateHtmlReport(result: EvaluationResult, outputPath: string): Promise<void> {
     const htmlContent = this.generateHtmlContent(result);
     await fs.writeFile(outputPath, htmlContent);
-    console.log(`HTML report generated: ${outputPath}`);
+    getLogger().info(`HTML report generated: ${outputPath}`);
   }
 
   /**

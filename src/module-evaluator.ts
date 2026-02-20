@@ -3,6 +3,7 @@ import { JavaEvaluator } from './evaluators/java-evaluator';
 import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
 import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
 import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitions';
+import { getLogger } from './utils/logger';
 
 /**
  * Main orchestrator for module evaluation
@@ -37,7 +38,7 @@ export class ModuleEvaluator {
     let repoPath = '';
 
     try {
-      console.log(`Starting evaluation of: ${repositoryUrl}`);
+      getLogger().info(`Starting evaluation of: ${repositoryUrl}`);
 
       // Clone the repository
       repoPath = await this.gitUtils.cloneRepository(repositoryUrl, this.config.branch);
@@ -48,7 +49,7 @@ export class ModuleEvaluator {
         throw new Error('No suitable evaluator found for this repository');
       }
       
-      console.log(`Using ${evaluator.getLanguage()} evaluator`);
+      getLogger().info(`Using ${evaluator.getLanguage()} evaluator`);
 
       // Validate criteria filter if provided
       if (this.config.criteriaFilter) {
@@ -69,7 +70,7 @@ export class ModuleEvaluator {
         criteria: criterionResults
       };
       
-      console.log(`Evaluation completed. Results: ${this.summarizeResults(criterionResults)}`);
+      getLogger().info(`Evaluation completed. Results: ${this.summarizeResults(criterionResults)}`);
       return result;
       
     } finally {
@@ -77,7 +78,7 @@ export class ModuleEvaluator {
       if (repoPath && !this.config.skipCleanup) {
         await this.gitUtils.cleanup(repoPath);
       } else if (repoPath && this.config.skipCleanup) {
-        console.log(`Repository preserved at: ${repoPath}`);
+        getLogger().info(`Repository preserved at: ${repoPath}`);
       }
     }
   }

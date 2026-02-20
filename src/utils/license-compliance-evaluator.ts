@@ -1,8 +1,127 @@
-import { CriterionResult, EvaluationStatus, LicenseIssueType } from '../types';
+import { CriterionResult, EvaluationStatus, LicenseIssueType, Dependency, ComplianceResult, DependencyExtractionError } from '../types';
 import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getLogger } from './logger';
+
+/**
+ * Format extraction errors into a detailed string for inclusion in criterion results.
+ */
+export function formatExtractionErrors(errors: DependencyExtractionError[]): string {
+  return errors
+    .map(e => {
+      const baseMessage = `  - [${e.source}] ${e.message}`;
+      if (e.error && e.error.message && !e.message.includes(e.error.message)) {
+        const stackInfo = e.error.stack ? `\n    Stack: ${e.error.stack.split('\n')[1]}` : '';
+        return `${baseMessage}\n    Details: ${e.error.message}${stackInfo}`;
+      }
+      return baseMessage;
+    })
+    .join('\n');
+}
+
+/**
+ * Find and read README content from a repository, checking common filename variants.
+ */
+export function findReadmeContent(repoPath: string): string {
+  const readmeFiles = ['README.md', 'README.txt', 'README', 'readme.md', 'readme.txt'];
+
+  for (const readmeFile of readmeFiles) {
+    const readmePath = path.join(repoPath, readmeFile);
+    if (fs.existsSync(readmePath)) {
+      return fs.readFileSync(readmePath, 'utf-8');
+    }
+  }
+  return '';
+}
+
+/**
+ * Build an evidence summary string from a list of dependencies.
+ */
+export function buildEvidenceSummary(dependencies: Dependency[]): string {
+  const dependencyCount = dependencies.length;
+  const licenseInfo = dependencies
+    .filter(d => d.licenses && d.licenses.length > 0)
+    .map(d => `${d.name}:${d.version} (${d.licenses!.join(', ')})`)
+    .join('; ');
+
+  return `Found ${dependencyCount} dependencies. ` +
+    (licenseInfo ? `Licenses: ${licenseInfo}` : 'No license information available for analysis.');
+}
+
+/**
+ * Determine the final CriterionResult based on compliance result, evidence, and warnings.
+ */
+export function determineComplianceStatus(
+  criterionId: string,
+  complianceResult: ComplianceResult,
+  evidence: string,
+  warnings: DependencyExtractionError[],
+  hasFallbackWarning: boolean
+): CriterionResult {
+  const warningInfo = warnings.length > 0
+    ? `\n\nExtraction warnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
+    : '';
+
+  if (complianceResult.compliant) {
+    if (hasFallbackWarning) {
+      return {
+        criterionId,
+        status: EvaluationStatus.MANUAL,
+        evidence,
+        details: `License compliance check passed for analyzed dependencies, but MANUAL REVIEW REQUIRED.\n\n⚠️  WARNING: Only direct dependencies were analyzed. Transitive dependencies are unavailable and were not included in this analysis. Full license compliance cannot be verified without analyzing all transitive dependencies.${warningInfo}`
+      };
+    }
+
+    return {
+      criterionId,
+      status: EvaluationStatus.PASS,
+      evidence,
+      details: `All third-party dependencies comply with ASF 3rd Party License Policy. No Category X licenses found, and all Category B licenses are properly documented.${warningInfo}`
+    };
+  }
+
+  // Generate detailed compliance issues
+  const issueDetails = complianceResult.issues
+    .map(issue => `• ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
+    .join('\n');
+
+  const hasCategoryXViolation = complianceResult.issues.some(issue =>
+    issue.issueType === LicenseIssueType.CATEGORY_X_VIOLATION
+  );
+
+  const allIssuesAreManualReview = complianceResult.issues.every(issue =>
+    issue.issueType === LicenseIssueType.UNKNOWN_LICENSE ||
+    issue.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B ||
+    issue.issueType === LicenseIssueType.NO_LICENSE_INFO
+  );
+
+  if (hasCategoryXViolation) {
+    return {
+      criterionId,
+      status: EvaluationStatus.FAIL,
+      evidence,
+      details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+    };
+  }
+
+  if (allIssuesAreManualReview) {
+    return {
+      criterionId,
+      status: EvaluationStatus.MANUAL,
+      evidence,
+      details: `Third-party license compliance issues require manual review. Please verify these dependencies comply with ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+    };
+  }
+
+  return {
+    criterionId,
+    status: EvaluationStatus.MANUAL,
+    evidence,
+    details: `Third-party license compliance issues found. Please review these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+  };
+}
 
 /**
  * Evaluates third-party license compliance (S003) for any project type.
@@ -14,24 +133,11 @@ import * as path from 'path';
  */
 export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<CriterionResult> {
   try {
-    // Extract dependencies from the repository (auto-detects Maven, Gradle, npm)
     const extractionResult = await getDependencies(repoPath);
     const { dependencies, errors, warnings } = extractionResult;
 
-    // Check if there were fatal errors during extraction
     if (errors.length > 0) {
-      const errorDetails = errors
-        .map(e => {
-          const baseMessage = `  - [${e.source}] ${e.message}`;
-          // Include the underlying error details if available and different from the main message
-          if (e.error && e.error.message && !e.message.includes(e.error.message)) {
-            const stackInfo = e.error.stack ? `\n    Stack: ${e.error.stack.split('\n')[1]}` : '';
-            return `${baseMessage}\n    Details: ${e.error.message}${stackInfo}`;
-          }
-          return baseMessage;
-        })
-        .join('\n');
-
+      const errorDetails = formatExtractionErrors(errors);
       return {
         criterionId: 'S003',
         status: EvaluationStatus.MANUAL,
@@ -40,9 +146,7 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
       };
     }
 
-    // If no dependencies found but no errors, could be valid (project has no dependencies)
     if (dependencies.length === 0) {
-      // Include warnings if present
       const warningInfo = warnings.length > 0
         ? `\n\nWarnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
         : '';
@@ -55,110 +159,20 @@ export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<
       };
     }
 
-    // Read README content for Category B license validation
-    let readmeContent = '';
-    const readmeFiles = ['README.md', 'README.txt', 'README', 'readme.md', 'readme.txt'];
-
-    for (const readmeFile of readmeFiles) {
-      const readmePath = path.join(repoPath, readmeFile);
-      if (fs.existsSync(readmePath)) {
-        readmeContent = fs.readFileSync(readmePath, 'utf-8');
-        break;
-      }
-    }
-
-    // Check license compliance according to ASF policy
+    const readmeContent = findReadmeContent(repoPath);
     const complianceResult = checkLicenseCompliance(dependencies, readmeContent);
+    const evidence = buildEvidenceSummary(dependencies);
 
-    // Generate evidence summary
-    const dependencyCount = dependencies.length;
-    const licenseInfo = dependencies
-      .filter(d => d.licenses && d.licenses.length > 0)
-      .map(d => `${d.name}:${d.version} (${d.licenses!.join(', ')})`)
-      .join('; ');
-
-    const evidence = `Found ${dependencyCount} dependencies. ` +
-      (licenseInfo ? `Licenses: ${licenseInfo}` : 'No license information available for analysis.');
-
-    // Include warnings in details if present
-    const warningInfo = warnings.length > 0
-      ? `\n\nExtraction warnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
-      : '';
-
-    // Check if fallback mode was used (transitive dependencies missing)
     const hasFallbackWarning = warnings.some(w =>
       w.message.includes('transitive dependencies unavailable') ||
       w.message.includes('fallback') ||
       w.message.includes('Fallback mode')
     );
 
-    if (complianceResult.compliant) {
-      // If fallback was used, force MANUAL status even if no violations found
-      if (hasFallbackWarning) {
-        return {
-          criterionId: 'S003',
-          status: EvaluationStatus.MANUAL,
-          evidence: evidence,
-          details: `License compliance check passed for analyzed dependencies, but MANUAL REVIEW REQUIRED.\n\n⚠️  WARNING: Only direct dependencies were analyzed. Transitive dependencies are unavailable and were not included in this analysis. Full license compliance cannot be verified without analyzing all transitive dependencies.${warningInfo}`
-        };
-      }
-
-      return {
-        criterionId: 'S003',
-        status: EvaluationStatus.PASS,
-        evidence: evidence,
-        details: `All third-party dependencies comply with ASF 3rd Party License Policy. No Category X licenses found, and all Category B licenses are properly documented.${warningInfo}`
-      };
-    } else {
-      // Generate detailed compliance issues
-      const issueDetails = complianceResult.issues
-        .map(issue => `• ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
-        .join('\n');
-
-      // Determine if issues are failures or require manual review
-      // Category X (prohibited) licenses should FAIL
-      // Unknown licenses and undocumented Category B should be MANUAL
-      const hasCategoryXViolation = complianceResult.issues.some(issue =>
-        issue.issueType === LicenseIssueType.CATEGORY_X_VIOLATION
-      );
-
-      const allIssuesAreManualReview = complianceResult.issues.every(issue =>
-        issue.issueType === LicenseIssueType.UNKNOWN_LICENSE ||
-        issue.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B ||
-        issue.issueType === LicenseIssueType.NO_LICENSE_INFO
-      );
-
-      // If there's a Category X violation, it's an automatic FAIL
-      if (hasCategoryXViolation) {
-        return {
-          criterionId: 'S003',
-          status: EvaluationStatus.FAIL,
-          evidence: evidence,
-          details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
-        };
-      }
-
-      // If all issues are manual review items (unknown licenses, undocumented Category B)
-      if (allIssuesAreManualReview) {
-        return {
-          criterionId: 'S003',
-          status: EvaluationStatus.MANUAL,
-          evidence: evidence,
-          details: `Third-party license compliance issues require manual review. Please verify these dependencies comply with ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
-        };
-      }
-
-      // Default to MANUAL for safety (mixed issues or unexpected patterns)
-      return {
-        criterionId: 'S003',
-        status: EvaluationStatus.MANUAL,
-        evidence: evidence,
-        details: `Third-party license compliance issues found. Please review these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
-      };
-    }
+    return determineComplianceStatus('S003', complianceResult, evidence, warnings, hasFallbackWarning);
 
   } catch (error) {
-    console.warn('Error evaluating S003:', error);
+    getLogger().warn('Error evaluating S003:', error);
     return {
       criterionId: 'S003',
       status: EvaluationStatus.MANUAL,

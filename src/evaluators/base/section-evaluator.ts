@@ -1,4 +1,4 @@
-import { SectionEvaluator, CriterionResult, EvaluationStatus } from '../../types';
+import { SectionEvaluator, CriterionResult, EvaluationStatus, CriterionFunction } from '../../types';
 
 /**
  * Abstract base class for section-specific evaluators
@@ -11,9 +11,18 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
   abstract readonly sectionName: string;
 
   /**
-   * Array of criterion IDs this evaluator handles
+   * Map of criterion ID to handler function.
+   * Subclasses populate this in their constructor.
+   * Insertion order determines criteriaIds order.
    */
-  abstract readonly criteriaIds: string[];
+  protected criterionHandlers: Map<string, CriterionFunction> = new Map();
+
+  /**
+   * Array of criterion IDs this evaluator handles, derived from the handler map.
+   */
+  get criteriaIds(): string[] {
+    return Array.from(this.criterionHandlers.keys());
+  }
 
   /**
    * Evaluate all criteria in this section
@@ -59,20 +68,19 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
   }
 
   /**
-   * Abstract method to be implemented by specific evaluators
-   * @param criterionId The ID of the criterion to evaluate
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<CriterionResult> Result of the specific criterion
+   * Look up and invoke the handler for a specific criterion.
+   * Subclasses may override this if they need custom dispatch logic.
    */
-  protected abstract evaluateSpecificCriterion(criterionId: string, repoPath: string): Promise<CriterionResult>;
+  protected async evaluateSpecificCriterion(criterionId: string, repoPath: string): Promise<CriterionResult> {
+    const handler = this.criterionHandlers.get(criterionId);
+    if (!handler) {
+      throw new Error(`No handler registered for criterion: ${criterionId}`);
+    }
+    return await handler(repoPath);
+  }
 
   /**
    * Create a standardized result object
-   * @param criterionId The ID of the criterion
-   * @param status The evaluation status
-   * @param evidence Evidence for the evaluation
-   * @param details Optional additional details
-   * @returns CriterionResult The standardized result
    */
   protected createResult(
     criterionId: string,
@@ -90,9 +98,6 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
 
   /**
    * Create an error result when evaluation fails
-   * @param criterionId The ID of the criterion
-   * @param error The error that occurred
-   * @returns CriterionResult The error result
    */
   protected createErrorResult(criterionId: string, error: any): CriterionResult {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -106,9 +111,6 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
 
   /**
    * Create a manual review result for criteria that require human evaluation
-   * @param criterionId The ID of the criterion
-   * @param reason Reason why manual review is needed
-   * @returns CriterionResult The manual review result
    */
   protected createManualReviewResult(criterionId: string, reason: string): CriterionResult {
     return this.createResult(
@@ -121,9 +123,6 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
 
   /**
    * Create a manual review result for a criterion with stub implementation
-   * @param criterionId The ID of the criterion
-   * @param description Brief description of what the criterion evaluates
-   * @returns CriterionResult The manual review result
    */
   protected createNotImplementedResult(criterionId: string, description: string): CriterionResult {
     return this.createResult(

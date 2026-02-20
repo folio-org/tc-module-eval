@@ -2,6 +2,7 @@ import simpleGit from 'simple-git';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
+import { getLogger } from './logger';
 
 /**
  * Git utilities for cloning and managing repositories
@@ -39,10 +40,10 @@ export class GitUtils {
       // Clone with branch if specified
       if (branch) {
         await git.clone(repositoryUrl, clonePath, ['--branch', branch]);
-        console.log(`Repository cloned to: ${clonePath} (branch: ${branch})`);
+        getLogger().info(`Repository cloned to: ${clonePath} (branch: ${branch})`);
       } else {
         await git.clone(repositoryUrl, clonePath);
-        console.log(`Repository cloned to: ${clonePath}`);
+        getLogger().info(`Repository cloned to: ${clonePath}`);
       }
 
       // Store repo name for later use
@@ -101,7 +102,7 @@ export class GitUtils {
     if (await fs.pathExists(repoPath)) {
       await fs.remove(repoPath);
       this.repoName = '';
-      console.log(`Cleaned up: ${repoPath}`);
+      getLogger().info(`Cleaned up: ${repoPath}`);
     }
   }
 

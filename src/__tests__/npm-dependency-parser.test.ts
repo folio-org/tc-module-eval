@@ -20,6 +20,7 @@ jest.mock('util', () => ({
 // Now import the module under test
 import { getNpmDependencies, hasNpmProject } from '../utils/parsers/npm-dependency-parser';
 import { Dependency } from '../types';
+import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
@@ -48,6 +49,7 @@ function createMockStats(isDirectory: boolean = true): Partial<Stats> {
 describe('npm-dependency-parser', () => {
 
   beforeEach(() => {
+    setLogger(new NoopLogger());
     jest.clearAllMocks();
 
     // Reset fs mocks to clean state
@@ -55,6 +57,10 @@ describe('npm-dependency-parser', () => {
     (mockFs.statSync as jest.Mock).mockReset();
     (mockFs.writeFileSync as jest.Mock).mockReset();
     (mockFs.readFileSync as jest.Mock).mockReset();
+  });
+
+  afterEach(() => {
+    resetLogger();
   });
 
   describe('hasNpmProject', () => {
