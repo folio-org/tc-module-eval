@@ -2,7 +2,7 @@
 
 A CLI for evaluating FOLIO modules against technical council criteria.
 
-Copyright (C) 2025-2026 The Open Library Foundation
+Copyright (C) 2025-2027 The Open Library Foundation
 
 This software is distributed under the terms of the Apache License,
 Version 2.0. See the file "[LICENSE](LICENSE)" for more information.
@@ -67,7 +67,7 @@ on:
         description: 'Node.js version'
         required: false
         type: string
-        default: '18'
+        default: '20'
 
 jobs:
   evaluate:
@@ -93,8 +93,8 @@ All inputs are optional:
 | `ref` | Git ref to evaluate | Triggering ref (PR head or push ref) |
 | `output_format` | Report format: `both`, `json-only`, or `html-only` | `both` |
 | `criteria_filter` | Comma-separated criterion IDs to evaluate (e.g., `S001,S002,B005`) | All criteria |
-| `java_version` | Java version for Maven/Gradle builds | `17` |
-| `node_version` | Node.js version for npm builds | `18` |
+| `java_version` | Java version for Maven/Gradle builds | `21` |
+| `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
 
 #### Outputs
