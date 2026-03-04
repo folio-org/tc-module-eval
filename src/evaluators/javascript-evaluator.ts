@@ -51,6 +51,10 @@ export class JavaScriptEvaluator extends CompositeLanguageEvaluator {
         dep === 'react-dom'
       );
 
+      if (!hasStripesDependency) {
+        getLogger().warn('package.json lacks at least one of these direct dependencies: @folio/*, stripes*, react, react-dom');
+      }
+
       return hasStripesDependency;
     } catch (error) {
       getLogger().warn(`Could not parse package.json: ${error}`);
