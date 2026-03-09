@@ -286,8 +286,11 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
 
     // Step 1: Run yarn install to get all dependencies including transitives
     // SECURITY: --ignore-scripts prevents execution of preinstall/postinstall/etc scripts
+    // --ignore-engines bypasses Node.js engine compatibility checks that can cause
+    // failures when transitive dependencies require newer Node versions (e.g., @formatjs/cli
+    // requiring Node >= 20). Engine compat is irrelevant for license extraction.
     getLogger().info('Running yarn install...');
-    await execAsync('yarn install --production --ignore-scripts', {
+    await execAsync('yarn install --production --ignore-scripts --ignore-engines', {
       cwd: validatedPath,
       timeout: INSTALL_TIMEOUT
     });
