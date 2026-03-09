@@ -31,12 +31,12 @@ on:
         description: "Java version"
         required: false
         type: string
-        default: "17"
+        default: "21"
       node_version:
         description: "Node.js version"
         required: false
         type: string
-        default: "18"
+        default: "20"
 
 permissions:
   contents: read
