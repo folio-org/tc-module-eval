@@ -32,7 +32,7 @@ on:
         description: "Node.js version to use"
         required: false
         type: string
-        default: "18"
+        default: "20"
       evaluator_ref:
         description: "tc-module-eval ref (branch/tag) to use"
         required: false
