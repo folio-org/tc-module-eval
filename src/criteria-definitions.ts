@@ -2,7 +2,7 @@
  * Centralized definitions of all FOLIO technical council acceptance criteria
  * This file serves as the single source of truth for all criterion IDs and their organization
  *
- * Source: https://raw.githubusercontent.com/folio-org/tech-council/refs/heads/criteria-ids/MODULE_ACCEPTANCE_CRITERIA.MD
+ * Source: https://raw.githubusercontent.com/folio-org/tech-council/refs/heads/master/MODULE_ACCEPTANCE_CRITERIA.MD
  */
 
 /**
