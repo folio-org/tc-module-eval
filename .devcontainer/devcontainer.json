@@ -68,10 +68,5 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "postCreateCommand": "yarn install && mkdir -p /home/node/.m2 && cp /workspace/.devcontainer/maven-settings.xml /home/node/.m2/settings.xml",
-  "postStartCommand": "mkdir -p /home/node/.m2/repository",
-  "features": {
-    "ghcr.io/devcontainers/features/git:1": {
-      "version": "latest"
-    }
-  }
+  "postStartCommand": "mkdir -p /home/node/.m2/repository"
 }
