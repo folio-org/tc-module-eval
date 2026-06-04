@@ -5,6 +5,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getLogger } from './logger';
 
+export interface ThirdPartyLicenseEvaluatorAdapters {
+  extractDependencies(repoPath: string): Promise<{
+    dependencies: Dependency[];
+    errors: DependencyExtractionError[];
+    warnings: DependencyExtractionError[];
+  }>;
+  readReadmeContent(repoPath: string): string;
+  checkCompliance(dependencies: Dependency[], readmeContent: string): ComplianceResult;
+}
+
 /**
  * Format extraction errors into a detailed string for inclusion in criterion results.
  */
@@ -124,6 +134,96 @@ export function determineComplianceStatus(
 }
 
 /**
+ * Deep module for evaluating third-party license compliance (S003).
+ */
+export class ThirdPartyLicenseEvaluator {
+  constructor(
+    private readonly adapters: ThirdPartyLicenseEvaluatorAdapters = {
+      extractDependencies: getDependencies,
+      readReadmeContent: findReadmeContent,
+      checkCompliance: checkLicenseCompliance
+    }
+  ) {}
+
+  /**
+   * Evaluates third-party license compliance for any project type.
+   */
+  async evaluate(repoPath: string, criterionId: string = 'S003'): Promise<CriterionResult> {
+    try {
+      const extractionResult = await this.adapters.extractDependencies(repoPath);
+      const { dependencies, errors, warnings } = extractionResult;
+
+      if (errors.length > 0) {
+        return this.createExtractionErrorResult(criterionId, errors);
+      }
+
+      if (dependencies.length === 0) {
+        return this.createNoDependenciesResult(criterionId, warnings);
+      }
+
+      const readmeContent = this.adapters.readReadmeContent(repoPath);
+      const complianceResult = this.adapters.checkCompliance(dependencies, readmeContent);
+      const evidence = buildEvidenceSummary(dependencies);
+
+      return determineComplianceStatus(
+        criterionId,
+        complianceResult,
+        evidence,
+        warnings,
+        this.hasFallbackWarning(warnings)
+      );
+    } catch (error) {
+      getLogger().warn(`Error evaluating ${criterionId}:`, error);
+      return {
+        criterionId,
+        status: EvaluationStatus.MANUAL,
+        evidence: 'Error occurred during dependency analysis',
+        details: `Failed to analyze third-party license compliance: ${error instanceof Error ? error.message : 'Unknown error'}. Manual review required.`
+      };
+    }
+  }
+
+  private createExtractionErrorResult(
+    criterionId: string,
+    errors: DependencyExtractionError[]
+  ): CriterionResult {
+    const errorDetails = formatExtractionErrors(errors);
+    return {
+      criterionId,
+      status: EvaluationStatus.MANUAL,
+      evidence: `Failed to extract dependencies due to ${errors.length} error(s)`,
+      details: `Dependency extraction errors:\n${errorDetails}\n\nManual review required to verify third-party license compliance.`
+    };
+  }
+
+  private createNoDependenciesResult(
+    criterionId: string,
+    warnings: DependencyExtractionError[]
+  ): CriterionResult {
+    const warningInfo = warnings.length > 0
+      ? `\n\nWarnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
+      : '';
+
+    return {
+      criterionId,
+      status: EvaluationStatus.MANUAL,
+      evidence: 'No third-party dependencies found',
+      details: `Repository appears to have no third-party dependencies. This is uncommon and may indicate a library project, configuration-only project, or build tool detection issue. Manual review required to confirm compliance.${warningInfo}`
+    };
+  }
+
+  private hasFallbackWarning(warnings: DependencyExtractionError[]): boolean {
+    return warnings.some(w =>
+      w.message.includes('transitive dependencies unavailable') ||
+      w.message.includes('fallback') ||
+      w.message.includes('Fallback mode')
+    );
+  }
+}
+
+const defaultThirdPartyLicenseEvaluator = new ThirdPartyLicenseEvaluator();
+
+/**
  * Evaluates third-party license compliance (S003) for any project type.
  * This is a language-agnostic evaluation that works with Maven, Gradle, and npm projects
  * through the dependency-orchestrator auto-detection.
@@ -132,52 +232,5 @@ export function determineComplianceStatus(
  * @returns CriterionResult for S003 evaluation
  */
 export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<CriterionResult> {
-  try {
-    const extractionResult = await getDependencies(repoPath);
-    const { dependencies, errors, warnings } = extractionResult;
-
-    if (errors.length > 0) {
-      const errorDetails = formatExtractionErrors(errors);
-      return {
-        criterionId: 'S003',
-        status: EvaluationStatus.MANUAL,
-        evidence: `Failed to extract dependencies due to ${errors.length} error(s)`,
-        details: `Dependency extraction errors:\n${errorDetails}\n\nManual review required to verify third-party license compliance.`
-      };
-    }
-
-    if (dependencies.length === 0) {
-      const warningInfo = warnings.length > 0
-        ? `\n\nWarnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
-        : '';
-
-      return {
-        criterionId: 'S003',
-        status: EvaluationStatus.MANUAL,
-        evidence: 'No third-party dependencies found',
-        details: `Repository appears to have no third-party dependencies. This is uncommon and may indicate a library project, configuration-only project, or build tool detection issue. Manual review required to confirm compliance.${warningInfo}`
-      };
-    }
-
-    const readmeContent = findReadmeContent(repoPath);
-    const complianceResult = checkLicenseCompliance(dependencies, readmeContent);
-    const evidence = buildEvidenceSummary(dependencies);
-
-    const hasFallbackWarning = warnings.some(w =>
-      w.message.includes('transitive dependencies unavailable') ||
-      w.message.includes('fallback') ||
-      w.message.includes('Fallback mode')
-    );
-
-    return determineComplianceStatus('S003', complianceResult, evidence, warnings, hasFallbackWarning);
-
-  } catch (error) {
-    getLogger().warn('Error evaluating S003:', error);
-    return {
-      criterionId: 'S003',
-      status: EvaluationStatus.MANUAL,
-      evidence: 'Error occurred during dependency analysis',
-      details: `Failed to analyze third-party license compliance: ${error instanceof Error ? error.message : 'Unknown error'}. Manual review required.`
-    };
-  }
+  return await defaultThirdPartyLicenseEvaluator.evaluate(repoPath);
 }

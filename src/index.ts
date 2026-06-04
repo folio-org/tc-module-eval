@@ -17,6 +17,7 @@ export { JavaScriptSharedEvaluator } from './evaluators/javascript/javascript-sh
 export { BackendEvaluator } from './evaluators/java/backend-evaluator';
 export { FrontendEvaluator } from './evaluators/javascript/frontend-evaluator';
 export { BaseSectionEvaluator } from './evaluators/base/section-evaluator';
+export { CatalogSectionEvaluator } from './evaluators/base/catalog-section-evaluator';
 export { CompositeLanguageEvaluator } from './evaluators/base/composite-language-evaluator';
 
 // Export types

@@ -1,7 +1,9 @@
 import { CriterionResult, EvaluationStatus, SectionEvaluator, CriterionFunction } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
+import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { CompositeLanguageEvaluator } from '../evaluators/base/composite-language-evaluator';
 import { BaseSectionEvaluator } from '../evaluators/base/section-evaluator';
+import { CatalogSectionEvaluator } from '../evaluators/base/catalog-section-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 // Mock fs-extra (needed by SharedEvaluator -> LicenseUtils)
@@ -98,6 +100,15 @@ describe('SharedEvaluator', () => {
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.evidence).toBe('Custom override works');
   });
+
+  it('should use catalog-backed JavaScript fallback wording', async () => {
+    const evaluator = new JavaScriptSharedEvaluator();
+    const result = await evaluator.evaluateCriterion('S002', '/fake/path');
+
+    expect(result.criterionId).toBe('S002');
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toBe('package.json and stripes metadata validation - evaluation logic not yet implemented');
+  });
 });
 
 describe('BaseSectionEvaluator', () => {
@@ -159,6 +170,20 @@ describe('BaseSectionEvaluator', () => {
     expect(results[1].evidence).toContain('Handler exploded');
     // Evaluation continues after the error
     expect(results[2].status).toBe(EvaluationStatus.PASS);
+  });
+});
+
+describe('CatalogSectionEvaluator', () => {
+  it('should fail fast when a catalog criterion has neither fallback nor override', () => {
+    class MissingOverrideEvaluator extends CatalogSectionEvaluator {
+      constructor() {
+        super('Shared/Common', 'java');
+      }
+    }
+
+    expect(() => new MissingOverrideEvaluator()).toThrow(
+      'No default evaluation or handler registered for criterion: S001'
+    );
   });
 });
 
