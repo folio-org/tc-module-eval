@@ -1,5 +1,10 @@
 import { EvaluationStatus, LicenseIssueType, ComplianceResult, DependencyExtractionError, Dependency } from '../types';
-import { formatExtractionErrors, determineComplianceStatus } from '../utils/license-compliance-evaluator';
+import {
+  formatExtractionErrors,
+  determineComplianceStatus,
+  ThirdPartyLicenseEvaluator,
+  ThirdPartyLicenseEvaluatorAdapters
+} from '../utils/license-compliance-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 beforeEach(() => {
@@ -171,5 +176,146 @@ describe('determineComplianceStatus', () => {
     const result = determineComplianceStatus('CUSTOM01', complianceResult, evidence, [], false);
 
     expect(result.criterionId).toBe('CUSTOM01');
+  });
+});
+
+describe('ThirdPartyLicenseEvaluator', () => {
+  const dependency: Dependency = {
+    name: 'example-lib',
+    version: '1.0.0',
+    licenses: ['MIT']
+  };
+
+  function createEvaluator(
+    extraction: Awaited<ReturnType<ThirdPartyLicenseEvaluatorAdapters['extractDependencies']>>,
+    complianceResult: ComplianceResult = { compliant: true, issues: [] },
+    readmeContent: string = 'README content'
+  ): ThirdPartyLicenseEvaluator {
+    return new ThirdPartyLicenseEvaluator({
+      extractDependencies: jest.fn().mockResolvedValue(extraction),
+      readReadmeContent: jest.fn().mockReturnValue(readmeContent),
+      checkCompliance: jest.fn().mockReturnValue(complianceResult)
+    });
+  }
+
+  it('should return MANUAL when dependency extraction has errors', async () => {
+    const evaluator = createEvaluator({
+      dependencies: [],
+      errors: [{ source: 'maven-parser', message: 'Build failed' }],
+      warnings: []
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toBe('Failed to extract dependencies due to 1 error(s)');
+    expect(result.details).toContain('Dependency extraction errors:');
+    expect(result.details).toContain('[maven-parser] Build failed');
+  });
+
+  it('should return MANUAL when no dependencies are found', async () => {
+    const evaluator = createEvaluator({
+      dependencies: [],
+      errors: [],
+      warnings: [{ source: 'dependency-orchestrator', message: 'No supported build tools found' }]
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toBe('No third-party dependencies found');
+    expect(result.details).toContain('Manual review required to confirm compliance');
+    expect(result.details).toContain('[dependency-orchestrator] No supported build tools found');
+  });
+
+  it('should return PASS when dependencies are compliant', async () => {
+    const evaluator = createEvaluator({
+      dependencies: [dependency],
+      errors: [],
+      warnings: []
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.evidence).toBe('Found 1 dependencies. Licenses: example-lib:1.0.0 (MIT)');
+    expect(result.details).toContain('All third-party dependencies comply');
+  });
+
+  it('should return MANUAL when compliant dependencies came from fallback extraction', async () => {
+    const evaluator = createEvaluator({
+      dependencies: [dependency],
+      errors: [],
+      warnings: [{ source: 'npm-parser', message: 'Fallback mode used - ONLY DIRECT DEPENDENCIES analyzed' }]
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('MANUAL REVIEW REQUIRED');
+    expect(result.details).toContain('Transitive dependencies are unavailable');
+  });
+
+  it('should return FAIL when Category X violations are present', async () => {
+    const evaluator = createEvaluator(
+      {
+        dependencies: [dependency],
+        errors: [],
+        warnings: []
+      },
+      {
+        compliant: false,
+        issues: [{
+          dependency,
+          reason: 'License GPL-3.0 is in Category X (prohibited)',
+          issueType: LicenseIssueType.CATEGORY_X_VIOLATION
+        }]
+      }
+    );
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.details).toContain('License GPL-3.0 is in Category X');
+  });
+
+  it('should return MANUAL when compliance issues require manual review', async () => {
+    const evaluator = createEvaluator(
+      {
+        dependencies: [dependency],
+        errors: [],
+        warnings: []
+      },
+      {
+        compliant: false,
+        issues: [{
+          dependency,
+          reason: 'Unknown license',
+          issueType: LicenseIssueType.UNKNOWN_LICENSE
+        }]
+      }
+    );
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('require manual review');
+  });
+
+  it('should return MANUAL when an adapter throws during evaluation', async () => {
+    const evaluator = new ThirdPartyLicenseEvaluator({
+      extractDependencies: jest.fn().mockRejectedValue(new Error('Dependency tool crashed')),
+      readReadmeContent: jest.fn(),
+      checkCompliance: jest.fn()
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result).toEqual({
+      criterionId: 'S003',
+      status: EvaluationStatus.MANUAL,
+      evidence: 'Error occurred during dependency analysis',
+      details: 'Failed to analyze third-party license compliance: Dependency tool crashed. Manual review required.'
+    });
   });
 });

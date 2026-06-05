@@ -18,7 +18,7 @@ export class JavaScriptEvaluator extends CompositeLanguageEvaluator {
 
   constructor() {
     super();
-    this.administrativeEvaluator = new AdministrativeEvaluator();
+    this.administrativeEvaluator = new AdministrativeEvaluator('javascript');
     this.sharedEvaluator = new JavaScriptSharedEvaluator();
     this.frontendEvaluator = new FrontendEvaluator();
   }

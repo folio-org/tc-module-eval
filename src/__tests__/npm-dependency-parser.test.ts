@@ -124,6 +124,11 @@ describe('npm-dependency-parser', () => {
 
       const result = await getNpmDependencies('/test/repo');
 
+      expect(mockExecAsync).toHaveBeenNthCalledWith(
+        1,
+        'yarn install --production --ignore-scripts --ignore-engines',
+        expect.objectContaining({ cwd: '/test/repo' })
+      );
       expect(result.dependencies).toHaveLength(3);
 
       const express = result.dependencies.find(d => d.name === 'express');

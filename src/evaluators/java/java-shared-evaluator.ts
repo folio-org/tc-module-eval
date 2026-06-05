@@ -6,4 +6,7 @@ import { SharedEvaluator } from '../shared/shared-evaluator';
  * since the generic descriptions match Java usage.
  */
 export class JavaSharedEvaluator extends SharedEvaluator {
+  constructor() {
+    super('java');
+  }
 }
