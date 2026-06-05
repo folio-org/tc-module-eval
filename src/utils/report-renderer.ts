@@ -14,7 +14,8 @@ export interface ReportRenderer {
 }
 
 /**
- * Renders evaluation reports without owning filesystem persistence.
+ * Produces JSON and HTML report strings from an EvaluationResult.
+ * Pure transformation: no I/O, no file writes.
  */
 export class EvaluationReportRenderer implements ReportRenderer {
   renderJson(result: EvaluationResult): string {
@@ -249,6 +250,8 @@ export class EvaluationReportRenderer implements ReportRenderer {
 `;
   }
 
+  // Escapes HTML special characters to prevent XSS from untrusted evidence/details
+  // text interpolated into the generated report (see generateCriteriaHtml).
   escapeHtml(text: string): string {
     const htmlEscapes: { [key: string]: string } = {
       '&': '&amp;',

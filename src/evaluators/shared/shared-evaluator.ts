@@ -5,11 +5,11 @@ import { LicenseUtils } from '../../utils/license-utils';
 import { evaluateS003ThirdPartyLicenses } from '../../utils/license-compliance-evaluator';
 
 /**
- * Abstract base class for Shared/Common criteria (S001-S014).
- * Registers default handlers for all shared criteria. Language-specific subclasses
- * can override individual handlers by calling criterionHandlers.set() in their
- * constructor (Map.set on existing keys replaces the value while preserving
- * insertion-order position).
+ * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
+ * IDs and their fallback results are derived from the acceptance-criterion catalog
+ * by CatalogSectionEvaluator. Automated criteria are supplied as handler overrides
+ * to super() (here S001 and S003); every other criterion falls back to the
+ * catalog-defined default result for the given language.
  */
 export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   constructor(language: CriterionLanguage = 'java') {
