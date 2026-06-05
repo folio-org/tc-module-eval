@@ -60,6 +60,23 @@ const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
 
+function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
+  const npmToolDir = path.join(repoPath, '.folio-eval-npm');
+  const npmPrefix = path.join(npmToolDir, 'prefix');
+  const npmCache = path.join(npmToolDir, 'cache');
+
+  fs.mkdirSync(path.join(npmPrefix, 'lib', 'node_modules'), { recursive: true });
+  fs.mkdirSync(path.join(npmPrefix, 'bin'), { recursive: true });
+  fs.mkdirSync(npmCache, { recursive: true });
+
+  return {
+    ...process.env,
+    NPM_CONFIG_PREFIX: npmPrefix,
+    NPM_CONFIG_CACHE: npmCache,
+    npm_config_prefix: npmPrefix,
+    npm_config_cache: npmCache
+  };
+}
 
 /**
  * Split an SPDX license expression that may contain multiple licenses
@@ -299,9 +316,10 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
     // Use npx with pinned version to ensure consistency across environments
     getLogger().info('Running license-checker-rseidelsohn...');
     const { stdout } = await execAsync(
-      'npx license-checker-rseidelsohn@4.4.2 --json --production',
+      'npx --yes license-checker-rseidelsohn@4.4.2 --json --production',
       {
         cwd: validatedPath,
+        env: createNpmToolEnv(validatedPath),
         timeout: LICENSE_CHECK_TIMEOUT
       }
     );
