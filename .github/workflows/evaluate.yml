@@ -193,6 +193,8 @@ jobs:
             ARGS="$ARGS --criteria $CRITERIA_FILTER"
           fi
 
+          ARGS="$ARGS --allow-local-commands"
+
           echo "cli_args=$ARGS" >> $GITHUB_OUTPUT
           echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
 

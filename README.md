@@ -14,12 +14,28 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 **Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 
+### S002 Module Descriptor Validation
+
+S002 validates the final `ModuleDescriptor.json` offline against bundled Okapi JSON Schemas. The schema bundle is vendored from Okapi's RAML schema directory at `folio-org/okapi` `master`, retrieved 2026-06-08.
+
+Descriptor evidence can come from Maven descriptor generation, an explicit frontend descriptor-generation script, or a checked-in root `ModuleDescriptor.json`. Source templates such as `ModuleDescriptor-template.json` are rejected. If a command-backed descriptor strategy is detected but cannot run safely, times out, or fails, S002 reports explicit failure or manual-review evidence; it does not silently pass by falling back to a weaker candidate.
+
+S002 is schema-only. It does not call Okapi, install Okapi, resolve dependencies, or perform semantic validation for interfaces, routes, or permissions.
+
 ## Security
 
-**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm).
+**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm). S002 may also run descriptor-producing build commands when descriptor generation is required.
 
 - **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
 - **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege [job level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and/or [workflow level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) `permissions` to reduce risk.
+
+By default, local CLI runs use strict command execution and block build-tool commands that require isolation or network-policy enforcement. To run those commands in a trusted local environment, opt in explicitly:
+
+```bash
+folio-eval evaluate <repo-url> --allow-local-commands
+```
+
+When this flag is used in GitHub Actions, reports record command execution mode as `github-actions`. Outside GitHub Actions, reports record `trusted-local`.
 
 ### For Local Development: Use Devcontainer
 
