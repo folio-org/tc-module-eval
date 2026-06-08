@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "EnvEntry.json",
+  "title": "EnvEntry",
+  "description": "Environment Variable",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "Key",
+      "type": "string"
+    },
+    "value": {
+      "description": "Value",
+      "type": "string"
+    },
+    "description": {
+      "description": "Description",
+      "type": "string"
+    },
+    "required": {
+      "description": "True if the module cannot function if the environment variable is missing (because no sensible default exists), false otherwise",
+      "type": "boolean"
+    }
+  },
+  "required": ["name"]
+}
