@@ -3,7 +3,6 @@
  *
  * Handles extraction of third-party dependencies from Gradle projects including:
  * - Gradle license report plugin output (JSON format)
- * - Gradle dependencies task output
  * - Gradle coordinate parsing
  *
  * PARSER CONTRACT IMPLEMENTATION:
@@ -31,24 +30,23 @@
  * Production deployment should use containerization, sandboxing, or isolated environments.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
+import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
-
-const execAsync = promisify(exec);
+import { defaultCommandRunner } from '../command-runner';
 
 // Gradle-specific constants
 const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
+const GRADLE_NETWORK_POLICY = {
+  default: 'deny' as const,
+  allowedHosts: ['repo.maven.apache.org', 'plugins.gradle.org', 'services.gradle.org', 'repository.folio.org']
+};
 
 // Gradle-specific regex patterns
-const GRADLE_DEPENDENCY_PATTERN = /[+\\-]+\s*(.+?):(.+?):(.+?)(\s|$)/;
-
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
 
@@ -111,42 +109,6 @@ function parseGradleLicenseReport(content: string): Dependency[] {
 }
 
 /**
- * Parse Gradle dependencies output
- * @param output - Output from gradle dependencies command
- * @returns Array of parsed dependencies (without license information)
- */
-function parseGradleDependencies(output: string): Dependency[] {
-  if (!isNonEmptyString(output)) {
-    return [];
-  }
-
-  const dependencies: Dependency[] = [];
-  const lines = output.split('\n');
-
-  for (const line of lines) {
-    // Look for dependency lines like: "+--- org.apache.commons:commons-lang3:3.12.0"
-    const match = line.match(GRADLE_DEPENDENCY_PATTERN);
-    if (match && match.length >= 4) {
-      const [, groupId, artifactId, version] = match;
-
-      if (isNonEmptyString(groupId) && isNonEmptyString(artifactId) && isNonEmptyString(version)) {
-        const dependency: Dependency = {
-          name: `${groupId.trim()}:${artifactId.trim()}`,
-          version: version.trim(),
-          licenses: undefined // License info not available from dependencies task
-        };
-
-        if (isValidDependency(dependency)) {
-          dependencies.push(dependency);
-        }
-      }
-    }
-  }
-
-  return dependencies;
-}
-
-/**
  * Check if a Gradle project exists in the repository
  * @param repoPath - Path to repository
  * @returns Promise resolving to true if Gradle project exists
@@ -158,12 +120,24 @@ export async function hasGradleProject(repoPath: string): Promise<boolean> {
   return GRADLE_BUILD_FILES.some(file => fs.existsSync(path.join(repoPath, file)));
 }
 
+function getGradleCommand(repoPath: string): { command: string; argsPrefix: string[] } {
+  const wrapper = path.join(repoPath, 'gradlew');
+  if (fs.existsSync(wrapper)) {
+    return { command: wrapper, argsPrefix: [] };
+  }
+  return { command: 'gradle', argsPrefix: [] };
+}
+
 /**
  * Extract dependencies from Gradle project using license plugin
  * @param repoPath - Path to Gradle project
  * @returns Promise resolving to extraction result with dependencies and errors
  */
-export async function getGradleDependencies(repoPath: string): Promise<DependencyExtractionResult> {
+export async function getGradleDependencies(
+  repoPath: string,
+  evaluationRun?: EvaluationRun,
+  commandRunner: CommandRunner = evaluationRun?.commandRunner ?? defaultCommandRunner
+): Promise<DependencyExtractionResult> {
   const errors: DependencyExtractionError[] = [];
   const warnings: DependencyExtractionError[] = [];
 
@@ -179,16 +153,26 @@ export async function getGradleDependencies(repoPath: string): Promise<Dependenc
   }
 
   try {
-    // Try to use Gradle license report plugin if available
-    const { stdout } = await execAsync(
-      './gradlew generateLicenseReport || gradle generateLicenseReport',
-      {
-        cwd: validatedPath,
-        timeout: COMMAND_TIMEOUT
-      }
-    );
+    const gradle = getGradleCommand(validatedPath);
+    const licenseCommand = await commandRunner.run({
+      command: gradle.command,
+      args: [...gradle.argsPrefix, 'generateLicenseReport'],
+      cwd: validatedPath,
+      timeoutMs: COMMAND_TIMEOUT,
+      requiresIsolation: true,
+      networkPolicy: GRADLE_NETWORK_POLICY
+    }, evaluationRun);
 
-    getLogger().info('Gradle license plugin output:', stdout);
+    getLogger().info('Gradle license plugin output:', licenseCommand.stdout);
+
+    if (licenseCommand.status !== 'success') {
+      errors.push({
+        source: 'gradle-parser',
+        message: `Failed to generate Gradle license report: ${licenseCommand.errorMessage ?? licenseCommand.status}`,
+        error: new Error(licenseCommand.stderr || licenseCommand.errorMessage || licenseCommand.status)
+      });
+      return { dependencies: [], errors, warnings };
+    }
 
     // Look for generated license report
     const licenseReport = path.join(validatedPath, GRADLE_LICENSE_REPORT_PATH);
@@ -199,19 +183,12 @@ export async function getGradleDependencies(repoPath: string): Promise<Dependenc
       return { dependencies, errors, warnings };
     }
 
-    // Fallback: use dependencies task
-    warnings.push({
+    errors.push({
       source: 'gradle-parser',
-      message: 'Gradle license plugin did not generate license report, falling back to dependencies task'
+      message: `Gradle license plugin did not generate ${GRADLE_LICENSE_REPORT_PATH}; dependency evidence unavailable`,
+      error: new Error('Gradle license report missing')
     });
-
-    const { stdout: depsOutput } = await execAsync(
-      './gradlew dependencies --configuration runtimeClasspath || gradle dependencies',
-      { cwd: validatedPath, timeout: COMMAND_TIMEOUT }
-    );
-
-    const dependencies = parseGradleDependencies(depsOutput);
-    return { dependencies, errors, warnings };
+    return { dependencies: [], errors, warnings };
 
   } catch (error) {
     errors.push({

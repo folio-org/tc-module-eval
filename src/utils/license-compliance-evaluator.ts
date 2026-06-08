@@ -1,4 +1,4 @@
-import { CriterionResult, EvaluationStatus, LicenseIssueType, Dependency, ComplianceResult, DependencyExtractionError } from '../types';
+import { CriterionResult, EvaluationStatus, LicenseIssueType, Dependency, ComplianceResult, DependencyExtractionError, EvaluationRun } from '../types';
 import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
 import * as fs from 'fs';
@@ -6,7 +6,7 @@ import * as path from 'path';
 import { getLogger } from './logger';
 
 export interface ThirdPartyLicenseEvaluatorAdapters {
-  extractDependencies(repoPath: string): Promise<{
+  extractDependencies(repoPath: string, evaluationRun?: EvaluationRun): Promise<{
     dependencies: Dependency[];
     errors: DependencyExtractionError[];
     warnings: DependencyExtractionError[];
@@ -148,30 +148,30 @@ export class ThirdPartyLicenseEvaluator {
   /**
    * Evaluates third-party license compliance for any project type.
    */
-  async evaluate(repoPath: string, criterionId: string = 'S003'): Promise<CriterionResult> {
+  async evaluate(repoPath: string, criterionId: string = 'S003', evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     try {
-      const extractionResult = await this.adapters.extractDependencies(repoPath);
+      const extractionResult = await this.adapters.extractDependencies(repoPath, evaluationRun);
       const { dependencies, errors, warnings } = extractionResult;
 
       if (errors.length > 0) {
-        return this.createExtractionErrorResult(criterionId, errors);
+        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors), evaluationRun);
       }
 
       if (dependencies.length === 0) {
-        return this.createNoDependenciesResult(criterionId, warnings);
+        return this.withCommandExecutionDetails(this.createNoDependenciesResult(criterionId, warnings), evaluationRun);
       }
 
       const readmeContent = this.adapters.readReadmeContent(repoPath);
       const complianceResult = this.adapters.checkCompliance(dependencies, readmeContent);
       const evidence = buildEvidenceSummary(dependencies);
 
-      return determineComplianceStatus(
+      return this.withCommandExecutionDetails(determineComplianceStatus(
         criterionId,
         complianceResult,
         evidence,
         warnings,
         this.hasFallbackWarning(warnings)
-      );
+      ), evaluationRun);
     } catch (error) {
       getLogger().warn(`Error evaluating ${criterionId}:`, error);
       return {
@@ -219,6 +219,21 @@ export class ThirdPartyLicenseEvaluator {
       w.message.includes('Fallback mode')
     );
   }
+
+  private withCommandExecutionDetails(result: CriterionResult, evaluationRun?: EvaluationRun): CriterionResult {
+    const observations = Array.from(evaluationRun?.commandObservations.values() ?? []);
+    if (observations.length === 0) {
+      return result;
+    }
+
+    const lines = observations
+      .map(command => `  - ${command.command} ${command.args.join(' ')} (${command.status}, mode: ${command.executionMode})`);
+
+    return {
+      ...result,
+      details: `${result.details ?? ''}\n\nCommand execution:\n${lines.join('\n')}`
+    };
+  }
 }
 
 const defaultThirdPartyLicenseEvaluator = new ThirdPartyLicenseEvaluator();
@@ -231,6 +246,9 @@ const defaultThirdPartyLicenseEvaluator = new ThirdPartyLicenseEvaluator();
  * @param repoPath Path to the repository to evaluate
  * @returns CriterionResult for S003 evaluation
  */
-export async function evaluateS003ThirdPartyLicenses(repoPath: string): Promise<CriterionResult> {
-  return await defaultThirdPartyLicenseEvaluator.evaluate(repoPath);
+export async function evaluateS003ThirdPartyLicenses(
+  repoPath: string,
+  evaluationRun?: EvaluationRun
+): Promise<CriterionResult> {
+  return await defaultThirdPartyLicenseEvaluator.evaluate(repoPath, 'S003', evaluationRun);
 }

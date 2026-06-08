@@ -21,12 +21,11 @@
  * - Creates .npmrc with @folio scope pointing to repository.folio.org if not present
  * - Respects existing .npmrc configuration in the repository
  *
- * ERROR HANDLING POLICY (Graceful Degradation):
- * This parser attempts to provide partial results when possible:
- * - Primary: yarn install + license-checker (full transitive deps with licenses)
- * - Fallback: package.json parsing (direct deps only, no license info)
- * - Fatal errors only: Invalid repository path, missing package.json
- * - Warnings vs Errors: Recoverable failures go to warnings, fatal to errors
+ * ERROR HANDLING POLICY:
+ * This parser only reports automatically extracted dependency evidence when the
+ * full yarn install + license-checker flow succeeds. Partial package.json-only
+ * extraction is intentionally not used, because it hides missing transitive
+ * dependency evidence behind a best-effort result.
  *
  * SECURITY: This module installs dependencies from untrusted repositories.
  * Security measures implemented:
@@ -42,23 +41,25 @@
  * Production deployment should use containerization or isolated environments.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
+import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { validateRepoPath } from './common';
 import { getLogger } from '../logger';
-
-const execAsync = promisify(exec);
+import { defaultCommandRunner } from '../command-runner';
 
 // npm-specific constants
 const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
 const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
+const LICENSE_CHECK_MAX_OUTPUT = 10 * 1024 * 1024; // license-checker JSON can be large
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
+const NPM_NETWORK_POLICY = {
+  default: 'deny' as const,
+  allowedHosts: ['registry.yarnpkg.com', 'registry.npmjs.org', 'repository.folio.org']
+};
 
 function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
   const npmToolDir = path.join(repoPath, '.folio-eval-npm');
@@ -70,7 +71,7 @@ function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
   fs.mkdirSync(npmCache, { recursive: true });
 
   return {
-    ...process.env,
+    PATH: process.env.PATH,
     NPM_CONFIG_PREFIX: npmPrefix,
     NPM_CONFIG_CACHE: npmCache,
     npm_config_prefix: npmPrefix,
@@ -215,48 +216,6 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
 }
 
 /**
- * Fallback: Extract direct dependencies from package.json without license information
- * Used when license-checker fails but we still want to report what dependencies exist
- *
- * GRACEFUL DEGRADATION: This provides partial results (dependencies without licenses)
- * which is better than no results at all. License compliance evaluator will mark
- * dependencies without license info as requiring manual review.
- *
- * @param repoPath - Validated repository path
- * @returns Array of dependencies without license information (only direct deps, not transitive)
- */
-function extractFromPackageJson(repoPath: string): Dependency[] {
-  const packageJsonPath = path.join(repoPath, 'package.json');
-
-  if (!fs.existsSync(packageJsonPath)) {
-    return [];
-  }
-
-  try {
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    const dependencies: Dependency[] = [];
-
-    // Extract from dependencies (production)
-    if (packageJson.dependencies && typeof packageJson.dependencies === 'object') {
-      for (const [name, version] of Object.entries(packageJson.dependencies)) {
-        if (isNonEmptyString(name) && isNonEmptyString(String(version))) {
-          dependencies.push({
-            name,
-            version: String(version).replace(/^[\^~>=<]/, ''), // Remove version prefix
-            licenses: undefined  // No license info available in fallback mode
-          });
-        }
-      }
-    }
-
-    return dependencies;
-  } catch (error) {
-    getLogger().error('Failed to parse package.json:', error);
-    return [];
-  }
-}
-
-/**
  * Check if an npm/Node.js project exists in the repository
  * @param repoPath - Path to repository
  * @returns Promise resolving to true if npm project exists
@@ -274,7 +233,11 @@ export async function hasNpmProject(repoPath: string): Promise<boolean> {
  * @param repoPath - Path to npm project
  * @returns Promise resolving to extraction result with dependencies and errors
  */
-export async function getNpmDependencies(repoPath: string): Promise<DependencyExtractionResult> {
+export async function getNpmDependencies(
+  repoPath: string,
+  evaluationRun?: EvaluationRun,
+  commandRunner: CommandRunner = evaluationRun?.commandRunner ?? defaultCommandRunner
+): Promise<DependencyExtractionResult> {
   const errors: DependencyExtractionError[] = [];
   const warnings: DependencyExtractionError[] = [];
 
@@ -307,25 +270,39 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
     // failures when transitive dependencies require newer Node versions (e.g., @formatjs/cli
     // requiring Node >= 20). Engine compat is irrelevant for license extraction.
     getLogger().info('Running yarn install...');
-    await execAsync('yarn install --production --ignore-scripts --ignore-engines', {
+    const installResult = await commandRunner.run({
+      command: 'yarn',
+      args: ['install', '--production', '--ignore-scripts', '--ignore-engines'],
       cwd: validatedPath,
-      timeout: INSTALL_TIMEOUT
-    });
+      timeoutMs: INSTALL_TIMEOUT,
+      requiresIsolation: true,
+      networkPolicy: NPM_NETWORK_POLICY
+    }, evaluationRun);
+
+    if (installResult.status !== 'success') {
+      throw new Error(installResult.errorMessage || installResult.stderr || installResult.status);
+    }
 
     // Step 2: Run license-checker-rseidelsohn to extract license information
     // Use npx with pinned version to ensure consistency across environments
     getLogger().info('Running license-checker-rseidelsohn...');
-    const { stdout } = await execAsync(
-      'npx --yes license-checker-rseidelsohn@4.4.2 --json --production',
-      {
-        cwd: validatedPath,
-        env: createNpmToolEnv(validatedPath),
-        timeout: LICENSE_CHECK_TIMEOUT
-      }
-    );
+    const checkerResult = await commandRunner.run({
+      command: 'npx',
+      args: ['--yes', 'license-checker-rseidelsohn@4.4.2', '--json', '--production'],
+      cwd: validatedPath,
+      env: createNpmToolEnv(validatedPath) as Record<string, string | undefined>,
+      timeoutMs: LICENSE_CHECK_TIMEOUT,
+      maxOutputBytes: LICENSE_CHECK_MAX_OUTPUT,
+      requiresIsolation: true,
+      networkPolicy: NPM_NETWORK_POLICY
+    }, evaluationRun);
+
+    if (checkerResult.status !== 'success') {
+      throw new Error(checkerResult.errorMessage || checkerResult.stderr || checkerResult.status);
+    }
 
     // Step 3: Parse the JSON output
-    const dependencies = parseLicenseCheckerOutput(stdout);
+    const dependencies = parseLicenseCheckerOutput(checkerResult.stdout);
 
     return { dependencies, errors, warnings };
 
@@ -336,35 +313,6 @@ export async function getNpmDependencies(repoPath: string): Promise<DependencyEx
       getLogger().error('Stack trace:', error.stack);
     }
 
-    // GRACEFUL DEGRADATION: Attempt to extract dependencies from package.json
-    // This provides partial results (direct deps without licenses) instead of complete failure
-    warnings.push({
-      source: 'npm-parser',
-      message: `License-checker approach failed, attempting fallback to package.json: ${errorMessage}`,
-      error: error instanceof Error ? error : new Error(String(error))
-    });
-
-    try {
-      const dependencies = extractFromPackageJson(validatedPath);
-      if (dependencies.length > 0) {
-        getLogger().info(`Extracted ${dependencies.length} direct dependencies from package.json (without license info)`);
-        warnings.push({
-          source: 'npm-parser',
-          message: '⚠️  CRITICAL: Fallback mode used - ONLY DIRECT DEPENDENCIES analyzed. All transitive dependencies are MISSING from analysis. License information unavailable. Full compliance verification is IMPOSSIBLE without manual review of all transitive dependencies.',
-          error: new Error('Partial extraction - transitive dependencies unavailable')
-        });
-        return { dependencies, errors, warnings };
-      }
-    } catch (fallbackError) {
-      getLogger().error('Fallback extraction also failed:', fallbackError);
-      errors.push({
-        source: 'npm-parser',
-        message: 'Both license-checker and package.json extraction failed',
-        error: fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError))
-      });
-    }
-
-    // Complete failure - no results available
     errors.push({
       source: 'npm-parser',
       message: `Failed to extract npm dependencies: ${errorMessage}`,

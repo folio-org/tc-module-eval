@@ -3,6 +3,15 @@ export { ModuleEvaluator } from './module-evaluator';
 export { ReportGenerator } from './utils/report-generator';
 export { GitUtils } from './utils/git';
 export { evaluateS003ThirdPartyLicenses } from './utils/license-compliance-evaluator';
+export {
+  LocalCommandRunner,
+  defaultCommandRunner,
+  normalizeCommandRequest,
+  sanitizeCommandOutput
+} from './utils/command-runner';
+export { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
+export { produceModuleDescriptorArtifact } from './utils/artifacts/module-descriptor-artifact';
+export { validateModuleDescriptorJson } from './utils/module-descriptor-validator';
 export { Logger, ConsoleLogger, NoopLogger, getLogger, setLogger, resetLogger } from './utils/logger';
 
 // Language-specific evaluators
@@ -27,6 +36,15 @@ export {
   CriterionResult,
   EvaluationResult,
   EvaluationConfig,
+  ArtifactKey,
+  CommandExecutionMode,
+  CommandExecutionRequest,
+  CommandNetworkPolicy,
+  CommandExecutionResult,
+  CommandRunner,
+  ModuleDescriptorArtifact,
+  EvaluationRunArtifacts,
+  EvaluationRun,
   LanguageEvaluator,
   SectionEvaluator,
   CriterionFunction,

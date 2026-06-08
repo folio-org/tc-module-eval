@@ -1,4 +1,4 @@
-import { LanguageEvaluator, CriterionResult, SectionEvaluator } from '../../types';
+import { LanguageEvaluator, CriterionResult, SectionEvaluator, EvaluationRun } from '../../types';
 import { getLogger } from '../../utils/logger';
 
 /**
@@ -19,12 +19,12 @@ export abstract class CompositeLanguageEvaluator implements LanguageEvaluator {
    * Evaluate the repository by dispatching to each section evaluator in order.
    * If any section throws, the loop aborts and partial results are returned.
    */
-  async evaluate(repoPath: string, criteriaFilter?: string[]): Promise<CriterionResult[]> {
+  async evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]> {
     const results: CriterionResult[] = [];
 
     try {
       for (const section of this.getSectionEvaluators()) {
-        const sectionResults = await section.evaluate(repoPath, criteriaFilter);
+        const sectionResults = await section.evaluate(repoPath, criteriaFilter, evaluationRun);
         results.push(...sectionResults);
       }
     } catch (error) {

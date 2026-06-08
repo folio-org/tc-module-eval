@@ -4,6 +4,8 @@ import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
 import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
 import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitions';
 import { getLogger } from './utils/logger';
+import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
+import { LocalCommandRunner } from './utils/command-runner';
 
 /**
  * Main orchestrator for module evaluation
@@ -56,10 +58,21 @@ export class ModuleEvaluator {
         await this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
       }
 
-      const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter);
-      
       // Get repository info
       const repoInfo = await this.gitUtils.getRepoInfo(repoPath);
+
+      const commandRunner = this.config.commandRunner ??
+        (this.config.commandExecutionMode ? new LocalCommandRunner({ executionMode: this.config.commandExecutionMode }) : undefined);
+      const evaluationRun = createEvaluationRun({
+        repositoryPath: repoPath,
+        repositoryUrl,
+        repositoryName: repoInfo.name,
+        language: languageToCatalogLanguage(evaluator.getLanguage()),
+        criteriaFilter: this.config.criteriaFilter,
+        commandRunner
+      });
+
+      const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);
       
       // Compile results
       const result: EvaluationResult = {
