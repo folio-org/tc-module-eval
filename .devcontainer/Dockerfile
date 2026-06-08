@@ -28,6 +28,7 @@ RUN wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt
   echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list && \
   apt-get update && apt-get install -y --no-install-recommends \
   temurin-21-jdk \
+  && ln -sfn "/usr/lib/jvm/temurin-21-jdk-$(dpkg --print-architecture)" /usr/lib/jvm/temurin-21-jdk \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Maven
@@ -45,7 +46,7 @@ RUN wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.
   rm gradle-${GRADLE_VERSION}-bin.zip
 
 # Set Java environment variables
-ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk
 ENV MAVEN_HOME=/opt/maven
 ENV GRADLE_HOME=/opt/gradle
 ENV PATH=$PATH:$MAVEN_HOME/bin:$GRADLE_HOME/bin

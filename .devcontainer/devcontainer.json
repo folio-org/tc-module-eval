@@ -45,7 +45,7 @@
         "java.configuration.runtimes": [
           {
             "name": "JavaSE-21",
-            "path": "/usr/lib/jvm/temurin-21-jdk-amd64",
+            "path": "/usr/lib/jvm/temurin-21-jdk",
             "default": true
           }
         ]
@@ -61,7 +61,7 @@
   "containerEnv": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
-    "JAVA_HOME": "/usr/lib/jvm/temurin-21-jdk-amd64",
+    "JAVA_HOME": "/usr/lib/jvm/temurin-21-jdk",
     "MAVEN_HOME": "/opt/maven",
     "GRADLE_HOME": "/opt/gradle"
   },
