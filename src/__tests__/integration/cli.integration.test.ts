@@ -3,7 +3,17 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import { ModuleEvaluator } from '../../module-evaluator';
 import { ReportGenerator } from '../../utils/report-generator';
-import { EvaluationConfig, ReportOptions } from '../../types';
+import { EvaluationConfig, EvaluationResult, ReportOptions } from '../../types';
+
+const GOLDEN_EVALUATED_AT = '<<normalized-evaluatedAt>>';
+type NormalizedEvaluationReport = Omit<EvaluationResult, 'evaluatedAt'> & { evaluatedAt: string };
+
+function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluationReport {
+  return {
+    ...report,
+    evaluatedAt: GOLDEN_EVALUATED_AT,
+  };
+}
 
 describe('CLI Integration Tests', () => {
   const testOutputDir = path.join(os.tmpdir(), 'folio-eval-integration-tests', Date.now().toString());
@@ -215,6 +225,43 @@ describe('CLI Integration Tests', () => {
       // Verify HTML file exists
       const htmlExists = await fs.pathExists(reportPaths.htmlPath!);
       expect(htmlExists).toBe(true);
+    });
+  });
+
+  describe('Golden Report Regression', () => {
+    test('should match normalized JSON report for mod-rtac-cache v1.1.1', async () => {
+      const repoUrl = 'https://github.com/folio-org/mod-rtac-cache';
+      const config: EvaluationConfig = {
+        outputDir: testOutputDir,
+        skipCleanup: false,
+        branch: 'v1.1.1',
+      };
+
+      const evaluator = new ModuleEvaluator(config);
+      const result = await evaluator.evaluateModule(repoUrl);
+
+      const reportGenerator = new ReportGenerator(testOutputDir);
+      const reportPaths = await reportGenerator.generateReports(result, {
+        outputHtml: false,
+        outputJson: true,
+        outputDir: testOutputDir,
+      });
+
+      expect(reportPaths.htmlPath).toBeUndefined();
+      expect(reportPaths.jsonPath).toBeDefined();
+
+      const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
+      const actualReport = normalizeEvaluationReport(JSON.parse(jsonContent));
+      const goldenPath = path.join(
+        __dirname,
+        '..',
+        'fixtures',
+        'golden-reports',
+        'mod-rtac-cache-v1.1.1.json'
+      );
+      const expectedReport = JSON.parse(await fs.readFile(goldenPath, 'utf-8'));
+
+      expect(actualReport).toEqual(expectedReport);
     });
   });
 
