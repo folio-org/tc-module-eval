@@ -37,14 +37,11 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
+import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 
 // Gradle-specific constants
 const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
-const GRADLE_NETWORK_POLICY = {
-  default: 'deny' as const,
-  allowedHosts: ['repo.maven.apache.org', 'plugins.gradle.org', 'services.gradle.org', 'repository.folio.org']
-};
 
 // Gradle-specific regex patterns
 // Gradle build file patterns

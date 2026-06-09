@@ -1,4 +1,13 @@
-import { CriterionResult, EvaluationStatus, LicenseIssueType, Dependency, ComplianceResult, DependencyExtractionError, EvaluationRun } from '../types';
+import {
+  CommandExecutionResult,
+  CriterionResult,
+  EvaluationStatus,
+  LicenseIssueType,
+  Dependency,
+  ComplianceResult,
+  DependencyExtractionError,
+  EvaluationRun
+} from '../types';
 import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
 import * as fs from 'fs';
@@ -150,15 +159,17 @@ export class ThirdPartyLicenseEvaluator {
    */
   async evaluate(repoPath: string, criterionId: string = 'S003', evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     try {
+      const previousCommandIdentities = new Set(evaluationRun?.commandObservations.keys() ?? []);
       const extractionResult = await this.adapters.extractDependencies(repoPath, evaluationRun);
       const { dependencies, errors, warnings } = extractionResult;
+      const commandObservations = this.getNewCommandObservations(evaluationRun, previousCommandIdentities);
 
       if (errors.length > 0) {
-        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors), evaluationRun);
+        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors), commandObservations);
       }
 
       if (dependencies.length === 0) {
-        return this.withCommandExecutionDetails(this.createNoDependenciesResult(criterionId, warnings), evaluationRun);
+        return this.withCommandExecutionDetails(this.createNoDependenciesResult(criterionId, warnings), commandObservations);
       }
 
       const readmeContent = this.adapters.readReadmeContent(repoPath);
@@ -171,7 +182,7 @@ export class ThirdPartyLicenseEvaluator {
         evidence,
         warnings,
         this.hasFallbackWarning(warnings)
-      ), evaluationRun);
+      ), commandObservations);
     } catch (error) {
       getLogger().warn(`Error evaluating ${criterionId}:`, error);
       return {
@@ -220,8 +231,18 @@ export class ThirdPartyLicenseEvaluator {
     );
   }
 
-  private withCommandExecutionDetails(result: CriterionResult, evaluationRun?: EvaluationRun): CriterionResult {
-    const observations = Array.from(evaluationRun?.commandObservations.values() ?? []);
+  private getNewCommandObservations(
+    evaluationRun: EvaluationRun | undefined,
+    previousIdentities: Set<string>
+  ): CommandExecutionResult[] {
+    return Array.from(evaluationRun?.commandObservations.values() ?? [])
+      .filter(command => !previousIdentities.has(command.identity));
+  }
+
+  private withCommandExecutionDetails(
+    result: CriterionResult,
+    observations: CommandExecutionResult[]
+  ): CriterionResult {
     if (observations.length === 0) {
       return result;
     }

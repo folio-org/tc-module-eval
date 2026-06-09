@@ -19,6 +19,22 @@ export interface ModuleDescriptorValidationResult {
   parseError?: string;
 }
 
+const moduleDescriptorValidator = createModuleDescriptorValidator();
+
+function createModuleDescriptorValidator() {
+  const ajv = new Ajv({
+    allErrors: true,
+    strict: false,
+    validateSchema: false
+  });
+
+  for (const schema of okapiModuleDescriptorSchemas) {
+    ajv.addSchema(schema);
+  }
+
+  return ajv.getSchema('ModuleDescriptor.json') ?? ajv.compile(okapiModuleDescriptorRootSchema);
+}
+
 export function validateModuleDescriptorJson(content: string): ModuleDescriptorValidationResult {
   let descriptor: unknown;
 
@@ -33,23 +49,12 @@ export function validateModuleDescriptorJson(content: string): ModuleDescriptorV
     };
   }
 
-  const ajv = new Ajv({
-    allErrors: true,
-    strict: false,
-    validateSchema: false
-  });
-
-  for (const schema of okapiModuleDescriptorSchemas) {
-    ajv.addSchema(schema);
-  }
-
-  const validate = ajv.getSchema('ModuleDescriptor.json') ?? ajv.compile(okapiModuleDescriptorRootSchema);
-  const valid = validate(descriptor) === true;
+  const valid = moduleDescriptorValidator(descriptor) === true;
 
   return {
     valid,
     schemaBaseline: OKAPI_MODULE_DESCRIPTOR_SCHEMA_BASELINE,
-    errors: (validate.errors ?? []).map(error => ({
+    errors: (moduleDescriptorValidator.errors ?? []).map(error => ({
       instancePath: error.instancePath || '',
       schemaPath: error.schemaPath,
       keyword: error.keyword,

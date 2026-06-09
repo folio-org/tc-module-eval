@@ -7,11 +7,13 @@ import {
   EvaluationRun,
   ModuleDescriptorArtifact
 } from '../../types';
+import { MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from '../build-tool-policies';
 import { defaultCommandRunner } from '../command-runner';
 import { validateRepoPath } from '../parsers/common';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
 const FRONTEND_DESCRIPTOR_SCRIPTS = ['build-mod-descriptor', 'build-module-descriptor', 'generate-module-descriptor'];
+const SKIPPED_SCAN_DIRS = new Set(['node_modules', '.git']);
 
 export async function produceModuleDescriptorArtifact(
   repoPath: string,
@@ -42,7 +44,7 @@ async function runMavenDescriptorStrategy(
   evaluationRun: EvaluationRun | undefined,
   commandRunner: CommandRunner
 ): Promise<ModuleDescriptorArtifact> {
-  const before = snapshotDescriptorPaths(repoPath);
+  const before = snapshotGeneratedDescriptorPaths(repoPath);
   const command = await commandRunner.run({
     command: 'mvn',
     args: ['process-resources', '-DskipTests'],
@@ -50,10 +52,7 @@ async function runMavenDescriptorStrategy(
     timeoutMs: 300000,
     maxOutputBytes: 64 * 1024,
     requiresIsolation: true,
-    networkPolicy: {
-      default: 'deny',
-      allowedHosts: ['repo.maven.apache.org', 'repository.folio.org']
-    }
+    networkPolicy: MAVEN_NETWORK_POLICY
   }, evaluationRun);
 
   if (command.status === 'blocked') {
@@ -93,7 +92,7 @@ async function runFrontendDescriptorStrategy(
   evaluationRun: EvaluationRun | undefined,
   commandRunner: CommandRunner
 ): Promise<ModuleDescriptorArtifact> {
-  const before = snapshotDescriptorPaths(repoPath);
+  const before = snapshotRootDescriptorPath(repoPath);
   const command = await commandRunner.run({
     command: 'yarn',
     args: ['run', scriptName],
@@ -101,10 +100,7 @@ async function runFrontendDescriptorStrategy(
     timeoutMs: 180000,
     maxOutputBytes: 64 * 1024,
     requiresIsolation: true,
-    networkPolicy: {
-      default: 'deny',
-      allowedHosts: ['registry.yarnpkg.com', 'registry.npmjs.org', 'repository.folio.org']
-    }
+    networkPolicy: NPM_NETWORK_POLICY
   }, evaluationRun);
 
   if (command.status === 'blocked') {
@@ -236,12 +232,42 @@ function selectedArtifact(
 }
 
 function findGeneratedDescriptorCandidates(repoPath: string): string[] {
-  return findDescriptorCandidates(repoPath, repoPath)
-    .filter(candidate => relative(repoPath, candidate).split('/').includes('target'));
+  const candidates: string[] = [];
+  walkDirectories(repoPath, directory => {
+    if (path.basename(directory) === 'target') {
+      candidates.push(...findDescriptorCandidates(repoPath, directory));
+      return false;
+    }
+
+    return true;
+  });
+
+  return candidates;
 }
 
 function findDescriptorCandidates(repoPath: string, startPath: string): string[] {
+  return findCandidateFiles(repoPath, startPath, candidate =>
+    path.basename(candidate) === DESCRIPTOR_NAME && !isTemplatePath(candidate)
+  );
+}
+
+function findTemplateCandidates(repoPath: string): string[] {
+  return findCandidateFiles(repoPath, repoPath, candidate =>
+    path.basename(candidate).endsWith('.json') && isTemplatePath(candidate)
+  );
+}
+
+function findCandidateFiles(
+  repoPath: string,
+  startPath: string,
+  includeFile: (candidatePath: string) => boolean
+): string[] {
   if (!fs.existsSync(startPath)) {
+    return [];
+  }
+
+  const repoRealPath = realPath(repoPath);
+  if (!repoRealPath) {
     return [];
   }
 
@@ -251,15 +277,17 @@ function findDescriptorCandidates(repoPath: string, startPath: string): string[]
     if (stats.isSymbolicLink()) {
       return;
     }
-    if (stats.isFile() && path.basename(current) === DESCRIPTOR_NAME && !isTemplatePath(current)) {
-      candidates.push(current);
+    if (stats.isFile()) {
+      if (includeFile(current)) {
+        candidates.push(current);
+      }
       return;
     }
     if (!stats.isDirectory()) {
       return;
     }
     for (const entry of fs.readdirSync(current)) {
-      if (entry === 'node_modules' || entry === '.git') {
+      if (SKIPPED_SCAN_DIRS.has(entry)) {
         continue;
       }
       walk(path.join(current, entry));
@@ -267,37 +295,7 @@ function findDescriptorCandidates(repoPath: string, startPath: string): string[]
   };
 
   walk(startPath);
-  return candidates.filter(candidate => isSafeFinalDescriptor(repoPath, candidate));
-}
-
-function findTemplateCandidates(repoPath: string): string[] {
-  if (!fs.existsSync(repoPath)) {
-    return [];
-  }
-
-  const candidates: string[] = [];
-  const walk = (current: string): void => {
-    const stats = fs.lstatSync(current);
-    if (stats.isSymbolicLink()) {
-      return;
-    }
-    if (stats.isFile() && path.basename(current).endsWith('.json') && isTemplatePath(current)) {
-      candidates.push(current);
-      return;
-    }
-    if (!stats.isDirectory()) {
-      return;
-    }
-    for (const entry of fs.readdirSync(current)) {
-      if (entry === 'node_modules' || entry === '.git') {
-        continue;
-      }
-      walk(path.join(current, entry));
-    }
-  };
-
-  walk(repoPath);
-  return candidates.filter(candidate => isWithinRepo(repoPath, candidate));
+  return candidates.filter(candidate => isWithinRealPath(repoRealPath, candidate));
 }
 
 function isSafeFinalDescriptor(repoPath: string, candidatePath: string): boolean {
@@ -309,8 +307,12 @@ function isSafeFinalDescriptor(repoPath: string, candidatePath: string): boolean
 }
 
 function isWithinRepo(repoPath: string, candidatePath: string): boolean {
+  const repoRealPath = realPath(repoPath);
+  return repoRealPath ? isWithinRealPath(repoRealPath, candidatePath) : false;
+}
+
+function isWithinRealPath(repoRealPath: string, candidatePath: string): boolean {
   try {
-    const repoRealPath = fs.realpathSync(repoPath);
     const candidateRealPath = fs.realpathSync(candidatePath);
     return candidateRealPath.startsWith(`${repoRealPath}${path.sep}`) || candidateRealPath === repoRealPath;
   } catch {
@@ -318,12 +320,53 @@ function isWithinRepo(repoPath: string, candidatePath: string): boolean {
   }
 }
 
+function realPath(candidatePath: string): string | undefined {
+  try {
+    return fs.realpathSync(candidatePath);
+  } catch {
+    return undefined;
+  }
+}
+
+function walkDirectories(startPath: string, visit: (directory: string) => boolean): void {
+  if (!fs.existsSync(startPath)) {
+    return;
+  }
+
+  const walk = (current: string): void => {
+    const stats = fs.lstatSync(current);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      return;
+    }
+
+    if (!visit(current)) {
+      return;
+    }
+
+    for (const entry of fs.readdirSync(current)) {
+      if (SKIPPED_SCAN_DIRS.has(entry)) {
+        continue;
+      }
+      walk(path.join(current, entry));
+    }
+  };
+
+  walk(startPath);
+}
+
 function isTemplatePath(candidatePath: string): boolean {
   return candidatePath.toLowerCase().includes('template');
 }
 
-function snapshotDescriptorPaths(repoPath: string): Set<string> {
-  return new Set(findDescriptorCandidates(repoPath, repoPath).map(candidate => relative(repoPath, candidate)));
+function snapshotGeneratedDescriptorPaths(repoPath: string): Set<string> {
+  return new Set(findGeneratedDescriptorCandidates(repoPath).map(candidate => relative(repoPath, candidate)));
+}
+
+function snapshotRootDescriptorPath(repoPath: string): Set<string> {
+  const rootDescriptor = path.join(repoPath, DESCRIPTOR_NAME);
+  return fs.existsSync(rootDescriptor) && isSafeFinalDescriptor(repoPath, rootDescriptor)
+    ? new Set([DESCRIPTOR_NAME])
+    : new Set();
 }
 
 function relative(repoPath: string, candidatePath: string): string {

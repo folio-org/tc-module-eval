@@ -113,38 +113,6 @@ describe('SharedEvaluator', () => {
 });
 
 describe('EvaluationRun', () => {
-  it('should mark no descriptor need when selected criteria do not require artifacts', () => {
-    const run = createEvaluationRun({
-      repositoryPath: '/repo',
-      language: 'java',
-      criteriaFilter: ['S001']
-    });
-
-    expect(run.selectedCriteria).toEqual(['S001']);
-    expect(run.artifactNeeds.has('moduleDescriptor')).toBe(false);
-  });
-
-  it('should mark moduleDescriptor need for S002 from catalog metadata', () => {
-    const run = createEvaluationRun({
-      repositoryPath: '/repo',
-      language: 'java',
-      criteriaFilter: ['S002']
-    });
-
-    expect(run.selectedCriteria).toEqual(['S002']);
-    expect(run.artifactNeeds.has('moduleDescriptor')).toBe(true);
-  });
-
-  it('should mark moduleDescriptor need for a full JavaScript run', () => {
-    const run = createEvaluationRun({
-      repositoryPath: '/repo',
-      language: 'javascript'
-    });
-
-    expect(run.selectedCriteria).toContain('S002');
-    expect(run.artifactNeeds.has('moduleDescriptor')).toBe(true);
-  });
-
   it('should cache lazy artifacts in one run slot', async () => {
     const run = createEvaluationRun({
       repositoryPath: '/repo',

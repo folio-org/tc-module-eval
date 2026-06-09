@@ -49,6 +49,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
+import { NPM_NETWORK_POLICY } from '../build-tool-policies';
 
 // npm-specific constants
 const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
@@ -56,10 +57,6 @@ const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const LICENSE_CHECK_MAX_OUTPUT = 10 * 1024 * 1024; // license-checker JSON can be large
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
-const NPM_NETWORK_POLICY = {
-  default: 'deny' as const,
-  allowedHosts: ['registry.yarnpkg.com', 'registry.npmjs.org', 'repository.folio.org']
-};
 
 function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
   const npmToolDir = path.join(repoPath, '.folio-eval-npm');

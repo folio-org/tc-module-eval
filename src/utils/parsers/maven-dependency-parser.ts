@@ -40,6 +40,7 @@ import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
+import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 
 // Maven-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
@@ -353,10 +354,7 @@ export async function getMavenDependencies(
       timeoutMs: COMMAND_TIMEOUT,
       maxOutputBytes: MAX_BUFFER,
       requiresIsolation: true,
-      networkPolicy: {
-        default: 'deny',
-        allowedHosts: ['repo.maven.apache.org', 'repository.folio.org']
-      }
+      networkPolicy: MAVEN_NETWORK_POLICY
     }, evaluationRun);
 
     getLogger().info('Maven license plugin output:', commandResult.stdout);

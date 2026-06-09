@@ -114,7 +114,6 @@ export interface EvaluationRun {
   repositoryName?: string;
   language: string;
   selectedCriteria: string[];
-  artifactNeeds: Set<ArtifactKey>;
   artifacts: EvaluationRunArtifacts;
   commandObservations: Map<string, CommandExecutionResult>;
   commandRunner?: CommandRunner;

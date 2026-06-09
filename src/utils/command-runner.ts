@@ -74,12 +74,12 @@ export class LocalCommandRunner implements CommandRunner {
   private readonly commandExecutionEnvironment: CommandExecutionEnvironment;
 
   constructor(options: boolean | LocalCommandRunnerOptions = false) {
-    this.allowLocalCommands = typeof options === 'boolean'
-      ? options
-      : options.allowLocalCommands ?? false;
-    this.commandExecutionEnvironment = typeof options === 'boolean'
-      ? 'local'
-      : options.commandExecutionEnvironment ?? 'local';
+    const resolvedOptions = typeof options === 'boolean'
+      ? { allowLocalCommands: options }
+      : options;
+
+    this.allowLocalCommands = resolvedOptions.allowLocalCommands ?? false;
+    this.commandExecutionEnvironment = resolvedOptions.commandExecutionEnvironment ?? 'local';
   }
 
   normalize(request: CommandExecutionRequest): string {
@@ -107,7 +107,7 @@ export class LocalCommandRunner implements CommandRunner {
       return blocked;
     }
 
-    if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+    if (!this.isDirectory(cwd)) {
       const blocked = this.result(request, identity, cwd, args, started, {
         status: 'blocked',
         errorMessage: `Command working directory is not a directory: ${cwd}`
@@ -123,6 +123,14 @@ export class LocalCommandRunner implements CommandRunner {
 
   private requiresPolicyEnforcement(request: CommandExecutionRequest): boolean {
     return request.requiresIsolation === true || request.networkPolicy?.default === 'deny';
+  }
+
+  private isDirectory(cwd: string): boolean {
+    try {
+      return fs.statSync(cwd).isDirectory();
+    } catch {
+      return false;
+    }
   }
 
   private spawnCommand(

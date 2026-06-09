@@ -5,7 +5,7 @@
  * Source: https://raw.githubusercontent.com/folio-org/tech-council/refs/heads/criteria-ids/MODULE_ACCEPTANCE_CRITERIA.MD
  */
 
-import { ArtifactKey, CriterionResult, EvaluationStatus } from './types';
+import { CriterionResult, EvaluationStatus } from './types';
 
 /**
  * Individual criterion definition
@@ -29,7 +29,6 @@ export interface AcceptanceCriterionDefinition extends CriterionDefinition {
   section: CriterionSection;
   languages: readonly CriterionLanguage[];
   defaultEvaluation?: CriterionDefaultEvaluation;
-  requiresArtifacts?: readonly ArtifactKey[];
 }
 
 const HUMAN_REVIEW_DETAILS = 'This criterion requires manual evaluation by a human reviewer';
@@ -61,7 +60,6 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     description: 'Module build produces valid module descriptor',
     section: 'Shared/Common',
     languages: ['java', 'javascript'],
-    requiresArtifacts: ['moduleDescriptor'],
     defaultEvaluation: {
       type: 'not_implemented',
       reason: 'Module descriptor validation',
@@ -608,29 +606,6 @@ export function getCriteriaForSection(
   return (ACCEPTANCE_CRITERION_CATALOG as readonly AcceptanceCriterionDefinition[])
     .filter(criterion => criterion.section === section && criterion.languages.includes(language))
     .map(criterion => criterion.id);
-}
-
-/**
- * Get artifact needs declared by the selected criteria for a language.
- */
-export function getArtifactNeedsForCriteria(
-  criterionIds: readonly string[],
-  language: CriterionLanguage
-): Set<ArtifactKey> {
-  const selectedCriteria = new Set(criterionIds);
-  const artifactNeeds = new Set<ArtifactKey>();
-
-  for (const criterion of ACCEPTANCE_CRITERION_CATALOG as readonly AcceptanceCriterionDefinition[]) {
-    if (!selectedCriteria.has(criterion.id) || !criterion.languages.includes(language)) {
-      continue;
-    }
-
-    for (const artifact of criterion.requiresArtifacts ?? []) {
-      artifactNeeds.add(artifact);
-    }
-  }
-
-  return artifactNeeds;
 }
 
 /**

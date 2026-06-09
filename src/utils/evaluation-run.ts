@@ -5,11 +5,7 @@ import {
   EvaluationRun,
   EvaluationRunArtifacts
 } from '../types';
-import {
-  CriterionLanguage,
-  getArtifactNeedsForCriteria,
-  getCriteriaForCatalogLanguage
-} from '../criteria-definitions';
+import { CriterionLanguage, getCriteriaForCatalogLanguage } from '../criteria-definitions';
 
 export interface CreateEvaluationRunOptions {
   repositoryPath: string;
@@ -34,7 +30,6 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     repositoryName: options.repositoryName,
     language: options.language,
     selectedCriteria,
-    artifactNeeds: getArtifactNeedsForCriteria(selectedCriteria, options.language),
     artifacts,
     commandObservations,
     commandRunner: options.commandRunner,
