@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from '../build-tool-policies';
 import { defaultCommandRunner } from '../command-runner';
+import { hasMavenProject } from '../parsers/maven-dependency-parser';
 import { validateRepoPath } from '../parsers/common';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
@@ -27,7 +28,7 @@ export async function produceModuleDescriptorArtifact(
     });
   }
 
-  if (fs.existsSync(path.join(validatedPath, 'pom.xml'))) {
+  if (await hasMavenProject(validatedPath)) {
     return runMavenDescriptorStrategy(validatedPath, evaluationRun, commandRunner);
   }
 
