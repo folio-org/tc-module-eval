@@ -35,7 +35,7 @@ By default, local CLI runs use strict command execution and block build-tool com
 folio-eval evaluate <repo-url> --allow-local-commands
 ```
 
-When this flag is used in GitHub Actions, reports record command execution mode as `github-actions`. Outside GitHub Actions, reports record `trusted-local`.
+When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
 ### For Local Development: Use Devcontainer
 

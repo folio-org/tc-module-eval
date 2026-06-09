@@ -38,7 +38,7 @@ program
         console.log(`🌿 Branch: ${options.branch}`);
       }
       if (options.allowLocalCommands) {
-        console.log(`🔐 Command execution mode: ${resolveCommandExecutionMode(options)}`);
+        console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
       }
 
       const evaluator = new ModuleEvaluator(config);
@@ -146,16 +146,13 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     skipCleanup: !options.cleanup,
     criteriaFilter,
     branch: options.branch,
-    commandExecutionMode: resolveCommandExecutionMode(options)
+    allowLocalCommands: options.allowLocalCommands === true,
+    commandExecutionEnvironment: resolveCommandExecutionEnvironment()
   };
 }
 
-function resolveCommandExecutionMode(options: any): EvaluationConfig['commandExecutionMode'] {
-  if (!options.allowLocalCommands) {
-    return 'strict';
-  }
-
-  return process.env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'trusted-local';
+function resolveCommandExecutionEnvironment(): EvaluationConfig['commandExecutionEnvironment'] {
+  return process.env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local';
 }
 
 function logEvaluationStart(repositoryUrl: string, outputDir: string, criteriaFilter?: string[]): void {

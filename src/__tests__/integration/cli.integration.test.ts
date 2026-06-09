@@ -61,7 +61,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -111,7 +111,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -150,7 +150,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -191,7 +191,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -224,7 +224,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -260,7 +260,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: false,
         branch: 'v1.1.1',
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       const evaluator = new ModuleEvaluator(config);
@@ -297,7 +297,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -324,7 +324,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: true,
         tempDir: tempDir,
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -353,7 +353,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: false,
         criteriaFilter: ['A001', 'S001'],
-        commandExecutionMode: 'trusted-local',
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -381,7 +381,7 @@ describe('CLI Integration Tests', () => {
         tempDir: path.join(os.tmpdir(), 'folio-eval-local-clones'),
         skipCleanup: false,
         criteriaFilter: ['S002'],
-        commandExecutionMode: 'trusted-local'
+        allowLocalCommands: true
       });
 
       const result = await evaluator.evaluateModule(repoPath);

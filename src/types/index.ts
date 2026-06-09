@@ -47,7 +47,7 @@ export interface EvaluationResult {
 }
 
 export type ArtifactKey = 'moduleDescriptor';
-export type CommandExecutionMode = 'strict' | 'sandboxed' | 'trusted-local' | 'github-actions';
+export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
   command: string;
@@ -70,7 +70,8 @@ export interface CommandExecutionResult {
   command: string;
   args: string[];
   cwd: string;
-  executionMode: CommandExecutionMode;
+  commandExecutionEnvironment: CommandExecutionEnvironment;
+  localCommandsAllowed: boolean;
   status: 'success' | 'failed' | 'timed_out' | 'blocked';
   exitCode?: number | null;
   signal?: string | null;
@@ -133,7 +134,8 @@ export interface EvaluationConfig {
   criteriaFilter?: string[];
   branch?: string;
   commandRunner?: CommandRunner;
-  commandExecutionMode?: CommandExecutionMode;
+  allowLocalCommands?: boolean;
+  commandExecutionEnvironment?: CommandExecutionEnvironment;
 }
 
 /**

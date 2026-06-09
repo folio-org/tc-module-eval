@@ -2,7 +2,7 @@ import { LocalCommandRunner, sanitizeCommandOutput } from '../utils/command-runn
 import { createEvaluationRun } from '../utils/evaluation-run';
 
 describe('CommandRunner', () => {
-  it('should block sandbox-required commands when no isolation adapter is available', async () => {
+  it('should block build-tool commands when local commands are not allowed', async () => {
     const runner = new LocalCommandRunner(false);
     const result = await runner.run({
       command: 'node',
@@ -12,7 +12,7 @@ describe('CommandRunner', () => {
     });
 
     expect(result.status).toBe('blocked');
-    expect(result.errorMessage).toContain('requires isolation');
+    expect(result.errorMessage).toContain('local commands are not allowed');
   });
 
   it('should cache equivalent normalized commands in one EvaluationRun', async () => {
@@ -72,7 +72,7 @@ describe('CommandRunner', () => {
     expect(run.commandObservations.size).toBe(3);
   });
 
-  it('should block deny-by-default network policies without an enforcement adapter', async () => {
+  it('should block deny-by-default network policies when local commands are not allowed', async () => {
     const runner = new LocalCommandRunner(false);
     const result = await runner.run({
       command: 'node',
@@ -82,11 +82,11 @@ describe('CommandRunner', () => {
     });
 
     expect(result.status).toBe('blocked');
-    expect(result.errorMessage).toContain('network policy enforcement');
+    expect(result.errorMessage).toContain('local commands are not allowed');
   });
 
-  it('should run policy-bound commands in explicit trusted-local mode', async () => {
-    const runner = new LocalCommandRunner({ executionMode: 'trusted-local' });
+  it('should run policy-bound commands when local commands are explicitly allowed', async () => {
+    const runner = new LocalCommandRunner({ allowLocalCommands: true });
     const result = await runner.run({
       command: 'node',
       args: ['-e', 'process.stdout.write("trusted")'],
@@ -97,12 +97,13 @@ describe('CommandRunner', () => {
 
     expect(result.status).toBe('success');
     expect(result.stdout).toBe('trusted');
-    expect(result.executionMode).toBe('trusted-local');
+    expect(result.localCommandsAllowed).toBe(true);
+    expect(result.commandExecutionEnvironment).toBe('local');
   });
 
-  it('should include execution mode in the cache identity', async () => {
+  it('should include local command permission in the cache identity', async () => {
     const strictRunner = new LocalCommandRunner(false);
-    const trustedRunner = new LocalCommandRunner({ executionMode: 'trusted-local' });
+    const trustedRunner = new LocalCommandRunner({ allowLocalCommands: true });
     const request = {
       command: 'node',
       args: ['-e', 'process.stdout.write("ok")'],

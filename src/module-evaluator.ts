@@ -62,7 +62,12 @@ export class ModuleEvaluator {
       const repoInfo = await this.gitUtils.getRepoInfo(repoPath);
 
       const commandRunner = this.config.commandRunner ??
-        (this.config.commandExecutionMode ? new LocalCommandRunner({ executionMode: this.config.commandExecutionMode }) : undefined);
+        (this.config.allowLocalCommands
+          ? new LocalCommandRunner({
+              allowLocalCommands: true,
+              commandExecutionEnvironment: this.config.commandExecutionEnvironment
+            })
+          : undefined);
       const evaluationRun = createEvaluationRun({
         repositoryPath: repoPath,
         repositoryUrl,

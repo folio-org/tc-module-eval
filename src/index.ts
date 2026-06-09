@@ -37,7 +37,7 @@ export {
   EvaluationResult,
   EvaluationConfig,
   ArtifactKey,
-  CommandExecutionMode,
+  CommandExecutionEnvironment,
   CommandExecutionRequest,
   CommandNetworkPolicy,
   CommandExecutionResult,

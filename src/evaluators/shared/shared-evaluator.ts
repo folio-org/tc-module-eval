@@ -115,7 +115,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       artifact.strategy ? `Strategy: ${artifact.strategy}` : undefined,
       artifact.descriptorPath ? `Descriptor path: ${artifact.descriptorPath}` : undefined,
       artifact.command ? `Command: ${artifact.command.command} ${artifact.command.args.join(' ')} (${artifact.command.status})` : undefined,
-      artifact.command ? `Command execution mode: ${artifact.command.executionMode}` : undefined,
+      artifact.command ? `Command execution environment: ${artifact.command.commandExecutionEnvironment}` : undefined,
       artifact.warnings.length ? `Warnings:\n${artifact.warnings.map(warning => `  - ${warning}`).join('\n')}` : undefined,
       artifact.errors.length ? `Errors:\n${artifact.errors.map(error => `  - ${error}`).join('\n')}` : undefined
     ];

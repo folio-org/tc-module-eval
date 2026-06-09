@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import {
   CommandExecutionRequest,
   CommandExecutionResult,
-  CommandExecutionMode,
+  CommandExecutionEnvironment,
   CommandRunner,
   EvaluationRun
 } from '../types';
@@ -19,7 +19,8 @@ const SECRET_PATTERNS = [
 
 export function normalizeCommandRequest(
   request: CommandExecutionRequest,
-  executionMode: CommandExecutionMode = 'strict'
+  allowLocalCommands: boolean = false,
+  commandExecutionEnvironment: CommandExecutionEnvironment = 'local'
 ): string {
   const args = request.args ?? [];
   const env = Object.entries(request.env ?? {})
@@ -40,7 +41,8 @@ export function normalizeCommandRequest(
     maxOutputBytes: request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     envHash,
     requiresIsolation: request.requiresIsolation === true,
-    executionMode,
+    allowLocalCommands,
+    commandExecutionEnvironment,
     network
   });
 }
@@ -63,20 +65,25 @@ export function sanitizeCommandOutput(output: string, maxBytes: number = DEFAULT
 }
 
 export interface LocalCommandRunnerOptions {
-  executionMode?: CommandExecutionMode;
+  allowLocalCommands?: boolean;
+  commandExecutionEnvironment?: CommandExecutionEnvironment;
 }
 
 export class LocalCommandRunner implements CommandRunner {
-  private readonly executionMode: CommandExecutionMode;
+  private readonly allowLocalCommands: boolean;
+  private readonly commandExecutionEnvironment: CommandExecutionEnvironment;
 
   constructor(options: boolean | LocalCommandRunnerOptions = false) {
-    this.executionMode = typeof options === 'boolean'
-      ? options ? 'sandboxed' : 'strict'
-      : options.executionMode ?? 'strict';
+    this.allowLocalCommands = typeof options === 'boolean'
+      ? options
+      : options.allowLocalCommands ?? false;
+    this.commandExecutionEnvironment = typeof options === 'boolean'
+      ? 'local'
+      : options.commandExecutionEnvironment ?? 'local';
   }
 
   normalize(request: CommandExecutionRequest): string {
-    return normalizeCommandRequest(request, this.executionMode);
+    return normalizeCommandRequest(request, this.allowLocalCommands, this.commandExecutionEnvironment);
   }
 
   async run(request: CommandExecutionRequest, evaluationRun?: EvaluationRun): Promise<CommandExecutionResult> {
@@ -91,10 +98,10 @@ export class LocalCommandRunner implements CommandRunner {
     const cwd = path.resolve(request.cwd);
     const maxOutputBytes = request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
-    if (this.requiresPolicyEnforcement(request) && !this.canRunPolicyBoundCommands()) {
+    if (this.requiresPolicyEnforcement(request) && !this.allowLocalCommands) {
       const blocked = this.result(request, identity, cwd, args, started, {
         status: 'blocked',
-        errorMessage: `Command requires isolation or network policy enforcement, but execution mode '${this.executionMode}' does not allow it`
+        errorMessage: 'Command requires build-tool execution, but local commands are not allowed'
       });
       evaluationRun?.commandObservations.set(identity, blocked);
       return blocked;
@@ -116,10 +123,6 @@ export class LocalCommandRunner implements CommandRunner {
 
   private requiresPolicyEnforcement(request: CommandExecutionRequest): boolean {
     return request.requiresIsolation === true || request.networkPolicy?.default === 'deny';
-  }
-
-  private canRunPolicyBoundCommands(): boolean {
-    return this.executionMode !== 'strict';
   }
 
   private spawnCommand(
@@ -225,7 +228,8 @@ export class LocalCommandRunner implements CommandRunner {
       command: request.command,
       args,
       cwd,
-      executionMode: this.executionMode,
+      commandExecutionEnvironment: this.commandExecutionEnvironment,
+      localCommandsAllowed: this.allowLocalCommands,
       status: values.status,
       exitCode: values.exitCode,
       signal: values.signal,

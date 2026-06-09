@@ -227,7 +227,7 @@ export class ThirdPartyLicenseEvaluator {
     }
 
     const lines = observations
-      .map(command => `  - ${command.command} ${command.args.join(' ')} (${command.status}, mode: ${command.executionMode})`);
+      .map(command => `  - ${command.command} ${command.args.join(' ')} (${command.status}, environment: ${command.commandExecutionEnvironment})`);
 
     return {
       ...result,
