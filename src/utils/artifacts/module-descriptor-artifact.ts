@@ -11,10 +11,10 @@ import { MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from '../build-tool-policies
 import { defaultCommandRunner } from '../command-runner';
 import { hasMavenProject } from '../parsers/maven-dependency-parser';
 import { validateRepoPath } from '../parsers/common';
+import { findCandidateFiles, isWithinRepo, relativePosixPath, walkDirectories } from '../repo-files';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
 const FRONTEND_DESCRIPTOR_SCRIPTS = ['build-mod-descriptor', 'build-module-descriptor', 'generate-module-descriptor'];
-const SKIPPED_SCAN_DIRS = new Set(['node_modules', '.git']);
 
 export async function produceModuleDescriptorArtifact(
   repoPath: string,
@@ -258,101 +258,12 @@ function findTemplateCandidates(repoPath: string): string[] {
   );
 }
 
-function findCandidateFiles(
-  repoPath: string,
-  startPath: string,
-  includeFile: (candidatePath: string) => boolean
-): string[] {
-  if (!fs.existsSync(startPath)) {
-    return [];
-  }
-
-  const repoRealPath = realPath(repoPath);
-  if (!repoRealPath) {
-    return [];
-  }
-
-  const candidates: string[] = [];
-  const walk = (current: string): void => {
-    const stats = fs.lstatSync(current);
-    if (stats.isSymbolicLink()) {
-      return;
-    }
-    if (stats.isFile()) {
-      if (includeFile(current)) {
-        candidates.push(current);
-      }
-      return;
-    }
-    if (!stats.isDirectory()) {
-      return;
-    }
-    for (const entry of fs.readdirSync(current)) {
-      if (SKIPPED_SCAN_DIRS.has(entry)) {
-        continue;
-      }
-      walk(path.join(current, entry));
-    }
-  };
-
-  walk(startPath);
-  return candidates.filter(candidate => isWithinRealPath(repoRealPath, candidate));
-}
-
 function isSafeFinalDescriptor(repoPath: string, candidatePath: string): boolean {
   if (isTemplatePath(candidatePath)) {
     return false;
   }
 
   return isWithinRepo(repoPath, candidatePath);
-}
-
-function isWithinRepo(repoPath: string, candidatePath: string): boolean {
-  const repoRealPath = realPath(repoPath);
-  return repoRealPath ? isWithinRealPath(repoRealPath, candidatePath) : false;
-}
-
-function isWithinRealPath(repoRealPath: string, candidatePath: string): boolean {
-  try {
-    const candidateRealPath = fs.realpathSync(candidatePath);
-    return candidateRealPath.startsWith(`${repoRealPath}${path.sep}`) || candidateRealPath === repoRealPath;
-  } catch {
-    return false;
-  }
-}
-
-function realPath(candidatePath: string): string | undefined {
-  try {
-    return fs.realpathSync(candidatePath);
-  } catch {
-    return undefined;
-  }
-}
-
-function walkDirectories(startPath: string, visit: (directory: string) => boolean): void {
-  if (!fs.existsSync(startPath)) {
-    return;
-  }
-
-  const walk = (current: string): void => {
-    const stats = fs.lstatSync(current);
-    if (stats.isSymbolicLink() || !stats.isDirectory()) {
-      return;
-    }
-
-    if (!visit(current)) {
-      return;
-    }
-
-    for (const entry of fs.readdirSync(current)) {
-      if (SKIPPED_SCAN_DIRS.has(entry)) {
-        continue;
-      }
-      walk(path.join(current, entry));
-    }
-  };
-
-  walk(startPath);
 }
 
 function isTemplatePath(candidatePath: string): boolean {
@@ -371,7 +282,7 @@ function snapshotRootDescriptorPath(repoPath: string): Set<string> {
 }
 
 function relative(repoPath: string, candidatePath: string): string {
-  return path.relative(repoPath, candidatePath).split(path.sep).join('/');
+  return relativePosixPath(repoPath, candidatePath);
 }
 
 function artifact(
