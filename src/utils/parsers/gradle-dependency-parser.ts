@@ -43,7 +43,6 @@ import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
 
-// Gradle-specific regex patterns
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
 
