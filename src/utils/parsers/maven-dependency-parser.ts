@@ -31,18 +31,16 @@
  * Production deployment should use containerization, sandboxing, or isolated environments.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
-import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../../types';
+import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
-
-const execAsync = promisify(exec);
+import { defaultCommandRunner } from '../command-runner';
+import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 
 // Maven-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
@@ -259,21 +257,6 @@ function parseMavenThirdPartyFile(content: string): Dependency[] {
  * @param error - Error object to check
  * @returns True if error was caused by timeout
  */
-function isTimeoutError(error: any): boolean {
-  return error.killed === true ||
-         error.signal === 'SIGTERM' ||
-         (error.message && error.message.toLowerCase().includes('timeout'));
-}
-
-/**
- * Check if an error is caused by maxBuffer overflow
- * @param error - Error object to check
- * @returns True if error was caused by buffer overflow
- */
-function isMaxBufferError(error: any): boolean {
-  return error.message && error.message.toLowerCase().includes('maxbuffer');
-}
-
 /**
  * Parse Maven dependency:list output
  * @param output - Output from mvn dependency:list command
@@ -327,7 +310,11 @@ export async function hasMavenProject(repoPath: string): Promise<boolean> {
  * @param repoPath - Path to Maven project
  * @returns Promise resolving to extraction result with dependencies and errors
  */
-export async function getMavenDependencies(repoPath: string): Promise<DependencyExtractionResult> {
+export async function getMavenDependencies(
+  repoPath: string,
+  evaluationRun?: EvaluationRun,
+  commandRunner: CommandRunner = evaluationRun?.commandRunner ?? defaultCommandRunner
+): Promise<DependencyExtractionResult> {
   const errors: DependencyExtractionError[] = [];
   const warnings: DependencyExtractionError[] = [];
 
@@ -356,16 +343,30 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
     getLogger().info(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
 
     // Execute Maven license plugin to generate third-party report
-    const { stdout } = await execAsync(
-      `mvn ${mavenGoal} -Dlicense.outputDirectory=target/licenses -Dlicense.includeTransitiveDependencies=true`,
-      {
-        cwd: validatedPath,
-        timeout: COMMAND_TIMEOUT,
-        maxBuffer: MAX_BUFFER
-      }
-    );
+    const commandResult = await commandRunner.run({
+      command: 'mvn',
+      args: [
+        mavenGoal,
+        '-Dlicense.outputDirectory=target/licenses',
+        '-Dlicense.includeTransitiveDependencies=true'
+      ],
+      cwd: validatedPath,
+      timeoutMs: COMMAND_TIMEOUT,
+      maxOutputBytes: MAX_BUFFER,
+      requiresIsolation: true,
+      networkPolicy: MAVEN_NETWORK_POLICY
+    }, evaluationRun);
 
-    getLogger().info('Maven license plugin output:', stdout);
+    getLogger().info('Maven license plugin output:', commandResult.stdout);
+
+    if (commandResult.status !== 'success') {
+      errors.push({
+        source: 'maven-parser',
+        message: `Failed to extract Maven dependencies: ${commandResult.errorMessage ?? commandResult.status}`,
+        error: new Error(commandResult.stderr || commandResult.errorMessage || commandResult.status)
+      });
+      return { dependencies: [], errors, warnings };
+    }
 
     // Parse the generated THIRD-PARTY.txt file
     const thirdPartyFile = path.join(validatedPath, MAVEN_THIRD_PARTY_PATH);
@@ -392,84 +393,13 @@ export async function getMavenDependencies(repoPath: string): Promise<Dependency
     return { dependencies: [], errors, warnings };
 
   } catch (error) {
-    // Check if this is a maxBuffer error
-    if (isMaxBufferError(error)) {
-      const bufferSizeMB = MAX_BUFFER / (1024 * 1024);
-      const bufferMessage =
-        `Maven build output exceeded buffer size (${bufferSizeMB}MB). This indicates:\n` +
-        `- Very large project with extensive dependency tree\n` +
-        `- Highly verbose Maven output during dependency downloads\n` +
-        `Note: The build may have completed successfully, but output was truncated. ` +
-        `Check the generated THIRD-PARTY.txt file manually if needed.`;
-
-      getLogger().error('Maven dependency extraction exceeded buffer:');
-      getLogger().error(`  Buffer size: ${bufferSizeMB}MB`);
-
-      errors.push({
-        source: 'maven-parser',
-        message: bufferMessage,
-        error: error instanceof Error ? error : new Error(String(error))
-      });
-      return { dependencies: [], errors, warnings };
-    }
-
-    // Check if this is a timeout error
-    if (isTimeoutError(error)) {
-      const timeoutMinutes = COMMAND_TIMEOUT / 60000;
-      const timeoutMessage =
-        `Maven build timed out after ${timeoutMinutes} minutes. This usually indicates:\n` +
-        `- Large project with many dependencies requiring longer build time\n` +
-        `- Slow network connection for dependency downloads\n` +
-        `- Maven repository connectivity issues\n` +
-        `Suggestion: The timeout is currently set to ${timeoutMinutes} minutes. ` +
-        `Consider reviewing project size, network connectivity, or Maven repository configuration.`;
-
-      getLogger().error('Maven dependency extraction timed out:');
-      getLogger().error(`  Timeout: ${timeoutMinutes} minutes`);
-
-      errors.push({
-        source: 'maven-parser',
-        message: timeoutMessage,
-        error: error instanceof Error ? error : new Error(String(error))
-      });
-      return { dependencies: [], errors, warnings };
-    }
-
-    // Non-timeout error - provide detailed error information
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-
-    // Extract stdout and stderr from execAsync error
-    const execError = error as any; // execAsync errors have stdout/stderr properties
-    const stdout = execError.stdout || '';
-    const stderr = execError.stderr || '';
-
     getLogger().error('Maven dependency extraction failed:');
     getLogger().error('  Message:', errorMessage);
 
-    if (stdout) {
-      getLogger().error('  Maven stdout:', stdout.substring(0, 500)); // Show first 500 chars
-    }
-
-    if (stderr) {
-      getLogger().error('  Maven stderr:', stderr.substring(0, 500)); // Show first 500 chars
-    }
-
-    if (errorStack && !stdout && !stderr) {
-      getLogger().error('  Stack:', errorStack);
-    }
-
-    // Build detailed error message including Maven output
-    let detailedMessage = `Failed to extract Maven dependencies: ${errorMessage}`;
-    if (stderr) {
-      detailedMessage += `\nMaven stderr: ${stderr.substring(0, 200)}`;
-    } else if (stdout) {
-      detailedMessage += `\nMaven output: ${stdout.substring(0, 200)}`;
-    }
-
     errors.push({
       source: 'maven-parser',
-      message: detailedMessage,
+      message: `Failed to extract Maven dependencies: ${errorMessage}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

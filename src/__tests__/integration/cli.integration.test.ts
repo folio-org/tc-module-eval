@@ -1,9 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import * as os from 'os';
+import { execFileSync } from 'child_process';
 import { ModuleEvaluator } from '../../module-evaluator';
 import { ReportGenerator } from '../../utils/report-generator';
-import { EvaluationConfig, EvaluationResult, ReportOptions } from '../../types';
+import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from '../../types';
 
 const GOLDEN_EVALUATED_AT = '<<normalized-evaluatedAt>>';
 type NormalizedEvaluationReport = Omit<EvaluationResult, 'evaluatedAt'> & { evaluatedAt: string };
@@ -13,6 +14,25 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
     ...report,
     evaluatedAt: GOLDEN_EVALUATED_AT,
   };
+}
+
+async function createLocalGitRepo(name: string, files: Record<string, string>): Promise<string> {
+  const repoPath = path.join(os.tmpdir(), 'folio-eval-local-fixtures', `${name}-${Date.now()}`);
+  await fs.ensureDir(repoPath);
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const absolutePath = path.join(repoPath, filePath);
+    await fs.ensureDir(path.dirname(absolutePath));
+    await fs.writeFile(absolutePath, content);
+  }
+
+  execFileSync('git', ['init'], { cwd: repoPath });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repoPath });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoPath });
+  execFileSync('git', ['add', '.'], { cwd: repoPath });
+  execFileSync('git', ['commit', '-m', 'fixture'], { cwd: repoPath });
+
+  return repoPath;
 }
 
 describe('CLI Integration Tests', () => {
@@ -41,6 +61,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -90,6 +111,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -128,6 +150,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -168,6 +191,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -200,6 +224,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -235,6 +260,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: false,
         branch: 'v1.1.1',
+        allowLocalCommands: true,
       };
 
       const evaluator = new ModuleEvaluator(config);
@@ -271,6 +297,7 @@ describe('CLI Integration Tests', () => {
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
         skipCleanup: false,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -297,6 +324,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: true,
         tempDir: tempDir,
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -325,6 +353,7 @@ describe('CLI Integration Tests', () => {
         outputDir: testOutputDir,
         skipCleanup: false,
         criteriaFilter: ['A001', 'S001'],
+        allowLocalCommands: true,
       };
 
       // Create evaluator with config
@@ -338,6 +367,54 @@ describe('CLI Integration Tests', () => {
       result.criteria.forEach((r) => {
         expect(['A001', 'S001']).toContain(r.criterionId);
       });
+    });
+  });
+
+  describe('Local S002 Descriptor Integration', () => {
+    test('should evaluate only S002 against a local static descriptor fixture', async () => {
+      const repoPath = await createLocalGitRepo('mod-static-descriptor', {
+        'src/main/java/org/folio/Example.java': 'package org.folio; public class Example {}',
+        'ModuleDescriptor.json': JSON.stringify({ id: 'mod-static-descriptor-1.0.0' }, null, 2)
+      });
+      const evaluator = new ModuleEvaluator({
+        outputDir: testOutputDir,
+        tempDir: path.join(os.tmpdir(), 'folio-eval-local-clones'),
+        skipCleanup: false,
+        criteriaFilter: ['S002'],
+        allowLocalCommands: true
+      });
+
+      const result = await evaluator.evaluateModule(repoPath);
+
+      expect(result.criteria).toHaveLength(1);
+      expect(result.criteria[0].criterionId).toBe('S002');
+      expect(result.criteria[0].status).toBe('pass');
+      expect(result.criteria[0].evidence).toContain('ModuleDescriptor.json validates against Okapi schema baseline');
+    });
+
+    test('should include S002 evidence in JSON and escaped HTML reports', async () => {
+      const result: EvaluationResult = {
+        repositoryUrl: 'local-fixture',
+        moduleName: 'mod-static-descriptor',
+        language: 'Java',
+        evaluatedAt: new Date('2026-06-08T00:00:00.000Z'),
+        criteria: [{
+          criterionId: 'S002',
+          status: EvaluationStatus.PASS,
+          evidence: 'Module descriptor ModuleDescriptor.json validates against Okapi schema baseline',
+          details: 'Warnings:\n  - <script>alert("x")</script>\nCommand: mvn process-resources (success)'
+        }]
+      };
+
+      const reportGenerator = new ReportGenerator(testOutputDir);
+      const reportPaths = await reportGenerator.generateReports(result);
+
+      const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
+      expect(jsonContent).toContain('Okapi schema baseline');
+
+      const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
+      expect(htmlContent).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+      expect(htmlContent).not.toContain('<script>alert("x")</script>');
     });
   });
 });

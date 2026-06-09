@@ -5,21 +5,12 @@
 import * as fs from 'fs';
 import { Stats } from 'fs';
 
-// Create mock execAsync before importing the module
-const mockExecAsync = jest.fn();
-
-// Mock fs and child_process
+// Mock fs
 jest.mock('fs');
-jest.mock('child_process', () => ({
-  exec: jest.fn()
-}));
-jest.mock('util', () => ({
-  promisify: jest.fn(() => mockExecAsync)
-}));
 
 // Now import the module under test
 import { getNpmDependencies, hasNpmProject } from '../utils/parsers/npm-dependency-parser';
-import { Dependency } from '../types';
+import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
@@ -46,6 +37,37 @@ function createMockStats(isDirectory: boolean = true): Partial<Stats> {
   } as Partial<Stats>;
 }
 
+class FakeRunner implements CommandRunner {
+  calls: CommandExecutionRequest[] = [];
+
+  constructor(private readonly results: Array<Partial<CommandExecutionResult>>) {}
+
+  normalize(request: CommandExecutionRequest): string {
+    return JSON.stringify({ command: request.command, args: request.args, cwd: request.cwd });
+  }
+
+  async run(request: CommandExecutionRequest, _evaluationRun?: EvaluationRun): Promise<CommandExecutionResult> {
+    this.calls.push(request);
+    const result = this.results.shift() ?? {};
+    return {
+      identity: this.normalize(request),
+      command: request.command,
+      args: request.args ?? [],
+      cwd: request.cwd,
+      commandExecutionEnvironment: result.commandExecutionEnvironment ?? 'local',
+      localCommandsAllowed: result.localCommandsAllowed ?? true,
+      status: result.status ?? 'success',
+      exitCode: result.exitCode ?? (result.status === 'failed' ? 1 : 0),
+      signal: result.signal,
+      durationMs: result.durationMs ?? 1,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      errorMessage: result.errorMessage,
+      sanitized: true
+    };
+  }
+}
+
 describe('npm-dependency-parser', () => {
 
   beforeEach(() => {
@@ -57,6 +79,7 @@ describe('npm-dependency-parser', () => {
     (mockFs.statSync as jest.Mock).mockReset();
     (mockFs.writeFileSync as jest.Mock).mockReset();
     (mockFs.readFileSync as jest.Mock).mockReset();
+    (mockFs.mkdirSync as jest.Mock).mockReset();
   });
 
   afterEach(() => {
@@ -117,18 +140,20 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      // Mock execAsync
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' }) // yarn install
-        .mockResolvedValueOnce({ stdout: licenseCheckerOutput, stderr: '' }); // license-checker
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
-      expect(mockExecAsync).toHaveBeenNthCalledWith(
-        1,
-        'yarn install --production --ignore-scripts --ignore-engines',
-        expect.objectContaining({ cwd: '/test/repo' })
-      );
+      expect(runner.calls[0]).toMatchObject({
+        command: 'yarn',
+        args: ['install', '--production', '--ignore-scripts', '--ignore-engines'],
+        cwd: '/test/repo',
+        requiresIsolation: true,
+        networkPolicy: expect.objectContaining({ default: 'deny' })
+      });
       expect(result.dependencies).toHaveLength(3);
 
       const express = result.dependencies.find(d => d.name === 'express');
@@ -169,9 +194,11 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync.mockRejectedValueOnce(new Error('yarn install failed'));
+      const runner = new FakeRunner([
+        { status: 'failed', errorMessage: 'yarn install failed' }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
@@ -187,11 +214,12 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' }) // yarn install succeeds
-        .mockRejectedValueOnce(new Error('license-checker failed'));
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'failed', errorMessage: 'license-checker failed' }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
@@ -213,11 +241,12 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: licenseCheckerOutput, stderr: '' });
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(1);
       const dep = result.dependencies[0];
@@ -239,11 +268,12 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: licenseCheckerOutput, stderr: '' });
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(1);
       const dep = result.dependencies[0];
@@ -266,11 +296,12 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: licenseCheckerOutput, stderr: '' });
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(1);
       const dep = result.dependencies[0];
@@ -296,11 +327,12 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
 
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: licenseCheckerOutput, stderr: '' });
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
 
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       // Verify writeFileSync was NOT called (existing .npmrc was respected)
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
@@ -308,15 +340,7 @@ describe('npm-dependency-parser', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should fallback to package.json when license-checker fails', async () => {
-      const packageJsonContent = JSON.stringify({
-        name: 'test-project',
-        dependencies: {
-          'express': '^4.18.2',
-          'lodash': '~4.17.21'
-        }
-      });
-
+    it('should return an explicit error when license-checker fails', async () => {
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         if (filePath === '/test/repo') return true;
         if (filePath.includes('.npmrc')) return false;
@@ -325,52 +349,40 @@ describe('npm-dependency-parser', () => {
       });
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
-      (mockFs.readFileSync as jest.Mock).mockReturnValue(packageJsonContent);
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'failed', errorMessage: 'license-checker command not found' }
+      ]);
 
-      // license-checker fails
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '', stderr: '' }) // yarn install succeeds
-        .mockRejectedValueOnce(new Error('license-checker command not found'));
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
-      const result = await getNpmDependencies('/test/repo');
-
-      // Should return partial results from package.json fallback
-      expect(result.dependencies).toHaveLength(2);
-      expect(result.dependencies[0].name).toBe('express');
-      expect(result.dependencies[0].version).toBe('4.18.2');
-      expect(result.dependencies[0].licenses).toBeUndefined();
-      expect(result.dependencies[1].name).toBe('lodash');
-      expect(result.dependencies[1].version).toBe('4.17.21');
-
-      // Should have warnings, not errors
-      expect(result.warnings).toHaveLength(2);
-      expect(result.warnings[0].message).toContain('License-checker approach failed');
-      expect(result.warnings[1].message).toContain('Fallback mode');
-      expect(result.warnings[1].message).toContain('ONLY DIRECT DEPENDENCIES analyzed');
-      expect(result.warnings[1].message).toContain('transitive dependencies are MISSING');
-      expect(result.errors).toHaveLength(0);
+      expect(result.dependencies).toHaveLength(0);
+      expect(result.warnings).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].message).toContain('Failed to extract npm dependencies');
+      expect(result.errors[0].message).toContain('license-checker command not found');
     });
 
-    it('should return empty array when both license-checker and fallback fail', async () => {
+    it('should return empty array when yarn install fails', async () => {
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         if (filePath === '/test/repo') return true;
         if (filePath.includes('.npmrc')) return false;
-        if (filePath.includes('package.json')) return false; // package.json doesn't exist
         return true;
       });
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
+      const runner = new FakeRunner([
+        { status: 'failed', errorMessage: 'yarn install failed' }
+      ]);
 
-      mockExecAsync.mockRejectedValueOnce(new Error('yarn install failed'));
-
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(0);
-      expect(result.warnings).toHaveLength(1); // Fallback attempt warning
-      expect(result.errors).toHaveLength(1); // Main failure (fallback returns empty array gracefully)
+      expect(result.warnings).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
     });
 
-    it('should handle malformed package.json in fallback', async () => {
+    it('should not parse package.json as a hidden fallback when extraction fails', async () => {
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         if (filePath === '/test/repo') return true;
         if (filePath.includes('.npmrc')) return false;
@@ -380,14 +392,16 @@ describe('npm-dependency-parser', () => {
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
       (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
       (mockFs.readFileSync as jest.Mock).mockReturnValue('{ invalid json }');
+      const runner = new FakeRunner([
+        { status: 'failed', errorMessage: 'blocked by policy' }
+      ]);
 
-      mockExecAsync.mockRejectedValueOnce(new Error('license-checker failed'));
-
-      const result = await getNpmDependencies('/test/repo');
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
 
       expect(result.dependencies).toHaveLength(0);
-      expect(result.warnings).toHaveLength(1); // Fallback attempt warning
-      expect(result.errors).toHaveLength(1); // Main failure (fallback catches JSON.parse error gracefully)
+      expect(result.warnings).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(mockFs.readFileSync).not.toHaveBeenCalled();
     });
   });
 });

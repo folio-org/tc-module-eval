@@ -24,6 +24,7 @@ program
   .option('--temp-dir <dir>', 'Temporary directory for cloning repositories')
   .option('--no-cleanup', 'Do not delete the cloned repository after evaluation')
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
+  .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
   .action(async (repositoryUrl: string, options) => {
     try {
       console.log('🚀 Starting FOLIO Module Evaluation...\n');
@@ -35,6 +36,9 @@ program
 
       if (options.branch) {
         console.log(`🌿 Branch: ${options.branch}`);
+      }
+      if (options.allowLocalCommands) {
+        console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
       }
 
       const evaluator = new ModuleEvaluator(config);
@@ -113,6 +117,9 @@ program
     console.log('');
     console.log('   # Evaluate a specific branch');
     console.log('   folio-eval evaluate <repo-url> --branch feature-branch');
+    console.log('');
+    console.log('   # Allow Maven/Gradle/npm commands in a trusted local or GitHub Actions environment');
+    console.log('   folio-eval evaluate <repo-url> --allow-local-commands');
   });
 
 function parseCriteriaFilter(options: any): string[] | undefined {
@@ -138,8 +145,14 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     outputDir: options.output,
     skipCleanup: !options.cleanup,
     criteriaFilter,
-    branch: options.branch
+    branch: options.branch,
+    allowLocalCommands: options.allowLocalCommands === true,
+    commandExecutionEnvironment: resolveCommandExecutionEnvironment()
   };
+}
+
+function resolveCommandExecutionEnvironment(): EvaluationConfig['commandExecutionEnvironment'] {
+  return process.env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local';
 }
 
 function logEvaluationStart(repositoryUrl: string, outputDir: string, criteriaFilter?: string[]): void {

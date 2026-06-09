@@ -1,4 +1,4 @@
-import { SectionEvaluator, CriterionResult, EvaluationStatus, CriterionFunction } from '../../types';
+import { SectionEvaluator, CriterionResult, EvaluationStatus, CriterionFunction, EvaluationRun } from '../../types';
 
 /**
  * Abstract base class for section-specific evaluators
@@ -30,7 +30,7 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
    * @param criteriaFilter Optional array of criterion IDs to filter evaluation
    * @returns Promise<CriterionResult[]> Results of all criteria in this section
    */
-  async evaluate(repoPath: string, criteriaFilter?: string[]): Promise<CriterionResult[]> {
+  async evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]> {
     const results: CriterionResult[] = [];
 
     // Determine which criteria to evaluate
@@ -40,7 +40,7 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
 
     for (const criterionId of criteriaToEvaluate) {
       try {
-        const result = await this.evaluateCriterion(criterionId, repoPath);
+        const result = await this.evaluateCriterion(criterionId, repoPath, evaluationRun);
         results.push(result);
       } catch (error) {
         // If evaluation fails, create a manual review result
@@ -57,26 +57,30 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
    * @param repoPath Path to the cloned repository
    * @returns Promise<CriterionResult> Result of the specific criterion
    */
-  async evaluateCriterion(criterionId: string, repoPath: string): Promise<CriterionResult> {
+  async evaluateCriterion(criterionId: string, repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     // Check if this evaluator handles the criterion
     if (!this.criteriaIds.includes(criterionId)) {
       throw new Error(`Criterion ${criterionId} is not handled by ${this.sectionName} evaluator`);
     }
 
     // Delegate to the specific evaluation method
-    return await this.evaluateSpecificCriterion(criterionId, repoPath);
+    return await this.evaluateSpecificCriterion(criterionId, repoPath, evaluationRun);
   }
 
   /**
    * Look up and invoke the handler for a specific criterion.
    * Subclasses may override this if they need custom dispatch logic.
    */
-  protected async evaluateSpecificCriterion(criterionId: string, repoPath: string): Promise<CriterionResult> {
+  protected async evaluateSpecificCriterion(
+    criterionId: string,
+    repoPath: string,
+    evaluationRun?: EvaluationRun
+  ): Promise<CriterionResult> {
     const handler = this.criterionHandlers.get(criterionId);
     if (!handler) {
       throw new Error(`No handler registered for criterion: ${criterionId}`);
     }
-    return await handler(repoPath);
+    return await handler(repoPath, evaluationRun);
   }
 
   /**

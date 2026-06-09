@@ -5,6 +5,7 @@ import { CompositeLanguageEvaluator } from '../evaluators/base/composite-languag
 import { BaseSectionEvaluator } from '../evaluators/base/section-evaluator';
 import { CatalogSectionEvaluator } from '../evaluators/base/catalog-section-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
+import { createEvaluationRun } from '../utils/evaluation-run';
 
 // Mock fs-extra (needed by SharedEvaluator -> LicenseUtils)
 jest.mock('fs-extra', () => ({
@@ -101,13 +102,34 @@ describe('SharedEvaluator', () => {
     expect(result.evidence).toBe('Custom override works');
   });
 
-  it('should use catalog-backed JavaScript fallback wording', async () => {
+  it('should automate JavaScript S002 through descriptor artifact evidence', async () => {
     const evaluator = new JavaScriptSharedEvaluator();
     const result = await evaluator.evaluateCriterion('S002', '/fake/path');
 
     expect(result.criterionId).toBe('S002');
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('package.json and stripes metadata validation - evaluation logic not yet implemented');
+    expect(result.evidence).toBe('Module descriptor artifact stage returned unsafe-to-run');
+  });
+});
+
+describe('EvaluationRun', () => {
+  it('should cache lazy artifacts in one run slot', async () => {
+    const run = createEvaluationRun({
+      repositoryPath: '/repo',
+      language: 'java',
+      criteriaFilter: ['S002']
+    });
+    const producer = jest.fn().mockResolvedValue({
+      status: 'missing',
+      warnings: [],
+      errors: ['not found']
+    });
+
+    const first = await run.getOrCreateArtifact('moduleDescriptor', producer);
+    const second = await run.getOrCreateArtifact('moduleDescriptor', producer);
+
+    expect(first).toBe(second);
+    expect(producer).toHaveBeenCalledTimes(1);
   });
 });
 

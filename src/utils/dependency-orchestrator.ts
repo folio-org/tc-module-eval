@@ -10,7 +10,7 @@
  */
 
 import * as fs from 'fs';
-import { Dependency, DependencyExtractionResult, DependencyExtractionError } from '../types';
+import { Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../types';
 import { getMavenDependencies, hasMavenProject } from './parsers/maven-dependency-parser';
 import { getGradleDependencies, hasGradleProject } from './parsers/gradle-dependency-parser';
 import { getNpmDependencies, hasNpmProject } from './parsers/npm-dependency-parser';
@@ -57,7 +57,7 @@ function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
  * @param repoPath - Path to the cloned repository
  * @returns Promise resolving to extraction result with dependencies and errors
  */
-export async function getDependencies(repoPath: string): Promise<DependencyExtractionResult> {
+export async function getDependencies(repoPath: string, evaluationRun?: EvaluationRun): Promise<DependencyExtractionResult> {
   const dependencies: Dependency[] = [];
   const errors: DependencyExtractionError[] = [];
   const warnings: DependencyExtractionError[] = [];
@@ -87,21 +87,21 @@ export async function getDependencies(repoPath: string): Promise<DependencyExtra
     const hasNpm = await hasNpmProject(repoPath);
 
     if (hasMaven) {
-      const mavenResult = await getMavenDependencies(repoPath);
+      const mavenResult = await getMavenDependencies(repoPath, evaluationRun);
       dependencies.push(...mavenResult.dependencies.filter(isValidDependency));
       errors.push(...mavenResult.errors);
       warnings.push(...mavenResult.warnings);
     }
 
     if (hasGradle) {
-      const gradleResult = await getGradleDependencies(repoPath);
+      const gradleResult = await getGradleDependencies(repoPath, evaluationRun);
       dependencies.push(...gradleResult.dependencies.filter(isValidDependency));
       errors.push(...gradleResult.errors);
       warnings.push(...gradleResult.warnings);
     }
 
     if (hasNpm) {
-      const npmResult = await getNpmDependencies(repoPath);
+      const npmResult = await getNpmDependencies(repoPath, evaluationRun);
       dependencies.push(...npmResult.dependencies.filter(isValidDependency));
       errors.push(...npmResult.errors);
       warnings.push(...npmResult.warnings);

@@ -46,6 +46,83 @@ export interface EvaluationResult {
   criteria: CriterionResult[];
 }
 
+export type ArtifactKey = 'moduleDescriptor';
+export type CommandExecutionEnvironment = 'local' | 'github-actions';
+
+export interface CommandExecutionRequest {
+  command: string;
+  args?: string[];
+  cwd: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+  env?: Record<string, string | undefined>;
+  requiresIsolation?: boolean;
+  networkPolicy?: CommandNetworkPolicy;
+}
+
+export interface CommandNetworkPolicy {
+  default: 'deny' | 'allow';
+  allowedHosts?: string[];
+}
+
+export interface CommandExecutionResult {
+  identity: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  commandExecutionEnvironment: CommandExecutionEnvironment;
+  localCommandsAllowed: boolean;
+  status: 'success' | 'failed' | 'timed_out' | 'blocked';
+  exitCode?: number | null;
+  signal?: string | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  errorMessage?: string;
+  sanitized: boolean;
+}
+
+export interface CommandRunner {
+  run(request: CommandExecutionRequest, evaluationRun?: EvaluationRun): Promise<CommandExecutionResult>;
+  normalize(request: CommandExecutionRequest): string;
+}
+
+export interface ModuleDescriptorArtifact {
+  status:
+    | 'produced'
+    | 'discovered'
+    | 'missing'
+    | 'invalid-candidate'
+    | 'ambiguous-candidates'
+    | 'unsafe-to-run'
+    | 'command-failed';
+  strategy?: 'maven-generation' | 'frontend-script' | 'static-root';
+  descriptorPath?: string;
+  absolutePath?: string;
+  command?: CommandExecutionResult;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface EvaluationRunArtifacts {
+  moduleDescriptor?: ModuleDescriptorArtifact;
+}
+
+export interface EvaluationRun {
+  repositoryPath: string;
+  repositoryUrl?: string;
+  repositoryName?: string;
+  language: string;
+  selectedCriteria: string[];
+  artifacts: EvaluationRunArtifacts;
+  commandObservations: Map<string, CommandExecutionResult>;
+  commandRunner?: CommandRunner;
+  getOrCreateArtifact<K extends ArtifactKey>(
+    key: K,
+    producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
+  ): Promise<NonNullable<EvaluationRunArtifacts[K]>>;
+}
+
 /**
  * Configuration for the evaluation process
  */
@@ -55,12 +132,15 @@ export interface EvaluationConfig {
   skipCleanup?: boolean;
   criteriaFilter?: string[];
   branch?: string;
+  commandRunner?: CommandRunner;
+  allowLocalCommands?: boolean;
+  commandExecutionEnvironment?: CommandExecutionEnvironment;
 }
 
 /**
  * Function signature for individual criterion evaluation methods
  */
-export type CriterionFunction = (repoPath: string) => Promise<CriterionResult>;
+export type CriterionFunction = (repoPath: string, evaluationRun?: EvaluationRun) => Promise<CriterionResult>;
 
 /**
  * Base interface for section-specific evaluators
@@ -82,7 +162,7 @@ export interface SectionEvaluator {
    * @param criteriaFilter Optional array of criterion IDs to filter evaluation
    * @returns Promise<CriterionResult[]> Results of all criteria in this section
    */
-  evaluate(repoPath: string, criteriaFilter?: string[]): Promise<CriterionResult[]>;
+  evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
   /**
    * Evaluate a specific criterion by ID
@@ -90,7 +170,7 @@ export interface SectionEvaluator {
    * @param repoPath Path to the cloned repository
    * @returns Promise<CriterionResult> Result of the specific criterion
    */
-  evaluateCriterion(criterionId: string, repoPath: string): Promise<CriterionResult>;
+  evaluateCriterion(criterionId: string, repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult>;
 }
 
 /**
@@ -110,7 +190,7 @@ export interface LanguageEvaluator {
    * @param criteriaFilter Optional array of criterion IDs to filter evaluation
    * @returns Promise<CriterionResult[]> Results of the evaluation
    */
-  evaluate(repoPath: string, criteriaFilter?: string[]): Promise<CriterionResult[]>;
+  evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
   /**
    * Get the language this evaluator handles
