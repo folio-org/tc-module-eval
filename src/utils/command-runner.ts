@@ -1,7 +1,6 @@
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import * as path from 'path';
-import * as fs from 'fs';
 import {
   CommandExecutionRequest,
   CommandExecutionResult,
@@ -9,13 +8,12 @@ import {
   CommandRunner,
   EvaluationRun
 } from '../types';
+import { redactSensitiveText } from './redaction';
+import { isDirectory } from './repo-files';
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
-const SECRET_PATTERNS = [
-  /(token|password|passwd|secret|api[_-]?key)=([^\s]+)/gi,
-  /Bearer\s+[A-Za-z0-9._~+/=-]+/g
-];
+const FORCE_KILL_GRACE_MS = 250;
 
 export function normalizeCommandRequest(
   request: CommandExecutionRequest,
@@ -48,20 +46,7 @@ export function normalizeCommandRequest(
 }
 
 export function sanitizeCommandOutput(output: string, maxBytes: number = DEFAULT_MAX_OUTPUT_BYTES): string {
-  let sanitized = output;
-  for (const pattern of SECRET_PATTERNS) {
-    sanitized = sanitized.replace(pattern, match => {
-      const separator = match.includes('=') ? match.indexOf('=') + 1 : 0;
-      return separator > 0 ? `${match.slice(0, separator)}[REDACTED]` : '[REDACTED]';
-    });
-  }
-
-  const buffer = Buffer.from(sanitized);
-  if (buffer.length <= maxBytes) {
-    return sanitized;
-  }
-
-  return `${buffer.subarray(0, maxBytes).toString('utf-8')}\n[output truncated to ${maxBytes} bytes]`;
+  return redactSensitiveText(output, maxBytes);
 }
 
 export interface LocalCommandRunnerOptions {
@@ -107,7 +92,7 @@ export class LocalCommandRunner implements CommandRunner {
       return blocked;
     }
 
-    if (!this.isDirectory(cwd)) {
+    if (!isDirectory(cwd)) {
       const blocked = this.result(request, identity, cwd, args, started, {
         status: 'blocked',
         errorMessage: `Command working directory is not a directory: ${cwd}`
@@ -125,14 +110,6 @@ export class LocalCommandRunner implements CommandRunner {
     return request.requiresIsolation === true || request.networkPolicy?.default === 'deny';
   }
 
-  private isDirectory(cwd: string): boolean {
-    try {
-      return fs.statSync(cwd).isDirectory();
-    } catch {
-      return false;
-    }
-  }
-
   private spawnCommand(
     request: CommandExecutionRequest,
     identity: string,
@@ -144,13 +121,17 @@ export class LocalCommandRunner implements CommandRunner {
     return new Promise(resolve => {
       const child = spawn(request.command, args, {
         cwd,
-        env: this.buildEnv(request)
+        env: this.buildEnv(request),
+        stdio: ['ignore', 'pipe', 'pipe']
       });
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
       let stdoutBytes = 0;
       let stderrBytes = 0;
       let timedOut = false;
+      let completed = false;
+      let forceKillTimeout: NodeJS.Timeout | undefined;
+      let forcedSignal: string | undefined;
 
       const appendBounded = (chunks: Buffer[], currentBytes: number, chunk: Buffer): number => {
         if (currentBytes >= maxOutputBytes) {
@@ -168,17 +149,32 @@ export class LocalCommandRunner implements CommandRunner {
         stderrBytes = appendBounded(stderrChunks, stderrBytes, Buffer.from(chunk));
       });
 
+      const finish = (values: Partial<CommandExecutionResult> & Pick<CommandExecutionResult, 'status'>): void => {
+        if (completed) {
+          return;
+        }
+        completed = true;
+        clearTimeout(timeout);
+        if (forceKillTimeout) {
+          clearTimeout(forceKillTimeout);
+        }
+        resolve(this.result(request, identity, cwd, args, started, values));
+      };
+
       const timeout = setTimeout(() => {
         timedOut = true;
         child.kill('SIGTERM');
+        forceKillTimeout = setTimeout(() => {
+          forcedSignal = 'SIGKILL';
+          child.kill('SIGKILL');
+        }, FORCE_KILL_GRACE_MS);
       }, request.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
       child.on('error', error => {
-        clearTimeout(timeout);
-        resolve(this.result(request, identity, cwd, args, started, {
+        finish({
           status: 'failed',
           errorMessage: sanitizeCommandOutput(error.message, maxOutputBytes)
-        }));
+        });
       });
 
       child.on('close', (code, signal) => {
@@ -186,16 +182,19 @@ export class LocalCommandRunner implements CommandRunner {
         const stdout = this.formatCapturedOutput(stdoutChunks, stdoutBytes, maxOutputBytes);
         const stderr = this.formatCapturedOutput(stderrChunks, stderrBytes, maxOutputBytes);
         const status = timedOut ? 'timed_out' : code === 0 ? 'success' : 'failed';
-        resolve(this.result(request, identity, cwd, args, started, {
+        const resolvedSignal = signal ?? forcedSignal;
+        finish({
           status,
           exitCode: code,
-          signal,
+          signal: resolvedSignal,
           stdout,
           stderr,
-          errorMessage: status === 'failed'
-            ? sanitizeCommandOutput(`Command exited with code ${code ?? 'unknown'}${stderr ? `: ${stderr}` : ''}`, maxOutputBytes)
-            : undefined
-        }));
+          errorMessage: status === 'timed_out'
+            ? sanitizeCommandOutput(this.formatTimeoutMessage(started, request.timeoutMs ?? DEFAULT_TIMEOUT_MS, resolvedSignal, stderr), maxOutputBytes)
+            : status === 'failed'
+              ? sanitizeCommandOutput(`Command exited with code ${code ?? 'unknown'}${stderr ? `: ${stderr}` : ''}`, maxOutputBytes)
+              : undefined
+        });
       });
     });
   }
@@ -206,6 +205,14 @@ export class LocalCommandRunner implements CommandRunner {
       return output;
     }
     return `${output}\n[output truncated to ${maxOutputBytes} bytes]`;
+  }
+
+  private formatTimeoutMessage(started: number, configuredTimeoutMs: number, signal?: string | null, stderr?: string): string {
+    const elapsedMs = Date.now() - started;
+    const elapsed = signal === 'SIGKILL' && elapsedMs > configuredTimeoutMs
+      ? `${configuredTimeoutMs}ms plus ${elapsedMs - configuredTimeoutMs}ms grace (${elapsedMs}ms elapsed)`
+      : `${configuredTimeoutMs}ms`;
+    return `Command timed out after ${elapsed}${signal ? ` (signal: ${signal})` : ''}${stderr ? `: ${stderr}` : ''}`;
   }
 
   private buildEnv(request: CommandExecutionRequest): NodeJS.ProcessEnv {

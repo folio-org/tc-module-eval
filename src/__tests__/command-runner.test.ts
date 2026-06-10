@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { LocalCommandRunner, sanitizeCommandOutput } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
 
@@ -137,6 +140,43 @@ describe('CommandRunner', () => {
     expect(result.status).toBe('failed');
     expect(result.errorMessage).toContain('token=[REDACTED]');
     expect(result.errorMessage).not.toContain('supersecret');
+  });
+
+  it('should include timeout details for timed out commands', async () => {
+    const runner = new LocalCommandRunner(true);
+    const result = await runner.run({
+      command: 'node',
+      args: ['-e', 'setTimeout(() => {}, 1000)'],
+      cwd: process.cwd(),
+      timeoutMs: 25
+    });
+
+    expect(result.status).toBe('timed_out');
+    expect(result.errorMessage).toContain('Command timed out after 25ms');
+  });
+
+  it('should force-complete timed out commands that ignore SIGTERM', async () => {
+    const runner = new LocalCommandRunner(true);
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'command-runner-'));
+    const pidFile = path.join(tempDir, 'pid');
+
+    try {
+      const result = await runner.run({
+        command: 'node',
+        args: ['-e', `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)`],
+        cwd: process.cwd(),
+        timeoutMs: 100
+      });
+      const pid = Number(fs.readFileSync(pidFile, 'utf-8'));
+
+      expect(result.status).toBe('timed_out');
+      expect(result.signal).toBe('SIGKILL');
+      expect(result.errorMessage).toContain('Command timed out after 100ms plus');
+      expect(result.errorMessage).toContain('elapsed');
+      expect(() => process.kill(pid, 0)).toThrow();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('should truncate oversized successful output without failing the command', async () => {

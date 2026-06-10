@@ -5,7 +5,7 @@
  * - PASS: Criterion automatically verified as meeting requirements
  * - FAIL: Criterion automatically verified as NOT meeting requirements
  * - MANUAL: Requires human review (e.g., errors during evaluation, non-automatable criteria)
- * - NOT_APPLICABLE: Evaluation logic not yet implemented (stub)
+ * - NOT_APPLICABLE: Criterion does not apply to this repository
  *
  */
 export enum EvaluationStatus {
@@ -33,6 +33,8 @@ export interface CriterionResult {
   status: EvaluationStatus;
   evidence: string;
   details?: string;
+  criterionDetails?: unknown;
+  agentReview?: CriterionAgentReviewResult;
 }
 
 /**
@@ -46,7 +48,7 @@ export interface EvaluationResult {
   criteria: CriterionResult[];
 }
 
-export type ArtifactKey = 'moduleDescriptor';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -106,6 +108,7 @@ export interface ModuleDescriptorArtifact {
 
 export interface EvaluationRunArtifacts {
   moduleDescriptor?: ModuleDescriptorArtifact;
+  moduleKind?: ModuleKindResult;
 }
 
 export interface EvaluationRun {
@@ -117,6 +120,7 @@ export interface EvaluationRun {
   artifacts: EvaluationRunArtifacts;
   commandObservations: Map<string, CommandExecutionResult>;
   commandRunner?: CommandRunner;
+  agentReview?: CriterionAgentReviewConfig;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -135,6 +139,108 @@ export interface EvaluationConfig {
   commandRunner?: CommandRunner;
   allowLocalCommands?: boolean;
   commandExecutionEnvironment?: CommandExecutionEnvironment;
+  agentReview?: CriterionAgentReviewConfig;
+}
+
+export type S004SignalGroup =
+  | 'install_deploy_run'
+  | 'docker_runtime'
+  | 'env_configuration'
+  | 'okapi_tenant_enablement'
+  | 'stripes_setup'
+  | 'build_test'
+  | 'external_reference';
+
+export interface S004DocumentationSignal {
+  group: S004SignalGroup;
+  label: string;
+  path: string;
+  excerpt: string;
+  line?: number;
+  strength: 'strong' | 'candidate' | 'insufficient';
+}
+
+export interface S004DocumentationCandidate {
+  path: string;
+  source: 'root-readme' | 'conventional-doc' | 'linked-doc';
+  sizeBytes: number;
+  signals: S004DocumentationSignal[];
+}
+
+export interface S004DeterministicClassification {
+  status: EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
+  reason: string;
+  strongestSignals: S004DocumentationSignal[];
+  filesConsidered: string[];
+  warnings: string[];
+}
+
+export interface S004InstallationDocumentationResult {
+  candidates: S004DocumentationCandidate[];
+  classification: S004DeterministicClassification;
+  agentReviewUnavailableReason?: string;
+  warnings: string[];
+}
+
+export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
+
+export interface ModuleKindResult {
+  kind: ModuleKind;
+  evidence: string[];
+  warnings: string[];
+}
+
+export type CriterionAgentRecommendation = 'likely_sufficient' | 'likely_insufficient' | 'needs_reviewer_judgment';
+
+export interface CriterionAgentReviewMetadata {
+  adapter: 'opencode' | 'fake';
+  modelLabel?: string;
+  endpointFamily?: string;
+  reviewMode: 'read-only';
+  promptInputSanitized: boolean;
+  reviewWorkspaceSanitized: boolean;
+  retainedWorkspacePath?: string;
+}
+
+export interface CriterionAgentReviewResult {
+  available: boolean;
+  criterionId: string;
+  recommendation?: CriterionAgentRecommendation;
+  confidence?: 'low' | 'medium' | 'high';
+  summary?: string;
+  rationale?: string;
+  evidenceReferences: string[];
+  metadata?: CriterionAgentReviewMetadata;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface CriterionAgentReviewConfig {
+  enabled: boolean;
+  enabledCriteria?: string[];
+  adapter: 'opencode' | 'fake';
+  modelLabel?: string;
+  readOnlyAgentName?: string;
+  timeoutMs?: number;
+  trustedConfigPath?: string;
+  trustedAuthStorePath?: string;
+  providerEnvAllowlist?: string[];
+  proxyEnvAllowlist?: string[];
+  endpoint?: string;
+  endpointFamily?: string;
+  endpointAllowlist?: string[];
+  debugRetainWorkspace?: boolean;
+  fakeResult?: CriterionAgentReviewResult;
+  generatedProvider?: CriterionAgentGeneratedProvider;
+  providerConfigError?: string;
+}
+
+export interface CriterionAgentGeneratedProvider {
+  name: 'openrouter' | 'openai';
+  apiKeyEnv: 'OPENROUTER_API_KEY' | 'OPENAI_API_KEY';
+  modelEnv: 'OPENROUTER_MODEL' | 'OPENAI_MODEL';
+  modelId: string;
+  modelSelector: string;
 }
 
 /**

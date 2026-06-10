@@ -29,6 +29,10 @@ folio-eval evaluate <repo-url> --allow-local-commands
 
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
+### Agent Review
+
+Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, and GitHub Actions notes.
+
 ### For Local Development: Use Devcontainer
 
 For local development, use the provided devcontainer configuration in `.devcontainer/`. The container provides isolation with all required tools (Node.js, Java 21, Maven, Gradle).

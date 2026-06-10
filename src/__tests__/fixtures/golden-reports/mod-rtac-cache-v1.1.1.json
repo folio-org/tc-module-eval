@@ -31,8 +31,111 @@
     {
       "criterionId": "S004",
       "status": "manual",
-      "evidence": "README file evaluation - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S004 manual: Repository documentation includes strong installation, deployment, running, or Okapi enablement evidence, but S004 requires reviewer judgment.",
+      "details": "Documentation files considered:\n  - README.md\n\nStrongest signals:\n  - README.md:22 [install_deploy_run] Installation or deployment guidance: There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling\n  - README.md:48 [docker_runtime] Docker or runtime dependency guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:63 [okapi_tenant_enablement] Okapi, tenant, or module enablement guidance: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n  - README.md:12 [external_reference] External documentation reference: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build_test] Developer build instructions: ### Compiling Compile with ```shell mvn clean install\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "candidates": [
+          {
+            "path": "README.md",
+            "source": "root-readme",
+            "sizeBytes": 3737,
+            "signals": [
+              {
+                "group": "external_reference",
+                "label": "External documentation reference",
+                "path": "README.md",
+                "line": 12,
+                "excerpt": "## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation",
+                "strength": "candidate"
+              },
+              {
+                "group": "install_deploy_run",
+                "label": "Installation or deployment guidance",
+                "path": "README.md",
+                "line": 22,
+                "excerpt": "There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling",
+                "strength": "strong"
+              },
+              {
+                "group": "build_test",
+                "label": "Developer build instructions",
+                "path": "README.md",
+                "line": 26,
+                "excerpt": "### Compiling Compile with ```shell mvn clean install",
+                "strength": "candidate"
+              },
+              {
+                "group": "docker_runtime",
+                "label": "Docker or runtime dependency guidance",
+                "path": "README.md",
+                "line": 48,
+                "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+                "strength": "strong"
+              },
+              {
+                "group": "okapi_tenant_enablement",
+                "label": "Okapi, tenant, or module enablement guidance",
+                "path": "README.md",
+                "line": 63,
+                "excerpt": "``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module",
+                "strength": "strong"
+              }
+            ]
+          }
+        ],
+        "classification": {
+          "status": "manual",
+          "reason": "Repository documentation includes strong installation, deployment, running, or Okapi enablement evidence, but S004 requires reviewer judgment.",
+          "strongestSignals": [
+            {
+              "group": "install_deploy_run",
+              "label": "Installation or deployment guidance",
+              "path": "README.md",
+              "line": 22,
+              "excerpt": "There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling",
+              "strength": "strong"
+            },
+            {
+              "group": "docker_runtime",
+              "label": "Docker or runtime dependency guidance",
+              "path": "README.md",
+              "line": 48,
+              "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+              "strength": "strong"
+            },
+            {
+              "group": "okapi_tenant_enablement",
+              "label": "Okapi, tenant, or module enablement guidance",
+              "path": "README.md",
+              "line": 63,
+              "excerpt": "``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module",
+              "strength": "strong"
+            },
+            {
+              "group": "external_reference",
+              "label": "External documentation reference",
+              "path": "README.md",
+              "line": 12,
+              "excerpt": "## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation",
+              "strength": "candidate"
+            },
+            {
+              "group": "build_test",
+              "label": "Developer build instructions",
+              "path": "README.md",
+              "line": 26,
+              "excerpt": "### Compiling Compile with ```shell mvn clean install",
+              "strength": "candidate"
+            }
+          ],
+          "filesConsidered": [
+            "README.md"
+          ],
+          "warnings": []
+        },
+        "warnings": [],
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "S005",

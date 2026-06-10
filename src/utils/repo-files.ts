@@ -50,6 +50,38 @@ export function isWithinRepo(repoPath: string, candidatePath: string): boolean {
   return repoRealPath ? isWithinRealPath(repoRealPath, candidatePath) : false;
 }
 
+export function isDirectory(candidatePath: string): boolean {
+  try {
+    return fs.statSync(candidatePath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function readJsonFile(filePath: string, warnings?: string[]): Record<string, unknown> | undefined {
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch (error) {
+    warnings?.push(`Unable to parse ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+}
+
+export function readTextFile(filePath: string, warnings?: string[]): string | undefined {
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    warnings?.push(`Unable to read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+}
+
 export function relativePosixPath(repoPath: string, candidatePath: string): string {
   return path.relative(repoPath, candidatePath).split(path.sep).join('/');
 }
@@ -93,7 +125,7 @@ function isWithinRealPath(repoRealPath: string, candidatePath: string): boolean 
   }
 }
 
-function realPath(candidatePath: string): string | undefined {
+export function realPath(candidatePath: string): string | undefined {
   try {
     return fs.realpathSync(candidatePath);
   } catch {

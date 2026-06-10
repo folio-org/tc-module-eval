@@ -74,7 +74,8 @@ export class ModuleEvaluator {
         repositoryName: repoInfo.name,
         language: languageToCatalogLanguage(evaluator.getLanguage()),
         criteriaFilter: this.config.criteriaFilter,
-        commandRunner
+        commandRunner,
+        agentReview: this.config.agentReview
       });
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);

@@ -22,7 +22,29 @@ describe('EvaluationReportRenderer', () => {
       {
         criterionId: 'S003',
         status: EvaluationStatus.MANUAL,
-        evidence: 'Manual evidence'
+        evidence: 'Manual with token=abc123',
+        details: 'Advisory says <script>alert("x")</script> password=hunter2',
+        criterionDetails: {
+          nested: [{ note: 'OPENAI_API_KEY=sk-details-secret' }]
+        },
+        agentReview: {
+          available: true,
+          criterionId: 'S003',
+          recommendation: 'needs_reviewer_judgment',
+          confidence: 'medium',
+          summary: '<script>bad()</script>',
+          rationale: 'private URL http://192.168.1.10/admin',
+          evidenceReferences: ['README.md'],
+          metadata: {
+            adapter: 'fake',
+            modelLabel: 'fake-model',
+            reviewMode: 'read-only',
+            promptInputSanitized: true,
+            reviewWorkspaceSanitized: true
+          },
+          warnings: [],
+          errors: []
+        }
       },
       {
         criterionId: 'S004',
@@ -61,6 +83,34 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Criterion S001');
     expect(html).toContain('Apache &lt;2.0&gt; &amp; compatible');
     expect(html).toContain('Line one<br>Line two');
+  });
+
+  it('escapes untrusted module names in the HTML title', () => {
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml({
+      ...result,
+      moduleName: '</title><script>alert("x")</script>'
+    });
+
+    expect(html).toContain('<title>FOLIO Module Evaluation Report - &lt;/title&gt;&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</title>');
+    expect(html).not.toContain('</title><script>');
+  });
+
+  it('redacts and escapes untrusted criterion and advisory fields', () => {
+    const renderer = new EvaluationReportRenderer();
+    const json = renderer.renderJson(result);
+    const html = renderer.renderHtml(result);
+
+    expect(json).toContain('token=[REDACTED]');
+    expect(json).toContain('password=[REDACTED]');
+    expect(json).toContain('"criterionDetails"');
+    expect(json).toContain('OPENAI_API_KEY=[REDACTED]');
+    expect(json).toContain('[REDACTED_PRIVATE_URL]');
+    expect(json).not.toContain('abc123');
+    expect(json).not.toContain('hunter2');
+    expect(json).not.toContain('sk-details-secret');
+    expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+    expect(html).not.toContain('token=abc123');
   });
 
   it('should expose escaping helpers for focused renderer tests', () => {

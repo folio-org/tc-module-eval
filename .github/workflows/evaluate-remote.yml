@@ -37,6 +37,8 @@ on:
         required: false
         type: string
         default: "20"
+      # OpenCode advisory review is local/trusted CLI-only for now. The manual
+      # remote workflow delegates to the deterministic reusable workflow.
 
 permissions:
   contents: read

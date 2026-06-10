@@ -38,6 +38,9 @@ on:
         required: false
         type: string
         default: "master"
+      # Hosted OpenCode criterion-agent review is intentionally not exposed here.
+      # This reusable workflow remains deterministic-only until protected
+      # environment secret handling and repository allowlists are designed.
     outputs:
       report_artifact:
         description: "Name of the uploaded artifact containing reports"

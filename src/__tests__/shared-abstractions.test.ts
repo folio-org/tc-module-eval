@@ -178,7 +178,7 @@ describe('BaseSectionEvaluator', () => {
   it('should return MANUAL result when an individual handler throws during evaluate', async () => {
     const evaluator = new StubSectionEvaluator('Test', {
       'X001': async () => ({ criterionId: 'X001', status: EvaluationStatus.PASS, evidence: 'ok' }),
-      'X002': async () => { throw new Error('Handler exploded'); },
+      'X002': async () => { throw new Error('Handler exploded with http://localhost:8080/health'); },
       'X003': async () => ({ criterionId: 'X003', status: EvaluationStatus.PASS, evidence: 'ok' }),
     });
 
@@ -190,6 +190,8 @@ describe('BaseSectionEvaluator', () => {
     expect(results[1].criterionId).toBe('X002');
     expect(results[1].status).toBe(EvaluationStatus.MANUAL);
     expect(results[1].evidence).toContain('Handler exploded');
+    expect(results[1].evidence).toContain('[REDACTED_PRIVATE_URL]');
+    expect(results[1].evidence).not.toContain('localhost:8080');
     // Evaluation continues after the error
     expect(results[2].status).toBe(EvaluationStatus.PASS);
   });
