@@ -417,4 +417,86 @@ describe('CLI Integration Tests', () => {
       expect(htmlContent).not.toContain('<script>alert("x")</script>');
     });
   });
+
+  describe('Local S004 Installation Documentation Integration', () => {
+    test('should evaluate S004 rich evidence manual, build manual, thin manual, and library not applicable through ModuleEvaluator', async () => {
+      const fixtures = [
+        {
+          name: 'mod-s004-rich-manual',
+          files: {
+            'pom.xml': '<project><modelVersion>4.0.0</modelVersion><artifactId>mod-s004-rich-manual</artifactId></project>',
+            'README.md': '## Deployment\nDeploy the ModuleDescriptor through Okapi, configure the tenant, and run with docker compose.'
+          },
+          expected: EvaluationStatus.MANUAL
+        },
+        {
+          name: 'mod-s004-build-manual',
+          files: {
+            'pom.xml': '<project><modelVersion>4.0.0</modelVersion><artifactId>mod-s004-build-manual</artifactId></project>',
+            'README.md': '## Build\nmvn clean install\n\n## Tests\nmvn test'
+          },
+          expected: EvaluationStatus.MANUAL
+        },
+        {
+          name: 'mod-s004-manual',
+          files: {
+            'pom.xml': '<project><modelVersion>4.0.0</modelVersion><artifactId>mod-s004-manual</artifactId></project>',
+            'README.md': 'Configuration links and module descriptor references are available.'
+          },
+          expected: EvaluationStatus.MANUAL
+        },
+        {
+          name: 'folio-spring-base',
+          files: {
+            'pom.xml': '<project><modelVersion>4.0.0</modelVersion><artifactId>folio-spring-base</artifactId></project>',
+            'README.md': 'Shared library.'
+          },
+          expected: EvaluationStatus.NOT_APPLICABLE
+        }
+      ];
+
+      for (const fixture of fixtures) {
+        const repoPath = await createLocalGitRepo(fixture.name, fixture.files);
+        const evaluator = new ModuleEvaluator({
+          outputDir: testOutputDir,
+          tempDir: path.join(os.tmpdir(), 'folio-eval-local-clones'),
+          skipCleanup: false,
+          criteriaFilter: ['S004'],
+          allowLocalCommands: true
+        });
+
+        const result = await evaluator.evaluateModule(repoPath);
+
+        expect(result.criteria).toHaveLength(1);
+        expect(result.criteria[0].criterionId).toBe('S004');
+        expect(result.criteria[0].status).toBe(fixture.expected);
+      }
+    });
+
+    test('should include S004 evidence in JSON and escaped HTML reports', async () => {
+      const result: EvaluationResult = {
+        repositoryUrl: 'local-fixture',
+        moduleName: 'mod-s004-manual',
+        language: 'Java',
+        evaluatedAt: new Date('2026-06-09T00:00:00.000Z'),
+        criteria: [{
+          criterionId: 'S004',
+          status: EvaluationStatus.MANUAL,
+          evidence: 'S004 manual: Candidate documentation exists',
+          details: 'Strongest signals:\n  - README.md [env_configuration] <script>alert("x")</script> token=abc123'
+        }]
+      };
+
+      const reportGenerator = new ReportGenerator(testOutputDir);
+      const reportPaths = await reportGenerator.generateReports(result);
+
+      const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
+      expect(jsonContent).toContain('S004 manual');
+      expect(jsonContent).toContain('token=[REDACTED]');
+
+      const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
+      expect(htmlContent).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+      expect(htmlContent).not.toContain('token=abc123');
+    });
+  });
 });

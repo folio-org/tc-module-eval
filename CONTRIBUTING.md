@@ -43,6 +43,14 @@ The evaluation process:
 5. Generates HTML + JSON reports
 6. Cleans up (unless `--no-cleanup`)
 
+S004 uses a deterministic-first documentation pipeline:
+1. Discover root and linked repository documentation.
+2. Extract developer build/run, runtime, configuration, Okapi/tenant, Stripes, and Docker signals.
+3. Fail only clear absence cases without agent review.
+4. Return manual evidence for candidate documentation, optionally enriched by reusable criterion-agent review.
+
+The criterion-agent layer is intentionally criterion-neutral. Future criteria can reuse the same OpenCode runner by providing bounded evidence files, criterion instructions, and an advisory-output schema.
+
 ## Criteria Definitions
 
 Defined in `src/criteria-definitions.ts` with structure:
@@ -88,3 +96,5 @@ folio-eval evaluate <repo-url> --no-cleanup
 folio-eval list-languages
 folio-eval info
 ```
+
+Criterion-agent options are opt-in. See [Agent Review Configuration](docs/agent-review.md) for OpenCode provider setup, credentials, and advanced options.

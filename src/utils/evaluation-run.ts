@@ -14,6 +14,7 @@ export interface CreateEvaluationRunOptions {
   repositoryUrl?: string;
   repositoryName?: string;
   commandRunner?: CommandRunner;
+  agentReview?: EvaluationRun['agentReview'];
 }
 
 export function createEvaluationRun(options: CreateEvaluationRunOptions): EvaluationRun {
@@ -33,6 +34,7 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     artifacts,
     commandObservations,
     commandRunner: options.commandRunner,
+    agentReview: options.agentReview,
     async getOrCreateArtifact<K extends ArtifactKey>(
       key: K,
       producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>

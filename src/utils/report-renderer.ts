@@ -1,4 +1,5 @@
 import { EvaluationResult, EvaluationStatus } from '../types';
+import { redactJsonValue, redactSensitiveText } from './redaction';
 
 export interface EvaluationReportStats {
   pass: number;
@@ -19,7 +20,7 @@ export interface ReportRenderer {
  */
 export class EvaluationReportRenderer implements ReportRenderer {
   renderJson(result: EvaluationResult): string {
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(redactJsonValue(result), null, 2);
   }
 
   renderHtml(result: EvaluationResult): string {
@@ -31,7 +32,7 @@ export class EvaluationReportRenderer implements ReportRenderer {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FOLIO Module Evaluation Report - ${result.moduleName}</title>
+    <title>FOLIO Module Evaluation Report - ${this.escapeHtml(redactSensitiveText(result.moduleName))}</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -195,15 +196,15 @@ export class EvaluationReportRenderer implements ReportRenderer {
             <div class="metadata">
                 <div class="metadata-item">
                     <div class="metadata-label">Module Name</div>
-                    <div>${result.moduleName}</div>
+                    <div>${this.escapeHtml(redactSensitiveText(result.moduleName))}</div>
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Language</div>
-                    <div>${result.language}</div>
+                    <div>${this.escapeHtml(redactSensitiveText(result.language))}</div>
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Repository</div>
-                    <div><a href="${result.repositoryUrl}" target="_blank" style="color: #87ceeb;">${result.repositoryUrl}</a></div>
+                    <div><a href="${this.escapeHtml(redactSensitiveText(result.repositoryUrl))}" target="_blank" style="color: #87ceeb;">${this.escapeHtml(redactSensitiveText(result.repositoryUrl))}</a></div>
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Evaluated At</div>
@@ -291,9 +292,9 @@ export class EvaluationReportRenderer implements ReportRenderer {
             </div>
             <div class="criterion-content">
                 <div class="evidence">
-                    <strong>Evidence:</strong> ${this.escapeHtml(criterion.evidence)}
+                    <strong>Evidence:</strong> ${this.escapeHtml(redactSensitiveText(criterion.evidence))}
                 </div>
-                ${criterion.details ? `<div class="details">${this.textToHtml(criterion.details)}</div>` : ''}
+                ${criterion.details ? `<div class="details">${this.textToHtml(redactSensitiveText(criterion.details))}</div>` : ''}
             </div>
         </div>
     `).join('');

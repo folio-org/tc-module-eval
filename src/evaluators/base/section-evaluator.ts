@@ -1,4 +1,5 @@
 import { SectionEvaluator, CriterionResult, EvaluationStatus, CriterionFunction, EvaluationRun } from '../../types';
+import { redactSensitiveText } from '../../utils/redaction';
 
 /**
  * Abstract base class for section-specific evaluators
@@ -104,7 +105,7 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
    * Create an error result when evaluation fails
    */
   protected createErrorResult(criterionId: string, error: any): CriterionResult {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = redactSensitiveText(error instanceof Error ? error.message : String(error));
     return this.createResult(
       criterionId,
       EvaluationStatus.MANUAL,

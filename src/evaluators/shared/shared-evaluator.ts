@@ -7,12 +7,16 @@ import { evaluateS003ThirdPartyLicenses } from '../../utils/license-compliance-e
 import { produceModuleDescriptorArtifact } from '../../utils/artifacts/module-descriptor-artifact';
 import { createEvaluationRun } from '../../utils/evaluation-run';
 import { validateModuleDescriptorJson } from '../../utils/module-descriptor-validator';
+import { analyzeS004Documentation, formatS004Evidence } from '../../utils/s004-installation-documentation';
+import { classifyModuleKind } from '../../utils/module-kind';
+import { reviewS004WithAgent } from '../../utils/s004-agent-review';
+import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
  * IDs and their fallback results are derived from the acceptance-criterion catalog
  * by CatalogSectionEvaluator. Automated criteria are supplied as handler overrides
- * to super() (here S001 and S003); every other criterion falls back to the
+ * to super() (here S001, S002, S003, and S004); every other criterion falls back to the
  * catalog-defined default result for the given language.
  */
 export abstract class SharedEvaluator extends CatalogSectionEvaluator {
@@ -20,7 +24,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     super('Shared/Common', language, {
       S001: async (repoPath: string) => this.evaluateS001(repoPath),
       S002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS002(repoPath, evaluationRun),
-      S003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS003(repoPath, evaluationRun)
+      S003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS003(repoPath, evaluationRun),
+      S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun)
     });
   }
 
@@ -91,6 +96,52 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: EvaluationStatus.FAIL,
       evidence,
       details: `${this.formatArtifactDetails(artifact)}\n\nValidation errors:\n${validationDetails}`
+    };
+  }
+
+  private async evaluateS004(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S004']
+    });
+
+    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    if (moduleKind.kind === 'library') {
+      return {
+        criterionId: 'S004',
+        status: EvaluationStatus.NOT_APPLICABLE,
+        evidence: 'S004 does not apply to explicit FOLIO library repositories',
+        details: [
+          'Repository kind: library',
+          'Evidence:',
+          ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
+          ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
+        ].join('\n')
+      };
+    }
+
+    const documentation = analyzeS004Documentation(repoPath);
+    documentation.warnings.push(...moduleKind.warnings);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S004',
+      status: documentation.classification.status,
+      hasReviewMaterial: documentation.candidates.length > 0,
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS004WithAgent(repoPath, documentation, config, commandRunner)
+    });
+    if (unavailableReason) {
+      documentation.agentReviewUnavailableReason = unavailableReason;
+    }
+
+    const rendered = formatS004Evidence(documentation, agentReview);
+    return {
+      criterionId: 'S004',
+      status: documentation.classification.status,
+      evidence: rendered.evidence,
+      details: rendered.details,
+      criterionDetails: documentation,
+      agentReview
     };
   }
 

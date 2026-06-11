@@ -5,6 +5,7 @@ import * as path from 'path';
 import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';
+import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
 
 const program = new Command();
 
@@ -25,6 +26,19 @@ program
   .option('--no-cleanup', 'Do not delete the cloned repository after evaluation')
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
+  .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
+  .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
+  .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
+  .option('--criterion-agent-read-only-agent <name>', 'OpenCode read-only agent name', 'reviewer')
+  .option('--criterion-agent-timeout-ms <ms>', 'Criterion-agent command timeout in milliseconds')
+  .option('--criterion-agent-trusted-config <path>', 'Trusted OpenCode config path outside the evaluated repository')
+  .option('--criterion-agent-auth-store <path>', 'Trusted OpenCode auth-store path outside the evaluated repository')
+  .option('--criterion-agent-provider-env <names>', 'Comma-separated provider credential env vars to pass to OpenCode')
+  .option('--criterion-agent-proxy-env <names>', 'Comma-separated proxy env vars to pass to OpenCode')
+  .option('--criterion-agent-endpoint <url>', 'OpenCode provider endpoint URL')
+  .option('--criterion-agent-endpoint-family <name>', 'Provider-neutral endpoint family metadata')
+  .option('--criterion-agent-endpoint-allowlist <prefixes>', 'Comma-separated endpoint URL prefixes allowed for non-HTTPS endpoints')
+  .option('--criterion-agent-debug-retain-workspace', 'Retain local criterion-agent scratch workspace for debugging')
   .action(async (repositoryUrl: string, options) => {
     try {
       console.log('🚀 Starting FOLIO Module Evaluation...\n');
@@ -147,7 +161,8 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     criteriaFilter,
     branch: options.branch,
     allowLocalCommands: options.allowLocalCommands === true,
-    commandExecutionEnvironment: resolveCommandExecutionEnvironment()
+    commandExecutionEnvironment: resolveCommandExecutionEnvironment(),
+    agentReview: buildCriterionAgentReviewConfig(options)
   };
 }
 
