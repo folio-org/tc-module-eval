@@ -182,6 +182,115 @@ export interface S004InstallationDocumentationResult {
   warnings: string[];
 }
 
+export type S005PersonalDataDisclosureParseState = 'completed' | 'incomplete' | 'unparseable';
+
+export type S005PersonalDataCategory =
+  | 'no_personal_data'
+  | 'name'
+  | 'username'
+  | 'user_identifier'
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'birth_date'
+  | 'patron_data'
+  | 'free_form_notes'
+  | 'profile_picture'
+  | 'ip_or_mac_address'
+  | 'financial_information'
+  | 'circulation_transactions'
+  | 'custom_fields'
+  | 'storage'
+  | 'processing'
+  | 'transmission'
+  | 'cache'
+  | 'logging'
+  | 'other';
+
+export type S005PersonalDataDisclosureTemplateIdentity = 'current-like' | 'older-or-custom' | 'unknown';
+
+export interface S005PersonalDataDisclosureChecklistItem {
+  order: number;
+  lineNumber: number;
+  sectionHeading?: string;
+  rawLabel: string;
+  checked: boolean;
+  normalizedCategory: S005PersonalDataCategory;
+}
+
+export interface S005PersonalDataDisclosurePlaceholderEvidence {
+  field: string;
+  lineNumber: number;
+  placeholderText: string;
+  excerpt: string;
+}
+
+export interface S005PersonalDataDisclosureMetadata {
+  versionText?: string;
+  versionLineNumber?: number;
+  templateIdentity: S005PersonalDataDisclosureTemplateIdentity;
+  lastUpdatedText?: string;
+  lastUpdatedLineNumber?: number;
+  lastReviewedText?: string;
+  lastReviewedLineNumber?: number;
+}
+
+export interface S005PersonalDataDisclosureCompletionState {
+  completed: boolean;
+  checkedMeaningfulAnswers: number;
+  checkedCategories: S005PersonalDataCategory[];
+  uncheckedCategories: S005PersonalDataCategory[];
+}
+
+export interface S005PersonalDataDisclosureContradiction {
+  kind: 'no-personal-data-with-personal-fields';
+  message: string;
+  lineNumbers: number[];
+  conflictingCategories: S005PersonalDataCategory[];
+}
+
+export interface S005PersonalDataDisclosureParseError {
+  message: string;
+  excerpt: string;
+}
+
+export interface S005PersonalDataEvidenceSignal {
+  category: S005PersonalDataCategory;
+  label: string;
+  path: string;
+  excerpt: string;
+  line?: number;
+  sourceClass: 'direct_contract' | 'implementation' | 'documentation' | 'ui' | 'test_sample';
+  strength: 'strong' | 'candidate' | 'context';
+}
+
+export interface S005PersonalDataPossibleMismatch {
+  kind: 'possible_omission' | 'possible_over_disclosure' | 'contradiction' | 'unverifiable';
+  category?: S005PersonalDataCategory;
+  message: string;
+  evidenceReferences: string[];
+}
+
+export interface S005PersonalDataDeterministicClassification {
+  status: EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
+  parseState: S005PersonalDataDisclosureParseState;
+  reason: string;
+  warnings: string[];
+}
+
+export interface S005PersonalDataDisclosureParseResult {
+  metadata: S005PersonalDataDisclosureMetadata;
+  checklistItems: S005PersonalDataDisclosureChecklistItem[];
+  checkedCategories: S005PersonalDataCategory[];
+  uncheckedCategories: S005PersonalDataCategory[];
+  completion: S005PersonalDataDisclosureCompletionState;
+  placeholders: S005PersonalDataDisclosurePlaceholderEvidence[];
+  contradictions: S005PersonalDataDisclosureContradiction[];
+  classification: S005PersonalDataDeterministicClassification;
+  parseError?: S005PersonalDataDisclosureParseError;
+  warnings: string[];
+}
+
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
 export interface ModuleKindResult {
