@@ -12,6 +12,8 @@ Version 2.0. See the file "[LICENSE](LICENSE)" for more information.
 This tool provides a modular, extensible framework for automatically evaluating a module against
 [FOLIO module acceptance criteria](https://github.com/folio-org/tech-council/blob/master/MODULE_ACCEPTANCE_CRITERIA.MD).
 
+S005 personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechanics, completion, and bounded source-inspection evidence. Completed forms remain subject to manual review; the tool does not certify legal or privacy compliance.
+
 **Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 
 ## Security
@@ -29,9 +31,11 @@ folio-eval evaluate <repo-url> --allow-local-commands
 
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
+S005 source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
+
 ### Agent Review
 
-Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, and GitHub Actions notes.
+Some criteria, including S005, can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
 
 ### For Local Development: Use Devcontainer
 

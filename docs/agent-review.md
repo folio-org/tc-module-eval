@@ -2,6 +2,11 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
+Supported advisory criteria:
+
+- `S004`: installation documentation review.
+- `S005`: personal data disclosure consistency review.
+
 Agent review runs through reusable criterion-agent infrastructure:
 
 - The evaluated repository is copied into a bounded, sanitized review workspace.
@@ -9,6 +14,22 @@ Agent review runs through reusable criterion-agent infrastructure:
 - Provider keys are read from environment variables, not CLI arguments.
 - The generated OpenCode agent is read-only and rejects mutating tools.
 - Evaluated-repository `.opencode/`, `opencode.json`, and `.env` files are ignored.
+
+## S005 Personal Data Disclosure Review
+
+S005 evaluates the top-level `PERSONAL_DATA_DISCLOSURE.md` required by the acceptance criterion. The deterministic evaluator checks artifact mechanics, parses disclosure checklist answers, reports obvious placeholders or contradictions, and gathers bounded source-inspection signals for likely personal-data handling.
+
+S005 does not certify legal, GDPR, CCPA, institutional privacy, or general privacy compliance. Completed disclosure forms remain `manual` so Technical Council reviewers own the interpretation of disclosure accuracy. Deterministic `fail` results are reserved for mechanics or completion problems such as a missing exact file, unreadable or unparseable form, misnamed-only artifact, or blank copied template. Explicit FOLIO libraries are `not_applicable`.
+
+S005 evidence gathering is read-only source inspection. It does not mutate the evaluated repository and does not run repository code, tests, builds, services, databases, or Okapi calls.
+
+When agent review is enabled for `S005`, it runs only for completed manual cases that have candidate deterministic evidence or possible mismatches beyond the form itself. The agent receives the disclosure form, a redacted parsed summary, and bounded redacted evidence excerpts. Its advisory JSON includes:
+
+- `recommendation`: `likely_sufficient`, `likely_insufficient`, or `needs_reviewer_judgment`.
+- `confidence`: `low`, `medium`, or `high`.
+- `summary`, `rationale`, and manifest-scoped `evidenceReferences`.
+
+If agent review is disabled, unconfigured, excluded for `S005`, unavailable, malformed, failed, or has no candidate material, the evaluator still reports deterministic S005 evidence and records a not-applied or unavailable reason. The S005 status remains driven by deterministic mechanics and reviewer-owned manual interpretation, not agent advice.
 
 ## OpenRouter
 
