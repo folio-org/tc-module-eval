@@ -10,15 +10,24 @@ import {
   S005PersonalDataDisclosureContradiction,
   S005PersonalDataDisclosureMetadata,
   S005PersonalDataDisclosureParseResult,
-  S005PersonalDataDisclosurePlaceholderEvidence
+  S005PersonalDataDisclosurePlaceholderEvidence,
+  S005PersonalDataEvidenceScanResult,
+  S005PersonalDataEvidenceSignal,
+  S005PersonalDataEvidenceSourceClass,
+  S005PersonalDataEvidenceStrength
 } from '../types';
-import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
+import { findCandidateFiles, isWithinRepo, realPath, relativePosixPath, walkDirectories } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
 const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
 const MAX_PARSE_ERROR_BYTES = 512;
 const MAX_DISCOVERY_READ_ERROR_BYTES = 300;
+export const MAX_S005_EVIDENCE_SCANNED_FILES = 200;
+export const MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES = 2 * 1024 * 1024;
+export const MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE = 96 * 1024;
+export const MAX_S005_EVIDENCE_EXCERPT_BYTES = 700;
+export const MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS = 8;
 const BOUNDED_NESTED_ATTEMPT_DIRS = ['docs', 'doc', 'documentation'];
 const MAX_BOUNDED_NESTED_ATTEMPT_DEPTH = 2;
 const CHECKBOX_PATTERN = /^\s{0,6}[-*+]\s+\[([ xX])\]\s+(.+?)\s*$/;
@@ -27,6 +36,38 @@ const VERSION_PATTERN = /\b(?:form\s+version|template\s+version|version)\s*[:|-]
 const LAST_UPDATED_PATTERN = /\blast\s+updated\s*[:|-]\s*(.+)$/i;
 const LAST_REVIEWED_PATTERN = /\blast\s+reviewed\s*[:|-]\s*(.+)$/i;
 const PLACEHOLDER_PATTERN = /^(?:todo|tbd|n\/a|\[.*\]|<.*>|yyyy-mm-dd|mm\/dd\/yyyy|date|last updated|last reviewed)$/i;
+const GENERATED_REPORT_DIRECTORY_PATTERN = /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
+const TEXT_FILE_EXTENSION_PATTERN = /\.(?:avram|conf|cfg|ini|java|js|json|jsx|kt|md|mjs|properties|raml|sql|ts|tsx|txt|xml|yaml|yml)$/i;
+const DIRECT_CONTRACT_FILE_PATTERN = /(?:^|\/)(?:schemas?|schema|ramls?|api|apis|descriptors?|interfaces?|module-descriptor)(?:\/|$)|(?:^|\/)(?:module-descriptor|package)\.json$|(?:openapi|swagger|raml|schema)\.(?:json|ya?ml|raml)$/i;
+const DOCUMENTATION_FILE_PATTERN = /(?:^|\/)(?:readme|privacy|personal-data|data-handling)[^/]*\.md$|(?:^|\/)(?:docs?|documentation)(?:\/|$)/i;
+const UI_FILE_PATTERN = /(?:^|\/)(?:translations|i18n|lang|ui|stripes|components?|routes?)(?:\/|$)|\.(?:jsx|tsx)$/i;
+const TEST_SAMPLE_FILE_PATTERN = /(?:^|\/)(?:__tests__|tests?|spec|fixtures?|samples?|examples?)(?:\/|$)|(?:test|spec|fixture|sample|example)\.[^.\/]+$/i;
+const HIGH_SIGNAL_PATH_PATTERN = /(?:schema|raml|openapi|swagger|module-descriptor|package\.json|readme|docs?|documentation|translation|i18n|lang|ui|stripes|component|route|persistence|database|migration|db\/|sql|log4j|logback|logging|logger|queue|event|kafka|pubsub|producer|consumer|cache|redis|s3|blob|bucket|profile|avatar|photo|api|example|sample|fixture)/i;
+const HIGH_RISK_PERSONAL_EXAMPLE_PATTERN = /\b(?:john|jane)\s+doe\b|\b(?:ssn|social security number)\s*[:=]?\s*\d{3}[-\s]?\d{2}[-\s]?\d{4}\b|\b(?:credit card|card number)\s*[:=]?\s*(?:\d[ -]?){13,19}\b|\b\d{4}\s+[A-Z][a-z]+(?:\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln))\b/gi;
+const LONG_FREE_FORM_VALUE_PATTERN = /(["'`])([^"'`\n]{180,})\1/g;
+const S005_EVIDENCE_SKIPPED_DIRS: ReadonlySet<string> = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  '.idea',
+  '.vscode',
+  'node_modules',
+  'bower_components',
+  'dist',
+  'build',
+  'target',
+  'out',
+  '.next',
+  '.turbo',
+  '.cache',
+  'coverage',
+  '.nyc_output',
+  'reports',
+  'report',
+  'evaluation-reports',
+  'generated-reports',
+  'test-results'
+]);
 
 const PERSONAL_FIELD_CATEGORIES = new Set<S005PersonalDataCategory>([
   'name',
@@ -44,6 +85,31 @@ const PERSONAL_FIELD_CATEGORIES = new Set<S005PersonalDataCategory>([
   'circulation_transactions',
   'custom_fields'
 ]);
+
+const S005_EVIDENCE_CATEGORY_PATTERNS: ReadonlyArray<{
+  category: S005PersonalDataCategory;
+  label: string;
+  pattern: RegExp;
+}> = [
+  { category: 'email', label: 'email address field or value', pattern: /\b(?:e-?mail|emailAddress\w*|email_address\w*|emails?)\b/i },
+  { category: 'phone', label: 'phone or telephone field', pattern: /\b(?:phone|telephone|mobilePhone|mobile_phone|fax)\b/i },
+  { category: 'address', label: 'address or location field', pattern: /\b(?:address|streetAddress\w*|street_address\w*|addressLine\w*|address_line\w*|postalCode\w*|postal_code\w*|zipCode\w*|zip_code\w*|city|province|state|country|location)\b/i },
+  { category: 'name', label: 'person name field', pattern: /\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name)\b/i },
+  { category: 'username', label: 'username or login field', pattern: /\b(?:username|userName|user_name|loginName|login_name)\b/i },
+  { category: 'user_identifier', label: 'user or patron identifier', pattern: /\b(?:userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier)\b/i },
+  { category: 'birth_date', label: 'birth date field', pattern: /\b(?:dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob)\b/i },
+  { category: 'patron_data', label: 'patron or borrower data', pattern: /\b(?:patron|borrower|requester|sponsor|proxyUser|proxy_user)\b/i },
+  { category: 'free_form_notes', label: 'free-form note or comment field', pattern: /\b(?:notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)\b/i },
+  { category: 'profile_picture', label: 'profile picture or avatar data', pattern: /\b(?:profilePicture|profile_picture|profileImage|profile_image|avatar|photoUrl|photo_url|pictureUrl|picture_url)\b/i },
+  { category: 'ip_or_mac_address', label: 'IP or MAC address field', pattern: /\b(?:ipAddress|ip_address|clientIp|client_ip|remoteAddr|remote_addr|macAddress|mac_address)\b/i },
+  { category: 'financial_information', label: 'financial or payment data', pattern: /\b(?:payment|creditCard|credit_card|cardNumber|card_number|bankAccount|bank_account|invoice|fee|fine|financial)\b/i },
+  { category: 'circulation_transactions', label: 'circulation transaction data', pattern: /\b(?:circulation|loan|checkout|checkin|check-in|checkin|renewal|holdRequest|hold_request|itemRequest|item_request)\b/i },
+  { category: 'custom_fields', label: 'custom field data', pattern: /\b(?:customFields?|custom_fields?|customFieldValues?|custom_field_values?|userDefined|user_defined)\b/i },
+  { category: 'logging', label: 'logging of user or personal data', pattern: /\b(?:log(?:ger|ging)?|log\.(?:info|warn|error|debug)|auditLog|audit_log|log4j|logback)\b/i },
+  { category: 'transmission', label: 'queue, event, API, or external transmission', pattern: /\b(?:kafka|queue|eventProducer|event_producer|publish(?:er)?|producer|webhook|externalSystem|external_system|thirdParty|third_party|httpClient|http_client|okapi|export|import|searchIndex|search_index)\b/i },
+  { category: 'storage', label: 'persistence or external storage', pattern: /\b(?:persist(?:ence)?|repository|database|db\.|create\s+table|alter\s+table|column|s3|\w*Bucket|bucket|blob|objectStorage|object_storage)\b/i },
+  { category: 'cache', label: 'cache of user or personal data', pattern: /\b(?:\w*Cache|cache|cached|redis|caffeine|ehcache|hazelcast)\b/i }
+];
 
 export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S005PersonalDataDisclosureDiscoveryResult {
   const warnings: string[] = [];
@@ -201,6 +267,128 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
   };
 }
 
+export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDataEvidenceScanResult {
+  const repoRoot = realPath(repoPath);
+  if (!repoRoot) {
+    return {
+      signals: [],
+      scannedFiles: [],
+      skippedFiles: [],
+      warnings: ['Unable to resolve repository path while gathering S005 personal-data evidence.']
+    };
+  }
+
+  const warnings: string[] = [];
+  const skippedFiles: S005PersonalDataEvidenceScanResult['skippedFiles'] = [];
+  const visibleDirectories = new Set<string>();
+
+  walkDirectories(
+    repoRoot,
+    directory => {
+      visibleDirectories.add(relativePosixPath(repoRoot, directory) || '.');
+      return true;
+    },
+    S005_EVIDENCE_SKIPPED_DIRS
+  );
+
+  const candidateFiles = findCandidateFiles(
+    repoRoot,
+    repoRoot,
+    candidatePath => isS005EvidenceCandidate(repoRoot, candidatePath, visibleDirectories),
+    S005_EVIDENCE_SKIPPED_DIRS
+  ).sort((left, right) => relativePosixPath(repoRoot, left).localeCompare(relativePosixPath(repoRoot, right)));
+
+  if (candidateFiles.length > MAX_S005_EVIDENCE_SCANNED_FILES) {
+    warnings.push(
+      `S005 evidence scan found ${candidateFiles.length} candidate files and scanned the first ${MAX_S005_EVIDENCE_SCANNED_FILES}; evidence was truncated by the scanned-file cap.`
+    );
+  }
+
+  const signals: S005PersonalDataEvidenceSignal[] = [];
+  const retentionCounts = new Map<string, number>();
+  const retentionWarnings = new Set<string>();
+  const scannedFiles: string[] = [];
+  let totalTextBytes = 0;
+  let totalCapReached = false;
+
+  for (const candidatePath of candidateFiles.slice(0, MAX_S005_EVIDENCE_SCANNED_FILES)) {
+    if (totalTextBytes >= MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES) {
+      totalCapReached = true;
+      break;
+    }
+
+    const relativePath = relativePosixPath(repoRoot, candidatePath);
+    if (!isWithinRepo(repoRoot, candidatePath)) {
+      skippedFiles.push({ path: relativePath, reason: 'outside-repository' });
+      continue;
+    }
+
+    if (looksLikeGeneratedReportPath(relativePath) || !TEXT_FILE_EXTENSION_PATTERN.test(relativePath)) {
+      skippedFiles.push({ path: relativePath, reason: 'unsupported-file' });
+      continue;
+    }
+
+    const readResult = readBoundedEvidenceText(candidatePath, relativePath, warnings, MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES - totalTextBytes);
+    if (readResult.status === 'binary') {
+      skippedFiles.push({ path: relativePath, reason: 'binary' });
+      continue;
+    }
+    if (readResult.status === 'read-error') {
+      skippedFiles.push({
+        path: relativePath,
+        reason: 'read-error',
+        message: readResult.message
+      });
+      continue;
+    }
+    if (readResult.status === 'empty') {
+      scannedFiles.push(relativePath);
+      continue;
+    }
+
+    scannedFiles.push(relativePath);
+    totalTextBytes += readResult.bytesRead;
+    if (readResult.totalCapReached) {
+      totalCapReached = true;
+    }
+
+    const sourceClass = classifyS005EvidenceSourceClass(relativePath);
+    for (const signal of extractS005EvidenceSignals(relativePath, readResult.text, sourceClass)) {
+      const retentionKey = `${signal.category}:${signal.sourceClass}`;
+      const retainedCount = retentionCounts.get(retentionKey) ?? 0;
+      if (retainedCount >= MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS) {
+        if (!retentionWarnings.has(retentionKey)) {
+          retentionWarnings.add(retentionKey);
+          warnings.push(
+            `S005 evidence retained first ${MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS} signals for category "${signal.category}" and source class "${signal.sourceClass}"; additional signals were truncated.`
+          );
+        }
+        continue;
+      }
+
+      retentionCounts.set(retentionKey, retainedCount + 1);
+      signals.push(signal);
+    }
+
+    if (totalCapReached) {
+      break;
+    }
+  }
+
+  if (totalCapReached) {
+    warnings.push(
+      `S005 evidence scan stopped because the ${MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES}-byte total text cap was reached.`
+    );
+  }
+
+  return {
+    signals,
+    scannedFiles,
+    skippedFiles,
+    warnings
+  };
+}
+
 export function normalizeS005ChecklistCategory(label: string): S005PersonalDataCategory {
   const normalized = label.toLowerCase();
 
@@ -273,9 +461,182 @@ export function redactS005PersonalDataText(input: string, maxBytes: number = MAX
   return boundUtf8(
     redactSensitiveText(input)
       .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
-      .replace(/\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g, '[REDACTED_PHONE]'),
+      .replace(/\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g, '[REDACTED_PHONE]')
+      .replace(HIGH_RISK_PERSONAL_EXAMPLE_PATTERN, '[REDACTED_PERSONAL_EXAMPLE]')
+      .replace(LONG_FREE_FORM_VALUE_PATTERN, (_match, quote) => `${quote}[REDACTED_LONG_TEXT]${quote}`),
     maxBytes
   );
+}
+
+function isS005EvidenceCandidate(repoPath: string, candidatePath: string, visibleDirectories: ReadonlySet<string>): boolean {
+  if (!isWithinRepo(repoPath, candidatePath)) {
+    return false;
+  }
+
+  const relativePath = relativePosixPath(repoPath, candidatePath);
+  if (path.basename(relativePath) === REQUIRED_DISCLOSURE_FILENAME || looksLikeGeneratedReportPath(relativePath)) {
+    return false;
+  }
+
+  if (!TEXT_FILE_EXTENSION_PATTERN.test(relativePath)) {
+    return false;
+  }
+
+  const parentPath = path.dirname(relativePath).split(path.sep).join('/');
+  if (parentPath !== '.' && !visibleDirectories.has(parentPath)) {
+    return false;
+  }
+
+  return (
+    HIGH_SIGNAL_PATH_PATTERN.test(relativePath) ||
+    /(?:^|\/)src\/.*\.(?:java|kt|js|jsx|ts|tsx|xml|properties|ya?ml)$/i.test(relativePath) ||
+    /(?:^|\/)(?:package|module-descriptor)\.json$/i.test(relativePath)
+  );
+}
+
+function looksLikeGeneratedReportPath(relativePath: string): boolean {
+  return GENERATED_REPORT_DIRECTORY_PATTERN.test(relativePath);
+}
+
+function classifyS005EvidenceSourceClass(relativePath: string): S005PersonalDataEvidenceSourceClass {
+  if (TEST_SAMPLE_FILE_PATTERN.test(relativePath)) {
+    return 'test_sample';
+  }
+  if (DIRECT_CONTRACT_FILE_PATTERN.test(relativePath)) {
+    return 'direct_contract';
+  }
+  if (UI_FILE_PATTERN.test(relativePath)) {
+    return 'ui';
+  }
+  if (DOCUMENTATION_FILE_PATTERN.test(relativePath)) {
+    return 'documentation';
+  }
+  return 'implementation';
+}
+
+function evidenceStrengthForSourceClass(sourceClass: S005PersonalDataEvidenceSourceClass): S005PersonalDataEvidenceStrength {
+  if (sourceClass === 'test_sample') {
+    return 'context';
+  }
+  if (sourceClass === 'documentation') {
+    return 'context';
+  }
+  if (sourceClass === 'ui') {
+    return 'candidate';
+  }
+  return 'strong';
+}
+
+function extractS005EvidenceSignals(
+  relativePath: string,
+  text: string,
+  sourceClass: S005PersonalDataEvidenceSourceClass
+): S005PersonalDataEvidenceSignal[] {
+  const signals: S005PersonalDataEvidenceSignal[] = [];
+  const strength = evidenceStrengthForSourceClass(sourceClass);
+  const lines = text.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (!line.trim()) {
+      continue;
+    }
+
+    const categoriesSeenOnLine = new Set<S005PersonalDataCategory>();
+    for (const categoryPattern of S005_EVIDENCE_CATEGORY_PATTERNS) {
+      if (!categoryPattern.pattern.test(line) || categoriesSeenOnLine.has(categoryPattern.category)) {
+        continue;
+      }
+
+      categoriesSeenOnLine.add(categoryPattern.category);
+      signals.push({
+        category: categoryPattern.category,
+        label: categoryPattern.label,
+        path: relativePath,
+        line: index + 1,
+        excerpt: redactS005PersonalDataText(line.trim(), MAX_S005_EVIDENCE_EXCERPT_BYTES),
+        sourceClass,
+        strength
+      });
+    }
+  }
+
+  return signals;
+}
+
+function readBoundedEvidenceText(
+  filePath: string,
+  relativePath: string,
+  warnings: string[],
+  remainingTotalBytes: number
+): { status: 'text'; text: string; bytesRead: number; totalCapReached: boolean } |
+  { status: 'empty'; bytesRead: 0; totalCapReached: boolean } |
+  { status: 'binary' } |
+  { status: 'read-error'; message: string } {
+  try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return { status: 'empty', bytesRead: 0, totalCapReached: false };
+    }
+    if (stats.size === 0 || remainingTotalBytes <= 0) {
+      return { status: 'empty', bytesRead: 0, totalCapReached: remainingTotalBytes <= 0 };
+    }
+
+    const bytesToRead = Math.min(stats.size, MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE, remainingTotalBytes);
+    const descriptor = fs.openSync(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(bytesToRead);
+      const bytesRead = fs.readSync(descriptor, buffer, 0, bytesToRead, 0);
+      const slice = buffer.subarray(0, bytesRead);
+      if (isBinaryBuffer(slice)) {
+        return { status: 'binary' };
+      }
+
+      if (stats.size > MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE) {
+        warnings.push(
+          `S005 evidence scanning truncated ${relativePath} to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file.`
+        );
+      }
+
+      if (bytesRead === 0) {
+        return {
+          status: 'empty',
+          bytesRead: 0,
+          totalCapReached: stats.size > remainingTotalBytes
+        };
+      }
+
+      return {
+        status: 'text',
+        text: slice.toString('utf-8').replace(/\uFFFD/g, ''),
+        bytesRead,
+        totalCapReached: stats.size > remainingTotalBytes
+      };
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch (error) {
+    return {
+      status: 'read-error',
+      message: redactS005PersonalDataText(error instanceof Error ? error.message : String(error), 240)
+    };
+  }
+}
+
+function isBinaryBuffer(buffer: Buffer): boolean {
+  if (!buffer.length) {
+    return false;
+  }
+
+  const sampleLength = Math.min(buffer.length, 1024);
+  for (let index = 0; index < sampleLength; index++) {
+    const value = buffer[index];
+    if (value === 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function captureMetadata(

@@ -254,14 +254,36 @@ export interface S005PersonalDataDisclosureParseError {
   excerpt: string;
 }
 
+export type S005PersonalDataEvidenceSourceClass =
+  | 'direct_contract'
+  | 'implementation'
+  | 'documentation'
+  | 'ui'
+  | 'test_sample';
+
+export type S005PersonalDataEvidenceStrength = 'strong' | 'candidate' | 'context';
+
 export interface S005PersonalDataEvidenceSignal {
   category: S005PersonalDataCategory;
   label: string;
   path: string;
   excerpt: string;
   line?: number;
-  sourceClass: 'direct_contract' | 'implementation' | 'documentation' | 'ui' | 'test_sample';
-  strength: 'strong' | 'candidate' | 'context';
+  sourceClass: S005PersonalDataEvidenceSourceClass;
+  strength: S005PersonalDataEvidenceStrength;
+}
+
+export interface S005PersonalDataEvidenceSkippedFile {
+  path: string;
+  reason: 'binary' | 'outside-repository' | 'unsupported-file' | 'read-error';
+  message?: string;
+}
+
+export interface S005PersonalDataEvidenceScanResult {
+  signals: S005PersonalDataEvidenceSignal[];
+  scannedFiles: string[];
+  skippedFiles: S005PersonalDataEvidenceSkippedFile[];
+  warnings: string[];
 }
 
 export interface S005PersonalDataPossibleMismatch {

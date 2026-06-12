@@ -5,6 +5,9 @@ import * as path from 'path';
 import { EvaluationStatus } from '../types';
 import {
   discoverS005PersonalDataDisclosureArtifact,
+  gatherS005PersonalDataEvidence,
+  MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
+  MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
   parseS005PersonalDataDisclosureMarkdown
 } from '../utils/s005-personal-data-disclosure';
 
@@ -13,6 +16,12 @@ function createTempRepo(): string {
 }
 
 function writeRepoFile(repoPath: string, relativePath: string, content: string = '# Personal Data Disclosure\n'): void {
+  const absolutePath = path.join(repoPath, relativePath);
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, content);
+}
+
+function writeRepoBinaryFile(repoPath: string, relativePath: string, content: Buffer): void {
   const absolutePath = path.join(repoPath, relativePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, content);
@@ -305,5 +314,201 @@ describe('S005 personal data disclosure artifact discovery', () => {
         reason: 'exact-file-read-error'
       }
     ]);
+  });
+});
+
+describe('S005 bounded personal-data evidence scanner', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('emits strong direct-contract signals for schema and RAML personal fields', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', JSON.stringify({
+      properties: {
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        emailAddress: { type: 'string' },
+        phone: { type: 'string' },
+        addressLine1: { type: 'string' },
+        patronId: { type: 'string' }
+      }
+    }, null, 2));
+    writeRepoFile(repoPath, 'ramls/users.raml', `
+#%RAML 1.0
+/users:
+  post:
+    body:
+      application/json:
+        example:
+          userId: 11111111-1111-1111-1111-111111111111
+          email: user@example.org
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'name',
+        path: 'src/main/resources/schemas/user.json',
+        sourceClass: 'direct_contract',
+        strength: 'strong'
+      }),
+      expect.objectContaining({
+        category: 'email',
+        path: 'src/main/resources/schemas/user.json',
+        sourceClass: 'direct_contract',
+        strength: 'strong'
+      }),
+      expect.objectContaining({
+        category: 'phone',
+        sourceClass: 'direct_contract',
+        strength: 'strong'
+      }),
+      expect.objectContaining({
+        category: 'address',
+        sourceClass: 'direct_contract',
+        strength: 'strong'
+      }),
+      expect.objectContaining({
+        category: 'user_identifier',
+        path: 'ramls/users.raml',
+        sourceClass: 'direct_contract',
+        strength: 'strong'
+      })
+    ]));
+    expect(result.signals.find(signal => signal.path === 'ramls/users.raml' && signal.category === 'email')?.excerpt)
+      .toContain('[REDACTED_EMAIL]');
+  });
+
+  it('treats UI and documentation evidence as candidate or context instead of persistence proof', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'translations/en.json', JSON.stringify({
+      'ui-users.firstName': 'First name',
+      'ui-users.emailAddress': 'Email address',
+      'ui-users.addressLine1': 'Address line 1'
+    }, null, 2));
+    writeRepoFile(repoPath, 'README.md', `
+# mod-source-record-manager
+
+This module may display requester patron details and email addresses in import logs for review.
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'name',
+        path: 'translations/en.json',
+        sourceClass: 'ui',
+        strength: 'candidate'
+      }),
+      expect.objectContaining({
+        category: 'email',
+        path: 'translations/en.json',
+        sourceClass: 'ui',
+        strength: 'candidate'
+      }),
+      expect.objectContaining({
+        category: 'patron_data',
+        path: 'README.md',
+        sourceClass: 'documentation',
+        strength: 'context'
+      })
+    ]));
+    expect(result.signals.filter(signal => signal.sourceClass === 'ui').every(signal => signal.strength !== 'strong')).toBe(true);
+  });
+
+  it('detects logging, event transmission, cache, and external profile-picture storage in source', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/java/org/folio/UserEventsProducer.java', `
+class UserEventsProducer {
+  private static final Logger log = LoggerFactory.getLogger(UserEventsProducer.class);
+  void send(User user) {
+    log.info("publishing userId={} email=user@example.org apiToken=super-secret", user.userId());
+    kafkaProducer.publish("user.updated", user.userId());
+    profilePictureBucket.put(user.profilePicture);
+    redisCache.put(user.userId(), user.emailAddress());
+  }
+}
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'logging', sourceClass: 'implementation', strength: 'strong' }),
+      expect.objectContaining({ category: 'transmission', sourceClass: 'implementation', strength: 'strong' }),
+      expect.objectContaining({ category: 'storage', sourceClass: 'implementation', strength: 'strong' }),
+      expect.objectContaining({ category: 'profile_picture', sourceClass: 'implementation', strength: 'strong' }),
+      expect.objectContaining({ category: 'cache', sourceClass: 'implementation', strength: 'strong' })
+    ]));
+
+    const loggingSignal = result.signals.find(signal => signal.category === 'logging' && signal.excerpt.includes('publishing'));
+    expect(loggingSignal?.excerpt).toContain('[REDACTED_EMAIL]');
+    expect(loggingSignal?.excerpt).toContain('apiToken=[REDACTED]');
+  });
+
+  it('keeps test fixtures and sample payloads at context strength and redacts risky examples', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/test/resources/fixtures/users.json', `
+{
+  "firstName": "Jane Doe",
+  "emailAddress": "jane.doe@example.org",
+  "phone": "312-555-0199",
+  "notes": "${'sensitive patron note '.repeat(20)}"
+}
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.signals.length).toBeGreaterThan(0);
+    expect(result.signals.every(signal => signal.sourceClass === 'test_sample')).toBe(true);
+    expect(result.signals.every(signal => signal.strength === 'context')).toBe(true);
+    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('jane.doe@example.org');
+    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('312-555-0199');
+    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('Jane Doe');
+    expect(result.signals.map(signal => signal.excerpt).join('\n')).toContain('[REDACTED_LONG_TEXT]');
+  });
+
+  it('bounds large and binary files, skips dependency/build/report folders, and reports retention caps', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/schemas/many-users.json',
+      Array.from({ length: MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS + 3 }, (_, index) => `"emailAddress${index}": "user${index}@example.org"`).join('\n')
+    );
+    writeRepoFile(repoPath, 'src/main/java/org/folio/LargeUser.java', `String firstName = "Ada";\n${'x'.repeat(MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE + 1024)}`);
+    writeRepoBinaryFile(repoPath, 'src/main/resources/schemas/binary-user.json', Buffer.from([0, 1, 2, 3, 4, 5]));
+    writeRepoFile(repoPath, 'node_modules/package/schemas/user.json', '"emailAddress": "dependency@example.org"');
+    writeRepoFile(repoPath, 'build/schemas/user.json', '"emailAddress": "build@example.org"');
+    writeRepoFile(repoPath, 'coverage/schemas/user.json', '"emailAddress": "coverage@example.org"');
+    writeRepoFile(repoPath, 'generated-reports/schemas/user.json', '"emailAddress": "report@example.org"');
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    const retainedDirectEmailSignals = result.signals.filter(signal =>
+      signal.category === 'email' && signal.sourceClass === 'direct_contract'
+    );
+    expect(retainedDirectEmailSignals).toHaveLength(MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS);
+    expect(result.skippedFiles).toEqual(expect.arrayContaining([
+      {
+        path: 'src/main/resources/schemas/binary-user.json',
+        reason: 'binary'
+      }
+    ]));
+    expect(result.scannedFiles).not.toEqual(expect.arrayContaining([
+      'node_modules/package/schemas/user.json',
+      'build/schemas/user.json',
+      'coverage/schemas/user.json',
+      'generated-reports/schemas/user.json'
+    ]));
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining(`category "email" and source class "direct_contract"`),
+      expect.stringContaining(`truncated src/main/java/org/folio/LargeUser.java to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file`)
+    ]));
   });
 });
