@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import { EvaluationStatus } from '../types';
 import {
+  analyzeS005PersonalDataDisclosure,
   discoverS005PersonalDataDisclosureArtifact,
   gatherS005PersonalDataEvidence,
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
@@ -509,6 +510,251 @@ class UserEventsProducer {
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.stringContaining(`category "email" and source class "direct_contract"`),
       expect.stringContaining(`truncated src/main/java/org/folio/LargeUser.java to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file`)
+    ]));
+  });
+});
+
+describe('S005 personal data disclosure deterministic analysis', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('fails a blank template with placeholder and unchecked-answer details', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Form Version: v1.1
+Last Updated: YYYY-MM-DD
+Last Reviewed: YYYY-MM-DD
+
+## Personal data stored
+
+- [ ] This module does not store personal data.
+- [ ] First name
+- [ ] Email address
+`);
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.classification.reason).toContain('blank');
+    expect(result.placeholders).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'Last Updated', placeholderText: 'YYYY-MM-DD' }),
+      expect.objectContaining({ field: 'Last Reviewed', placeholderText: 'YYYY-MM-DD' })
+    ]));
+    expect(result.uncheckedAnswerDetails.map(item => item.normalizedCategory)).toEqual(expect.arrayContaining([
+      'no_personal_data',
+      'name',
+      'email'
+    ]));
+  });
+
+  it('returns manual for contradictory answers with contradiction and mismatch details', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data stored
+
+- [x] This module does not store personal data.
+- [x] First name
+- [x] Email address
+`);
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.contradictions).toHaveLength(1);
+    expect(result.possibleMismatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'contradiction',
+        category: 'no_personal_data'
+      })
+    ]));
+  });
+
+  it('returns manual with supporting evidence for no-personal-data answers without strong personal-data signals', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.0
+
+## Personal data
+
+- [x] This module does not store or process personal data.
+`);
+    writeRepoFile(repoPath, 'README.md', 'This module has no patron profile storage and only documents deployment.');
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.possibleMismatches.find(mismatch => mismatch.kind === 'likely_omission')).toBeUndefined();
+    expect(result.supportingEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'supporting_no_personal_data',
+        category: 'no_personal_data'
+      })
+    ]));
+  });
+
+  it('returns manual with likely mismatch evidence when no-personal-data answers conflict with strong source signals', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data
+
+- [x] This module does not store or process personal data.
+`);
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', JSON.stringify({
+      properties: {
+        firstName: { type: 'string' },
+        emailAddress: { type: 'string' }
+      }
+    }, null, 2));
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.possibleMismatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'likely_omission',
+        category: 'no_personal_data',
+        sourceClasses: expect.arrayContaining(['direct_contract']),
+        signalStrengths: expect.arrayContaining(['strong'])
+      })
+    ]));
+  });
+
+  it('reports likely matching evidence for checked fields with matching source signals', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data stored
+
+- [x] First name
+- [x] Email address
+- [x] Address
+`);
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', JSON.stringify({
+      properties: {
+        firstName: { type: 'string' },
+        emailAddress: { type: 'string' },
+        addressLine1: { type: 'string' }
+      }
+    }, null, 2));
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.matchingEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'likely_match', category: 'name' }),
+      expect.objectContaining({ kind: 'likely_match', category: 'email' }),
+      expect.objectContaining({ kind: 'likely_match', category: 'address' })
+    ]));
+    expect(result.classification.status).not.toBe(EvaluationStatus.PASS);
+  });
+
+  it('reports checked fields without source signals as possible over-disclosure rather than failure', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data stored
+
+- [x] Phone number
+`);
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.possibleMismatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'possible_over_disclosure',
+        category: 'phone',
+        evidenceReferences: []
+      })
+    ]));
+  });
+
+  it('reports unchecked categories with source signals as possible omissions', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data stored
+
+- [x] Email address
+`);
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', JSON.stringify({
+      properties: {
+        emailAddress: { type: 'string' },
+        phone: { type: 'string' }
+      }
+    }, null, 2));
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.possibleMismatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'likely_omission',
+        category: 'phone',
+        sourceClasses: expect.arrayContaining(['direct_contract'])
+      })
+    ]));
+  });
+
+  it('keeps test/sample-only signals as context instead of likely omission evidence', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.0
+
+## Personal data
+
+- [x] This module does not store or process personal data.
+`);
+    writeRepoFile(repoPath, 'src/test/resources/fixtures/users.json', JSON.stringify({
+      firstName: 'Jane Doe',
+      emailAddress: 'jane.doe@example.org'
+    }, null, 2));
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.possibleMismatches.filter(mismatch => mismatch.kind === 'likely_omission')).toEqual([]);
+    expect(result.supportingEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'context_only',
+        category: 'name',
+        sourceClasses: ['test_sample'],
+        signalStrengths: ['context']
+      }),
+      expect.objectContaining({
+        kind: 'context_only',
+        category: 'email',
+        sourceClasses: ['test_sample'],
+        signalStrengths: ['context']
+      })
     ]));
   });
 });

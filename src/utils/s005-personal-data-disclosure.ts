@@ -5,16 +5,19 @@ import {
   EvaluationStatus,
   S005PersonalDataCategory,
   S005PersonalDataDisclosureAttempt,
+  S005PersonalDataDisclosureAnalysisResult,
   S005PersonalDataDisclosureDiscoveryResult,
   S005PersonalDataDisclosureChecklistItem,
   S005PersonalDataDisclosureContradiction,
   S005PersonalDataDisclosureMetadata,
   S005PersonalDataDisclosureParseResult,
   S005PersonalDataDisclosurePlaceholderEvidence,
+  S005PersonalDataEvidenceAssessment,
   S005PersonalDataEvidenceScanResult,
   S005PersonalDataEvidenceSignal,
   S005PersonalDataEvidenceSourceClass,
-  S005PersonalDataEvidenceStrength
+  S005PersonalDataEvidenceStrength,
+  S005PersonalDataPossibleMismatch
 } from '../types';
 import { findCandidateFiles, isWithinRepo, realPath, relativePosixPath, walkDirectories } from './repo-files';
 import { redactSensitiveText } from './redaction';
@@ -84,6 +87,15 @@ const PERSONAL_FIELD_CATEGORIES = new Set<S005PersonalDataCategory>([
   'financial_information',
   'circulation_transactions',
   'custom_fields'
+]);
+
+const REVIEWABLE_DISCLOSURE_CATEGORIES = new Set<S005PersonalDataCategory>([
+  ...PERSONAL_FIELD_CATEGORIES,
+  'storage',
+  'processing',
+  'transmission',
+  'cache',
+  'logging'
 ]);
 
 const S005_EVIDENCE_CATEGORY_PATTERNS: ReadonlyArray<{
@@ -387,6 +399,308 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
     skippedFiles,
     warnings
   };
+}
+
+export function analyzeS005PersonalDataDisclosure(repoPath: string): S005PersonalDataDisclosureAnalysisResult {
+  const discovery = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+  if (discovery.status === 'missing') {
+    return {
+      discovery,
+      classification: {
+        status: EvaluationStatus.FAIL,
+        parseState: 'not_parsed',
+        reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md was not found.',
+        warnings: discovery.warnings
+      },
+      possibleMismatches: [],
+      matchingEvidence: [],
+      supportingEvidence: [],
+      uncheckedAnswerDetails: [],
+      placeholders: [],
+      contradictions: [],
+      warnings: discovery.warnings
+    };
+  }
+
+  if (discovery.status === 'unreadable') {
+    const warnings = discovery.warnings;
+    return {
+      discovery,
+      classification: {
+        status: EvaluationStatus.FAIL,
+        parseState: 'not_parsed',
+        reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md could not be read.',
+        warnings
+      },
+      possibleMismatches: [],
+      matchingEvidence: [],
+      supportingEvidence: [],
+      uncheckedAnswerDetails: [],
+      placeholders: [],
+      contradictions: [],
+      warnings
+    };
+  }
+
+  const parseResult = parseS005PersonalDataDisclosureMarkdown(discovery.artifact?.content ?? '');
+  if (parseResult.classification.status === EvaluationStatus.FAIL) {
+    const reason = parseResult.classification.parseState === 'unparseable'
+      ? parseResult.classification.reason
+      : incompleteDisclosureReason(parseResult);
+    const warnings = [...discovery.warnings, ...parseResult.warnings];
+
+    return {
+      discovery,
+      parseResult,
+      classification: {
+        status: EvaluationStatus.FAIL,
+        parseState: parseResult.classification.parseState,
+        reason,
+        warnings
+      },
+      possibleMismatches: contradictionMismatches(parseResult.contradictions),
+      matchingEvidence: [],
+      supportingEvidence: [],
+      uncheckedAnswerDetails: parseResult.checklistItems.filter(item => !item.checked),
+      placeholders: parseResult.placeholders,
+      contradictions: parseResult.contradictions,
+      warnings
+    };
+  }
+
+  const evidenceScan = gatherS005PersonalDataEvidence(repoPath);
+  const classified = classifyCompletedS005PersonalDataDisclosure(parseResult, evidenceScan);
+  const warnings = [...discovery.warnings, ...parseResult.warnings, ...evidenceScan.warnings, ...classified.warnings];
+
+  return {
+    discovery,
+    parseResult,
+    evidenceScan,
+    classification: {
+      status: EvaluationStatus.MANUAL,
+      parseState: 'completed',
+      reason: classified.reason,
+      warnings
+    },
+    possibleMismatches: classified.possibleMismatches,
+    matchingEvidence: classified.matchingEvidence,
+    supportingEvidence: classified.supportingEvidence,
+    uncheckedAnswerDetails: parseResult.checklistItems.filter(item => !item.checked),
+    placeholders: parseResult.placeholders,
+    contradictions: parseResult.contradictions,
+    warnings
+  };
+}
+
+export function classifyCompletedS005PersonalDataDisclosure(
+  parseResult: S005PersonalDataDisclosureParseResult,
+  evidenceScan: S005PersonalDataEvidenceScanResult
+): {
+  reason: string;
+  possibleMismatches: S005PersonalDataPossibleMismatch[];
+  matchingEvidence: S005PersonalDataEvidenceAssessment[];
+  supportingEvidence: S005PersonalDataEvidenceAssessment[];
+  warnings: string[];
+} {
+  const checkedCategories = new Set(
+    parseResult.checkedCategories.filter(category => REVIEWABLE_DISCLOSURE_CATEGORIES.has(category))
+  );
+  const noPersonalDataChecked = parseResult.checkedCategories.includes('no_personal_data');
+  const signalsByCategory = groupSignalsByCategory(evidenceScan.signals);
+  const possibleMismatches: S005PersonalDataPossibleMismatch[] = [
+    ...contradictionMismatches(parseResult.contradictions)
+  ];
+  const matchingEvidence: S005PersonalDataEvidenceAssessment[] = [];
+  const supportingEvidence: S005PersonalDataEvidenceAssessment[] = [];
+
+  for (const category of uniqueCategories([
+    ...Array.from(checkedCategories),
+    ...Array.from(signalsByCategory.keys())
+  ])) {
+    if (!REVIEWABLE_DISCLOSURE_CATEGORIES.has(category)) {
+      continue;
+    }
+
+    const signals = signalsByCategory.get(category) ?? [];
+    const strongSignals = signals.filter(signal => signal.strength === 'strong');
+    const candidateSignals = signals.filter(signal => signal.strength === 'candidate');
+    const contextSignals = signals.filter(signal => signal.strength === 'context');
+    const disclosureChecked = checkedCategories.has(category);
+
+    if (disclosureChecked && (strongSignals.length || candidateSignals.length)) {
+      matchingEvidence.push(evidenceAssessment(
+        'likely_match',
+        category,
+        `Disclosure checks ${category} and deterministic source signals mention the same category.`,
+        [...strongSignals, ...candidateSignals]
+      ));
+      continue;
+    }
+
+    if (disclosureChecked && contextSignals.length) {
+      supportingEvidence.push(evidenceAssessment(
+        'context_only',
+        category,
+        `Disclosure checks ${category}; only documentation, test, or sample context was found for this category.`,
+        contextSignals
+      ));
+      continue;
+    }
+
+    if (disclosureChecked) {
+      possibleMismatches.push({
+        kind: 'possible_over_disclosure',
+        category,
+        message: `Disclosure checks ${category}, but deterministic source scanning did not find corresponding source signals.`,
+        evidenceReferences: []
+      });
+      continue;
+    }
+
+    if (strongSignals.length) {
+      possibleMismatches.push({
+        kind: 'likely_omission',
+        category,
+        message: `Disclosure does not check ${category}, but direct contract or production implementation evidence mentions it.`,
+        evidenceReferences: signalReferences(strongSignals),
+        sourceClasses: uniqueSourceClasses(strongSignals),
+        signalStrengths: uniqueStrengths(strongSignals)
+      });
+      continue;
+    }
+
+    if (candidateSignals.length) {
+      possibleMismatches.push({
+        kind: 'possible_omission',
+        category,
+        message: `Disclosure does not check ${category}, but UI evidence mentions it.`,
+        evidenceReferences: signalReferences(candidateSignals),
+        sourceClasses: uniqueSourceClasses(candidateSignals),
+        signalStrengths: uniqueStrengths(candidateSignals)
+      });
+      continue;
+    }
+
+    if (contextSignals.length) {
+      supportingEvidence.push(evidenceAssessment(
+        'context_only',
+        category,
+        `Disclosure does not check ${category}; only documentation, test, or sample context was found.`,
+        contextSignals
+      ));
+    }
+  }
+
+  const strongPersonalSignals = evidenceScan.signals.filter(signal =>
+    PERSONAL_FIELD_CATEGORIES.has(signal.category) && signal.strength === 'strong'
+  );
+
+  if (noPersonalDataChecked && strongPersonalSignals.length) {
+    possibleMismatches.push({
+      kind: 'likely_omission',
+      category: 'no_personal_data',
+      message: 'No-personal-data answer is checked, but strong personal-data source signals were found.',
+      evidenceReferences: signalReferences(strongPersonalSignals),
+      sourceClasses: uniqueSourceClasses(strongPersonalSignals),
+      signalStrengths: uniqueStrengths(strongPersonalSignals)
+    });
+  } else if (noPersonalDataChecked) {
+    const supportSignals = evidenceScan.signals.filter(signal => signal.strength !== 'strong').slice(0, 8);
+    supportingEvidence.push(evidenceAssessment(
+      'supporting_no_personal_data',
+      'no_personal_data',
+      strongPersonalSignals.length
+        ? 'No-personal-data answer is checked; strong signal review remains manual.'
+        : 'No-personal-data answer is checked and deterministic scanning found no strong personal-data source signals.',
+      supportSignals
+    ));
+  }
+
+  return {
+    reason: 'Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.',
+    possibleMismatches: dedupeMismatches(possibleMismatches),
+    matchingEvidence,
+    supportingEvidence,
+    warnings: []
+  };
+}
+
+function incompleteDisclosureReason(parseResult: S005PersonalDataDisclosureParseResult): string {
+  if (parseResult.placeholders.length) {
+    return 'Disclosure form appears incomplete or blank because required review metadata still contains placeholder values and no meaningful answer is checked.';
+  }
+
+  return parseResult.classification.reason;
+}
+
+function contradictionMismatches(
+  contradictions: S005PersonalDataDisclosureContradiction[]
+): S005PersonalDataPossibleMismatch[] {
+  return contradictions.map(contradiction => ({
+    kind: 'contradiction',
+    message: contradiction.message,
+    category: 'no_personal_data',
+    evidenceReferences: contradiction.lineNumbers.map(lineNumber => `PERSONAL_DATA_DISCLOSURE.md:${lineNumber}`),
+    signalStrengths: [],
+    sourceClasses: []
+  }));
+}
+
+function groupSignalsByCategory(
+  signals: S005PersonalDataEvidenceSignal[]
+): Map<S005PersonalDataCategory, S005PersonalDataEvidenceSignal[]> {
+  const grouped = new Map<S005PersonalDataCategory, S005PersonalDataEvidenceSignal[]>();
+  for (const signal of signals) {
+    grouped.set(signal.category, [...(grouped.get(signal.category) ?? []), signal]);
+  }
+
+  return grouped;
+}
+
+function evidenceAssessment(
+  kind: S005PersonalDataEvidenceAssessment['kind'],
+  category: S005PersonalDataCategory,
+  message: string,
+  signals: S005PersonalDataEvidenceSignal[]
+): S005PersonalDataEvidenceAssessment {
+  return {
+    kind,
+    category,
+    message,
+    evidenceReferences: signalReferences(signals),
+    sourceClasses: uniqueSourceClasses(signals),
+    signalStrengths: uniqueStrengths(signals)
+  };
+}
+
+function signalReferences(signals: S005PersonalDataEvidenceSignal[]): string[] {
+  return signals.map(signal => `${signal.path}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}]`);
+}
+
+function uniqueSourceClasses(signals: S005PersonalDataEvidenceSignal[]): S005PersonalDataEvidenceSourceClass[] {
+  return [...new Set(signals.map(signal => signal.sourceClass))];
+}
+
+function uniqueStrengths(signals: S005PersonalDataEvidenceSignal[]): S005PersonalDataEvidenceStrength[] {
+  return [...new Set(signals.map(signal => signal.strength))];
+}
+
+function dedupeMismatches(mismatches: S005PersonalDataPossibleMismatch[]): S005PersonalDataPossibleMismatch[] {
+  const seen = new Set<string>();
+  const deduped: S005PersonalDataPossibleMismatch[] = [];
+
+  for (const mismatch of mismatches) {
+    const key = `${mismatch.kind}:${mismatch.category ?? ''}:${mismatch.evidenceReferences.join('|')}:${mismatch.message}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(mismatch);
+  }
+
+  return deduped;
 }
 
 export function normalizeS005ChecklistCategory(label: string): S005PersonalDataCategory {

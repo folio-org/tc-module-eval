@@ -182,7 +182,7 @@ export interface S004InstallationDocumentationResult {
   warnings: string[];
 }
 
-export type S005PersonalDataDisclosureParseState = 'completed' | 'incomplete' | 'unparseable';
+export type S005PersonalDataDisclosureParseState = 'completed' | 'incomplete' | 'unparseable' | 'not_parsed';
 
 export type S005PersonalDataCategory =
   | 'no_personal_data'
@@ -287,16 +287,46 @@ export interface S005PersonalDataEvidenceScanResult {
 }
 
 export interface S005PersonalDataPossibleMismatch {
-  kind: 'possible_omission' | 'possible_over_disclosure' | 'contradiction' | 'unverifiable';
+  kind: 'likely_omission' | 'possible_omission' | 'possible_over_disclosure' | 'contradiction' | 'unverifiable';
   category?: S005PersonalDataCategory;
   message: string;
   evidenceReferences: string[];
+  sourceClasses?: S005PersonalDataEvidenceSourceClass[];
+  signalStrengths?: S005PersonalDataEvidenceStrength[];
 }
 
 export interface S005PersonalDataDeterministicClassification {
   status: EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
   parseState: S005PersonalDataDisclosureParseState;
   reason: string;
+  warnings: string[];
+}
+
+export type S005PersonalDataEvidenceAssessmentKind =
+  | 'likely_match'
+  | 'supporting_no_personal_data'
+  | 'context_only';
+
+export interface S005PersonalDataEvidenceAssessment {
+  kind: S005PersonalDataEvidenceAssessmentKind;
+  category?: S005PersonalDataCategory;
+  message: string;
+  evidenceReferences: string[];
+  sourceClasses: S005PersonalDataEvidenceSourceClass[];
+  signalStrengths: S005PersonalDataEvidenceStrength[];
+}
+
+export interface S005PersonalDataDisclosureAnalysisResult {
+  discovery: S005PersonalDataDisclosureDiscoveryResult;
+  parseResult?: S005PersonalDataDisclosureParseResult;
+  evidenceScan?: S005PersonalDataEvidenceScanResult;
+  classification: S005PersonalDataDeterministicClassification;
+  possibleMismatches: S005PersonalDataPossibleMismatch[];
+  matchingEvidence: S005PersonalDataEvidenceAssessment[];
+  supportingEvidence: S005PersonalDataEvidenceAssessment[];
+  uncheckedAnswerDetails: S005PersonalDataDisclosureChecklistItem[];
+  placeholders: S005PersonalDataDisclosurePlaceholderEvidence[];
+  contradictions: S005PersonalDataDisclosureContradiction[];
   warnings: string[];
 }
 
