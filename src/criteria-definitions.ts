@@ -91,7 +91,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     languages: ['java', 'javascript'],
     defaultEvaluation: {
       type: 'not_implemented',
-      reason: 'Version control and branching strategy'
+      reason: 'Personal data disclosure form evaluation'
     }
   },
   {

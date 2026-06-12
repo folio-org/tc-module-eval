@@ -1,5 +1,12 @@
 import * as fs from 'fs';
-import { CriterionResult, EvaluationRun, EvaluationStatus, ModuleDescriptorArtifact } from '../../types';
+import {
+  CriterionResult,
+  EvaluationRun,
+  EvaluationStatus,
+  ModuleDescriptorArtifact,
+  ModuleKindResult,
+  S005PersonalDataDisclosureAnalysisResult
+} from '../../types';
 import { CriterionLanguage } from '../../criteria-definitions';
 import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { LicenseUtils } from '../../utils/license-utils';
@@ -11,6 +18,9 @@ import { analyzeS004Documentation, formatS004Evidence } from '../../utils/s004-i
 import { classifyModuleKind } from '../../utils/module-kind';
 import { reviewS004WithAgent } from '../../utils/s004-agent-review';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
+import { analyzeS005PersonalDataDisclosure } from '../../utils/s005-personal-data-disclosure';
+
+const S005_AGENT_NOT_APPLIED_REASON = 'S005 agent review is not applied until the criterion-agent adapter is added.';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -25,7 +35,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S001: async (repoPath: string) => this.evaluateS001(repoPath),
       S002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS002(repoPath, evaluationRun),
       S003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS003(repoPath, evaluationRun),
-      S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun)
+      S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun),
+      S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun)
     });
   }
 
@@ -145,6 +156,43 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     };
   }
 
+  private async evaluateS005(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S005']
+    });
+
+    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    if (moduleKind.kind === 'library') {
+      return {
+        criterionId: 'S005',
+        status: EvaluationStatus.NOT_APPLICABLE,
+        evidence: 'S005 does not apply to explicit FOLIO library repositories',
+        details: this.formatModuleKindDetails('Repository kind: library', moduleKind),
+        criterionDetails: {
+          moduleKind
+        }
+      };
+    }
+
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.warnings.push(...moduleKind.warnings);
+    analysis.classification.warnings.push(...moduleKind.warnings);
+    if (analysis.classification.status === EvaluationStatus.MANUAL) {
+      analysis.agentReviewUnavailableReason = S005_AGENT_NOT_APPLIED_REASON;
+    }
+
+    const rendered = this.formatS005Evidence(analysis, moduleKind);
+    return {
+      criterionId: 'S005',
+      status: analysis.classification.status,
+      evidence: rendered.evidence,
+      details: rendered.details,
+      criterionDetails: analysis
+    };
+  }
+
   private artifactFailureResult(artifact: ModuleDescriptorArtifact): CriterionResult {
     const uncertainStatuses = new Set<ModuleDescriptorArtifact['status']>([
       'ambiguous-candidates',
@@ -172,5 +220,68 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     ];
 
     return lines.filter((line): line is string => Boolean(line)).join('\n');
+  }
+
+  private formatModuleKindDetails(heading: string, moduleKind: ModuleKindResult): string {
+    return [
+      heading,
+      'Module-kind evidence:',
+      ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
+      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
+    ].join('\n');
+  }
+
+  private formatS005Evidence(
+    analysis: S005PersonalDataDisclosureAnalysisResult,
+    moduleKind: ModuleKindResult
+  ): { evidence: string; details: string } {
+    const evidence = analysis.classification.status === EvaluationStatus.FAIL
+      ? analysis.classification.reason
+      : 'Completed S005 personal data disclosure form requires reviewer judgment';
+
+    const parseResult = analysis.parseResult;
+    const evidenceScan = analysis.evidenceScan;
+    const lines = [
+      `Status: ${analysis.classification.status}`,
+      `Reason: ${analysis.classification.reason}`,
+      `Parse state: ${analysis.classification.parseState}`,
+      `Repository kind: ${moduleKind.kind}`,
+      'Module-kind evidence:',
+      ...moduleKind.evidence.map(item => `  - ${item}`),
+      `Disclosure artifact: ${analysis.discovery.artifact?.path ?? analysis.discovery.status}`,
+      analysis.discovery.readError ? `Read error: ${analysis.discovery.readError}` : undefined,
+      analysis.discovery.attempts.length
+        ? `Attempted disclosure files:\n${analysis.discovery.attempts.map(attempt => `  - ${attempt.path} (${attempt.reason})`).join('\n')}`
+        : undefined,
+      parseResult?.metadata.versionText ? `Form version: ${parseResult.metadata.versionText}` : undefined,
+      parseResult ? `Checked categories: ${parseResult.checkedCategories.join(', ') || 'none'}` : undefined,
+      parseResult ? `Unchecked categories: ${parseResult.uncheckedCategories.join(', ') || 'none'}` : undefined,
+      analysis.placeholders.length
+        ? `Placeholders:\n${analysis.placeholders.map(placeholder => `  - ${placeholder.field} at line ${placeholder.lineNumber}: ${placeholder.placeholderText}`).join('\n')}`
+        : undefined,
+      analysis.contradictions.length
+        ? `Contradictions:\n${analysis.contradictions.map(contradiction => `  - ${contradiction.message}`).join('\n')}`
+        : undefined,
+      analysis.possibleMismatches.length
+        ? `Possible mismatches:\n${analysis.possibleMismatches.map(mismatch => `  - ${mismatch.kind}${mismatch.category ? `/${mismatch.category}` : ''}: ${mismatch.message}`).join('\n')}`
+        : undefined,
+      analysis.matchingEvidence.length
+        ? `Matching evidence:\n${analysis.matchingEvidence.map(match => `  - ${match.category ?? 'unknown'}: ${match.message}`).join('\n')}`
+        : undefined,
+      analysis.supportingEvidence.length
+        ? `Supporting evidence:\n${analysis.supportingEvidence.map(support => `  - ${support.category ?? 'unknown'}: ${support.message}`).join('\n')}`
+        : undefined,
+      evidenceScan ? `Evidence signals: ${evidenceScan.signals.length}` : undefined,
+      evidenceScan?.signals.length
+        ? `Signal samples:\n${evidenceScan.signals.slice(0, 8).map(signal => `  - ${signal.path}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}] ${signal.excerpt}`).join('\n')}`
+        : undefined,
+      analysis.agentReviewUnavailableReason ? `Agent review: ${analysis.agentReviewUnavailableReason}` : undefined,
+      analysis.warnings.length ? `Warnings:\n${analysis.warnings.map(warning => `  - ${warning}`).join('\n')}` : undefined
+    ];
+
+    return {
+      evidence,
+      details: lines.filter((line): line is string => Boolean(line)).join('\n')
+    };
   }
 }

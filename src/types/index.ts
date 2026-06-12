@@ -321,6 +321,7 @@ export interface S005PersonalDataDisclosureAnalysisResult {
   parseResult?: S005PersonalDataDisclosureParseResult;
   evidenceScan?: S005PersonalDataEvidenceScanResult;
   classification: S005PersonalDataDeterministicClassification;
+  agentReviewUnavailableReason?: string;
   possibleMismatches: S005PersonalDataPossibleMismatch[];
   matchingEvidence: S005PersonalDataEvidenceAssessment[];
   supportingEvidence: S005PersonalDataEvidenceAssessment[];
