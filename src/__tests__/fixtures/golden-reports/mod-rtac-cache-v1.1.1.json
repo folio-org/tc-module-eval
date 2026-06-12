@@ -140,8 +140,1114 @@
     {
       "criterionId": "S005",
       "status": "manual",
-      "evidence": "Version control and branching strategy - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S005 manual: Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.",
+      "details": "Artifact mechanics:\n  - Repository kind: backend-module\n  - Module-kind evidence: Backend module descriptor found at descriptors/ModuleDescriptor-template.json\n  - Required file: PERSONAL_DATA_DISCLOSURE.md\n  - Discovery status: found\n  - Disclosure artifact: PERSONAL_DATA_DISCLOSURE.md\n\nParsed disclosure fields:\n  - Parse state: completed\n  - Template identity: current-like\n  - Checked answers: no_personal_data\n  - Unchecked answers: other, free_form_notes, logging, financial_information, name, birth_date, address, phone, ... 4 more\n  - Unchecked answer evidence:\n    - line 21 [other]: This module provides custom fields.\n    - line 22 [free_form_notes]: This module stores fields with free-form text (tags, notes, descriptions, etc.)\n    - line 23 [other]: This module caches PD\n    - line 24 [other]: This module logs PD\n    - line 25 [logging]: Log level ERROR includes PD\n    - line 26 [logging]: Log level WARNING includes PD\n    - line 27 [logging]: Log level INFO includes PD\n    - line 28 [logging]: Log level DEBUG includes PD\n    - ... 23 more\n\nDeterministic evidence:\n  - Evidence files scanned: 200\n  - Evidence signals found: 184\n  - Matching disclosure/source evidence: none\n  - Supporting deterministic evidence: none\n  - Strongest signals:\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:4 [direct_contract/strong/circulation_transactions] circulation transaction data: \"title\": \"Loan\",\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:5 [direct_contract/strong/patron_data] patron or borrower data: \"description\": \"Links the item with the patron and applies certain conditions based on policies\",\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:10 [direct_contract/strong/user_identifier] user or patron identifier: \"userId\": {\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:11 [direct_contract/strong/patron_data] patron or borrower data: \"description\": \"UUID of the patron (user) who has borrowed the item\",\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:14 [direct_contract/strong/patron_data] patron or borrower data: \"borrower\": {\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:15 [direct_contract/strong/user_identifier] user or patron identifier: \"description\": \"Additional information about the borrower of the item, taken from the user referred to by the userId\",\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:15 [direct_contract/strong/patron_data] patron or borrower data: \"description\": \"Additional information about the borrower of the item, taken from the user referred to by the userId\",\n    - src/main/resources/swagger.api/schemas/circulation/loan.json:19 [direct_contract/strong/name] person name field: \"firstName\": {\n\nPossible mismatches:\n  - Mismatch signals:\n    - likely_omission/free_form_notes: Disclosure does not check free_form_notes, but direct contract or production implementation evidence mentions it. (evidence: .github/workflows/api-doc.yml:12 [implementation/strong/free_form_notes], .github/workflows/api-lint.yml:12 [implementation/strong/free_form_notes], .github/workflows/api-schema-lint.yml:8 [implementation/strong/free_form_notes], src/main/java/org/folio/rtaccache/client/InventoryClient.java:41 [implementation/strong/free_form_notes], src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:4 [implementation/strong/free_form_notes], src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:5 [implementation/strong/free_form_notes], src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java:5 [implementation/strong/free_form_notes], src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java:6 [implementation/strong/free_form_notes], ... 8 more)\n    - likely_omission/storage: Disclosure does not check storage, but direct contract or production implementation evidence mentions it. (evidence: .github/workflows/api-doc.yml:24 [implementation/strong/storage], .github/workflows/api-doc.yml:81 [implementation/strong/storage], .github/workflows/api-doc.yml:82 [implementation/strong/storage], .github/workflows/api-doc.yml:88 [implementation/strong/storage], src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:3 [implementation/strong/storage], src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:4 [implementation/strong/storage], src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:5 [implementation/strong/storage], src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:6 [implementation/strong/storage])\n    - likely_omission/circulation_transactions: Disclosure does not check circulation_transactions, but direct contract or production implementation evidence mentions it. (evidence: .github/workflows/api-doc.yml:42 [implementation/strong/circulation_transactions], .github/workflows/api-doc.yml:43 [implementation/strong/circulation_transactions], .github/workflows/api-lint.yml:41 [implementation/strong/circulation_transactions], .github/workflows/api-lint.yml:42 [implementation/strong/circulation_transactions], .github/workflows/api-schema-lint.yml:31 [implementation/strong/circulation_transactions], .github/workflows/api-schema-lint.yml:32 [implementation/strong/circulation_transactions], src/main/java/org/folio/rtaccache/client/CirculationClient.java:13 [implementation/strong/circulation_transactions], src/main/java/org/folio/rtaccache/client/CirculationClient.java:16 [implementation/strong/circulation_transactions], ... 8 more)\n    - likely_omission/transmission: Disclosure does not check transmission, but direct contract or production implementation evidence mentions it. (evidence: .github/workflows/api-doc.yml:81 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:3 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:4 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:5 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:6 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:7 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/CirculationClient.java:8 [implementation/strong/transmission], src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:3 [implementation/strong/transmission], ... 1 more)\n    - likely_omission/cache: Disclosure does not check cache, but direct contract or production implementation evidence mentions it. (evidence: src/main/java/org/folio/rtaccache/client/CirculationClient.java:1 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/CirculationClient.java:4 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/CirculationClient.java:5 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:1 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:3 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/InventoryClient.java:1 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/InventoryClient.java:4 [implementation/strong/cache], src/main/java/org/folio/rtaccache/client/InventoryClient.java:5 [implementation/strong/cache])\n    - likely_omission/username: Disclosure does not check username, but direct contract or production implementation evidence mentions it. (evidence: src/main/resources/application.yml:13 [implementation/strong/username], src/main/resources/application.yml:115 [implementation/strong/username], src/main/resources/swagger.api/schemas/metadata.json:17 [direct_contract/strong/username], src/main/resources/swagger.api/schemas/metadata.json:31 [direct_contract/strong/username], src/main/resources/swagger.api/schemas/users/userTenants.json:19 [direct_contract/strong/username], src/main/resources/swagger.api/schemas/users/userTenants.json:20 [direct_contract/strong/username])\n    - likely_omission/address: Disclosure does not check address, but direct contract or production implementation evidence mentions it. (evidence: src/main/java/org/folio/rtaccache/client/InventoryClient.java:38 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:11 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:40 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:151 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:152 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:153 [implementation/strong/address], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:159 [implementation/strong/address], src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java:15 [implementation/strong/address], ... 8 more)\n    - likely_omission/logging: Disclosure does not check logging, but direct contract or production implementation evidence mentions it. (evidence: src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java:9 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:17 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:260 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:269 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:4 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:25 [implementation/strong/logging], src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:28 [implementation/strong/logging], src/main/java/org/folio/rtaccache/rest/RtacCacheController.java:20 [implementation/strong/logging])\n    - ... 5 more\n\nWarnings:\n  - S005 evidence scan found 263 candidate files and scanned the first 200; evidence was truncated by the scanned-file cap.\n  - S005 evidence retained first 8 signals for category \"transmission\" and source class \"documentation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"cache\" and source class \"documentation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"transmission\" and source class \"implementation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"cache\" and source class \"implementation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"implementation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"storage\" and source class \"implementation\"; additional signals were truncated.\n  - S005 evidence retained first 8 signals for category \"address\" and source class \"implementation\"; additional signals were truncated.\n    - ... 14 more\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "discovery": {
+          "status": "found",
+          "artifact": {
+            "path": "PERSONAL_DATA_DISCLOSURE.md",
+            "sizeBytes": 4601
+          },
+          "attempts": [],
+          "warnings": []
+        },
+        "parseResult": {
+          "metadata": {
+            "templateIdentity": "current-like"
+          },
+          "checklistItems": [
+            {
+              "order": 1,
+              "lineNumber": 19,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module does not store any PD.",
+              "checked": true,
+              "normalizedCategory": "no_personal_data"
+            },
+            {
+              "order": 2,
+              "lineNumber": 20,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module does not process any PD.",
+              "checked": true,
+              "normalizedCategory": "no_personal_data"
+            },
+            {
+              "order": 3,
+              "lineNumber": 21,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module provides custom fields.",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 4,
+              "lineNumber": 22,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module stores fields with free-form text (tags, notes, descriptions, etc.)",
+              "checked": false,
+              "normalizedCategory": "free_form_notes"
+            },
+            {
+              "order": 5,
+              "lineNumber": 23,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module caches PD",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 6,
+              "lineNumber": 24,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module logs PD",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 7,
+              "lineNumber": 25,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "Log level ERROR includes PD",
+              "checked": false,
+              "normalizedCategory": "logging"
+            },
+            {
+              "order": 8,
+              "lineNumber": 26,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "Log level WARNING includes PD",
+              "checked": false,
+              "normalizedCategory": "logging"
+            },
+            {
+              "order": 9,
+              "lineNumber": 27,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "Log level INFO includes PD",
+              "checked": false,
+              "normalizedCategory": "logging"
+            },
+            {
+              "order": 10,
+              "lineNumber": 28,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "Log level DEBUG includes PD",
+              "checked": false,
+              "normalizedCategory": "logging"
+            },
+            {
+              "order": 11,
+              "lineNumber": 29,
+              "sectionHeading": "Personal Data processed by this Module",
+              "rawLabel": "This module transmits PD (including queues, additional databases, etc.)",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 12,
+              "lineNumber": 35,
+              "sectionHeading": "Identifiable information",
+              "rawLabel": "Passport number / National identification numbers",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 13,
+              "lineNumber": 36,
+              "sectionHeading": "Identifiable information",
+              "rawLabel": "Driver’s license number",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 14,
+              "lineNumber": 37,
+              "sectionHeading": "Identifiable information",
+              "rawLabel": "Social security number",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 15,
+              "lineNumber": 38,
+              "sectionHeading": "Identifiable information",
+              "rawLabel": "Financial account information",
+              "checked": false,
+              "normalizedCategory": "financial_information"
+            },
+            {
+              "order": 16,
+              "lineNumber": 44,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "First name",
+              "checked": false,
+              "normalizedCategory": "name"
+            },
+            {
+              "order": 17,
+              "lineNumber": 45,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Last name",
+              "checked": false,
+              "normalizedCategory": "name"
+            },
+            {
+              "order": 18,
+              "lineNumber": 46,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Gender",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 19,
+              "lineNumber": 47,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Date of birth",
+              "checked": false,
+              "normalizedCategory": "birth_date"
+            },
+            {
+              "order": 20,
+              "lineNumber": 48,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Place of birth",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 21,
+              "lineNumber": 49,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Racial or ethnic origin",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 22,
+              "lineNumber": 50,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Address",
+              "checked": false,
+              "normalizedCategory": "address"
+            },
+            {
+              "order": 23,
+              "lineNumber": 51,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Location information",
+              "checked": false,
+              "normalizedCategory": "address"
+            },
+            {
+              "order": 24,
+              "lineNumber": 52,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Geolocation data",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 25,
+              "lineNumber": 53,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Phone number(s)",
+              "checked": false,
+              "normalizedCategory": "phone"
+            },
+            {
+              "order": 26,
+              "lineNumber": 54,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Pseudonym / Alias / Nickname",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 27,
+              "lineNumber": 55,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Username / User Identifier (UUID)",
+              "checked": false,
+              "normalizedCategory": "username"
+            },
+            {
+              "order": 28,
+              "lineNumber": 56,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Email address",
+              "checked": false,
+              "normalizedCategory": "email"
+            },
+            {
+              "order": 29,
+              "lineNumber": 57,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Financial information / Fees or Fines",
+              "checked": false,
+              "normalizedCategory": "financial_information"
+            },
+            {
+              "order": 30,
+              "lineNumber": 58,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Circulation transaction(s)",
+              "checked": false,
+              "normalizedCategory": "circulation_transactions"
+            },
+            {
+              "order": 31,
+              "lineNumber": 59,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Web cookies",
+              "checked": false,
+              "normalizedCategory": "other"
+            },
+            {
+              "order": 32,
+              "lineNumber": 60,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "IP address / MAC address",
+              "checked": false,
+              "normalizedCategory": "address"
+            },
+            {
+              "order": 33,
+              "lineNumber": 61,
+              "sectionHeading": "Identifiable information if linked",
+              "rawLabel": "Photographs of users (profile picture)",
+              "checked": false,
+              "normalizedCategory": "profile_picture"
+            }
+          ],
+          "checkedCategories": [
+            "no_personal_data"
+          ],
+          "uncheckedCategories": [
+            "other",
+            "free_form_notes",
+            "logging",
+            "financial_information",
+            "name",
+            "birth_date",
+            "address",
+            "phone",
+            "username",
+            "email",
+            "circulation_transactions",
+            "profile_picture"
+          ],
+          "completion": {
+            "completed": true,
+            "checkedMeaningfulAnswers": 2,
+            "checkedCategories": [
+              "no_personal_data"
+            ],
+            "uncheckedCategories": [
+              "other",
+              "free_form_notes",
+              "logging",
+              "financial_information",
+              "name",
+              "birth_date",
+              "address",
+              "phone",
+              "username",
+              "email",
+              "circulation_transactions",
+              "profile_picture"
+            ]
+          },
+          "placeholders": [],
+          "contradictions": [],
+          "classification": {
+            "status": "manual",
+            "parseState": "completed",
+            "reason": "Disclosure form has at least one checked meaningful answer and requires reviewer judgment.",
+            "warnings": []
+          },
+          "warnings": []
+        },
+        "evidenceScan": {
+          "signalCount": 184,
+          "signals": [
+            {
+              "category": "circulation_transactions",
+              "label": "circulation transaction data",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 4,
+              "excerpt": "\"title\": \"Loan\",",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "patron_data",
+              "label": "patron or borrower data",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 5,
+              "excerpt": "\"description\": \"Links the item with the patron and applies certain conditions based on policies\",",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "user_identifier",
+              "label": "user or patron identifier",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 10,
+              "excerpt": "\"userId\": {",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "patron_data",
+              "label": "patron or borrower data",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 11,
+              "excerpt": "\"description\": \"UUID of the patron (user) who has borrowed the item\",",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "patron_data",
+              "label": "patron or borrower data",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 14,
+              "excerpt": "\"borrower\": {",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "user_identifier",
+              "label": "user or patron identifier",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 15,
+              "excerpt": "\"description\": \"Additional information about the borrower of the item, taken from the user referred to by the userId\",",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "patron_data",
+              "label": "patron or borrower data",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 15,
+              "excerpt": "\"description\": \"Additional information about the borrower of the item, taken from the user referred to by the userId\",",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            },
+            {
+              "category": "name",
+              "label": "person name field",
+              "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+              "line": 19,
+              "excerpt": "\"firstName\": {",
+              "sourceClass": "direct_contract",
+              "strength": "strong"
+            }
+          ],
+          "scannedFileCount": 200,
+          "scannedFiles": [
+            ".github/workflows/api-doc.yml",
+            ".github/workflows/api-lint.yml",
+            ".github/workflows/api-schema-lint.yml",
+            "README.md",
+            "src/main/java/org/folio/rtaccache/client/CirculationClient.java",
+            "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java",
+            "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+            "src/main/java/org/folio/rtaccache/client/OrdersClient.java",
+            "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+            "src/main/java/org/folio/rtaccache/client/SettingsClient.java",
+            "src/main/java/org/folio/rtaccache/client/UserClient.java",
+            "src/main/java/org/folio/rtaccache/config/CacheInvalidationJobProperties.java",
+            "src/main/java/org/folio/rtaccache/config/HttpClientConfiguration.java",
+            "src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java",
+            "src/main/java/org/folio/rtaccache/constant/RtacCacheConstant.java",
+            "src/main/java/org/folio/rtaccache/domain/dto/FolioCqlRequest.java",
+            "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java",
+            "src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java",
+            "src/main/java/org/folio/rtaccache/domain/kafka/KafkaItem.java",
+            "src/main/java/org/folio/rtaccache/domain/RtacBatchCountProjection.java",
+            "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java",
+            "src/main/java/org/folio/rtaccache/domain/RtacHoldingId.java",
+            "src/main/java/org/folio/rtaccache/domain/RtacPreWarmingJobEntity.java",
+            "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java",
+            "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacHoldingRepository.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacHoldingRepositoryCustom.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacHoldingRepositoryImpl.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacPreWarmingJobRepository.java",
+            "src/main/java/org/folio/rtaccache/repository/RtacSummaryProjection.java",
+            "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+            "src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "src/main/java/org/folio/rtaccache/service/CirculationService.java",
+            "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+            "src/main/java/org/folio/rtaccache/service/handler/CirculationEventHandler.java",
+            "src/main/java/org/folio/rtaccache/service/handler/EventHandler.java",
+            "src/main/java/org/folio/rtaccache/service/handler/EventHandlerFactory.java",
+            "src/main/java/org/folio/rtaccache/service/handler/impl/HoldingsCreateEventHandler.java",
+            "src/main/java/org/folio/rtaccache/service/handler/impl/HoldingsDeleteEventHandler.java"
+          ],
+          "skippedFiles": [],
+          "warnings": [
+            "S005 evidence scan found 263 candidate files and scanned the first 200; evidence was truncated by the scanned-file cap.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"documentation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"documentation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"storage\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"logging\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"patron_data\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"user_identifier\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"name\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"logging\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"storage\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"test_sample\"; additional signals were truncated."
+          ]
+        },
+        "classification": {
+          "status": "manual",
+          "parseState": "completed",
+          "reason": "Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.",
+          "warnings": [
+            "S005 evidence scan found 263 candidate files and scanned the first 200; evidence was truncated by the scanned-file cap.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"documentation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"documentation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"storage\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"logging\" and source class \"implementation\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"patron_data\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"user_identifier\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"name\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"direct_contract\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"cache\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"logging\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"address\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"storage\" and source class \"test_sample\"; additional signals were truncated.",
+            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"test_sample\"; additional signals were truncated."
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured",
+        "possibleMismatches": [
+          {
+            "kind": "likely_omission",
+            "category": "free_form_notes",
+            "message": "Disclosure does not check free_form_notes, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              ".github/workflows/api-doc.yml:12 [implementation/strong/free_form_notes]",
+              ".github/workflows/api-lint.yml:12 [implementation/strong/free_form_notes]",
+              ".github/workflows/api-schema-lint.yml:8 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:41 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:4 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:5 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java:5 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java:6 [implementation/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:147 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:26 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/error.json:5 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/error.json:7 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/error.json:11 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/error.json:15 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/error.json:23 [direct_contract/strong/free_form_notes]",
+              "src/main/resources/swagger.api/schemas/inventory/electronicAccessItem.json:21 [direct_contract/strong/free_form_notes]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 16
+          },
+          {
+            "kind": "likely_omission",
+            "category": "storage",
+            "message": "Disclosure does not check storage, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              ".github/workflows/api-doc.yml:24 [implementation/strong/storage]",
+              ".github/workflows/api-doc.yml:81 [implementation/strong/storage]",
+              ".github/workflows/api-doc.yml:82 [implementation/strong/storage]",
+              ".github/workflows/api-doc.yml:88 [implementation/strong/storage]",
+              "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:3 [implementation/strong/storage]",
+              "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:4 [implementation/strong/storage]",
+              "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:5 [implementation/strong/storage]",
+              "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java:6 [implementation/strong/storage]"
+            ],
+            "sourceClasses": [
+              "implementation"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 8
+          },
+          {
+            "kind": "likely_omission",
+            "category": "circulation_transactions",
+            "message": "Disclosure does not check circulation_transactions, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              ".github/workflows/api-doc.yml:42 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-doc.yml:43 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-lint.yml:41 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-lint.yml:42 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-schema-lint.yml:31 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-schema-lint.yml:32 [implementation/strong/circulation_transactions]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:13 [implementation/strong/circulation_transactions]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:16 [implementation/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:4 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:57 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:61 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:65 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:71 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:77 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:81 [direct_contract/strong/circulation_transactions]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:87 [direct_contract/strong/circulation_transactions]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 16
+          },
+          {
+            "kind": "likely_omission",
+            "category": "transmission",
+            "message": "Disclosure does not check transmission, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              ".github/workflows/api-doc.yml:81 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:3 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:4 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:5 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:6 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:7 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:8 [implementation/strong/transmission]",
+              "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:3 [implementation/strong/transmission]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:81 [direct_contract/strong/transmission]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 9
+          },
+          {
+            "kind": "likely_omission",
+            "category": "cache",
+            "message": "Disclosure does not check cache, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:1 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:4 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:5 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:1 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java:3 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:1 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:4 [implementation/strong/cache]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:5 [implementation/strong/cache]"
+            ],
+            "sourceClasses": [
+              "implementation"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 8
+          },
+          {
+            "kind": "likely_omission",
+            "category": "username",
+            "message": "Disclosure does not check username, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/resources/application.yml:13 [implementation/strong/username]",
+              "src/main/resources/application.yml:115 [implementation/strong/username]",
+              "src/main/resources/swagger.api/schemas/metadata.json:17 [direct_contract/strong/username]",
+              "src/main/resources/swagger.api/schemas/metadata.json:31 [direct_contract/strong/username]",
+              "src/main/resources/swagger.api/schemas/users/userTenants.json:19 [direct_contract/strong/username]",
+              "src/main/resources/swagger.api/schemas/users/userTenants.json:20 [direct_contract/strong/username]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 6
+          },
+          {
+            "kind": "likely_omission",
+            "category": "address",
+            "message": "Disclosure does not check address, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:38 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:11 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:40 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:151 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:152 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:153 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:159 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java:15 [implementation/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:109 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:4 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:243 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:247 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:251 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:252 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:256 [direct_contract/strong/address]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:257 [direct_contract/strong/address]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 16
+          },
+          {
+            "kind": "likely_omission",
+            "category": "logging",
+            "message": "Disclosure does not check logging, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java:9 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:17 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:260 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:269 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:4 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:25 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java:28 [implementation/strong/logging]",
+              "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java:20 [implementation/strong/logging]"
+            ],
+            "sourceClasses": [
+              "implementation"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 8
+          },
+          {
+            "kind": "likely_omission",
+            "category": "user_identifier",
+            "message": "Disclosure does not check user_identifier, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java:146 [implementation/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:10 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:15 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:34 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:35 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:29 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:122 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:123 [direct_contract/strong/user_identifier]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:130 [direct_contract/strong/user_identifier]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 9
+          },
+          {
+            "kind": "likely_omission",
+            "category": "name",
+            "message": "Disclosure does not check name, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/resources/application.yml:117 [implementation/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:19 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:24 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:29 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:134 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:139 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:144 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:188 [direct_contract/strong/name]",
+              "src/main/resources/swagger.api/schemas/circulation/request.json:193 [direct_contract/strong/name]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 9
+          },
+          {
+            "kind": "likely_omission",
+            "category": "patron_data",
+            "message": "Disclosure does not check patron_data, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:5 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:11 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:14 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:15 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:20 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:25 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:30 [direct_contract/strong/patron_data]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:35 [direct_contract/strong/patron_data]"
+            ],
+            "sourceClasses": [
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 8
+          },
+          {
+            "kind": "likely_omission",
+            "category": "financial_information",
+            "message": "Disclosure does not check financial_information, but direct contract or production implementation evidence mentions it.",
+            "evidenceReferences": [
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:77 [direct_contract/strong/financial_information]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:81 [direct_contract/strong/financial_information]",
+              "src/main/resources/swagger.api/schemas/circulation/loan.json:87 [direct_contract/strong/financial_information]"
+            ],
+            "sourceClasses": [
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 3
+          },
+          {
+            "kind": "likely_omission",
+            "category": "no_personal_data",
+            "message": "No-personal-data answer is checked, but strong personal-data source signals were found.",
+            "evidenceReferences": [
+              ".github/workflows/api-doc.yml:12 [implementation/strong/free_form_notes]",
+              ".github/workflows/api-doc.yml:42 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-doc.yml:43 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-lint.yml:12 [implementation/strong/free_form_notes]",
+              ".github/workflows/api-lint.yml:41 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-lint.yml:42 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-schema-lint.yml:8 [implementation/strong/free_form_notes]",
+              ".github/workflows/api-schema-lint.yml:31 [implementation/strong/circulation_transactions]",
+              ".github/workflows/api-schema-lint.yml:32 [implementation/strong/circulation_transactions]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:13 [implementation/strong/circulation_transactions]",
+              "src/main/java/org/folio/rtaccache/client/CirculationClient.java:16 [implementation/strong/circulation_transactions]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:38 [implementation/strong/address]",
+              "src/main/java/org/folio/rtaccache/client/InventoryClient.java:41 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:4 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java:5 [implementation/strong/free_form_notes]",
+              "src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java:5 [implementation/strong/free_form_notes]"
+            ],
+            "sourceClasses": [
+              "implementation",
+              "direct_contract"
+            ],
+            "signalStrengths": [
+              "strong"
+            ],
+            "evidenceReferenceCount": 83
+          }
+        ],
+        "matchingEvidence": [],
+        "supportingEvidence": [],
+        "uncheckedAnswerDetails": [
+          {
+            "order": 3,
+            "lineNumber": 21,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "This module provides custom fields.",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 4,
+            "lineNumber": 22,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "This module stores fields with free-form text (tags, notes, descriptions, etc.)",
+            "checked": false,
+            "normalizedCategory": "free_form_notes"
+          },
+          {
+            "order": 5,
+            "lineNumber": 23,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "This module caches PD",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 6,
+            "lineNumber": 24,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "This module logs PD",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 7,
+            "lineNumber": 25,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "Log level ERROR includes PD",
+            "checked": false,
+            "normalizedCategory": "logging"
+          },
+          {
+            "order": 8,
+            "lineNumber": 26,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "Log level WARNING includes PD",
+            "checked": false,
+            "normalizedCategory": "logging"
+          },
+          {
+            "order": 9,
+            "lineNumber": 27,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "Log level INFO includes PD",
+            "checked": false,
+            "normalizedCategory": "logging"
+          },
+          {
+            "order": 10,
+            "lineNumber": 28,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "Log level DEBUG includes PD",
+            "checked": false,
+            "normalizedCategory": "logging"
+          },
+          {
+            "order": 11,
+            "lineNumber": 29,
+            "sectionHeading": "Personal Data processed by this Module",
+            "rawLabel": "This module transmits PD (including queues, additional databases, etc.)",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 12,
+            "lineNumber": 35,
+            "sectionHeading": "Identifiable information",
+            "rawLabel": "Passport number / National identification numbers",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 13,
+            "lineNumber": 36,
+            "sectionHeading": "Identifiable information",
+            "rawLabel": "Driver’s license number",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 14,
+            "lineNumber": 37,
+            "sectionHeading": "Identifiable information",
+            "rawLabel": "Social security number",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 15,
+            "lineNumber": 38,
+            "sectionHeading": "Identifiable information",
+            "rawLabel": "Financial account information",
+            "checked": false,
+            "normalizedCategory": "financial_information"
+          },
+          {
+            "order": 16,
+            "lineNumber": 44,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "First name",
+            "checked": false,
+            "normalizedCategory": "name"
+          },
+          {
+            "order": 17,
+            "lineNumber": 45,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Last name",
+            "checked": false,
+            "normalizedCategory": "name"
+          },
+          {
+            "order": 18,
+            "lineNumber": 46,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Gender",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 19,
+            "lineNumber": 47,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Date of birth",
+            "checked": false,
+            "normalizedCategory": "birth_date"
+          },
+          {
+            "order": 20,
+            "lineNumber": 48,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Place of birth",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 21,
+            "lineNumber": 49,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Racial or ethnic origin",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 22,
+            "lineNumber": 50,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Address",
+            "checked": false,
+            "normalizedCategory": "address"
+          },
+          {
+            "order": 23,
+            "lineNumber": 51,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Location information",
+            "checked": false,
+            "normalizedCategory": "address"
+          },
+          {
+            "order": 24,
+            "lineNumber": 52,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Geolocation data",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 25,
+            "lineNumber": 53,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Phone number(s)",
+            "checked": false,
+            "normalizedCategory": "phone"
+          },
+          {
+            "order": 26,
+            "lineNumber": 54,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Pseudonym / Alias / Nickname",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 27,
+            "lineNumber": 55,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Username / User Identifier (UUID)",
+            "checked": false,
+            "normalizedCategory": "username"
+          },
+          {
+            "order": 28,
+            "lineNumber": 56,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Email address",
+            "checked": false,
+            "normalizedCategory": "email"
+          },
+          {
+            "order": 29,
+            "lineNumber": 57,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Financial information / Fees or Fines",
+            "checked": false,
+            "normalizedCategory": "financial_information"
+          },
+          {
+            "order": 30,
+            "lineNumber": 58,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Circulation transaction(s)",
+            "checked": false,
+            "normalizedCategory": "circulation_transactions"
+          },
+          {
+            "order": 31,
+            "lineNumber": 59,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Web cookies",
+            "checked": false,
+            "normalizedCategory": "other"
+          },
+          {
+            "order": 32,
+            "lineNumber": 60,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "IP address / MAC address",
+            "checked": false,
+            "normalizedCategory": "address"
+          },
+          {
+            "order": 33,
+            "lineNumber": 61,
+            "sectionHeading": "Identifiable information if linked",
+            "rawLabel": "Photographs of users (profile picture)",
+            "checked": false,
+            "normalizedCategory": "profile_picture"
+          }
+        ],
+        "placeholders": [],
+        "contradictions": [],
+        "warnings": [
+          "S005 evidence scan found 263 candidate files and scanned the first 200; evidence was truncated by the scanned-file cap.",
+          "S005 evidence retained first 8 signals for category \"transmission\" and source class \"documentation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"cache\" and source class \"documentation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"transmission\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"cache\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"storage\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"address\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"logging\" and source class \"implementation\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"patron_data\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"user_identifier\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"name\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"address\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"direct_contract\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"transmission\" and source class \"test_sample\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"cache\" and source class \"test_sample\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"logging\" and source class \"test_sample\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"address\" and source class \"test_sample\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"storage\" and source class \"test_sample\"; additional signals were truncated.",
+          "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"test_sample\"; additional signals were truncated."
+        ]
+      }
     },
     {
       "criterionId": "S006",

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { EvaluationStatus, S005PersonalDataDisclosureAnalysisResult } from '../types';
+import { CriterionAgentReviewResult, EvaluationStatus, S005PersonalDataDisclosureAnalysisResult } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { createEvaluationRun } from '../utils/evaluation-run';
 
@@ -67,6 +67,8 @@ describe('S005 shared evaluator', () => {
     expect(details.discovery.attempts).toEqual([
       { path: 'PERSONAL_DATA_DISCOSURE.md', reason: 'root-near-match' }
     ]);
+    expect(result.details).toContain('Missing exact file: PERSONAL_DATA_DISCLOSURE.md');
+    expect(result.details).toContain('PERSONAL_DATA_DISCOSURE.md (root-near-match)');
   });
 
   it('returns manual for completed forms with structured criterionDetails', async () => {
@@ -81,6 +83,58 @@ describe('S005 shared evaluator', () => {
     expect(details.parseResult?.checkedCategories).toContain('no_personal_data');
     expect(details.evidenceScan?.signals.some(signal => signal.category === 'email')).toBe(true);
     expect(details.possibleMismatches.length).toBeGreaterThan(0);
+    expect(result.details).toContain('Parsed disclosure fields:');
+    expect(result.details).toContain('Deterministic evidence:');
+    expect(result.details).toContain('Possible mismatches:');
+    expect(result.details).toContain('Supporting deterministic evidence:');
+    expect(JSON.stringify(result.criterionDetails)).not.toContain('# Personal Data Disclosure');
+    expect(JSON.stringify(result.criterionDetails)).not.toContain(tempRoot);
+    expect(JSON.stringify(result.criterionDetails)).toContain('"sizeBytes"');
+  });
+
+  it('reports blank-template placeholders and unchecked answers without dumping the whole file', async () => {
+    writeFile('PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: YYYY-MM-DD
+Last Reviewed: YYYY-MM-DD
+
+## Personal Data
+- [ ] Does not store personal data
+- [ ] Email address
+
+This long template instruction should not be dumped as whole-file report content.
+`);
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot);
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.details).toContain('Placeholder/incomplete evidence:');
+    expect(result.details).toContain('Unchecked answer evidence:');
+    expect(result.details).toContain('Last updated: YYYY-MM-DD');
+    expect(result.details).not.toContain('This long template instruction should not be dumped as whole-file report content.');
+  });
+
+  it('shows contradiction details before advisory agent output', async () => {
+    writeFile('PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: 2026-06-12
+Last Reviewed: 2026-06-12
+
+## Personal Data
+- [x] Does not store personal data
+- [x] Email address
+`);
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    const renderedDetails = result.details ?? '';
+    expect(renderedDetails).toContain('Contradictions:');
+    expect(renderedDetails.indexOf('Contradictions:')).toBeLessThan(renderedDetails.indexOf('Agent review:'));
+    expect(renderedDetails).toContain('Advisory recommendation: likely_insufficient');
   });
 
   it('preserves module-kind warnings in S005 details', async () => {
@@ -149,6 +203,51 @@ describe('S005 shared evaluator', () => {
     expect(result.details).toContain('no candidate evidence was available for agent review');
   });
 
+  it.each([
+    {
+      name: 'unavailable',
+      fakeResult: {
+        available: false,
+        criterionId: 'S005',
+        evidenceReferences: [],
+        warnings: [],
+        errors: []
+      },
+      expected: 'Fake criterion-agent review was unavailable'
+    },
+    {
+      name: 'malformed',
+      fakeResult: {
+        available: true,
+        criterionId: 'S005',
+        recommendation: 'likely_insufficient',
+        confidence: 'medium',
+        evidenceReferences: [],
+        warnings: [],
+        errors: []
+      } as unknown as CriterionAgentReviewResult,
+      expected: 'Fake criterion-agent review returned incomplete advisory JSON'
+    },
+    {
+      name: 'config-unavailable',
+      config: {
+        endpoint: 'http://agent.example.test'
+      },
+      expected: 'OpenCode endpoint must use HTTPS unless it is local or explicitly allowlisted'
+    }
+  ])('reports $name agent review as not applied with the reason', async ({ fakeResult, config, expected }) => {
+    writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005'], fakeResult, config));
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview?.available).toBe(false);
+    expect(details.agentReviewUnavailableReason).toContain(expected);
+    expect(result.details).toContain(`Not applied: ${expected}`);
+  });
+
   it('does not invoke agent review for deterministic S005 failures', async () => {
     writeFile('PERSONAL_DATA_DISCLOSURE.md', `
 # Personal Data Disclosure
@@ -165,7 +264,11 @@ Last Reviewed: YYYY-MM-DD
     expect(result.details).not.toContain('Agent review');
   });
 
-  function createRunWithFakeAgent(enabledCriteria: string[]) {
+  function createRunWithFakeAgent(
+    enabledCriteria: string[],
+    fakeResult?: CriterionAgentReviewResult,
+    config?: { endpoint?: string }
+  ) {
     return createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',
@@ -175,7 +278,8 @@ Last Reviewed: YYYY-MM-DD
         enabledCriteria,
         adapter: 'fake',
         modelLabel: 'fake-model',
-        fakeResult: {
+        endpoint: config?.endpoint,
+        fakeResult: fakeResult ?? {
           available: true,
           criterionId: 'S005',
           recommendation: 'likely_insufficient',

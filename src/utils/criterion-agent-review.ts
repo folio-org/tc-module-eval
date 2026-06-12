@@ -265,10 +265,10 @@ function normalizeFakeCriterionReviewResult(
   const rawEvidenceReferences = Array.isArray(rawResult.evidenceReferences) ? rawResult.evidenceReferences : [];
   const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
   const warnings = [
-    ...stringArray(rawResult.warnings).map(redactSensitiveText),
+    ...stringArray(rawResult.warnings).map(warning => redactSensitiveText(warning)),
     ...(rawEvidenceReferences.length !== evidenceReferences.length ? ['Dropped uncited or unknown advisory evidence references'] : [])
   ];
-  const errors = stringArray(rawResult.errors).map(redactSensitiveText);
+  const errors = stringArray(rawResult.errors).map(error => redactSensitiveText(error));
   const metadata = rawResult.metadata ?? {
     adapter: 'fake' as const,
     modelLabel: config.modelLabel,

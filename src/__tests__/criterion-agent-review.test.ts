@@ -166,13 +166,17 @@ describe('criterion agent review', () => {
         summary: 'Fake summary.',
         rationale: 'Fake rationale.',
         evidenceReferences: ['schemas/user.json'],
-        warnings: [],
-        errors: []
+        warnings: ['warning token=abc123 should be redacted'],
+        errors: ['error password=hunter2 should be redacted']
       } as unknown as CriterionAgentReviewConfig['fakeResult']
     });
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
+    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED] should be redacted');
+    expect(result.errors.join('\n')).toContain('error password=[REDACTED] should be redacted');
+    expect(result.warnings.join('\n')).not.toContain('abc123');
+    expect(result.errors.join('\n')).not.toContain('hunter2');
   });
 
   it('prepares a sanitized manifest workspace', () => {
