@@ -1,16 +1,26 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import {
   EvaluationStatus,
   S005PersonalDataCategory,
+  S005PersonalDataDisclosureAttempt,
+  S005PersonalDataDisclosureDiscoveryResult,
   S005PersonalDataDisclosureChecklistItem,
   S005PersonalDataDisclosureContradiction,
   S005PersonalDataDisclosureMetadata,
   S005PersonalDataDisclosureParseResult,
   S005PersonalDataDisclosurePlaceholderEvidence
 } from '../types';
+import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
+const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
 const MAX_PARSE_ERROR_BYTES = 512;
+const MAX_DISCOVERY_READ_ERROR_BYTES = 300;
+const BOUNDED_NESTED_ATTEMPT_DIRS = ['docs', 'doc', 'documentation'];
+const MAX_BOUNDED_NESTED_ATTEMPT_DEPTH = 2;
 const CHECKBOX_PATTERN = /^\s{0,6}[-*+]\s+\[([ xX])\]\s+(.+?)\s*$/;
 const HEADING_PATTERN = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
 const VERSION_PATTERN = /\b(?:form\s+version|template\s+version|version)\s*[:|-]\s*(.+)$/i;
@@ -34,6 +44,60 @@ const PERSONAL_FIELD_CATEGORIES = new Set<S005PersonalDataCategory>([
   'circulation_transactions',
   'custom_fields'
 ]);
+
+export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S005PersonalDataDisclosureDiscoveryResult {
+  const warnings: string[] = [];
+  const repoRoot = realPath(repoPath);
+  if (!repoRoot) {
+    return {
+      status: 'missing',
+      attempts: [],
+      warnings: ['Unable to resolve repository path while looking for PERSONAL_DATA_DISCLOSURE.md.']
+    };
+  }
+
+  const attempts = discoverS005AttemptedDisclosureFiles(repoRoot);
+  const exactPath = path.join(repoRoot, REQUIRED_DISCLOSURE_FILENAME);
+
+  if (!hasExactRootFileName(repoRoot, REQUIRED_DISCLOSURE_FILENAME)) {
+    return {
+      status: 'missing',
+      attempts,
+      warnings
+    };
+  }
+
+  if (!isWithinRepo(repoRoot, exactPath)) {
+    return {
+      status: 'missing',
+      attempts,
+      warnings: ['Skipped exact disclosure candidate because it is outside the repository.']
+    };
+  }
+
+  try {
+    return {
+      status: 'found',
+      artifact: {
+        path: REQUIRED_DISCLOSURE_FILENAME,
+        absolutePath: exactPath,
+        content: fs.readFileSync(exactPath, 'utf-8')
+      },
+      attempts,
+      warnings
+    };
+  } catch (error) {
+    return {
+      status: 'unreadable',
+      attempts: addUniqueAttempt(attempts, {
+        path: REQUIRED_DISCLOSURE_FILENAME,
+        reason: 'exact-file-read-error'
+      }),
+      readError: boundUtf8(error instanceof Error ? error.message : String(error), MAX_DISCOVERY_READ_ERROR_BYTES),
+      warnings
+    };
+  }
+}
 
 export function parseS005PersonalDataDisclosureMarkdown(content: string): S005PersonalDataDisclosureParseResult {
   const warnings: string[] = [];
@@ -314,6 +378,151 @@ function uniqueCategories(categories: S005PersonalDataCategory[]): S005PersonalD
 
 function uniqueNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
+}
+
+function discoverS005AttemptedDisclosureFiles(repoPath: string): S005PersonalDataDisclosureAttempt[] {
+  const attempts: S005PersonalDataDisclosureAttempt[] = [];
+
+  for (const entry of safeReadDir(repoPath)) {
+    const absolutePath = path.join(repoPath, entry);
+    if (!safeIsFile(absolutePath) || entry === REQUIRED_DISCLOSURE_FILENAME) {
+      continue;
+    }
+
+    if (isDisclosureNearMatch(entry)) {
+      attempts.push({
+        path: relativePosixPath(repoPath, absolutePath),
+        reason: 'root-near-match'
+      });
+    }
+  }
+
+  for (const directoryName of BOUNDED_NESTED_ATTEMPT_DIRS) {
+    collectBoundedNestedAttempts(
+      repoPath,
+      path.join(repoPath, directoryName),
+      0,
+      attempts
+    );
+  }
+
+  return attempts;
+}
+
+function hasExactRootFileName(repoPath: string, fileName: string): boolean {
+  return safeReadDir(repoPath).includes(fileName);
+}
+
+function collectBoundedNestedAttempts(
+  repoPath: string,
+  directoryPath: string,
+  depth: number,
+  attempts: S005PersonalDataDisclosureAttempt[]
+): void {
+  if (depth > MAX_BOUNDED_NESTED_ATTEMPT_DEPTH || !safeIsDirectory(directoryPath) || !isWithinRepo(repoPath, directoryPath)) {
+    return;
+  }
+
+  for (const entry of safeReadDir(directoryPath)) {
+    const absolutePath = path.join(directoryPath, entry);
+    if (safeIsDirectory(absolutePath)) {
+      collectBoundedNestedAttempts(repoPath, absolutePath, depth + 1, attempts);
+      continue;
+    }
+
+    if (safeIsFile(absolutePath) && isDisclosureNearMatch(entry)) {
+      attempts.push({
+        path: relativePosixPath(repoPath, absolutePath),
+        reason: 'bounded-nested-near-match'
+      });
+    }
+  }
+}
+
+function isDisclosureNearMatch(fileName: string): boolean {
+  if (!/\.md$/i.test(fileName)) {
+    return false;
+  }
+
+  const normalized = normalizeDisclosureFileName(fileName);
+  const required = normalizeDisclosureFileName(REQUIRED_DISCLOSURE_FILENAME);
+
+  return normalized.includes(required) || boundedEditDistance(normalized, required, 2) <= 2;
+}
+
+function normalizeDisclosureFileName(fileName: string): string {
+  return fileName
+    .replace(/\.md$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+}
+
+function safeReadDir(directoryPath: string): string[] {
+  try {
+    return fs.readdirSync(directoryPath).sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+function safeIsDirectory(candidatePath: string): boolean {
+  try {
+    const stats = fs.lstatSync(candidatePath);
+    return !stats.isSymbolicLink() && stats.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function safeIsFile(candidatePath: string): boolean {
+  try {
+    const stats = fs.lstatSync(candidatePath);
+    return !stats.isSymbolicLink() && stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+function addUniqueAttempt(
+  attempts: S005PersonalDataDisclosureAttempt[],
+  attempt: S005PersonalDataDisclosureAttempt
+): S005PersonalDataDisclosureAttempt[] {
+  if (attempts.some(existing => existing.path === attempt.path && existing.reason === attempt.reason)) {
+    return attempts;
+  }
+
+  return [...attempts, attempt];
+}
+
+function boundedEditDistance(left: string, right: string, maxDistance: number): number {
+  if (Math.abs(left.length - right.length) > maxDistance) {
+    return maxDistance + 1;
+  }
+
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+    const current = [leftIndex];
+    let rowMinimum = current[0];
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      const distance = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost
+      );
+      current[rightIndex] = distance;
+      rowMinimum = Math.min(rowMinimum, distance);
+    }
+
+    if (rowMinimum > maxDistance) {
+      return maxDistance + 1;
+    }
+
+    previous = current;
+  }
+
+  return previous[right.length];
 }
 
 function boundUtf8(input: string, maxBytes: number): string {

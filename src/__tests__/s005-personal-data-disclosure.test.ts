@@ -1,5 +1,22 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import { EvaluationStatus } from '../types';
-import { parseS005PersonalDataDisclosureMarkdown } from '../utils/s005-personal-data-disclosure';
+import {
+  discoverS005PersonalDataDisclosureArtifact,
+  parseS005PersonalDataDisclosureMarkdown
+} from '../utils/s005-personal-data-disclosure';
+
+function createTempRepo(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 's005-disclosure-'));
+}
+
+function writeRepoFile(repoPath: string, relativePath: string, content: string = '# Personal Data Disclosure\n'): void {
+  const absolutePath = path.join(repoPath, relativePath);
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, content);
+}
 
 describe('S005 personal data disclosure parser', () => {
   it('parses a completed v1.1-like form with checked fields, sections, and version evidence', () => {
@@ -159,5 +176,134 @@ Last Reviewed: YYYY-MM-DD
     expect(item.rawLabel).toContain('Bearer [REDACTED]');
     expect(item.rawLabel).toContain('[truncated to');
     expect(Buffer.byteLength(item.rawLabel)).toBeLessThanOrEqual(320);
+  });
+});
+
+describe('S005 personal data disclosure artifact discovery', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('fails discovery and names a root-level PERSONAL_DATA_DISCOSURE.md attempt when exact file is missing', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCOSURE.md');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('missing');
+    expect(result.artifact).toBeUndefined();
+    expect(result.attempts).toEqual([
+      {
+        path: 'PERSONAL_DATA_DISCOSURE.md',
+        reason: 'root-near-match'
+      }
+    ]);
+  });
+
+  it('selects the correct top-level file even when additional similar files exist', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', 'correct disclosure');
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCOSURE.md', 'typo disclosure');
+    writeRepoFile(repoPath, 'docs/PERSONAL_DATA_DISCLOSURE.md', 'nested disclosure');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('found');
+    expect(result.artifact).toMatchObject({
+      path: 'PERSONAL_DATA_DISCLOSURE.md',
+      content: 'correct disclosure'
+    });
+    expect(result.attempts).toEqual([
+      {
+        path: 'PERSONAL_DATA_DISCOSURE.md',
+        reason: 'root-near-match'
+      },
+      {
+        path: 'docs/PERSONAL_DATA_DISCLOSURE.md',
+        reason: 'bounded-nested-near-match'
+      }
+    ]);
+  });
+
+  it('reports nested attempts below docs, doc, and documentation to bounded depth without satisfying S005', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docs/PERSONAL_DATA_DISCLOSURE.md');
+    writeRepoFile(repoPath, 'doc/review/PERSONAL_DATA_DISCOSURE.md');
+    writeRepoFile(repoPath, 'documentation/privacy/forms/personal_data_disclosure.md');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('missing');
+    expect(result.artifact).toBeUndefined();
+    expect(result.attempts).toEqual([
+      {
+        path: 'docs/PERSONAL_DATA_DISCLOSURE.md',
+        reason: 'bounded-nested-near-match'
+      },
+      {
+        path: 'doc/review/PERSONAL_DATA_DISCOSURE.md',
+        reason: 'bounded-nested-near-match'
+      },
+      {
+        path: 'documentation/privacy/forms/personal_data_disclosure.md',
+        reason: 'bounded-nested-near-match'
+      }
+    ]);
+  });
+
+  it('ignores disclosure-like files nested outside bounded attempted-evidence locations', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/docs/PERSONAL_DATA_DISCLOSURE.md');
+    writeRepoFile(repoPath, 'examples/personal_data_disclosure.md');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('missing');
+    expect(result.attempts).toEqual([]);
+  });
+
+  it('treats a case-only root personal_data_disclosure.md variant as attempted evidence, not compliant', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'personal_data_disclosure.md');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('missing');
+    expect(result.artifact).toBeUndefined();
+    expect(result.attempts).toEqual([
+      {
+        path: 'personal_data_disclosure.md',
+        reason: 'root-near-match'
+      }
+    ]);
+  });
+
+  it('fails unreadable exact files with bounded read error and attempted-file evidence', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md');
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCOSURE.md');
+    fs.chmodSync(path.join(repoPath, 'PERSONAL_DATA_DISCLOSURE.md'), 0o000);
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('unreadable');
+    expect(result.artifact).toBeUndefined();
+    expect(result.readError).toContain('permission denied');
+    expect(Buffer.byteLength(result.readError ?? '')).toBeLessThanOrEqual(320);
+    expect(result.attempts).toEqual([
+      {
+        path: 'PERSONAL_DATA_DISCOSURE.md',
+        reason: 'root-near-match'
+      },
+      {
+        path: 'PERSONAL_DATA_DISCLOSURE.md',
+        reason: 'exact-file-read-error'
+      }
+    ]);
   });
 });

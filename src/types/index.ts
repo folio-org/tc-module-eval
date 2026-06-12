@@ -291,6 +291,30 @@ export interface S005PersonalDataDisclosureParseResult {
   warnings: string[];
 }
 
+export type S005PersonalDataDisclosureAttemptReason =
+  | 'root-near-match'
+  | 'bounded-nested-near-match'
+  | 'exact-file-read-error';
+
+export interface S005PersonalDataDisclosureAttempt {
+  path: string;
+  reason: S005PersonalDataDisclosureAttemptReason;
+}
+
+export interface S005PersonalDataDisclosureArtifact {
+  path: string;
+  absolutePath: string;
+  content: string;
+}
+
+export interface S005PersonalDataDisclosureDiscoveryResult {
+  status: 'found' | 'missing' | 'unreadable';
+  artifact?: S005PersonalDataDisclosureArtifact;
+  attempts: S005PersonalDataDisclosureAttempt[];
+  readError?: string;
+  warnings: string[];
+}
+
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
 export interface ModuleKindResult {
