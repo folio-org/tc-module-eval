@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import {
   CriterionResult,
+  CriterionAgentReviewResult,
   EvaluationRun,
   EvaluationStatus,
   ModuleDescriptorArtifact,
@@ -19,8 +20,7 @@ import { classifyModuleKind } from '../../utils/module-kind';
 import { reviewS004WithAgent } from '../../utils/s004-agent-review';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import { analyzeS005PersonalDataDisclosure } from '../../utils/s005-personal-data-disclosure';
-
-const S005_AGENT_NOT_APPLIED_REASON = 'S005 agent review is not applied until the criterion-agent adapter is added.';
+import { hasS005AgentReviewMaterial, reviewS005WithAgent } from '../../utils/s005-agent-review';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -179,17 +179,25 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const analysis = analyzeS005PersonalDataDisclosure(repoPath);
     analysis.warnings.push(...moduleKind.warnings);
     analysis.classification.warnings.push(...moduleKind.warnings);
-    if (analysis.classification.status === EvaluationStatus.MANUAL) {
-      analysis.agentReviewUnavailableReason = S005_AGENT_NOT_APPLIED_REASON;
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S005',
+      status: analysis.classification.status,
+      hasReviewMaterial: hasS005AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS005WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) {
+      analysis.agentReviewUnavailableReason = unavailableReason;
     }
 
-    const rendered = this.formatS005Evidence(analysis, moduleKind);
+    const rendered = this.formatS005Evidence(analysis, moduleKind, agentReview);
     return {
       criterionId: 'S005',
       status: analysis.classification.status,
       evidence: rendered.evidence,
       details: rendered.details,
-      criterionDetails: analysis
+      criterionDetails: analysis,
+      agentReview
     };
   }
 
@@ -233,7 +241,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
   private formatS005Evidence(
     analysis: S005PersonalDataDisclosureAnalysisResult,
-    moduleKind: ModuleKindResult
+    moduleKind: ModuleKindResult,
+    agentReview?: CriterionAgentReviewResult
   ): { evidence: string; details: string } {
     const evidence = analysis.classification.status === EvaluationStatus.FAIL
       ? analysis.classification.reason
@@ -275,9 +284,30 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       evidenceScan?.signals.length
         ? `Signal samples:\n${evidenceScan.signals.slice(0, 8).map(signal => `  - ${signal.path}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}] ${signal.excerpt}`).join('\n')}`
         : undefined,
-      analysis.agentReviewUnavailableReason ? `Agent review: ${analysis.agentReviewUnavailableReason}` : undefined,
       analysis.warnings.length ? `Warnings:\n${analysis.warnings.map(warning => `  - ${warning}`).join('\n')}` : undefined
     ];
+
+    if (agentReview) {
+      lines.push(
+        '',
+        'Agent review:',
+        agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
+        agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
+        agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
+        agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
+        agentReview.evidenceReferences.length ? `  - Evidence references: ${agentReview.evidenceReferences.join(', ')}` : undefined,
+        agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
+        agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
+        agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
+        agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
+      );
+    } else if (analysis.classification.status === EvaluationStatus.MANUAL) {
+      lines.push(
+        '',
+        'Agent review:',
+        `  - Not applied: ${analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`
+      );
+    }
 
     return {
       evidence,

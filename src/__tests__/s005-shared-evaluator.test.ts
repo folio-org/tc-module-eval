@@ -36,7 +36,7 @@ describe('S005 shared evaluator', () => {
   it('returns not applicable for explicit FOLIO library repositories without agent review', async () => {
     writeFile('package.json', JSON.stringify({ name: '@folio/stripes-components' }));
     writeFile('PERSONAL_DATA_DISCLOSURE.md', 'this would be unparseable without the library short-circuit');
-    const run = createRunWithFakeAgent();
+    const run = createRunWithFakeAgent(['S005']);
 
     const result = await evaluator.evaluateCriterion('S005', tempRoot, run);
 
@@ -96,28 +96,96 @@ describe('S005 shared evaluator', () => {
     expect(details.classification.warnings).toContainEqual(expect.stringContaining('Unable to parse package.json'));
   });
 
-  it('records an agent-not-applied reason for completed deterministic manual results', async () => {
+  it('invokes fake agent review for completed forms with candidate evidence when S005 is enabled', async () => {
     writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string', firstName: 'string' }));
 
-    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent());
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview?.available).toBe(true);
+    expect(result.agentReview?.recommendation).toBe('likely_insufficient');
+    expect(result.agentReview?.evidenceReferences).toEqual(['schemas/user.json']);
+    expect(result.details).toContain('Agent review');
+    expect(result.details).toContain('Advisory recommendation: likely_insufficient');
+    expect(result.details).toContain('Evidence references: schemas/user.json');
+  });
+
+  it('records disabled agent review for completed forms with candidate evidence when unconfigured', async () => {
+    writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot);
     const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview).toBeUndefined();
-    expect(details.agentReviewUnavailableReason).toContain('not applied');
-    expect(result.details).toContain('Agent review: S005 agent review is not applied');
+    expect(details.agentReviewUnavailableReason).toContain('agent review is disabled or unconfigured');
+    expect(result.details).toContain('agent review is disabled or unconfigured');
   });
 
-  function createRunWithFakeAgent() {
+  it('records S005 exclusion when agent review is enabled for other criteria only', async () => {
+    writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S004']));
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview).toBeUndefined();
+    expect(details.agentReviewUnavailableReason).toContain('agent review is not enabled for S005');
+    expect(result.details).toContain('agent review is not enabled for S005');
+  });
+
+  it('records a no-candidate-material reason for completed form-only manual results', async () => {
+    writeCompletedDisclosure();
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview).toBeUndefined();
+    expect(details.agentReviewUnavailableReason).toContain('no candidate evidence');
+    expect(result.details).toContain('no candidate evidence was available for agent review');
+  });
+
+  it('does not invoke agent review for deterministic S005 failures', async () => {
+    writeFile('PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+Last Updated: YYYY-MM-DD
+Last Reviewed: YYYY-MM-DD
+- [ ] Does not store personal data
+- [ ] Email address
+`);
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.agentReview).toBeUndefined();
+    expect(result.details).not.toContain('Agent review');
+  });
+
+  function createRunWithFakeAgent(enabledCriteria: string[]) {
     return createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',
       criteriaFilter: ['S005'],
       agentReview: {
         enabled: true,
-        enabledCriteria: ['S005'],
+        enabledCriteria,
         adapter: 'fake',
-        modelLabel: 'fake-model'
+        modelLabel: 'fake-model',
+        fakeResult: {
+          available: true,
+          criterionId: 'S005',
+          recommendation: 'likely_insufficient',
+          confidence: 'medium',
+          summary: 'S005 fake review summary.',
+          rationale: 'S005 fake review rationale.',
+          evidenceReferences: ['schemas/user.json'],
+          warnings: [],
+          errors: []
+        }
       }
     });
   }

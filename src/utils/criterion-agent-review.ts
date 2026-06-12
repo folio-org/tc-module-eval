@@ -100,7 +100,7 @@ export async function runCriterionAgentReview(
   }
 
   if (config.adapter === 'fake') {
-    return config.fakeResult ?? {
+    return normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
       available: true,
       criterionId: request.criterionId,
       recommendation: 'needs_reviewer_judgment',
@@ -118,7 +118,7 @@ export async function runCriterionAgentReview(
       },
       warnings: [],
       errors: []
-    };
+    });
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
@@ -254,6 +254,129 @@ function unavailableResult(criterionId: string): CriterionAgentReviewResult {
     warnings: [],
     errors: []
   };
+}
+
+function normalizeFakeCriterionReviewResult(
+  request: CriterionAgentReviewRequest,
+  config: CriterionAgentReviewConfig,
+  rawResult: CriterionAgentReviewResult
+): CriterionAgentReviewResult {
+  const manifestEntries = request.files.map(file => file.repoRelativePath);
+  const rawEvidenceReferences = Array.isArray(rawResult.evidenceReferences) ? rawResult.evidenceReferences : [];
+  const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
+  const warnings = [
+    ...stringArray(rawResult.warnings).map(redactSensitiveText),
+    ...(rawEvidenceReferences.length !== evidenceReferences.length ? ['Dropped uncited or unknown advisory evidence references'] : [])
+  ];
+  const errors = stringArray(rawResult.errors).map(redactSensitiveText);
+  const metadata = rawResult.metadata ?? {
+    adapter: 'fake' as const,
+    modelLabel: config.modelLabel,
+    endpointFamily: config.endpointFamily,
+    reviewMode: 'read-only' as const,
+    promptInputSanitized: true,
+    reviewWorkspaceSanitized: true
+  };
+
+  if (rawResult.available === false) {
+    return {
+      available: false,
+      criterionId: request.criterionId,
+      evidenceReferences,
+      metadata,
+      warnings,
+      errors: errors.length ? errors : ['Fake criterion-agent review was unavailable']
+    };
+  }
+
+  const raw = rawResult as unknown as Record<string, unknown>;
+  const recommendation = parseAdvisoryRecommendation(raw.recommendation);
+  const confidence = parseAdvisoryConfidence(raw.confidence);
+  const summary = typeof raw.summary === 'string' ? redactSensitiveText(raw.summary) : undefined;
+  const rationale = typeof raw.rationale === 'string' ? redactSensitiveText(raw.rationale) : undefined;
+
+  if (!recommendation || !confidence || !summary || !rationale) {
+    return {
+      available: false,
+      criterionId: request.criterionId,
+      evidenceReferences: [],
+      metadata,
+      warnings,
+      errors: [...errors, 'Fake criterion-agent review returned incomplete advisory JSON']
+    };
+  }
+
+  return {
+    available: true,
+    criterionId: request.criterionId,
+    recommendation,
+    confidence,
+    summary,
+    rationale,
+    evidenceReferences,
+    metadata,
+    warnings,
+    errors
+  };
+}
+
+function parseAdvisoryRecommendation(value: unknown): CriterionAgentReviewResult['recommendation'] | undefined {
+  if (value === 'likely_sufficient' || value === 'likely_insufficient' || value === 'needs_reviewer_judgment') {
+    return value;
+  }
+  const normalized = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  if (['pass', 'passed', 'sufficient', 'likely pass', 'likely_pass'].includes(normalized)) {
+    return 'likely_sufficient';
+  }
+  if (['fail', 'failed', 'insufficient', 'likely fail', 'likely_fail'].includes(normalized)) {
+    return 'likely_insufficient';
+  }
+  if (['manual', 'manual_review', 'needs manual review', 'needs_reviewer_judgment'].includes(normalized)) {
+    return 'needs_reviewer_judgment';
+  }
+  return undefined;
+}
+
+function parseAdvisoryConfidence(value: unknown): CriterionAgentReviewResult['confidence'] | undefined {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (value >= 0.75) {
+      return 'high';
+    }
+    if (value >= 0.4) {
+      return 'medium';
+    }
+    return 'low';
+  }
+  return undefined;
+}
+
+function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestEntries: string[]): string[] {
+  const references = rawReferences
+    .map(reference => {
+      if (typeof reference === 'string') {
+        return reference;
+      }
+      if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+        const candidate = reference as Record<string, unknown>;
+        if (typeof candidate.repoRelativePath === 'string') {
+          return candidate.repoRelativePath;
+        }
+        if (typeof candidate.path === 'string') {
+          return candidate.path;
+        }
+      }
+      return undefined;
+    })
+    .filter((reference): reference is string => typeof reference === 'string' && manifestEntries.includes(reference));
+
+  return [...new Set(references)];
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function pathIsInsideRepository(repositoryPath: string, candidatePath: string): boolean {

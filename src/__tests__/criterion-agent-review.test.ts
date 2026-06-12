@@ -111,6 +111,70 @@ describe('criterion agent review', () => {
     expect(result.errors.join('\n')).toContain('disabled');
   });
 
+  it('normalizes fake adapter advisory output against manifest references', async () => {
+    const result = await runCriterionAgentReview({
+      criterionId: 'S005',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'schemas/user.json', content: 'email' }],
+      schemaDescription: 'schema'
+    }, {
+      enabled: true,
+      enabledCriteria: ['S005'],
+      adapter: 'fake',
+      modelLabel: 'fake-model',
+      fakeResult: {
+        available: true,
+        criterionId: 'S005',
+        recommendation: 'fail',
+        confidence: 0.78,
+        summary: 'Fake summary.',
+        rationale: 'Fake rationale.',
+        evidenceReferences: [
+          { repoRelativePath: 'schemas/user.json' },
+          'missing.md'
+        ],
+        warnings: [],
+        errors: []
+      } as unknown as CriterionAgentReviewConfig['fakeResult']
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.recommendation).toBe('likely_insufficient');
+    expect(result.confidence).toBe('high');
+    expect(result.evidenceReferences).toEqual(['schemas/user.json']);
+    expect(result.warnings.join('\n')).toContain('Dropped');
+  });
+
+  it('treats incomplete fake adapter advisory output as unavailable', async () => {
+    const result = await runCriterionAgentReview({
+      criterionId: 'S005',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'schemas/user.json', content: 'email' }],
+      schemaDescription: 'schema'
+    }, {
+      enabled: true,
+      enabledCriteria: ['S005'],
+      adapter: 'fake',
+      modelLabel: 'fake-model',
+      fakeResult: {
+        available: true,
+        criterionId: 'S005',
+        recommendation: 'definitely_compliant',
+        confidence: 'certain',
+        summary: 'Fake summary.',
+        rationale: 'Fake rationale.',
+        evidenceReferences: ['schemas/user.json'],
+        warnings: [],
+        errors: []
+      } as unknown as CriterionAgentReviewConfig['fakeResult']
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
+  });
+
   it('prepares a sanitized manifest workspace', () => {
     const workspace = prepareCriterionReviewWorkspace({
       criterionId: 'S004',
