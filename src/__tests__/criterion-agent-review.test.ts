@@ -5,10 +5,13 @@ import {
   CommandExecutionRequest,
   CommandExecutionResult,
   CommandRunner,
-  CriterionAgentReviewConfig
+  CriterionAgentReviewConfig,
+  EvaluationRun,
+  EvaluationStatus
 } from '../types';
 import {
   prepareCriterionReviewWorkspace,
+  reviewCriterionWithAgent,
   runCriterionAgentReview,
   validateEndpointUrl
 } from '../utils/criterion-agent-review';
@@ -109,6 +112,29 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('disabled');
+  });
+
+  it('converts unexpected optional review exceptions into unavailable results', async () => {
+    const result = await reviewCriterionWithAgent({
+      criterionId: 'S005',
+      status: EvaluationStatus.MANUAL,
+      hasReviewMaterial: true,
+      evaluationRun: {
+        agentReview: {
+          enabled: true,
+          enabledCriteria: ['S005'],
+          adapter: 'fake'
+        }
+      } as EvaluationRun,
+      review: async () => {
+        throw new Error('agent crashed with token=abc123');
+      }
+    });
+
+    expect(result.agentReview?.available).toBe(false);
+    expect(result.agentReview?.errors.join('\n')).toContain('Agent review failed unexpectedly');
+    expect(result.agentReview?.errors.join('\n')).not.toContain('abc123');
+    expect(result.unavailableReason).toContain('Agent review failed unexpectedly');
   });
 
   it('normalizes fake adapter advisory output against manifest references', async () => {

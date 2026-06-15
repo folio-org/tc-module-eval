@@ -5,7 +5,9 @@ import * as path from 'path';
 import { EvaluationStatus } from '../types';
 import {
   analyzeS005PersonalDataDisclosure,
+  buildS005CriterionDetails,
   discoverS005PersonalDataDisclosureArtifact,
+  formatS005Evidence,
   gatherS005PersonalDataEvidence,
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
@@ -316,12 +318,43 @@ describe('S005 personal data disclosure artifact discovery', () => {
       }
     ]);
   });
+
+  it('bounds oversized disclosure artifacts and checklist retention', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'PERSONAL_DATA_DISCLOSURE.md',
+      [
+        '# Personal Data Disclosure',
+        'Form Version: v1.1',
+        'Last Updated: 2026-06-12',
+        'Last Reviewed: 2026-06-12',
+        '',
+        '## Personal data',
+        '- [x] This module does not store personal data.',
+        ...Array.from({ length: 700 }, (_, index) => `- [ ] Email address ${index}`),
+        'x'.repeat(600 * 1024)
+      ].join('\n')
+    );
+
+    const discovery = discoverS005PersonalDataDisclosureArtifact(repoPath);
+    const parsed = parseS005PersonalDataDisclosureMarkdown(discovery.artifact?.content ?? '');
+
+    expect(discovery.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('truncated')
+    ]));
+    expect(parsed.checklistItems.length).toBeLessThanOrEqual(500);
+    expect(parsed.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('checklist item cap')
+    ]));
+  });
 });
 
 describe('S005 bounded personal-data evidence scanner', () => {
   let repoPath: string;
 
   afterEach(() => {
+    jest.restoreAllMocks();
     if (repoPath && fs.existsSync(repoPath)) {
       fs.rmSync(repoPath, { recursive: true, force: true });
     }
@@ -383,7 +416,7 @@ describe('S005 bounded personal-data evidence scanner', () => {
       })
     ]));
     expect(result.signals.find(signal => signal.path === 'ramls/users.raml' && signal.category === 'email')?.excerpt)
-      .toContain('[REDACTED_EMAIL]');
+      .toContain('[REDACTED_VALUE]');
   });
 
   it('treats UI and documentation evidence as candidate or context instead of persistence proof', () => {
@@ -449,7 +482,7 @@ class UserEventsProducer {
     ]));
 
     const loggingSignal = result.signals.find(signal => signal.category === 'logging' && signal.excerpt.includes('publishing'));
-    expect(loggingSignal?.excerpt).toContain('[REDACTED_EMAIL]');
+    expect(loggingSignal?.excerpt).toContain('[REDACTED_VALUE]');
     expect(loggingSignal?.excerpt).toContain('apiToken=[REDACTED]');
   });
 
@@ -473,6 +506,41 @@ class UserEventsProducer {
     expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('312-555-0199');
     expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('Jane Doe');
     expect(result.signals.map(signal => signal.excerpt).join('\n')).toContain('[REDACTED_LONG_TEXT]');
+  });
+
+  it('redacts short personal values from evidence excerpts', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', `
+{
+  "firstName": "Mary Smith",
+  "barcode": "12345",
+  "addressLine1": "12 Oak St"
+}
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+    const excerpts = result.signals.map(signal => signal.excerpt).join('\n');
+
+    expect(excerpts).not.toContain('Mary Smith');
+    expect(excerpts).not.toContain('12345');
+    expect(excerpts).not.toContain('12 Oak St');
+    expect(excerpts).toContain('[REDACTED_VALUE]');
+  });
+
+  it('skips CI workflow metadata so build terms do not become strong evidence', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, '.github/workflows/api-cache.yml', `
+name: api cache
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v4
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.scannedFiles).not.toContain('.github/workflows/api-cache.yml');
+    expect(result.signals).toEqual([]);
   });
 
   it('bounds large and binary files, skips dependency/build/report folders, and reports retention caps', () => {
@@ -529,6 +597,82 @@ class UserEventsProducer {
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.stringContaining('file scan cap')
     ]));
+  });
+
+  it('prioritizes direct contract evidence before low-value docs when applying the scan cap', () => {
+    repoPath = createTempRepo();
+    for (let index = 0; index < 205; index++) {
+      writeRepoFile(
+        repoPath,
+        `api/${String(index).padStart(3, '0')}.md`,
+        'API cache documentation without personal fields.'
+      );
+    }
+    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', JSON.stringify({
+      emailAddress: 'person@example.org'
+    }, null, 2));
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.scannedFiles).toContain('src/main/resources/schemas/user.json');
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'src/main/resources/schemas/user.json',
+        category: 'email',
+        sourceClass: 'direct_contract'
+      })
+    ]));
+  });
+
+  it('stops evidence reads at the total text cap and reports truncation', () => {
+    repoPath = createTempRepo();
+    for (let index = 0; index < 30; index++) {
+      writeRepoFile(
+        repoPath,
+        `src/main/java/org/folio/User${String(index).padStart(3, '0')}.java`,
+        `class User${index} { String firstName = "Mary Smith"; }\n${'x'.repeat(MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE)}`
+      );
+    }
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.scannedFiles.length).toBeLessThan(30);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('byte total text cap')
+    ]));
+  });
+
+  it('reports traversal truncation when discovery hits the entry cap', () => {
+    repoPath = createTempRepo();
+    for (let index = 0; index < 5050; index++) {
+      fs.mkdirSync(path.join(repoPath, `empty-${String(index).padStart(4, '0')}`), { recursive: true });
+    }
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('traversal cap')
+    ]));
+  });
+
+  it('reports unreadable candidate directories during evidence discovery', () => {
+    repoPath = createTempRepo();
+    const unreadablePath = path.join(repoPath, 'schemas');
+    fs.mkdirSync(unreadablePath, { recursive: true });
+    fs.chmodSync(unreadablePath, 0o000);
+
+    try {
+      const result = gatherS005PersonalDataEvidence(repoPath);
+
+      expect(result.skippedFiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: 'schemas',
+          reason: 'read-error'
+        })
+      ]));
+    } finally {
+      fs.chmodSync(unreadablePath, 0o700);
+    }
   });
 });
 
@@ -774,5 +918,44 @@ Version: v1.0
         signalStrengths: ['context']
       })
     ]));
+  });
+
+  it('redacts metadata and path values from structured criterion details', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Form Version: reviewer@example.org
+Last Updated: 312-555-0199
+Last Reviewed: reviewer@example.org
+
+## Personal data for Mary Smith
+- [ ] Mary Smith barcode 12345 should be disclosed.
+- [x] This module does not store or process personal data.
+`);
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCOSURE-reviewer@example.org-token=abc123.md');
+    writeRepoFile(repoPath, 'schemas/reviewer@example.org-token=abc123/user.json', `${JSON.stringify({
+      emailAddress: 'person@example.org'
+    }, null, 2)}\n${'x'.repeat(MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE)}`);
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+    const details = JSON.stringify(buildS005CriterionDetails(result));
+    const rendered = formatS005Evidence(result, {
+      kind: 'backend-module',
+      evidence: [],
+      warnings: []
+    }).details;
+    const combinedReportText = `${details}\n${rendered}`;
+
+    expect(combinedReportText).not.toContain('reviewer@example.org');
+    expect(combinedReportText).not.toContain('312-555-0199');
+    expect(combinedReportText).not.toContain('Mary Smith');
+    expect(combinedReportText).not.toContain('12345');
+    expect(combinedReportText).not.toContain('abc123');
+    expect(combinedReportText).toContain('[REDACTED_EMAIL]');
+    expect(combinedReportText).toContain('[REDACTED]');
+    expect(combinedReportText).toContain('checklistItems');
+    expect(combinedReportText).not.toContain('rawLabel');
+    expect(combinedReportText).not.toContain('sectionHeading');
   });
 });

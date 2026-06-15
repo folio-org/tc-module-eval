@@ -28,6 +28,9 @@ export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
 const MAX_PARSE_ERROR_BYTES = 512;
 const MAX_DISCOVERY_READ_ERROR_BYTES = 300;
+const MAX_DISCLOSURE_FILE_BYTES = 512 * 1024;
+const MAX_DISCLOSURE_CHECKLIST_ITEMS = 500;
+const MAX_DISCLOSURE_PLACEHOLDERS = 100;
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_CRITERION_DETAIL_REFERENCES = 16;
 const MAX_CRITERION_DETAIL_FILES = 40;
@@ -50,15 +53,24 @@ const DIRECT_CONTRACT_FILE_PATTERN = /(?:^|\/)(?:schemas?|schema|ramls?|api|apis
 const DOCUMENTATION_FILE_PATTERN = /(?:^|\/)(?:readme|privacy|personal-data|data-handling)[^/]*\.md$|(?:^|\/)(?:docs?|documentation)(?:\/|$)/i;
 const UI_FILE_PATTERN = /(?:^|\/)(?:translations|i18n|lang|ui|stripes|components?|routes?)(?:\/|$)|\.(?:jsx|tsx)$/i;
 const TEST_SAMPLE_FILE_PATTERN = /(?:^|\/)(?:__tests__|tests?|spec|fixtures?|samples?|examples?)(?:\/|$)|(?:test|spec|fixture|sample|example)\.[^.\/]+$/i;
+const AUTOMATION_CONFIG_FILE_PATTERN = /(?:^|\/)(?:\.github|\.gitlab|\.circleci|circleci|buildkite|ci|github\/workflows|workflows)(?:\/|$)|(?:^|\/)(?:Dockerfile|docker-compose\.ya?ml|Jenkinsfile|Makefile)$/i;
 const HIGH_SIGNAL_PATH_PATTERN = /(?:schema|raml|openapi|swagger|module-descriptor|package\.json|readme|docs?|documentation|translation|i18n|lang|ui|stripes|component|route|persistence|database|migration|db\/|sql|log4j|logback|logging|logger|queue|event|kafka|pubsub|producer|consumer|cache|redis|s3|blob|bucket|profile|avatar|photo|api|example|sample|fixture)/i;
 const HIGH_RISK_PERSONAL_EXAMPLE_PATTERN = /\b(?:john|jane)\s+doe\b|\b(?:ssn|social security number)\s*[:=]?\s*\d{3}[-\s]?\d{2}[-\s]?\d{4}\b|\b(?:credit card|card number)\s*[:=]?\s*(?:\d[ -]?){13,19}\b|\b\d{4}\s+[A-Z][a-z]+(?:\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln))\b/gi;
 const LONG_FREE_FORM_VALUE_PATTERN = /(["'`])([^"'`\n]{180,})\1/g;
+const PATH_SECRET_PATTERN = /\b(?:api[-_]?key|token|secret|password|passwd|pwd|credential|auth)[-_:=][^/\\\s]+/gi;
+const PERSONAL_FIELD_VALUE_PATTERN = new RegExp(
+  '(["\']?\\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name|username|userName|user_name|loginName|login_name|userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier|emailAddress|email_address|email|phone|telephone|mobilePhone|mobile_phone|address|streetAddress|street_address|addressLine\\d*|address_line\\d*|postalCode|postal_code|zipCode|zip_code|city|province|state|country|location|dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob|notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)["\']?\\s*[:=]\\s*)(?:"[^"\\n]{1,180}"|\'[^\'\\n]{1,180}\'|`[^`\\n]{1,180}`|[A-Za-z0-9._@+\\-]{2,180})',
+  'gi'
+);
 const S005_EVIDENCE_SKIPPED_DIRS: ReadonlySet<string> = new Set([
   '.git',
   '.hg',
   '.svn',
+  '.github',
+  '.gitlab',
   '.idea',
   '.vscode',
+  '.circleci',
   'node_modules',
   'bower_components',
   'dist',
@@ -76,6 +88,7 @@ const S005_EVIDENCE_SKIPPED_DIRS: ReadonlySet<string> = new Set([
   'generated-reports',
   'test-results'
 ]);
+const MAX_S005_EVIDENCE_TRAVERSAL_ENTRIES = 5000;
 
 const PERSONAL_FIELD_CATEGORIES = new Set<S005PersonalDataCategory>([
   'name',
@@ -164,7 +177,7 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
       artifact: {
         path: REQUIRED_DISCLOSURE_FILENAME,
         absolutePath: exactPath,
-        content: fs.readFileSync(exactPath, 'utf-8')
+        content: readBoundedDisclosureText(exactPath, warnings)
       },
       attempts,
       warnings
@@ -207,6 +220,13 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
 
     const checkboxMatch = line.match(CHECKBOX_PATTERN);
     if (!checkboxMatch) {
+      continue;
+    }
+
+    if (checklistItems.length >= MAX_DISCLOSURE_CHECKLIST_ITEMS) {
+      if (!warnings.some(warning => warning.includes('checklist item cap'))) {
+        warnings.push(`S005 disclosure parsing reached the ${MAX_DISCLOSURE_CHECKLIST_ITEMS}-item checklist item cap; additional checklist items were truncated.`);
+      }
       continue;
     }
 
@@ -299,6 +319,8 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
   const skippedFiles: S005PersonalDataEvidenceScanResult['skippedFiles'] = [];
   const candidateDiscovery = collectBoundedS005EvidenceCandidates(repoRoot);
   const candidateFiles = candidateDiscovery.files;
+  warnings.push(...candidateDiscovery.warnings);
+  skippedFiles.push(...candidateDiscovery.skippedFiles);
 
   if (candidateDiscovery.truncated) {
     warnings.push(
@@ -483,329 +505,10 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
   };
 }
 
-export function formatS005Evidence(
-  analysis: S005PersonalDataDisclosureAnalysisResult,
-  moduleKind: ModuleKindResult,
-  agentReview?: CriterionAgentReviewResult
-): { evidence: string; details: string } {
-  const evidence = `S005 ${analysis.classification.status}: ${analysis.classification.reason}`;
-  const parseResult = analysis.parseResult;
-  const evidenceScan = analysis.evidenceScan;
-  const lines: Array<string | undefined> = [
-    'Artifact mechanics:',
-    `  - Repository kind: ${moduleKind.kind}`,
-    ...moduleKind.evidence.map(evidenceItem => `  - Module-kind evidence: ${evidenceItem}`),
-    `  - Required file: ${REQUIRED_DISCLOSURE_FILENAME}`,
-    `  - Discovery status: ${analysis.discovery.status}`,
-    analysis.discovery.artifact?.path ? `  - Disclosure artifact: ${analysis.discovery.artifact.path}` : `  - Missing exact file: ${REQUIRED_DISCLOSURE_FILENAME}`,
-    analysis.discovery.readError ? `  - Read error: ${analysis.discovery.readError}` : undefined,
-    ...formatAttemptLines(analysis.discovery.attempts),
-    '',
-    'Parsed disclosure fields:',
-    `  - Parse state: ${analysis.classification.parseState}`,
-    parseResult ? `  - Template identity: ${parseResult.metadata.templateIdentity}` : undefined,
-    parseResult?.metadata.versionText ? `  - Form version: ${parseResult.metadata.versionText}` : undefined,
-    parseResult?.metadata.lastUpdatedText ? `  - Last updated: ${parseResult.metadata.lastUpdatedText}` : undefined,
-    parseResult?.metadata.lastReviewedText ? `  - Last reviewed: ${parseResult.metadata.lastReviewedText}` : undefined,
-    parseResult ? `  - Checked answers: ${formatCategoryList(parseResult.checkedCategories)}` : undefined,
-    parseResult ? `  - Unchecked answers: ${formatCategoryList(parseResult.uncheckedCategories)}` : undefined,
-    ...formatPlaceholderLines(analysis.placeholders),
-    ...formatUncheckedAnswerLines(analysis.uncheckedAnswerDetails),
-    ...formatParseErrorLines(parseResult),
-    '',
-    'Deterministic evidence:',
-    evidenceScan ? `  - Evidence files scanned: ${evidenceScan.scannedFiles.length}` : '  - Evidence files scanned: not applied',
-    evidenceScan ? `  - Evidence signals found: ${evidenceScan.signals.length}` : undefined,
-    ...formatAssessmentLines('Matching disclosure/source evidence:', analysis.matchingEvidence),
-    ...formatAssessmentLines('Supporting deterministic evidence:', analysis.supportingEvidence),
-    ...formatSignalLines(evidenceScan?.signals ?? []),
-    '',
-    'Possible mismatches:',
-    ...formatContradictionLines(analysis.contradictions),
-    ...formatMismatchLines(analysis.possibleMismatches),
-    ...(analysis.contradictions.length || analysis.possibleMismatches.length ? [] : ['  - none']),
-    ...formatWarningLines(analysis.warnings)
-  ];
-
-  appendAgentReviewLines(lines, analysis, agentReview);
-
-  return {
-    evidence: redactS005PersonalDataText(evidence, 700),
-    details: redactS005PersonalDataText(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
-  };
-}
-
-export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAnalysisResult): unknown {
-  return {
-    discovery: {
-      status: analysis.discovery.status,
-      artifact: analysis.discovery.artifact
-        ? {
-            path: analysis.discovery.artifact.path,
-            sizeBytes: Buffer.byteLength(analysis.discovery.artifact.content, 'utf-8')
-          }
-        : undefined,
-      attempts: analysis.discovery.attempts,
-      readError: analysis.discovery.readError,
-      warnings: analysis.discovery.warnings
-    },
-    parseResult: analysis.parseResult
-      ? {
-          metadata: analysis.parseResult.metadata,
-          checklistItems: analysis.parseResult.checklistItems,
-          checkedCategories: analysis.parseResult.checkedCategories,
-          uncheckedCategories: analysis.parseResult.uncheckedCategories,
-          completion: analysis.parseResult.completion,
-          placeholders: analysis.parseResult.placeholders,
-          contradictions: analysis.parseResult.contradictions,
-          classification: analysis.parseResult.classification,
-          parseError: analysis.parseResult.parseError,
-          warnings: analysis.parseResult.warnings
-        }
-      : undefined,
-    evidenceScan: analysis.evidenceScan
-      ? {
-          signalCount: analysis.evidenceScan.signals.length,
-          signals: strongestS005Signals(analysis.evidenceScan.signals),
-          scannedFileCount: analysis.evidenceScan.scannedFiles.length,
-          scannedFiles: analysis.evidenceScan.scannedFiles.slice(0, MAX_CRITERION_DETAIL_FILES),
-          skippedFiles: analysis.evidenceScan.skippedFiles.slice(0, MAX_CRITERION_DETAIL_FILES),
-          warnings: analysis.evidenceScan.warnings
-        }
-      : undefined,
-    classification: analysis.classification,
-    agentReviewUnavailableReason: analysis.agentReviewUnavailableReason,
-    possibleMismatches: analysis.possibleMismatches.map(boundS005MismatchDetails),
-    matchingEvidence: analysis.matchingEvidence.map(boundS005AssessmentDetails),
-    supportingEvidence: analysis.supportingEvidence.map(boundS005AssessmentDetails),
-    uncheckedAnswerDetails: analysis.uncheckedAnswerDetails,
-    placeholders: analysis.placeholders,
-    contradictions: analysis.contradictions,
-    warnings: analysis.warnings
-  };
-}
-
-function boundS005MismatchDetails(mismatch: S005PersonalDataPossibleMismatch): unknown {
-  return {
-    ...mismatch,
-    evidenceReferenceCount: mismatch.evidenceReferences.length,
-    evidenceReferences: mismatch.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES)
-  };
-}
-
-function boundS005AssessmentDetails(assessment: S005PersonalDataEvidenceAssessment): unknown {
-  return {
-    ...assessment,
-    evidenceReferenceCount: assessment.evidenceReferences.length,
-    evidenceReferences: assessment.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES)
-  };
-}
-
-function formatAttemptLines(attempts: S005PersonalDataDisclosureAttempt[]): string[] {
-  if (!attempts.length) {
-    return [];
-  }
-
-  return [
-    '  - Attempted disclosure artifacts:',
-    ...attempts.slice(0, MAX_REPORT_LIST_ITEMS).map(attempt => `    - ${attempt.path} (${attempt.reason})`),
-    ...overflowLine(attempts.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatPlaceholderLines(placeholders: S005PersonalDataDisclosurePlaceholderEvidence[]): string[] {
-  if (!placeholders.length) {
-    return [];
-  }
-
-  return [
-    '  - Placeholder/incomplete evidence:',
-    ...placeholders.slice(0, MAX_REPORT_LIST_ITEMS).map(placeholder =>
-      `    - ${placeholder.field} line ${placeholder.lineNumber}: ${placeholder.placeholderText}`
-    ),
-    ...overflowLine(placeholders.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatUncheckedAnswerLines(items: S005PersonalDataDisclosureChecklistItem[]): string[] {
-  if (!items.length) {
-    return [];
-  }
-
-  return [
-    '  - Unchecked answer evidence:',
-    ...items.slice(0, MAX_REPORT_LIST_ITEMS).map(item =>
-      `    - line ${item.lineNumber} [${item.normalizedCategory}]: ${item.rawLabel}`
-    ),
-    ...overflowLine(items.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatParseErrorLines(parseResult?: S005PersonalDataDisclosureParseResult): string[] {
-  if (!parseResult?.parseError) {
-    return [];
-  }
-
-  return [
-    `  - Parse error: ${parseResult.parseError.message}`,
-    `  - Parse excerpt: ${parseResult.parseError.excerpt}`
-  ];
-}
-
-function formatAssessmentLines(
-  heading: string,
-  assessments: S005PersonalDataEvidenceAssessment[]
-): string[] {
-  if (!assessments.length) {
-    return [`  - ${heading} none`];
-  }
-
-  return [
-    `  - ${heading}`,
-    ...assessments.slice(0, MAX_REPORT_LIST_ITEMS).map(assessment =>
-      `    - ${assessment.kind}${assessment.category ? `/${assessment.category}` : ''}: ${assessment.message}${formatReferences(assessment.evidenceReferences)}`
-    ),
-    ...overflowLine(assessments.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatSignalLines(signals: S005PersonalDataEvidenceSignal[]): string[] {
-  if (!signals.length) {
-    return ['  - Strongest signals: none'];
-  }
-
-  return [
-    '  - Strongest signals:',
-    ...strongestS005Signals(signals).map(signal =>
-      `    - ${signal.path}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}] ${signal.label}: ${signal.excerpt}`
-    )
-  ];
-}
-
-function formatContradictionLines(contradictions: S005PersonalDataDisclosureContradiction[]): string[] {
-  if (!contradictions.length) {
-    return [];
-  }
-
-  return [
-    '  - Contradictions:',
-    ...contradictions.slice(0, MAX_REPORT_LIST_ITEMS).map(contradiction =>
-      `    - ${contradiction.message}${formatReferences(contradiction.lineNumbers.map(line => `${REQUIRED_DISCLOSURE_FILENAME}:${line}`))}`
-    ),
-    ...overflowLine(contradictions.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatMismatchLines(mismatches: S005PersonalDataPossibleMismatch[]): string[] {
-  if (!mismatches.length) {
-    return [];
-  }
-
-  return [
-    '  - Mismatch signals:',
-    ...mismatches.slice(0, MAX_REPORT_LIST_ITEMS).map(mismatch =>
-      `    - ${mismatch.kind}${mismatch.category ? `/${mismatch.category}` : ''}: ${mismatch.message}${formatReferences(mismatch.evidenceReferences)}`
-    ),
-    ...overflowLine(mismatches.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatWarningLines(warnings: string[]): string[] {
-  if (!warnings.length) {
-    return [];
-  }
-
-  return [
-    '',
-    'Warnings:',
-    ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning => `  - ${warning}`),
-    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function appendAgentReviewLines(
-  lines: Array<string | undefined>,
-  analysis: S005PersonalDataDisclosureAnalysisResult,
-  agentReview?: CriterionAgentReviewResult
-): void {
-  if (agentReview?.available) {
-    lines.push(
-      '',
-      'Agent review:',
-      agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
-      agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
-      agentReview.evidenceReferences.length ? `  - Evidence references: ${agentReview.evidenceReferences.join(', ')}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
-      agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
-      agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
-    );
-    return;
-  }
-
-  if (analysis.classification.status !== EvaluationStatus.MANUAL) {
-    return;
-  }
-
-  const reason = analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured';
-  lines.push(
-    '',
-    'Agent review:',
-    `  - Not applied: ${reason}`,
-    agentReview?.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
-    agentReview?.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
-    agentReview?.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
-    agentReview?.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
-  );
-}
-
-function strongestS005Signals(signals: S005PersonalDataEvidenceSignal[]): S005PersonalDataEvidenceSignal[] {
-  const strengthRank: Record<S005PersonalDataEvidenceStrength, number> = {
-    strong: 0,
-    candidate: 1,
-    context: 2
-  };
-  const sourceRank: Record<S005PersonalDataEvidenceSourceClass, number> = {
-    direct_contract: 0,
-    implementation: 1,
-    ui: 2,
-    documentation: 3,
-    test_sample: 4
-  };
-
-  return [...signals]
-    .sort((a, b) =>
-      strengthRank[a.strength] - strengthRank[b.strength] ||
-      sourceRank[a.sourceClass] - sourceRank[b.sourceClass] ||
-      a.path.localeCompare(b.path) ||
-      (a.line ?? 0) - (b.line ?? 0)
-    )
-    .slice(0, MAX_REPORT_LIST_ITEMS);
-}
-
-function formatCategoryList(categories: S005PersonalDataCategory[]): string {
-  if (!categories.length) {
-    return 'none';
-  }
-
-  const visible = categories.slice(0, MAX_REPORT_LIST_ITEMS).join(', ');
-  const hiddenCount = categories.length - MAX_REPORT_LIST_ITEMS;
-  return hiddenCount > 0 ? `${visible}, ... ${hiddenCount} more` : visible;
-}
-
-function formatReferences(references: string[]): string {
-  if (!references.length) {
-    return '';
-  }
-
-  return ` (evidence: ${references.slice(0, MAX_REPORT_LIST_ITEMS).join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
-}
-
-function overflowLine(total: number, visible: number): string[] {
-  return total > visible ? [`    - ... ${total - visible} more`] : [];
-}
+export {
+  buildS005CriterionDetails,
+  formatS005Evidence
+} from './s005-personal-data-disclosure-report';
 
 export function classifyCompletedS005PersonalDataDisclosure(
   parseResult: S005PersonalDataDisclosureParseResult,
@@ -1096,20 +799,48 @@ export function redactS005PersonalDataText(input: string, maxBytes: number = MAX
   );
 }
 
-function collectBoundedS005EvidenceCandidates(repoPath: string): { files: string[]; truncated: boolean } {
+export function redactS005PersonalDataPath(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
+  return redactS005PersonalDataText(input.replace(PATH_SECRET_PATTERN, match => {
+    const separatorIndex = Math.max(match.lastIndexOf('-'), match.lastIndexOf('_'), match.lastIndexOf(':'), match.lastIndexOf('='));
+    return separatorIndex >= 0 ? `${match.slice(0, separatorIndex + 1)}[REDACTED]` : '[REDACTED]';
+  }), maxBytes);
+}
+
+function redactS005EvidenceExcerpt(input: string): string {
+  return redactS005PersonalDataText(
+    input.replace(PERSONAL_FIELD_VALUE_PATTERN, (_match, prefix: string) => `${prefix}[REDACTED_VALUE]`),
+    MAX_S005_EVIDENCE_EXCERPT_BYTES
+  );
+}
+
+function collectBoundedS005EvidenceCandidates(repoPath: string): {
+  files: string[];
+  truncated: boolean;
+  skippedFiles: S005PersonalDataEvidenceScanResult['skippedFiles'];
+  warnings: string[];
+} {
   const files: string[] = [];
+  const skippedFiles: S005PersonalDataEvidenceScanResult['skippedFiles'] = [];
+  const warnings: string[] = [];
   let truncated = false;
+  let visitedEntries = 0;
 
   const walk = (currentPath: string): void => {
-    if (files.length >= MAX_S005_EVIDENCE_SCANNED_FILES) {
+    if (visitedEntries >= MAX_S005_EVIDENCE_TRAVERSAL_ENTRIES) {
       truncated = true;
       return;
     }
+    visitedEntries += 1;
 
     let stats: fs.Stats;
     try {
       stats = fs.lstatSync(currentPath);
     } catch {
+      skippedFiles.push({
+        path: redactS005PersonalDataPath(relativePosixPath(repoPath, currentPath)),
+        reason: 'read-error',
+        message: 'Unable to inspect path while discovering S005 evidence candidates.'
+      });
       return;
     }
 
@@ -1132,6 +863,11 @@ function collectBoundedS005EvidenceCandidates(repoPath: string): { files: string
     try {
       entries = fs.readdirSync(currentPath).sort((left, right) => left.localeCompare(right));
     } catch {
+      skippedFiles.push({
+        path: redactS005PersonalDataPath(relativePosixPath(repoPath, currentPath)),
+        reason: 'read-error',
+        message: 'Unable to read directory while discovering S005 evidence candidates.'
+      });
       return;
     }
 
@@ -1147,7 +883,20 @@ function collectBoundedS005EvidenceCandidates(repoPath: string): { files: string
   };
 
   walk(repoPath);
-  return { files, truncated };
+  if (files.length > MAX_S005_EVIDENCE_SCANNED_FILES) {
+    truncated = true;
+  }
+  if (visitedEntries >= MAX_S005_EVIDENCE_TRAVERSAL_ENTRIES) {
+    warnings.push(
+      `S005 evidence discovery reached the ${MAX_S005_EVIDENCE_TRAVERSAL_ENTRIES}-entry traversal cap; additional paths were not inspected.`
+    );
+  }
+  return {
+    files: prioritizeS005EvidenceCandidates(repoPath, files).slice(0, MAX_S005_EVIDENCE_SCANNED_FILES),
+    truncated,
+    skippedFiles,
+    warnings
+  };
 }
 
 function isS005EvidenceCandidate(repoPath: string, candidatePath: string): boolean {
@@ -1164,11 +913,40 @@ function isS005EvidenceCandidate(repoPath: string, candidatePath: string): boole
     return false;
   }
 
+  if (AUTOMATION_CONFIG_FILE_PATTERN.test(relativePath)) {
+    return false;
+  }
+
   return (
     HIGH_SIGNAL_PATH_PATTERN.test(relativePath) ||
     /(?:^|\/)src\/.*\.(?:java|kt|js|jsx|ts|tsx|xml|properties|ya?ml)$/i.test(relativePath) ||
     /(?:^|\/)(?:package|module-descriptor)\.json$/i.test(relativePath)
   );
+}
+
+function prioritizeS005EvidenceCandidates(repoPath: string, files: string[]): string[] {
+  return [...files].sort((left, right) => {
+    const leftRelative = relativePosixPath(repoPath, left);
+    const rightRelative = relativePosixPath(repoPath, right);
+    return s005CandidatePriority(leftRelative) - s005CandidatePriority(rightRelative) ||
+      leftRelative.localeCompare(rightRelative);
+  });
+}
+
+function s005CandidatePriority(relativePath: string): number {
+  if (DOCUMENTATION_FILE_PATTERN.test(relativePath) || /\.md$/i.test(relativePath)) {
+    return 3;
+  }
+
+  const sourceClass = classifyS005EvidenceSourceClass(relativePath);
+  const priority: Record<S005PersonalDataEvidenceSourceClass, number> = {
+    direct_contract: 0,
+    implementation: 1,
+    ui: 2,
+    documentation: 3,
+    test_sample: 4
+  };
+  return priority[sourceClass];
 }
 
 function looksLikeGeneratedReportPath(relativePath: string): boolean {
@@ -1178,6 +956,9 @@ function looksLikeGeneratedReportPath(relativePath: string): boolean {
 function classifyS005EvidenceSourceClass(relativePath: string): S005PersonalDataEvidenceSourceClass {
   if (TEST_SAMPLE_FILE_PATTERN.test(relativePath)) {
     return 'test_sample';
+  }
+  if (AUTOMATION_CONFIG_FILE_PATTERN.test(relativePath)) {
+    return 'documentation';
   }
   if (DIRECT_CONTRACT_FILE_PATTERN.test(relativePath)) {
     return 'direct_contract';
@@ -1231,7 +1012,7 @@ function extractS005EvidenceSignals(
         label: categoryPattern.label,
         path: relativePath,
         line: index + 1,
-        excerpt: redactS005PersonalDataText(line.trim(), MAX_S005_EVIDENCE_EXCERPT_BYTES),
+        excerpt: redactS005EvidenceExcerpt(line.trim()),
         sourceClass,
         strength
       });
@@ -1300,6 +1081,24 @@ function readBoundedEvidenceText(
   }
 }
 
+function readBoundedDisclosureText(filePath: string, warnings: string[]): string {
+  const stats = fs.statSync(filePath);
+  const bytesToRead = Math.min(stats.size, MAX_DISCLOSURE_FILE_BYTES);
+  const descriptor = fs.openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(bytesToRead);
+    const bytesRead = fs.readSync(descriptor, buffer, 0, bytesToRead, 0);
+    if (stats.size > MAX_DISCLOSURE_FILE_BYTES) {
+      warnings.push(
+        `S005 disclosure artifact was truncated to ${MAX_DISCLOSURE_FILE_BYTES} bytes before parsing.`
+      );
+    }
+    return buffer.subarray(0, bytesRead).toString('utf-8').replace(/\uFFFD/g, '');
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 function isBinaryBuffer(buffer: Buffer): boolean {
   if (!buffer.length) {
     return false;
@@ -1324,20 +1123,20 @@ function captureMetadata(
 ): void {
   const versionMatch = line.match(VERSION_PATTERN);
   if (versionMatch && !metadata.versionText) {
-    metadata.versionText = stripInlineMarkdown(versionMatch[1]).trim();
+    metadata.versionText = redactS005PersonalDataText(stripInlineMarkdown(versionMatch[1]).trim(), 240);
     metadata.versionLineNumber = lineNumber;
   }
 
   const updatedMatch = line.match(LAST_UPDATED_PATTERN);
   if (updatedMatch && !metadata.lastUpdatedText) {
-    metadata.lastUpdatedText = stripInlineMarkdown(updatedMatch[1]).trim();
+    metadata.lastUpdatedText = redactS005PersonalDataText(stripInlineMarkdown(updatedMatch[1]).trim(), 240);
     metadata.lastUpdatedLineNumber = lineNumber;
     addPlaceholderIfNeeded('Last Updated', metadata.lastUpdatedText, lineNumber, line, placeholders);
   }
 
   const reviewedMatch = line.match(LAST_REVIEWED_PATTERN);
   if (reviewedMatch && !metadata.lastReviewedText) {
-    metadata.lastReviewedText = stripInlineMarkdown(reviewedMatch[1]).trim();
+    metadata.lastReviewedText = redactS005PersonalDataText(stripInlineMarkdown(reviewedMatch[1]).trim(), 240);
     metadata.lastReviewedLineNumber = lineNumber;
     addPlaceholderIfNeeded('Last Reviewed', metadata.lastReviewedText, lineNumber, line, placeholders);
   }
@@ -1351,6 +1150,9 @@ function addPlaceholderIfNeeded(
   placeholders: S005PersonalDataDisclosurePlaceholderEvidence[]
 ): void {
   if (!PLACEHOLDER_PATTERN.test(value.trim())) {
+    return;
+  }
+  if (placeholders.length >= MAX_DISCLOSURE_PLACEHOLDERS) {
     return;
   }
 

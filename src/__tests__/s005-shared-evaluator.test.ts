@@ -159,10 +159,10 @@ Last Reviewed: 2026-06-12
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.recommendation).toBe('likely_insufficient');
-    expect(result.agentReview?.evidenceReferences).toEqual(['schemas/user.json']);
+    expect(result.agentReview?.evidenceReferences).toEqual(['.criterion-agent/S005/evidence/evidence-001.txt']);
     expect(result.details).toContain('Agent review');
     expect(result.details).toContain('Advisory recommendation: likely_insufficient');
-    expect(result.details).toContain('Evidence references: schemas/user.json');
+    expect(result.details).toContain('Evidence references: .criterion-agent/S005/evidence/evidence-001.txt');
   });
 
   it('records disabled agent review for completed forms with candidate evidence when unconfigured', async () => {
@@ -286,7 +286,7 @@ Last Reviewed: YYYY-MM-DD
           confidence: 'medium',
           summary: 'S005 fake review summary.',
           rationale: 'S005 fake review rationale.',
-          evidenceReferences: ['schemas/user.json'],
+          evidenceReferences: ['.criterion-agent/S005/evidence/evidence-001.txt'],
           warnings: [],
           errors: []
         }

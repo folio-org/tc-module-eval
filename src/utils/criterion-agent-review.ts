@@ -70,7 +70,22 @@ export async function reviewCriterionWithAgent(
     return { unavailableReason: `agent review is not enabled for ${request.criterionId}` };
   }
 
-  const agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+  let agentReview: CriterionAgentReviewResult;
+  try {
+    agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      agentReview: {
+        available: false,
+        criterionId: request.criterionId,
+        evidenceReferences: [],
+        warnings: [],
+        errors: [`Agent review failed unexpectedly: ${redactSensitiveText(message)}`]
+      },
+      unavailableReason: `Agent review failed unexpectedly: ${redactSensitiveText(message)}`
+    };
+  }
   if (!agentReview.available) {
     return {
       agentReview,

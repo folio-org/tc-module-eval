@@ -18,6 +18,7 @@ import {
   MAX_S005_EVIDENCE_EXCERPT_BYTES,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
   REQUIRED_DISCLOSURE_FILENAME,
+  redactS005PersonalDataPath,
   redactS005PersonalDataText
 } from './s005-personal-data-disclosure';
 
@@ -53,6 +54,10 @@ export function hasS005AgentReviewMaterial(analysis: S005PersonalDataDisclosureA
   }
 
   if (analysis.evidenceScan?.signals.length) {
+    return true;
+  }
+
+  if (analysis.evidenceScan?.warnings.some(warning => /\b(?:truncated|cap)\b/i.test(warning))) {
     return true;
   }
 
@@ -110,19 +115,20 @@ function buildParsedSummaryContent(analysis: S005PersonalDataDisclosureAnalysisR
     checklistItems: (analysis.parseResult?.checklistItems ?? []).map(item => ({
       order: item.order,
       lineNumber: item.lineNumber,
-      sectionHeading: item.sectionHeading,
       checked: item.checked,
-      normalizedCategory: item.normalizedCategory,
-      rawLabel: item.rawLabel
+      normalizedCategory: item.normalizedCategory
     })),
     contradictions: analysis.contradictions,
     possibleMismatches: analysis.possibleMismatches,
     matchingEvidence: analysis.matchingEvidence,
     supportingEvidence: analysis.supportingEvidence,
-    warnings: analysis.warnings
+    warnings: analysis.warnings.map(warning => redactS005PersonalDataPath(warning))
   };
 
-  return redactS005PersonalDataText(JSON.stringify(summary, null, 2), MAX_S005_AGENT_SUMMARY_BYTES);
+  return redactS005PersonalDataText(
+    redactS005PersonalDataPath(JSON.stringify(summary, null, 2), MAX_S005_AGENT_SUMMARY_BYTES),
+    MAX_S005_AGENT_SUMMARY_BYTES
+  );
 }
 
 function buildEvidenceExcerptFiles(
@@ -134,8 +140,8 @@ function buildEvidenceExcerptFiles(
     signalsByPath.set(signal.path, [...(signalsByPath.get(signal.path) ?? []), signal]);
   }
 
-  return [...signalsByPath.entries()].map(([repoRelativePath, pathSignals]) => ({
-    repoRelativePath,
+  return [...signalsByPath.entries()].map(([repoRelativePath, pathSignals], index) => ({
+    repoRelativePath: `.criterion-agent/S005/evidence/evidence-${String(index + 1).padStart(3, '0')}.txt`,
     content: buildEvidenceExcerptContent(repoPath, repoRelativePath, pathSignals)
   }));
 }
@@ -145,18 +151,16 @@ function buildEvidenceExcerptContent(
   repoRelativePath: string,
   signals: S005PersonalDataEvidenceSignal[]
 ): string {
-  const sourceText = readS005ReviewFile(repoPath, repoRelativePath);
-  const lines = sourceText.split(/\r?\n/);
+  readS005ReviewFile(repoPath, repoRelativePath);
   const excerptLines = [
-    `S005 bounded evidence excerpts for ${repoRelativePath}.`,
+    `S005 bounded evidence excerpts for ${redactS005PersonalDataPath(repoRelativePath)}.`,
     'Use these excerpts only as advisory review evidence.',
     ''
   ];
 
   for (const signal of signals) {
-    const currentLine = signal.line ? lines[signal.line - 1] : undefined;
     const excerpt = redactS005PersonalDataText(
-      currentLine?.trim() || signal.excerpt,
+      signal.excerpt,
       MAX_S005_EVIDENCE_EXCERPT_BYTES
     );
     excerptLines.push(
