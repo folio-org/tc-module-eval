@@ -76,6 +76,20 @@ describe('S005 agent review adapter', () => {
     expect(request.files.find(file => file.repoRelativePath === 'schemas/user.json')?.content).toContain('S005 bounded evidence excerpts');
   });
 
+  it('reads evidence source material through bounded file reads', () => {
+    writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({
+      email: 'person@example.org',
+      longPadding: 'x'.repeat(128 * 1024)
+    }, null, 2));
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    const readFileSync = jest.spyOn(jest.requireActual<typeof import('fs')>('fs'), 'readFileSync');
+
+    buildS005AgentReviewRequest(repoPath, analysis);
+
+    expect(readFileSync).not.toHaveBeenCalled();
+  });
+
   it('rejects review-material paths outside the repository before reading them', () => {
     writeCompletedDisclosure();
     writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));

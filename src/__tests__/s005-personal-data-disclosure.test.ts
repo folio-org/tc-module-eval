@@ -512,6 +512,24 @@ class UserEventsProducer {
       expect.stringContaining(`truncated src/main/java/org/folio/LargeUser.java to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file`)
     ]));
   });
+
+  it('stops candidate discovery at the scan cap and reports truncation', () => {
+    repoPath = createTempRepo();
+    for (let index = 0; index < 205; index++) {
+      writeRepoFile(
+        repoPath,
+        `schemas/users-${String(index).padStart(3, '0')}.json`,
+        `"emailAddress": "user${index}@example.org"`
+      );
+    }
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.scannedFiles.length).toBeLessThanOrEqual(200);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('file scan cap')
+    ]));
+  });
 });
 
 describe('S005 personal data disclosure deterministic analysis', () => {

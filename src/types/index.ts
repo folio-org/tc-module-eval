@@ -287,7 +287,7 @@ export interface S005PersonalDataEvidenceScanResult {
 }
 
 export interface S005PersonalDataPossibleMismatch {
-  kind: 'likely_omission' | 'possible_omission' | 'possible_over_disclosure' | 'contradiction' | 'unverifiable';
+  kind: 'likely_omission' | 'possible_omission' | 'possible_over_disclosure' | 'contradiction';
   category?: S005PersonalDataCategory;
   message: string;
   evidenceReferences: string[];

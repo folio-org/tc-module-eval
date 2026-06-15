@@ -3,12 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   CommandRunner,
-  CriterionAgentRecommendation,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult
 } from '../types';
 import {
   CriterionAgentReviewRequest,
+  normalizeCriterionAgentAdvisoryPayload,
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
@@ -394,23 +394,15 @@ function normalizeOpenCodeResult(
     };
   }
 
-  const rawEvidenceReferences = Array.isArray(parsed.evidenceReferences) ? parsed.evidenceReferences : [];
-  const evidenceReferences = normalizeEvidenceReferences(rawEvidenceReferences, workspace.manifestEntries);
-  const warnings = rawEvidenceReferences.length !== evidenceReferences.length
-    ? ['Dropped uncited or unknown advisory evidence references']
-    : [];
-  const recommendation = parseRecommendation(parsed.recommendation);
-  const confidence = parseConfidence(parsed.confidence);
-  const summary = typeof parsed.summary === 'string' ? redactSensitiveText(parsed.summary) : undefined;
-  const rationale = typeof parsed.rationale === 'string' ? redactSensitiveText(parsed.rationale) : undefined;
+  const normalized = normalizeCriterionAgentAdvisoryPayload(parsed, workspace.manifestEntries);
 
-  if (!recommendation || !confidence || !summary || !rationale) {
+  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata: openCodeMetadata(config, workspace),
-      warnings,
+      warnings: normalized.warnings,
       errors: ['OpenCode returned incomplete advisory JSON']
     };
   }
@@ -418,13 +410,13 @@ function normalizeOpenCodeResult(
   return {
     available: true,
     criterionId: request.criterionId,
-    recommendation,
-    confidence,
-    summary,
-    rationale,
-    evidenceReferences,
+    recommendation: normalized.recommendation,
+    confidence: normalized.confidence,
+    summary: normalized.summary,
+    rationale: normalized.rationale,
+    evidenceReferences: normalized.evidenceReferences,
     metadata: openCodeMetadata(config, workspace),
-    warnings,
+    warnings: normalized.warnings,
     errors: []
   };
 }
@@ -442,61 +434,6 @@ function openCodeMetadata(
     reviewWorkspaceSanitized: true,
     retainedWorkspacePath: config.debugRetainWorkspace ? workspace.rootPath : undefined
   };
-}
-
-function parseRecommendation(value: unknown): CriterionAgentRecommendation | undefined {
-  if (value === 'likely_sufficient' || value === 'likely_insufficient' || value === 'needs_reviewer_judgment') {
-    return value;
-  }
-  const normalized = typeof value === 'string' ? value.toLowerCase().trim() : '';
-  if (['pass', 'passed', 'sufficient', 'likely pass', 'likely_pass'].includes(normalized)) {
-    return 'likely_sufficient';
-  }
-  if (['fail', 'failed', 'insufficient', 'likely fail', 'likely_fail'].includes(normalized)) {
-    return 'likely_insufficient';
-  }
-  if (['manual', 'manual_review', 'needs manual review', 'needs_reviewer_judgment'].includes(normalized)) {
-    return 'needs_reviewer_judgment';
-  }
-  return undefined;
-}
-
-function parseConfidence(value: unknown): 'low' | 'medium' | 'high' | undefined {
-  if (value === 'low' || value === 'medium' || value === 'high') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    if (value >= 0.75) {
-      return 'high';
-    }
-    if (value >= 0.4) {
-      return 'medium';
-    }
-    return 'low';
-  }
-  return undefined;
-}
-
-function normalizeEvidenceReferences(rawReferences: unknown[], manifestEntries: string[]): string[] {
-  const references = rawReferences
-    .map(reference => {
-      if (typeof reference === 'string') {
-        return reference;
-      }
-      if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
-        const candidate = reference as Record<string, unknown>;
-        if (typeof candidate.repoRelativePath === 'string') {
-          return candidate.repoRelativePath;
-        }
-        if (typeof candidate.path === 'string') {
-          return candidate.path;
-        }
-      }
-      return undefined;
-    })
-    .filter((reference): reference is string => typeof reference === 'string' && manifestEntries.includes(reference));
-
-  return [...new Set(references)];
 }
 
 function parseOpenCodeReviewPayload(output: string): Record<string, unknown> | undefined {

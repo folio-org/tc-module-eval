@@ -261,12 +261,13 @@ function normalizeFakeCriterionReviewResult(
   config: CriterionAgentReviewConfig,
   rawResult: CriterionAgentReviewResult
 ): CriterionAgentReviewResult {
-  const manifestEntries = request.files.map(file => file.repoRelativePath);
-  const rawEvidenceReferences = Array.isArray(rawResult.evidenceReferences) ? rawResult.evidenceReferences : [];
-  const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
+  const normalized = normalizeCriterionAgentAdvisoryPayload(
+    rawResult as unknown as Record<string, unknown>,
+    request.files.map(file => file.repoRelativePath)
+  );
   const warnings = [
     ...stringArray(rawResult.warnings).map(warning => redactSensitiveText(warning)),
-    ...(rawEvidenceReferences.length !== evidenceReferences.length ? ['Dropped uncited or unknown advisory evidence references'] : [])
+    ...normalized.warnings
   ];
   const errors = stringArray(rawResult.errors).map(error => redactSensitiveText(error));
   const metadata = rawResult.metadata ?? {
@@ -282,20 +283,14 @@ function normalizeFakeCriterionReviewResult(
     return {
       available: false,
       criterionId: request.criterionId,
-      evidenceReferences,
+      evidenceReferences: normalized.evidenceReferences,
       metadata,
       warnings,
       errors: errors.length ? errors : ['Fake criterion-agent review was unavailable']
     };
   }
 
-  const raw = rawResult as unknown as Record<string, unknown>;
-  const recommendation = parseAdvisoryRecommendation(raw.recommendation);
-  const confidence = parseAdvisoryConfidence(raw.confidence);
-  const summary = typeof raw.summary === 'string' ? redactSensitiveText(raw.summary) : undefined;
-  const rationale = typeof raw.rationale === 'string' ? redactSensitiveText(raw.rationale) : undefined;
-
-  if (!recommendation || !confidence || !summary || !rationale) {
+  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
     return {
       available: false,
       criterionId: request.criterionId,
@@ -309,14 +304,41 @@ function normalizeFakeCriterionReviewResult(
   return {
     available: true,
     criterionId: request.criterionId,
-    recommendation,
-    confidence,
-    summary,
-    rationale,
-    evidenceReferences,
+    recommendation: normalized.recommendation,
+    confidence: normalized.confidence,
+    summary: normalized.summary,
+    rationale: normalized.rationale,
+    evidenceReferences: normalized.evidenceReferences,
     metadata,
     warnings,
     errors
+  };
+}
+
+export interface NormalizedCriterionAgentAdvisoryPayload {
+  recommendation?: CriterionAgentReviewResult['recommendation'];
+  confidence?: CriterionAgentReviewResult['confidence'];
+  summary?: string;
+  rationale?: string;
+  evidenceReferences: string[];
+  warnings: string[];
+}
+
+export function normalizeCriterionAgentAdvisoryPayload(
+  payload: Record<string, unknown>,
+  manifestEntries: string[]
+): NormalizedCriterionAgentAdvisoryPayload {
+  const rawEvidenceReferences = Array.isArray(payload.evidenceReferences) ? payload.evidenceReferences : [];
+  const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
+  return {
+    recommendation: parseAdvisoryRecommendation(payload.recommendation),
+    confidence: parseAdvisoryConfidence(payload.confidence),
+    summary: typeof payload.summary === 'string' ? redactSensitiveText(payload.summary) : undefined,
+    rationale: typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale) : undefined,
+    evidenceReferences,
+    warnings: rawEvidenceReferences.length !== evidenceReferences.length
+      ? ['Dropped uncited or unknown advisory evidence references']
+      : []
   };
 }
 
@@ -385,7 +407,7 @@ function pathIsInsideRepository(repositoryPath: string, candidatePath: string): 
   return resolvedCandidate === repoRoot || resolvedCandidate.startsWith(`${repoRoot}${path.sep}`) || isWithinRepo(repositoryPath, candidatePath);
 }
 
-function safeWorkspaceRelativePath(repoRelativePath: string): string {
+export function safeWorkspaceRelativePath(repoRelativePath: string): string {
   const forwardSlashPath = repoRelativePath.replace(/\\/g, '/');
   if (path.posix.isAbsolute(forwardSlashPath)) {
     throw new Error(`Agent review file path must be repository-relative: ${repoRelativePath}`);

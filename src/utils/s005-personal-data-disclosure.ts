@@ -21,18 +21,18 @@ import {
   S005PersonalDataEvidenceStrength,
   S005PersonalDataPossibleMismatch
 } from '../types';
-import { findCandidateFiles, isWithinRepo, realPath, relativePosixPath, walkDirectories } from './repo-files';
+import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
-const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
+export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
 const MAX_PARSE_ERROR_BYTES = 512;
 const MAX_DISCOVERY_READ_ERROR_BYTES = 300;
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_CRITERION_DETAIL_REFERENCES = 16;
 const MAX_CRITERION_DETAIL_FILES = 40;
-export const MAX_S005_EVIDENCE_SCANNED_FILES = 200;
-export const MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES = 2 * 1024 * 1024;
+const MAX_S005_EVIDENCE_SCANNED_FILES = 200;
+const MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE = 96 * 1024;
 export const MAX_S005_EVIDENCE_EXCERPT_BYTES = 700;
 export const MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS = 8;
@@ -297,27 +297,12 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
 
   const warnings: string[] = [];
   const skippedFiles: S005PersonalDataEvidenceScanResult['skippedFiles'] = [];
-  const visibleDirectories = new Set<string>();
+  const candidateDiscovery = collectBoundedS005EvidenceCandidates(repoRoot);
+  const candidateFiles = candidateDiscovery.files;
 
-  walkDirectories(
-    repoRoot,
-    directory => {
-      visibleDirectories.add(relativePosixPath(repoRoot, directory) || '.');
-      return true;
-    },
-    S005_EVIDENCE_SKIPPED_DIRS
-  );
-
-  const candidateFiles = findCandidateFiles(
-    repoRoot,
-    repoRoot,
-    candidatePath => isS005EvidenceCandidate(repoRoot, candidatePath, visibleDirectories),
-    S005_EVIDENCE_SKIPPED_DIRS
-  ).sort((left, right) => relativePosixPath(repoRoot, left).localeCompare(relativePosixPath(repoRoot, right)));
-
-  if (candidateFiles.length > MAX_S005_EVIDENCE_SCANNED_FILES) {
+  if (candidateDiscovery.truncated) {
     warnings.push(
-      `S005 evidence scan found ${candidateFiles.length} candidate files and scanned the first ${MAX_S005_EVIDENCE_SCANNED_FILES}; evidence was truncated by the scanned-file cap.`
+      `S005 evidence scan reached the ${MAX_S005_EVIDENCE_SCANNED_FILES}-file scan cap; additional candidate files were not scanned.`
     );
   }
 
@@ -328,7 +313,7 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
   let totalTextBytes = 0;
   let totalCapReached = false;
 
-  for (const candidatePath of candidateFiles.slice(0, MAX_S005_EVIDENCE_SCANNED_FILES)) {
+  for (const candidatePath of candidateFiles) {
     if (totalTextBytes >= MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES) {
       totalCapReached = true;
       break;
@@ -1111,7 +1096,61 @@ export function redactS005PersonalDataText(input: string, maxBytes: number = MAX
   );
 }
 
-function isS005EvidenceCandidate(repoPath: string, candidatePath: string, visibleDirectories: ReadonlySet<string>): boolean {
+function collectBoundedS005EvidenceCandidates(repoPath: string): { files: string[]; truncated: boolean } {
+  const files: string[] = [];
+  let truncated = false;
+
+  const walk = (currentPath: string): void => {
+    if (files.length >= MAX_S005_EVIDENCE_SCANNED_FILES) {
+      truncated = true;
+      return;
+    }
+
+    let stats: fs.Stats;
+    try {
+      stats = fs.lstatSync(currentPath);
+    } catch {
+      return;
+    }
+
+    if (stats.isSymbolicLink()) {
+      return;
+    }
+
+    if (stats.isFile()) {
+      if (isS005EvidenceCandidate(repoPath, currentPath)) {
+        files.push(currentPath);
+      }
+      return;
+    }
+
+    if (!stats.isDirectory()) {
+      return;
+    }
+
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(currentPath).sort((left, right) => left.localeCompare(right));
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (S005_EVIDENCE_SKIPPED_DIRS.has(entry)) {
+        continue;
+      }
+      walk(path.join(currentPath, entry));
+      if (truncated) {
+        return;
+      }
+    }
+  };
+
+  walk(repoPath);
+  return { files, truncated };
+}
+
+function isS005EvidenceCandidate(repoPath: string, candidatePath: string): boolean {
   if (!isWithinRepo(repoPath, candidatePath)) {
     return false;
   }
@@ -1122,11 +1161,6 @@ function isS005EvidenceCandidate(repoPath: string, candidatePath: string, visibl
   }
 
   if (!TEXT_FILE_EXTENSION_PATTERN.test(relativePath)) {
-    return false;
-  }
-
-  const parentPath = path.dirname(relativePath).split(path.sep).join('/');
-  if (parentPath !== '.' && !visibleDirectories.has(parentPath)) {
     return false;
   }
 

@@ -10,12 +10,14 @@ import {
 } from '../types';
 import {
   CriterionAgentReviewRequest,
-  runCriterionAgentReview
+  runCriterionAgentReview,
+  safeWorkspaceRelativePath
 } from './criterion-agent-review';
 import { isWithinRepo, realPath } from './repo-files';
 import {
   MAX_S005_EVIDENCE_EXCERPT_BYTES,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
+  REQUIRED_DISCLOSURE_FILENAME,
   redactS005PersonalDataText
 } from './s005-personal-data-disclosure';
 
@@ -55,7 +57,7 @@ export function hasS005AgentReviewMaterial(analysis: S005PersonalDataDisclosureA
   }
 
   return analysis.possibleMismatches.some(mismatch =>
-    mismatch.evidenceReferences.some(reference => !reference.startsWith('PERSONAL_DATA_DISCLOSURE.md'))
+    mismatch.evidenceReferences.some(reference => !reference.startsWith(REQUIRED_DISCLOSURE_FILENAME))
   );
 }
 
@@ -167,9 +169,9 @@ function buildEvidenceExcerptContent(
 
 function readS005ReviewFile(repoPath: string, repoRelativePath: string): string {
   const absolutePath = resolveS005ReviewPath(repoPath, repoRelativePath);
-  const content = fs.readFileSync(absolutePath);
+  const content = readBoundedFileBytes(absolutePath, MAX_S005_AGENT_SOURCE_BYTES);
   return redactS005PersonalDataText(
-    content.subarray(0, MAX_S005_AGENT_SOURCE_BYTES).toString('utf-8').replace(/\uFFFD/g, ''),
+    content.toString('utf-8').replace(/\uFFFD/g, ''),
     MAX_S005_AGENT_SOURCE_BYTES
   );
 }
@@ -180,14 +182,10 @@ function resolveS005ReviewPath(repoPath: string, repoRelativePath: string): stri
     throw new Error('Unable to resolve repository path');
   }
 
-  const normalized = repoRelativePath.replace(/\\/g, '/');
-  if (
-    path.posix.isAbsolute(normalized) ||
-    normalized === '.' ||
-    normalized === '..' ||
-    normalized.startsWith('../') ||
-    normalized.split('/').includes('..')
-  ) {
+  let normalized: string;
+  try {
+    normalized = safeWorkspaceRelativePath(repoRelativePath);
+  } catch {
     throw new Error(`S005 review material path must stay inside the repository: ${repoRelativePath}`);
   }
 
@@ -202,4 +200,15 @@ function resolveS005ReviewPath(repoPath: string, repoRelativePath: string): stri
   }
 
   return absolutePath;
+}
+
+function readBoundedFileBytes(filePath: string, maxBytes: number): Buffer {
+  const descriptor = fs.openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(descriptor, buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
