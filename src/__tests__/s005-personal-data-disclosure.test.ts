@@ -854,6 +854,30 @@ Version: v1.1
     ]));
   });
 
+  it('does not report processing as over-disclosure when no deterministic processing signal exists', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+
+Version: v1.1
+
+## Personal data
+
+- [x] Processing personal data.
+`);
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.parseResult?.checkedCategories).toContain('processing');
+    expect(result.possibleMismatches).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'possible_over_disclosure',
+        category: 'processing'
+      })
+    ]));
+  });
+
   it('reports unchecked categories with source signals as possible omissions', () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `

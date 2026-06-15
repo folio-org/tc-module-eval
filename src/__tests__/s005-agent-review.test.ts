@@ -37,6 +37,17 @@ describe('S005 agent review adapter', () => {
     const withEvidence = analyzeS005PersonalDataDisclosure(repoPath);
     expect(hasS005AgentReviewMaterial(withEvidence)).toBe(true);
 
+    const warningsOnly: S005PersonalDataDisclosureAnalysisResult = {
+      ...formOnly,
+      evidenceScan: formOnly.evidenceScan
+        ? {
+            ...formOnly.evidenceScan,
+            warnings: ['S005 evidence scan reached the 200-file scan cap; additional candidate files were not scanned.']
+          }
+        : undefined
+    };
+    expect(hasS005AgentReviewMaterial(warningsOnly)).toBe(true);
+
     const failure: S005PersonalDataDisclosureAnalysisResult = {
       ...withEvidence,
       classification: {
@@ -109,6 +120,32 @@ describe('S005 agent review adapter', () => {
     } finally {
       fs.rmSync(outsidePath, { force: true });
     }
+  });
+
+  it('returns unavailable agent review when request preparation fails', async () => {
+    writeCompletedDisclosure();
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string' }));
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.evidenceScan!.signals[0] = {
+      ...analysis.evidenceScan!.signals[0],
+      path: '../outside.txt'
+    };
+
+    const result = await reviewS005WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S005',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'low',
+      summary: 'unused',
+      rationale: 'unused',
+      evidenceReferences: [],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('Unable to prepare S005 agent review material');
+    expect(result.evidenceReferences).toEqual([]);
   });
 
   it('returns allowed fake advisory output with manifest evidence references', async () => {

@@ -115,6 +115,9 @@ const REVIEWABLE_DISCLOSURE_CATEGORIES = new Set<S005PersonalDataCategory>([
   'cache',
   'logging'
 ]);
+const CATEGORIES_WITHOUT_DETERMINISTIC_OVER_DISCLOSURE = new Set<S005PersonalDataCategory>([
+  'processing'
+]);
 
 const S005_EVIDENCE_CATEGORY_PATTERNS: ReadonlyArray<{
   category: S005PersonalDataCategory;
@@ -189,7 +192,10 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
         path: REQUIRED_DISCLOSURE_FILENAME,
         reason: 'exact-file-read-error'
       }),
-      readError: boundUtf8(error instanceof Error ? error.message : String(error), MAX_DISCOVERY_READ_ERROR_BYTES),
+      readError: redactS005PersonalDataPath(
+        error instanceof Error ? error.message : String(error),
+        MAX_DISCOVERY_READ_ERROR_BYTES
+      ),
       warnings
     };
   }
@@ -423,7 +429,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
         status: EvaluationStatus.FAIL,
         parseState: 'not_parsed',
         reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md was not found.',
-        warnings: discovery.warnings
+        warnings: [...discovery.warnings]
       },
       possibleMismatches: [],
       matchingEvidence: [],
@@ -443,7 +449,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
         status: EvaluationStatus.FAIL,
         parseState: 'not_parsed',
         reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md could not be read.',
-        warnings
+        warnings: [...warnings]
       },
       possibleMismatches: [],
       matchingEvidence: [],
@@ -469,7 +475,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
         status: EvaluationStatus.FAIL,
         parseState: parseResult.classification.parseState,
         reason,
-        warnings
+        warnings: [...warnings]
       },
       possibleMismatches: contradictionMismatches(parseResult.contradictions),
       matchingEvidence: [],
@@ -493,7 +499,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
       status: EvaluationStatus.MANUAL,
       parseState: 'completed',
       reason: classified.reason,
-      warnings
+      warnings: [...warnings]
     },
     possibleMismatches: classified.possibleMismatches,
     matchingEvidence: classified.matchingEvidence,
@@ -565,7 +571,7 @@ export function classifyCompletedS005PersonalDataDisclosure(
       continue;
     }
 
-    if (disclosureChecked) {
+    if (disclosureChecked && !CATEGORIES_WITHOUT_DETERMINISTIC_OVER_DISCLOSURE.has(category)) {
       possibleMismatches.push({
         kind: 'possible_over_disclosure',
         category,

@@ -8,6 +8,7 @@ import {
   S005PersonalDataDisclosureAnalysisResult,
   S005PersonalDataDisclosureChecklistItem,
   S005PersonalDataDisclosureContradiction,
+  S005PersonalDataDisclosureMetadata,
   S005PersonalDataDisclosureParseResult,
   S005PersonalDataDisclosurePlaceholderEvidence,
   S005PersonalDataEvidenceAssessment,
@@ -95,7 +96,7 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
     },
     parseResult: analysis.parseResult
       ? {
-          metadata: analysis.parseResult.metadata,
+          metadata: redactS005Metadata(analysis.parseResult.metadata),
           checklistItems: analysis.parseResult.checklistItems.map(summarizeS005ChecklistItem),
           checkedCategories: analysis.parseResult.checkedCategories,
           uncheckedCategories: analysis.parseResult.uncheckedCategories,
@@ -366,6 +367,15 @@ function redactS005Placeholder(placeholder: S005PersonalDataDisclosurePlaceholde
   return {
     ...placeholder,
     placeholderText: redactS005PersonalDataText(placeholder.placeholderText)
+  };
+}
+
+function redactS005Metadata(metadata: S005PersonalDataDisclosureMetadata): S005PersonalDataDisclosureMetadata {
+  return {
+    ...metadata,
+    versionText: metadata.versionText ? redactS005PersonalDataText(metadata.versionText) : undefined,
+    lastUpdatedText: metadata.lastUpdatedText ? redactS005PersonalDataText(metadata.lastUpdatedText) : undefined,
+    lastReviewedText: metadata.lastReviewedText ? redactS005PersonalDataText(metadata.lastReviewedText) : undefined
   };
 }
 

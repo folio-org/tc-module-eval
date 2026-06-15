@@ -180,7 +180,6 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
     const analysis = analyzeS005PersonalDataDisclosure(repoPath);
     analysis.warnings.push(...moduleKind.warnings);
-    analysis.classification.warnings.push(...moduleKind.warnings);
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S005',
       status: analysis.classification.status,
