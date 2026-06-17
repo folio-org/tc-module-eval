@@ -151,7 +151,7 @@ function buildEvidenceExcerptContent(
   repoRelativePath: string,
   signals: S005PersonalDataEvidenceSignal[]
 ): string {
-  readS005ReviewFile(repoPath, repoRelativePath);
+  resolveS005ReviewPath(repoPath, repoRelativePath);
   const excerptLines = [
     `S005 bounded evidence excerpts for ${redactS005PersonalDataPath(repoRelativePath)}.`,
     'Use these excerpts only as advisory review evidence.',

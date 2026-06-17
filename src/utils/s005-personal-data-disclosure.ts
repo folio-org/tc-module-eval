@@ -2,9 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
-  CriterionAgentReviewResult,
   EvaluationStatus,
-  ModuleKindResult,
   S005PersonalDataCategory,
   S005PersonalDataDisclosureAttempt,
   S005PersonalDataDisclosureAnalysisResult,
@@ -31,9 +29,6 @@ const MAX_DISCOVERY_READ_ERROR_BYTES = 300;
 const MAX_DISCLOSURE_FILE_BYTES = 512 * 1024;
 const MAX_DISCLOSURE_CHECKLIST_ITEMS = 500;
 const MAX_DISCLOSURE_PLACEHOLDERS = 100;
-const MAX_REPORT_LIST_ITEMS = 8;
-const MAX_CRITERION_DETAIL_REFERENCES = 16;
-const MAX_CRITERION_DETAIL_FILES = 40;
 const MAX_S005_EVIDENCE_SCANNED_FILES = 200;
 const MAX_S005_EVIDENCE_TOTAL_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE = 96 * 1024;
@@ -729,6 +724,7 @@ function dedupeMismatches(mismatches: S005PersonalDataPossibleMismatch[]): S005P
 export function normalizeS005ChecklistCategory(label: string): S005PersonalDataCategory {
   const normalized = label.toLowerCase();
 
+  // Checklist rows carry one category in reports; multi-category labels use the first specific match below.
   if (/\bdoes\s+not\b.*\b(?:store|process|collect|use|handle|contain|personal\s+data)\b/.test(normalized) ||
       /\bno\s+personal\s+data\b/.test(normalized)) {
     return 'no_personal_data';
