@@ -19,7 +19,7 @@ import {
   S005PersonalDataEvidenceStrength,
   S005PersonalDataPossibleMismatch
 } from '../types';
-import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
+import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
@@ -52,7 +52,7 @@ const AUTOMATION_CONFIG_FILE_PATTERN = /(?:^|\/)(?:\.github|\.gitlab|\.circleci|
 const HIGH_SIGNAL_PATH_PATTERN = /(?:schema|raml|openapi|swagger|module-descriptor|package\.json|readme|docs?|documentation|translation|i18n|lang|ui|stripes|component|route|persistence|database|migration|db\/|sql|log4j|logback|logging|logger|queue|event|kafka|pubsub|producer|consumer|cache|redis|s3|blob|bucket|profile|avatar|photo|api|example|sample|fixture)/i;
 const HIGH_RISK_PERSONAL_EXAMPLE_PATTERN = /\b(?:john|jane)\s+doe\b|\b(?:ssn|social security number)\s*[:=]?\s*\d{3}[-\s]?\d{2}[-\s]?\d{4}\b|\b(?:credit card|card number)\s*[:=]?\s*(?:\d[ -]?){13,19}\b|\b\d{4}\s+[A-Z][a-z]+(?:\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln))\b/gi;
 const LONG_FREE_FORM_VALUE_PATTERN = /(["'`])([^"'`\n]{180,})\1/g;
-const PATH_SECRET_PATTERN = /\b(?:api[-_]?key|token|secret|password|passwd|pwd|credential|auth)[-_:=][^/\\\s]+/gi;
+const PATH_SECRET_PATTERN = /\b(api[-_]?key|token|secret|password|passwd|pwd|credential|auth)([-_:=])[^/\\\s]+/gi;
 const PERSONAL_FIELD_VALUE_PATTERN = new RegExp(
   '(["\']?\\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name|username|userName|user_name|loginName|login_name|userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier|emailAddress|email_address|email|phone|telephone|mobilePhone|mobile_phone|address|streetAddress|street_address|addressLine\\d*|address_line\\d*|postalCode|postal_code|zipCode|zip_code|city|province|state|country|location|dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob|notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)["\']?\\s*[:=]\\s*)(?:"[^"\\n]{1,180}"|\'[^\'\\n]{1,180}\'|`[^`\\n]{1,180}`|[A-Za-z0-9._@+\\-]{2,180})',
   'gi'
@@ -418,42 +418,20 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
   const discovery = discoverS005PersonalDataDisclosureArtifact(repoPath);
 
   if (discovery.status === 'missing') {
-    return {
+    return unparsedS005DisclosureResult(
       discovery,
-      classification: {
-        status: EvaluationStatus.FAIL,
-        parseState: 'not_parsed',
-        reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md was not found.',
-        warnings: [...discovery.warnings]
-      },
-      possibleMismatches: [],
-      matchingEvidence: [],
-      supportingEvidence: [],
-      uncheckedAnswerDetails: [],
-      placeholders: [],
-      contradictions: [],
-      warnings: discovery.warnings
-    };
+      'Required top-level PERSONAL_DATA_DISCLOSURE.md was not found.',
+      discovery.warnings
+    );
   }
 
   if (discovery.status === 'unreadable') {
     const warnings = discovery.warnings;
-    return {
+    return unparsedS005DisclosureResult(
       discovery,
-      classification: {
-        status: EvaluationStatus.FAIL,
-        parseState: 'not_parsed',
-        reason: 'Required top-level PERSONAL_DATA_DISCLOSURE.md could not be read.',
-        warnings: [...warnings]
-      },
-      possibleMismatches: [],
-      matchingEvidence: [],
-      supportingEvidence: [],
-      uncheckedAnswerDetails: [],
-      placeholders: [],
-      contradictions: [],
+      'Required top-level PERSONAL_DATA_DISCLOSURE.md could not be read.',
       warnings
-    };
+    );
   }
 
   const parseResult = parseS005PersonalDataDisclosureMarkdown(discovery.artifact?.content ?? '');
@@ -502,6 +480,29 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
     uncheckedAnswerDetails: parseResult.checklistItems.filter(item => !item.checked),
     placeholders: parseResult.placeholders,
     contradictions: parseResult.contradictions,
+    warnings
+  };
+}
+
+function unparsedS005DisclosureResult(
+  discovery: S005PersonalDataDisclosureDiscoveryResult,
+  reason: string,
+  warnings: string[]
+): S005PersonalDataDisclosureAnalysisResult {
+  return {
+    discovery,
+    classification: {
+      status: EvaluationStatus.FAIL,
+      parseState: 'not_parsed',
+      reason,
+      warnings: [...warnings]
+    },
+    possibleMismatches: [],
+    matchingEvidence: [],
+    supportingEvidence: [],
+    uncheckedAnswerDetails: [],
+    placeholders: [],
+    contradictions: [],
     warnings
   };
 }
@@ -670,7 +671,12 @@ function groupSignalsByCategory(
 ): Map<S005PersonalDataCategory, S005PersonalDataEvidenceSignal[]> {
   const grouped = new Map<S005PersonalDataCategory, S005PersonalDataEvidenceSignal[]>();
   for (const signal of signals) {
-    grouped.set(signal.category, [...(grouped.get(signal.category) ?? []), signal]);
+    const categorySignals = grouped.get(signal.category);
+    if (categorySignals) {
+      categorySignals.push(signal);
+    } else {
+      grouped.set(signal.category, [signal]);
+    }
   }
 
   return grouped;
@@ -802,9 +808,8 @@ export function redactS005PersonalDataText(input: string, maxBytes: number = MAX
 }
 
 export function redactS005PersonalDataPath(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
-  return redactS005PersonalDataText(input.replace(PATH_SECRET_PATTERN, match => {
-    const separatorIndex = Math.max(match.lastIndexOf('-'), match.lastIndexOf('_'), match.lastIndexOf(':'), match.lastIndexOf('='));
-    return separatorIndex >= 0 ? `${match.slice(0, separatorIndex + 1)}[REDACTED]` : '[REDACTED]';
+  return redactS005PersonalDataText(input.replace(PATH_SECRET_PATTERN, (_match, key: string, separator: string) => {
+    return `${key}${separator}[REDACTED]`;
   }), maxBytes);
 }
 
@@ -927,12 +932,17 @@ function isS005EvidenceCandidate(repoPath: string, candidatePath: string): boole
 }
 
 function prioritizeS005EvidenceCandidates(repoPath: string, files: string[]): string[] {
-  return [...files].sort((left, right) => {
-    const leftRelative = relativePosixPath(repoPath, left);
-    const rightRelative = relativePosixPath(repoPath, right);
-    return s005CandidatePriority(leftRelative) - s005CandidatePriority(rightRelative) ||
-      leftRelative.localeCompare(rightRelative);
-  });
+  return files
+    .map(filePath => {
+      const relativePath = relativePosixPath(repoPath, filePath);
+      return {
+        filePath,
+        relativePath,
+        priority: s005CandidatePriority(relativePath)
+      };
+    })
+    .sort((left, right) => left.priority - right.priority || left.relativePath.localeCompare(right.relativePath))
+    .map(candidate => candidate.filePath);
 }
 
 function s005CandidatePriority(relativePath: string): number {
@@ -1043,38 +1053,32 @@ function readBoundedEvidenceText(
     }
 
     const bytesToRead = Math.min(stats.size, MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE, remainingTotalBytes);
-    const descriptor = fs.openSync(filePath, 'r');
-    try {
-      const buffer = Buffer.alloc(bytesToRead);
-      const bytesRead = fs.readSync(descriptor, buffer, 0, bytesToRead, 0);
-      const slice = buffer.subarray(0, bytesRead);
-      if (isBinaryBuffer(slice)) {
-        return { status: 'binary' };
-      }
+    const slice = readBoundedFileBytes(filePath, bytesToRead);
+    const bytesRead = slice.length;
+    if (isBinaryBuffer(slice)) {
+      return { status: 'binary' };
+    }
 
-      if (stats.size > MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE) {
-        warnings.push(
-          `S005 evidence scanning truncated ${relativePath} to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file.`
-        );
-      }
+    if (stats.size > MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE) {
+      warnings.push(
+        `S005 evidence scanning truncated ${relativePath} to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file.`
+      );
+    }
 
-      if (bytesRead === 0) {
-        return {
-          status: 'empty',
-          bytesRead: 0,
-          totalCapReached: stats.size > remainingTotalBytes
-        };
-      }
-
+    if (bytesRead === 0) {
       return {
-        status: 'text',
-        text: slice.toString('utf-8').replace(/\uFFFD/g, ''),
-        bytesRead,
+        status: 'empty',
+        bytesRead: 0,
         totalCapReached: stats.size > remainingTotalBytes
       };
-    } finally {
-      fs.closeSync(descriptor);
     }
+
+    return {
+      status: 'text',
+      text: slice.toString('utf-8').replace(/\uFFFD$/, ''),
+      bytesRead,
+      totalCapReached: stats.size > remainingTotalBytes
+    };
   } catch (error) {
     return {
       status: 'read-error',
@@ -1086,19 +1090,13 @@ function readBoundedEvidenceText(
 function readBoundedDisclosureText(filePath: string, warnings: string[]): string {
   const stats = fs.statSync(filePath);
   const bytesToRead = Math.min(stats.size, MAX_DISCLOSURE_FILE_BYTES);
-  const descriptor = fs.openSync(filePath, 'r');
-  try {
-    const buffer = Buffer.alloc(bytesToRead);
-    const bytesRead = fs.readSync(descriptor, buffer, 0, bytesToRead, 0);
-    if (stats.size > MAX_DISCLOSURE_FILE_BYTES) {
-      warnings.push(
-        `S005 disclosure artifact was truncated to ${MAX_DISCLOSURE_FILE_BYTES} bytes before parsing.`
-      );
-    }
-    return buffer.subarray(0, bytesRead).toString('utf-8').replace(/\uFFFD/g, '');
-  } finally {
-    fs.closeSync(descriptor);
+  const buffer = readBoundedFileBytes(filePath, bytesToRead);
+  if (stats.size > MAX_DISCLOSURE_FILE_BYTES) {
+    warnings.push(
+      `S005 disclosure artifact was truncated to ${MAX_DISCLOSURE_FILE_BYTES} bytes before parsing.`
+    );
   }
+  return buffer.toString('utf-8').replace(/\uFFFD$/, '');
 }
 
 function isBinaryBuffer(buffer: Buffer): boolean {

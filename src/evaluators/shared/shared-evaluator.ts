@@ -125,12 +125,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
         criterionId: 'S004',
         status: EvaluationStatus.NOT_APPLICABLE,
         evidence: 'S004 does not apply to explicit FOLIO library repositories',
-        details: [
-          'Repository kind: library',
-          'Evidence:',
-          ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
-          ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
-        ].join('\n')
+        details: this.formatModuleKindDetails('Repository kind: library', moduleKind)
       };
     }
 
@@ -180,6 +175,9 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
     const analysis = analyzeS005PersonalDataDisclosure(repoPath);
     analysis.warnings.push(...moduleKind.warnings);
+    if (analysis.classification.warnings !== analysis.warnings) {
+      analysis.classification.warnings.push(...moduleKind.warnings);
+    }
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S005',
       status: analysis.classification.status,

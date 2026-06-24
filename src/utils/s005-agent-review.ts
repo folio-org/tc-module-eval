@@ -13,7 +13,7 @@ import {
   runCriterionAgentReview,
   safeWorkspaceRelativePath
 } from './criterion-agent-review';
-import { isWithinRepo, realPath } from './repo-files';
+import { isWithinRepo, readBoundedFileBytes, realPath } from './repo-files';
 import {
   MAX_S005_EVIDENCE_EXCERPT_BYTES,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
@@ -137,7 +137,12 @@ function buildEvidenceExcerptFiles(
 ): Array<{ repoRelativePath: string; content: string }> {
   const signalsByPath = new Map<string, S005PersonalDataEvidenceSignal[]>();
   for (const signal of signals) {
-    signalsByPath.set(signal.path, [...(signalsByPath.get(signal.path) ?? []), signal]);
+    const pathSignals = signalsByPath.get(signal.path);
+    if (pathSignals) {
+      pathSignals.push(signal);
+    } else {
+      signalsByPath.set(signal.path, [signal]);
+    }
   }
 
   return [...signalsByPath.entries()].map(([repoRelativePath, pathSignals], index) => ({
@@ -175,7 +180,7 @@ function readS005ReviewFile(repoPath: string, repoRelativePath: string): string 
   const absolutePath = resolveS005ReviewPath(repoPath, repoRelativePath);
   const content = readBoundedFileBytes(absolutePath, MAX_S005_AGENT_SOURCE_BYTES);
   return redactS005PersonalDataText(
-    content.toString('utf-8').replace(/\uFFFD/g, ''),
+    content.toString('utf-8').replace(/\uFFFD$/, ''),
     MAX_S005_AGENT_SOURCE_BYTES
   );
 }
@@ -204,15 +209,4 @@ function resolveS005ReviewPath(repoPath: string, repoRelativePath: string): stri
   }
 
   return absolutePath;
-}
-
-function readBoundedFileBytes(filePath: string, maxBytes: number): Buffer {
-  const descriptor = fs.openSync(filePath, 'r');
-  try {
-    const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs.readSync(descriptor, buffer, 0, maxBytes, 0);
-    return buffer.subarray(0, bytesRead);
-  } finally {
-    fs.closeSync(descriptor);
-  }
 }

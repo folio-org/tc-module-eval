@@ -82,6 +82,21 @@ export function readTextFile(filePath: string, warnings?: string[]): string | un
   }
 }
 
+export function readBoundedFileBytes(filePath: string, maxBytes: number): Buffer {
+  if (maxBytes <= 0) {
+    return Buffer.alloc(0);
+  }
+
+  const descriptor = fs.openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(descriptor, buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 export function relativePosixPath(repoPath: string, candidatePath: string): string {
   return path.relative(repoPath, candidatePath).split(path.sep).join('/');
 }

@@ -147,7 +147,7 @@ Last Reviewed: 2026-06-12
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.details).toContain('Unable to parse package.json');
     expect(details.warnings).toContainEqual(expect.stringContaining('Unable to parse package.json'));
-    expect(details.classification.warnings).not.toContainEqual(expect.stringContaining('Unable to parse package.json'));
+    expect(details.classification.warnings).toContainEqual(expect.stringContaining('Unable to parse package.json'));
   });
 
   it('invokes fake agent review for completed forms with candidate evidence when S005 is enabled', async () => {

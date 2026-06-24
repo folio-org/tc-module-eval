@@ -11,7 +11,8 @@ import {
   gatherS005PersonalDataEvidence,
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
-  parseS005PersonalDataDisclosureMarkdown
+  parseS005PersonalDataDisclosureMarkdown,
+  redactS005PersonalDataPath
 } from '../utils/s005-personal-data-disclosure';
 
 function createTempRepo(): string {
@@ -191,6 +192,19 @@ Last Reviewed: YYYY-MM-DD
   });
 });
 
+describe('S005 redaction helpers', () => {
+  it('redacts path-like secret values from the first key/value separator', () => {
+    const redacted = redactS005PersonalDataPath('schemas/auth=mytoken-value-123/credential:prefix_secret_value/pwd_test.json');
+
+    expect(redacted).toContain('auth=[REDACTED]');
+    expect(redacted).toContain('credential:[REDACTED]');
+    expect(redacted).toContain('pwd_[REDACTED]');
+    expect(redacted).not.toContain('mytoken');
+    expect(redacted).not.toContain('prefix_secret_value');
+    expect(redacted).not.toContain('test.json');
+  });
+});
+
 describe('S005 personal data disclosure artifact discovery', () => {
   let repoPath: string;
 
@@ -240,6 +254,16 @@ describe('S005 personal data disclosure artifact discovery', () => {
         reason: 'bounded-nested-near-match'
       }
     ]);
+  });
+
+  it('preserves legitimate replacement characters while reading non-truncated disclosure content', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n\n- [x] Notes include � replacement marker\n');
+
+    const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+    expect(result.status).toBe('found');
+    expect(result.artifact?.content).toContain('� replacement marker');
   });
 
   it('reports nested attempts below docs, doc, and documentation to bounded depth without satisfying S005', () => {
@@ -417,6 +441,21 @@ describe('S005 bounded personal-data evidence scanner', () => {
     ]));
     expect(result.signals.find(signal => signal.path === 'ramls/users.raml' && signal.category === 'email')?.excerpt)
       .toContain('[REDACTED_VALUE]');
+  });
+
+  it('preserves legitimate replacement characters in evidence excerpts', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/java/org/folio/UserNotes.java', '// user notes include � replacement marker\n');
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'free_form_notes',
+        path: 'src/main/java/org/folio/UserNotes.java',
+        excerpt: expect.stringContaining('� replacement marker')
+      })
+    ]));
   });
 
   it('treats UI and documentation evidence as candidate or context instead of persistence proof', () => {

@@ -29,7 +29,7 @@ When agent review is enabled for `S005`, it runs only for completed manual cases
 - `confidence`: `low`, `medium`, or `high`.
 - `summary`, `rationale`, and manifest-scoped `evidenceReferences`.
 
-S005 excerpts are bounded and redacted before report or agent use, but they are source-review hints rather than a PII-safe export format. Redaction targets known sensitive patterns and personal-field values; reviewers should not treat excerpts as sanitized data extracts.
+S005 excerpts are bounded and redacted, but they are only review hints; do not treat them as PII-safe extracts.
 
 If agent review is disabled, unconfigured, excluded for `S005`, unavailable, malformed, failed, or has no candidate material, the evaluator still reports deterministic S005 evidence and records a not-applied or unavailable reason. The S005 status remains driven by deterministic mechanics and reviewer-owned manual interpretation, not agent advice.
 
