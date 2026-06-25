@@ -699,6 +699,268 @@ describe('S006 sensitive information finding extraction', () => {
   });
 });
 
+describe('S006 deterministic classification by context, confidence, and coverage', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('returns fail for a live-looking provider key in production configuration with reviewer-facing rationale', () => {
+    repoPath = createTempRepo();
+    const rawKey = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const finding = result.findings[0];
+
+    expect(result.classification).toMatchObject({
+      status: EvaluationStatus.FAIL,
+      materiallyWeakenedCoverage: false,
+      findingReferences: ['src/main/resources/application.yml:1:provider-api-key']
+    });
+    expect(result.classification.reason).toContain('high-confidence live-looking secret');
+    expect(finding).toMatchObject({
+      category: 'provider_api_key',
+      context: 'production_source_or_configuration',
+      confidence: 'high',
+      severity: 'critical',
+      redactedExcerpt: expect.objectContaining({
+        text: '[REDACTED_PROVIDER_API_KEY]'
+      })
+    });
+    expect(finding.rationale).toContain('deterministic failure candidate');
+    expect(JSON.stringify(result)).not.toContain(rawKey);
+  });
+
+  it('returns manual for mod-search-style docker env defaults instead of failing local passwords', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'docker/.env',
+      [
+        'DB_HOST=postgres',
+        'POSTGRES_PASSWORD=postgres',
+        'PGADMIN_DEFAULT_EMAIL=admin@example.com',
+        'PGADMIN_DEFAULT_PASSWORD=admin'
+      ].join('\n')
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        context: 'local_docker_defaults',
+        valueClassification: 'synthetic'
+      })
+    ]));
+    expect(result.findings.every(finding => finding.context === 'local_docker_defaults')).toBe(true);
+  });
+
+  it('returns manual for README Okapi token examples with documentation context', () => {
+    repoPath = createTempRepo();
+    const okapiToken = 'abcdefghijklmnopqrstuvwxyz123456';
+    writeRepoFile(
+      repoPath,
+      'README.md',
+      `Example request:\n\ncurl -H "X-Okapi-Token: ${okapiToken}" http://localhost:9130/users\n`
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'bearer-or-jwt-token',
+        context: 'documentation',
+        confidence: 'high',
+        severity: 'high'
+      })
+    ]));
+    expect(JSON.stringify(result)).not.toContain(okapiToken);
+  });
+
+  it('keeps test credentials low impact or manual without deterministic failure', () => {
+    repoPath = createTempRepo();
+    const generatedTestToken = 'sk-test-1234567890abcdefghijklmnopqrstuvwxyz';
+    writeRepoFile(
+      repoPath,
+      'src/__tests__/auth.fixture.ts',
+      [
+        'const headers = { token: abc };',
+        'const password = "fake-password";',
+        `const generated = "${generatedTestToken}";`
+      ].join('\n')
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        line: 1,
+        context: 'test_fixture',
+        confidence: 'low',
+        severity: 'low'
+      }),
+      expect.objectContaining({
+        detectorId: 'provider-api-key',
+        context: 'test_fixture',
+        confidence: 'medium'
+      })
+    ]));
+    expect(result.findings.some(finding => finding.rationale.includes('deterministic failure candidate'))).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(generatedTestToken);
+  });
+
+  it('retains provider-shaped and private-key findings under docs, samples, and tests as manual evidence', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docs/provider.md', 'OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n');
+    writeRepoFile(
+      repoPath,
+      'samples/key.txt',
+      '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n'
+    );
+    writeRepoFile(repoPath, 'src/test/resources/provider.txt', 'OPENAI_API_KEY=sk-proj-abcdef1234567890abcdefghijklmnop\n');
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detectorId: 'provider-api-key', path: 'docs/provider.md', context: 'documentation' }),
+      expect.objectContaining({ detectorId: 'private-key-block', path: 'samples/key.txt', context: 'sample_or_example' }),
+      expect.objectContaining({ detectorId: 'provider-api-key', path: 'src/test/resources/provider.txt', context: 'test_fixture' })
+    ]));
+  });
+
+  it('routes an unusual production-looking fixture cue to manual rather than deterministic fail', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'config/bootstrap.yml',
+      '# Test fixture for parser coverage\nOPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n'
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({
+      context: 'test_fixture',
+      confidence: 'high',
+      severity: 'critical'
+    });
+  });
+
+  it('returns pass with scan coverage evidence when no findings remain and coverage is complete', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'README.md', '# Clean module\n');
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', 'server:\n  port: 8081\n');
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toMatchObject({
+      complete: true,
+      materiallyWeakened: false
+    });
+    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+    expect(result.classification.reason).toContain('scanning 2 of 2 candidate files');
+    expect(result.classification.reason).toContain('no material coverage warnings');
+  });
+
+  it('returns manual with coverage-warning evidence when material truncation weakens a no-finding scan', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, '.env.production', `COMMENT=${'x'.repeat(MAX_S006_SCAN_BYTES_PER_FILE + 1024)}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.findings).toEqual([]);
+    expect(result.classification).toMatchObject({
+      status: EvaluationStatus.MANUAL,
+      materiallyWeakenedCoverage: true
+    });
+    expect(result.coverage.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'file-truncated',
+        path: '.env.production',
+        materialToCoverage: true
+      })
+    ]));
+    expect(result.classification.reason).toContain('materially weakened');
+  });
+
+  it('keeps private key blocks in fixtures manual while production-like private keys fail', () => {
+    repoPath = createTempRepo();
+    const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n';
+    writeRepoFile(repoPath, 'src/test/resources/key.txt', privateKey);
+
+    let result = analyzeS006SensitiveInformation(repoPath);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({
+      detectorId: 'private-key-block',
+      context: 'test_fixture'
+    });
+
+    fs.rmSync(repoPath, { recursive: true, force: true });
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'config/key.txt', privateKey);
+
+    result = analyzeS006SensitiveInformation(repoPath);
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings[0]).toMatchObject({
+      detectorId: 'private-key-block',
+      context: 'production_source_or_configuration'
+    });
+  });
+
+  it('fails credential-bearing URLs in CI while keeping the same shape manual in documentation', () => {
+    const credentialUrl = 'https://ci-user:s3cr3t@10.0.0.12:9130/admin';
+
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, '.github/workflows/build.yml', `env:\n  ADMIN_URL: ${credentialUrl}\n`);
+    let result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings[0]).toMatchObject({
+      detectorId: 'credential-url',
+      context: 'ci_or_deployment_configuration',
+      confidence: 'high',
+      severity: 'critical'
+    });
+    expect(JSON.stringify(result)).not.toContain(credentialUrl);
+
+    fs.rmSync(repoPath, { recursive: true, force: true });
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docs/ci.md', `Example admin URL: ${credentialUrl}\n`);
+    result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({
+      detectorId: 'credential-url',
+      context: 'documentation'
+    });
+  });
+
+  it('does not change status for paths or comments that only mention password, token, or secret names', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/password-token-secret-notes.yml',
+      '# password token secret labels only\nname: no committed values here\n'
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.findings).toEqual([]);
+    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+  });
+});
+
 describe('S006 context labels and type exports', () => {
   it('includes all planned context labels', () => {
     expect(S006_CONTEXT_LABELS).toEqual([
