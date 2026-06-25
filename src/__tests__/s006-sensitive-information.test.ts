@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createHash } from 'crypto';
 
 import type {
   S004InstallationDocumentationResult,
@@ -9,7 +10,9 @@ import type {
 } from '../types';
 import { EvaluationStatus } from '../types';
 import {
+  analyzeS006SensitiveInformation,
   buildS006RedactedDetectorMatch,
+  buildS006RedactedReportDetails,
   classifyS006SourceContext,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
@@ -382,6 +385,317 @@ describe('S006 bounded repository candidate scanning', () => {
     } finally {
       fs.chmodSync(unreadablePath, 0o600);
     }
+  });
+});
+
+describe('S006 sensitive information finding extraction', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('detects provider-shaped API keys in source config without returning raw key material', () => {
+    repoPath = createTempRepo();
+    const rawKey = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const providerFinding = result.findings.find(finding => finding.detectorId === 'provider-api-key');
+    const serialized = JSON.stringify({
+      analysis: result,
+      report: buildS006RedactedReportDetails(result)
+    });
+
+    expect(providerFinding).toMatchObject({
+      path: 'src/main/resources/application.yml',
+      line: 1,
+      context: 'production_source_or_configuration',
+      category: 'provider_api_key',
+      confidence: 'high',
+      severity: 'critical',
+      redactedExcerpt: expect.objectContaining({
+        text: '[REDACTED_PROVIDER_API_KEY]'
+      })
+    });
+    expect(serialized).not.toContain(rawKey);
+  });
+
+  it('detects multiline private key blocks with stable redacted placeholders', () => {
+    repoPath = createTempRepo();
+    const privateKeyBody = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC';
+    writeRepoFile(
+      repoPath,
+      'config/key.txt',
+      `before\n-----BEGIN PRIVATE KEY-----\n${privateKeyBody}\n-----END PRIVATE KEY-----\nafter\n`
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const finding = result.findings.find(candidate => candidate.detectorId === 'private-key-block');
+
+    expect(finding).toMatchObject({
+      detectorId: 'private-key-block',
+      category: 'private_key',
+      line: 2,
+      endLine: 4,
+      confidence: 'high',
+      severity: 'critical',
+      redactedExcerpt: {
+        text: '[REDACTED_PRIVATE_KEY_BLOCK]',
+        placeholder: '[REDACTED_PRIVATE_KEY_BLOCK]',
+        multiline: true,
+        startLine: 2,
+        endLine: 4
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain(privateKeyBody);
+  });
+
+  it('marks truncated possible private key blocks as material uncertainty without leaking partial body lines', () => {
+    repoPath = createTempRepo();
+    const partialBody = 'PRIVATEKEYBODYSHOULDNOTLEAK';
+    const prefix = 'a'.repeat(MAX_S006_SCAN_BYTES_PER_FILE - 45);
+    writeRepoFile(
+      repoPath,
+      'docs/key.md',
+      `${prefix}\n-----BEGIN PRIVATE KEY-----\n${partialBody}\n${'b'.repeat(1024)}`
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const serialized = JSON.stringify(result);
+
+    expect(result.coverage.materiallyWeakened).toBe(true);
+    expect(result.coverage.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'file-truncated',
+        path: 'docs/key.md',
+        materialToCoverage: true
+      })
+    ]));
+    expect(result.findings.some(finding => finding.detectorId === 'private-key-block')).toBe(false);
+    expect(serialized).not.toContain(partialBody);
+    expect(serialized).not.toContain('bbbbbbbb');
+  });
+
+  it('detects live-looking password and token assignments while downgrading empty and placeholder values', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'config/application.properties',
+      [
+        'password=CorrectHorseBatteryStaple',
+        'refresh_token=abcdefghijklmnopqrstuvwxyz123456',
+        'token=TODO',
+        'secret=<replace-me>',
+        'password=',
+        'Password:',
+        'Token'
+      ].join('\n')
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const assignments = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
+
+    expect(assignments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        line: 1,
+        valueClassification: 'live-looking',
+        confidence: 'medium',
+        severity: 'high'
+      }),
+      expect.objectContaining({
+        line: 2,
+        valueClassification: 'live-looking',
+        confidence: 'medium',
+        severity: 'high'
+      }),
+      expect.objectContaining({
+        line: 3,
+        valueClassification: 'placeholder',
+        confidence: 'low'
+      }),
+      expect.objectContaining({
+        line: 4,
+        valueClassification: 'placeholder',
+        confidence: 'low'
+      })
+    ]));
+    expect(assignments.some(finding => finding.line === 5 || finding.line === 6 || finding.line === 7)).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('CorrectHorseBatteryStaple');
+    expect(JSON.stringify(result)).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
+  });
+
+  it('redacts credential URLs without preserving username, password, host, or the full URL', () => {
+    repoPath = createTempRepo();
+    const credentialUrl = 'https://admin:s3cr3t@10.0.0.12:9130/admin';
+    writeRepoFile(repoPath, 'config/service.yml', `proxy: ${credentialUrl}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const finding = result.findings.find(candidate => candidate.detectorId === 'credential-url');
+    const serialized = JSON.stringify(result);
+
+    expect(finding).toMatchObject({
+      category: 'credential_url',
+      confidence: 'high',
+      redactedExcerpt: expect.objectContaining({
+        text: '[REDACTED_CREDENTIAL_URL]'
+      })
+    });
+    expect(serialized).not.toContain('admin');
+    expect(serialized).not.toContain('s3cr3t');
+    expect(serialized).not.toContain('10.0.0.12');
+    expect(serialized).not.toContain(credentialUrl);
+  });
+
+  it('detects private URLs and local absolute paths as environment-specific findings', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      'okapi: http://10.0.0.12:9130/okapi\nlocal: /Users/alice/work/private-config.yml\n'
+    );
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'private-url',
+        category: 'private_url',
+        severity: 'medium'
+      }),
+      expect.objectContaining({
+        detectorId: 'local-absolute-path',
+        category: 'local_absolute_path',
+        severity: 'low'
+      })
+    ]));
+    expect(result.findings.find(finding => finding.detectorId === 'private-url')?.category).not.toBe('credential_url');
+    expect(JSON.stringify(result)).not.toContain('10.0.0.12');
+    expect(JSON.stringify(result)).not.toContain('/Users/alice');
+  });
+
+  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', () => {
+    const run = createS006FingerprintRun();
+    const cases = [
+      {
+        detectorId: 'provider-api-key' as const,
+        raw: 'AKIA1234567890ABCDEF',
+        absent: ['AKIA1234567890ABCDEF'],
+        expected: '[REDACTED_PROVIDER_API_KEY]'
+      },
+      {
+        detectorId: 'provider-api-key' as const,
+        raw: 'ya29.abcdefghijklmnopqrstuvwxyz123456',
+        absent: ['ya29.abcdefghijklmnopqrstuvwxyz123456'],
+        expected: '[REDACTED_PROVIDER_API_KEY]'
+      },
+      {
+        detectorId: 'password-secret-assignment' as const,
+        raw: 'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY1234567890',
+        absent: ['wJalrXUtnFEMI'],
+        expected: '[REDACTED_SECRET_ASSIGNMENT]'
+      },
+      {
+        detectorId: 'password-secret-assignment' as const,
+        raw: 'refreshToken=abcdefghijklmnopqrstuvwxyz123456',
+        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
+        expected: '[REDACTED_SECRET_ASSIGNMENT]'
+      },
+      {
+        detectorId: 'bearer-or-jwt-token' as const,
+        raw: 'Bearer abcdefghijklmnopqrstuvwxyz123456',
+        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
+        expected: 'Bearer [REDACTED_TOKEN]'
+      },
+      {
+        detectorId: 'bearer-or-jwt-token' as const,
+        raw: 'X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456',
+        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
+        expected: '[REDACTED_TOKEN]'
+      },
+      {
+        detectorId: 'bearer-or-jwt-token' as const,
+        raw: 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123',
+        absent: ['eyJhbGciOiJIUzI1NiIsInR5cCI'],
+        expected: '[REDACTED_JWT]'
+      }
+    ];
+
+    for (const testCase of cases) {
+      const detector = getS006DetectorById(testCase.detectorId);
+      const rawMatch = findFirstS006DetectorMatch(detector, testCase.raw);
+      expect(rawMatch).toBeDefined();
+
+      const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, run);
+      expect(redacted.redactedExcerpt.text).toContain(testCase.expected);
+      for (const absent of testCase.absent) {
+        expect(JSON.stringify(redacted)).not.toContain(absent);
+      }
+    }
+  });
+
+  it('collapses duplicate detector hits for the same location and value fingerprint', () => {
+    repoPath = createTempRepo();
+    const repeated = 'abcdefghijklmnopqrstuvwxyz123456';
+    writeRepoFile(repoPath, 'config/repeated.properties', `token=${repeated} token=${repeated}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const tokenFindings = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
+
+    expect(tokenFindings).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain(repeated);
+  });
+
+  it('does not expose default passwords as raw values or bare hashes in serialized output', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docker-compose.yml', 'POSTGRES_PASSWORD=postgres\nADMIN_PASSWORD=admin\n');
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const serialized = JSON.stringify(result);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        valueClassification: 'synthetic'
+      })
+    ]));
+    expect(serialized).not.toContain('postgres');
+    expect(serialized).not.toContain('admin');
+    expect(serialized).not.toContain(createHash('sha256').update('postgres').digest('hex'));
+    expect(serialized).not.toContain(createHash('sha256').update('admin').digest('hex'));
+  });
+
+  it('redacts long bearer and JWT-like values in docs and tests before returned objects are inspectable', () => {
+    repoPath = createTempRepo();
+    const bearer = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123';
+    writeRepoFile(repoPath, 'docs/auth.md', `curl -H "Authorization: ${bearer}"\n`);
+    writeRepoFile(repoPath, 'src/__tests__/fixtures/token.txt', jwt);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const serialized = JSON.stringify(result);
+
+    expect(result.findings.filter(finding => finding.detectorId === 'bearer-or-jwt-token')).toHaveLength(2);
+    expect(serialized).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
+    expect(serialized).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI');
+    expect(serialized).toContain('[REDACTED_TOKEN]');
+    expect(serialized).toContain('[REDACTED_JWT]');
+  });
+
+  it('keeps report details redacted as defense-in-depth without rescuing raw S006 detector values', () => {
+    repoPath = createTempRepo();
+    const rawKey = 'sk-proj-abcdef1234567890abcdefghijklmnopqrstuvwxyz';
+    writeRepoFile(repoPath, '.env.production', `OPENAI_API_KEY=${rawKey}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const reportDetails = buildS006RedactedReportDetails(result);
+
+    expect(JSON.stringify(result)).not.toContain(rawKey);
+    expect(JSON.stringify(reportDetails)).not.toContain(rawKey);
+    expect(JSON.stringify(reportDetails)).not.toContain('valueFingerprint');
+    expect(reportDetails.findings[0].redactedExcerpt.text).toBe('[REDACTED_PROVIDER_API_KEY]');
   });
 });
 

@@ -10,13 +10,16 @@ import {
   S006FindingContext,
   S006FindingSeverity,
   S006RedactedDetectorMatch,
+  S006RedactedReportDetails,
   S006RunLocalValueFingerprint,
   S006ScanCoverage,
   S006ScanWarning,
+  S006SensitiveInformationFinding,
   S006SensitiveInformationAnalysisResult,
   S006SkippedFile,
   S006ValueClassification
 } from '../types';
+import { redactSensitiveText } from './redaction';
 import { decodeBoundedUtf8, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 
 export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
@@ -31,8 +34,9 @@ export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
 ];
 
 const PLACEHOLDER_VALUE_PATTERN =
-  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change_me|replace_me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
+  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
+const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
 
 const BASE64ISH_PATTERN = /^[A-Za-z0-9._~+/=-]{20,}$/;
 export const MAX_S006_SCAN_TRAVERSAL_ENTRIES = 5000;
@@ -93,12 +97,23 @@ export interface S006RepositoryCandidateScanResult {
   warnings: S006ScanWarning[];
 }
 
+interface S006LineWithOffset {
+  text: string;
+  lineNumber: number;
+  offset: number;
+}
+
+interface S006PrivateKeyRange {
+  start: number;
+  end: number;
+}
+
 export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = [
   {
     id: 'provider-api-key',
     category: 'provider_api_key',
     label: 'Provider-shaped API key',
-    pattern: /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{18,}|sk-or-v1-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b/g,
+    pattern: /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{18,}|sk-or-v1-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{20,})\b/g,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_PROVIDER_API_KEY]',
     defaultConfidence: 'high',
@@ -149,18 +164,33 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'bearer-or-jwt-token',
     category: 'bearer_or_jwt_token',
     label: 'Bearer or JWT-like token',
-    pattern: /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b/g,
+    pattern: /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*[A-Za-z0-9._~+/=-]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b/gi,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_TOKEN]',
     defaultConfidence: 'high',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: rawMatch => (rawMatch.startsWith('Bearer ') ? 'Bearer [REDACTED_TOKEN]' : '[REDACTED_JWT]'),
+    redactor: rawMatch => {
+      if (/^Bearer\s+/i.test(rawMatch)) {
+        return 'Bearer [REDACTED_TOKEN]';
+      }
+      if (/^(?:X-Okapi-Token|Okapi-Token)\s*[:=]/i.test(rawMatch)) {
+        return rawMatch.replace(/^((?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*)[A-Za-z0-9._~+/=-]{20,}$/i, '$1[REDACTED_TOKEN]');
+      }
+      return '[REDACTED_JWT]';
+    },
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
         name: 'Bearer token',
         rawValue: 'Bearer abcdefghijklmnopqrstuvwxyz123456',
+        expectedValueClassification: 'live-looking',
+        expectedConfidence: 'high',
+        expectedSeverity: 'high'
+      },
+      {
+        name: 'Okapi token header',
+        rawValue: 'X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456',
         expectedValueClassification: 'live-looking',
         expectedConfidence: 'high',
         expectedSeverity: 'high'
@@ -171,7 +201,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'password-secret-assignment',
     category: 'password_or_secret_assignment',
     label: 'Password, token, or secret assignment',
-    pattern: /\b(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token)\b\s*[:=]\s*(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})/gi,
+    pattern: /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})/gi,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_SECRET_ASSIGNMENT]',
     defaultConfidence: 'medium',
@@ -179,7 +209,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
     redactor: rawMatch =>
       rawMatch.replace(
-        /^(\b(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token)\b\s*[:=]\s*)(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})$/i,
+        /^(\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*)(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})$/i,
         '$1[REDACTED_SECRET_ASSIGNMENT]'
       ),
     classifyValue: rawMatch => classifyAssignmentValue(rawMatch),
@@ -366,7 +396,7 @@ export function buildS006RedactedDetectorMatch(
 ): S006RedactedDetectorMatch {
   const valueClassification = detector.classifyValue(rawMatch);
   const confidence = getS006Confidence(detector, valueClassification);
-  const redactedText = detector.redactor(rawMatch);
+  const redactedText = boundS006RedactedExcerptText(redactDetectorMatch(detector, rawMatch));
   const lineSpan = rawMatch.split(/\r?\n/).length;
 
   return {
@@ -382,8 +412,86 @@ export function buildS006RedactedDetectorMatch(
       startLine,
       endLine: startLine === undefined ? undefined : startLine + lineSpan - 1
     },
-    valueFingerprint: fingerprintRun.fingerprint(rawMatch)
+    valueFingerprint: fingerprintRun.fingerprint(getS006FingerprintSource(detector, rawMatch))
   };
+}
+
+export function extractS006SensitiveInformationFindings(
+  files: ReadonlyArray<S006ScannedCandidateTextFile>,
+  fingerprintRun: S006FingerprintRun = createS006FingerprintRun()
+): { findings: S006SensitiveInformationFinding[]; warnings: S006ScanWarning[] } {
+  const findings: S006SensitiveInformationFinding[] = [];
+  const warnings: S006ScanWarning[] = [];
+  const dedupeKeys = new Set<string>();
+  let findingLimitReached = false;
+
+  for (const file of files) {
+    const context = classifyS006SourceContext(file.path);
+    const privateKeyRanges = extractS006PrivateKeyFindings(file, context, fingerprintRun, findings, dedupeKeys);
+    if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
+      findingLimitReached = true;
+      break;
+    }
+
+    const lines = splitS006Lines(file.text);
+    for (const line of lines) {
+      const occupiedLineRanges: Array<{ start: number; end: number }> = [];
+      for (const detector of S006_DETECTOR_REGISTRY) {
+        if (detector.id === 'private-key-block') {
+          continue;
+        }
+
+        const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(line.text)) !== null) {
+          const rawMatch = match[0];
+          const matchStart = match.index;
+          const matchEnd = matchStart + rawMatch.length;
+          const absoluteStart = line.offset + matchStart;
+          const absoluteEnd = line.offset + matchEnd;
+
+          if (
+            rawMatch.length === 0 ||
+            occupiedLineRanges.some(range => rangesOverlap(matchStart, matchEnd, range.start, range.end)) ||
+            privateKeyRanges.some(range => rangesOverlap(absoluteStart, absoluteEnd, range.start, range.end))
+          ) {
+            continue;
+          }
+
+          const finding = buildS006Finding(file.path, context, detector, rawMatch, fingerprintRun, line.lineNumber);
+          if (retainS006Finding(findings, dedupeKeys, finding)) {
+            occupiedLineRanges.push({ start: matchStart, end: matchEnd });
+          }
+          if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
+            findingLimitReached = true;
+            break;
+          }
+        }
+
+        if (findingLimitReached) {
+          break;
+        }
+      }
+
+      if (findingLimitReached) {
+        break;
+      }
+    }
+
+    if (findingLimitReached) {
+      break;
+    }
+  }
+
+  if (findingLimitReached) {
+    warnings.push(buildS006Warning(
+      'finding-limit',
+      `S006 detector extraction retained first ${MAX_S006_RETAINED_FINDINGS} findings; additional findings were omitted.`,
+      true
+    ));
+  }
+
+  return { findings, warnings };
 }
 
 export function scanS006RepositoryCandidates(repoPath: string): S006RepositoryCandidateScanResult {
@@ -542,23 +650,57 @@ export function scanS006RepositoryCandidates(repoPath: string): S006RepositoryCa
 
 export function analyzeS006SensitiveInformation(repoPath: string): S006SensitiveInformationAnalysisResult {
   const scan = scanS006RepositoryCandidates(repoPath);
-  const status = scan.coverage.complete ? EvaluationStatus.PASS : EvaluationStatus.MANUAL;
+  const extraction = extractS006SensitiveInformationFindings(scan.files);
+  const warnings = [...scan.warnings, ...extraction.warnings];
+  const coverage = {
+    ...scan.coverage,
+    warnings,
+    materiallyWeakened: scan.coverage.materiallyWeakened || extraction.warnings.some(warning => warning.materialToCoverage),
+    complete: scan.coverage.complete && extraction.warnings.every(warning => !warning.materialToCoverage)
+  };
+  const status = coverage.complete ? EvaluationStatus.PASS : EvaluationStatus.MANUAL;
 
   return {
     criterionId: 'S006',
-    findings: [],
-    coverage: scan.coverage,
+    findings: extraction.findings,
+    coverage,
     classification: {
       status,
-      reason: scan.coverage.complete
-        ? 'No S006 detector findings were produced by the bounded candidate scan.'
-        : scan.coverage.materiallyWeakened
+      reason: coverage.complete
+        ? 'S006 detector extraction completed within bounded candidate scan coverage.'
+        : coverage.materiallyWeakened
         ? 'S006 scan coverage was materially weakened by bounded candidate discovery or reading limits.'
         : 'S006 scan coverage was incomplete after bounded candidate discovery or reading limits.',
-      findingReferences: [],
-      materiallyWeakenedCoverage: scan.coverage.materiallyWeakened
+      findingReferences: extraction.findings.map(finding => formatS006FindingReference(finding)),
+      materiallyWeakenedCoverage: coverage.materiallyWeakened
     },
-    warnings: scan.warnings
+    warnings
+  };
+}
+
+export function buildS006RedactedReportDetails(
+  analysis: S006SensitiveInformationAnalysisResult
+): S006RedactedReportDetails {
+  return {
+    criterionId: 'S006',
+    findings: analysis.findings.map(finding => ({
+      path: redactSensitiveText(finding.path),
+      line: finding.line,
+      endLine: finding.endLine,
+      detectorId: finding.detectorId,
+      category: finding.category,
+      context: finding.context,
+      confidence: finding.confidence,
+      severity: finding.severity,
+      redactedExcerpt: {
+        ...finding.redactedExcerpt,
+        text: redactSensitiveText(finding.redactedExcerpt.text)
+      },
+      rationale: redactSensitiveText(finding.rationale)
+    })),
+    coverage: analysis.coverage,
+    classification: analysis.classification,
+    warnings: analysis.warnings
   };
 }
 
@@ -820,10 +962,12 @@ function readBoundedS006CandidateText(
     }
 
     const truncated = stats.size > bytesToRead;
-    const materialToCoverage = truncated && isS006MaterialCoveragePath(relativePath);
+    const text = decodeBoundedUtf8(slice, truncated);
+    const possiblePrivateKeyBlockTruncated = truncated && hasOpenS006PrivateKeyBlock(text);
+    const materialToCoverage = truncated && (isS006MaterialCoveragePath(relativePath) || possiblePrivateKeyBlockTruncated);
     return {
       status: 'text',
-      text: decodeBoundedUtf8(slice, truncated),
+      text,
       bytesRead: slice.length,
       truncated,
       totalCapReached: stats.size > remainingTotalBytes,
@@ -896,6 +1040,163 @@ function buildS006Coverage(
   };
 }
 
+function extractS006PrivateKeyFindings(
+  file: S006ScannedCandidateTextFile,
+  context: S006FindingContext,
+  fingerprintRun: S006FingerprintRun,
+  findings: S006SensitiveInformationFinding[],
+  dedupeKeys: Set<string>
+): S006PrivateKeyRange[] {
+  const detector = getS006DetectorById('private-key-block');
+  const privateKeyRanges: S006PrivateKeyRange[] = [];
+  const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(file.text)) !== null) {
+    const rawMatch = match[0];
+    if (rawMatch.length === 0) {
+      continue;
+    }
+
+    const line = getS006LineForOffset(file.text, match.index);
+    const finding = buildS006Finding(file.path, context, detector, rawMatch, fingerprintRun, line);
+    if (retainS006Finding(findings, dedupeKeys, finding)) {
+      privateKeyRanges.push({ start: match.index, end: match.index + rawMatch.length });
+    }
+    if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
+      break;
+    }
+  }
+
+  return privateKeyRanges;
+}
+
+function buildS006Finding(
+  filePath: string,
+  context: S006FindingContext,
+  detector: S006DetectorRegistryEntry,
+  rawMatch: string,
+  fingerprintRun: S006FingerprintRun,
+  line: number
+): S006SensitiveInformationFinding {
+  const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, fingerprintRun, line);
+  return {
+    path: filePath,
+    line,
+    endLine: redacted.redactedExcerpt.endLine,
+    detectorId: redacted.detectorId,
+    category: redacted.category,
+    context,
+    valueClassification: redacted.valueClassification,
+    confidence: redacted.confidence,
+    severity: redacted.severity,
+    redactedExcerpt: redacted.redactedExcerpt,
+    valueFingerprint: redacted.valueFingerprint,
+    rationale: `${detector.label} detected in ${context}; detector-local redaction was applied before retaining evidence.`
+  };
+}
+
+function retainS006Finding(
+  findings: S006SensitiveInformationFinding[],
+  dedupeKeys: Set<string>,
+  finding: S006SensitiveInformationFinding
+): boolean {
+  const dedupeKey = [
+    finding.detectorId,
+    finding.path,
+    finding.line ?? '',
+    finding.endLine ?? '',
+    finding.valueFingerprint.value
+  ].join('\0');
+  if (dedupeKeys.has(dedupeKey)) {
+    return false;
+  }
+  if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
+    return false;
+  }
+
+  dedupeKeys.add(dedupeKey);
+  findings.push(finding);
+  return true;
+}
+
+function splitS006Lines(text: string): S006LineWithOffset[] {
+  const lines: S006LineWithOffset[] = [];
+  const pattern = /([^\r\n]*)(\r\n|\n|\r|$)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match[0] === '' && match.index === text.length) {
+      break;
+    }
+    lines.push({
+      text: match[1],
+      lineNumber: lines.length + 1,
+      offset: match.index
+    });
+    if (match[2] === '') {
+      break;
+    }
+  }
+
+  return lines;
+}
+
+function getS006LineForOffset(text: string, offset: number): number {
+  let line = 1;
+  for (let index = 0; index < offset && index < text.length; index++) {
+    if (text[index] === '\n') {
+      line += 1;
+    }
+  }
+  return line;
+}
+
+function rangesOverlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number): boolean {
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+function redactDetectorMatch(detector: S006DetectorRegistryEntry, rawMatch: string): string {
+  const redacted = detector.redactor(rawMatch);
+  if (redacted.includes(rawMatch)) {
+    return detector.redactionPlaceholder;
+  }
+  return redacted;
+}
+
+function boundS006RedactedExcerptText(input: string): string {
+  return Buffer.from(input).length > MAX_S006_EXCERPT_BYTES
+    ? `${Buffer.from(input).subarray(0, MAX_S006_EXCERPT_BYTES).toString('utf-8').replace(/\uFFFD$/, '')}...`
+    : input;
+}
+
+function getS006FingerprintSource(detector: S006DetectorRegistryEntry, rawMatch: string): string {
+  if (detector.id === 'password-secret-assignment') {
+    return rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
+  }
+  if (detector.id === 'bearer-or-jwt-token' && /^Bearer\s+/i.test(rawMatch)) {
+    return rawMatch.replace(/^Bearer\s+/i, '').trim();
+  }
+  if (detector.id === 'bearer-or-jwt-token' && /^(?:X-Okapi-Token|Okapi-Token)\s*[:=]/i.test(rawMatch)) {
+    return rawMatch.replace(/^(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*/i, '').trim();
+  }
+  return rawMatch;
+}
+
+function formatS006FindingReference(finding: S006SensitiveInformationFinding): string {
+  return `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}:${finding.detectorId}`;
+}
+
+function hasOpenS006PrivateKeyBlock(text: string): boolean {
+  const beginMatches = [...text.matchAll(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g)];
+  if (!beginMatches.length) {
+    return false;
+  }
+  const lastBegin = beginMatches[beginMatches.length - 1];
+  const start = lastBegin.index ?? 0;
+  return !/-----END [A-Z0-9 ]*PRIVATE KEY-----/.test(text.slice(start));
+}
+
 function boundedS006Message(input: string): string {
   return input.length > MAX_S006_EXCERPT_BYTES ? `${input.slice(0, MAX_S006_EXCERPT_BYTES)}...` : input;
 }
@@ -905,7 +1206,7 @@ function classifyAssignmentValue(rawMatch: string): S006ValueClassification {
   if (PLACEHOLDER_VALUE_PATTERN.test(value)) {
     return 'placeholder';
   }
-  if (SYNTHETIC_VALUE_PATTERN.test(value) || value.length < 8) {
+  if (DEFAULT_CREDENTIAL_VALUE_PATTERN.test(value) || SYNTHETIC_VALUE_PATTERN.test(value) || value.length < 8) {
     return 'synthetic';
   }
   if (BASE64ISH_PATTERN.test(value)) {

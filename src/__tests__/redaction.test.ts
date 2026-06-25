@@ -33,18 +33,42 @@ describe('redaction', () => {
   });
 
   it('redacts private URLs', () => {
-    const redacted = redactSensitiveText('see http://user:pass@192.168.1.10:9130/admin');
+    const redacted = redactSensitiveText('see http://192.168.1.10:9130/admin');
 
     expect(redacted).toContain('[REDACTED_PRIVATE_URL]');
     expect(redacted).not.toContain('192.168.1.10');
   });
 
-  it('redacts credentials embedded in non-private URLs', () => {
-    const redacted = redactSensitiveText('proxy=https://user:pass@example.com:8080');
+  it('redacts credentials embedded in URLs before preserving private-url shape', () => {
+    const redacted = redactSensitiveText('proxy=https://user:pass@example.com:8080 db=http://admin:s3cr3t@192.168.1.10:9130/admin');
 
     expect(redacted).toContain('[REDACTED_CREDENTIAL_URL]');
     expect(redacted).not.toContain('user:pass');
     expect(redacted).not.toContain('example.com');
+    expect(redacted).not.toContain('admin:s3cr3t');
+    expect(redacted).not.toContain('192.168.1.10');
+  });
+
+  it('redacts private key blocks, JWTs, Okapi tokens, and OAuth-like provider tokens', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123';
+    const oauthToken = 'ya29.abcdefghijklmnopqrstuvwxyz123456';
+    const redacted = redactSensitiveText([
+      '-----BEGIN PRIVATE KEY-----',
+      'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC',
+      '-----END PRIVATE KEY-----',
+      `jwt=${jwt}`,
+      'X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456',
+      oauthToken
+    ].join('\n'));
+
+    expect(redacted).toContain('[REDACTED_PRIVATE_KEY_BLOCK]');
+    expect(redacted).toContain('[REDACTED_JWT]');
+    expect(redacted).toContain('X-Okapi-Token: [REDACTED]');
+    expect(redacted).toContain('[REDACTED_PROVIDER_TOKEN]');
+    expect(redacted).not.toContain('MIIEvQIB');
+    expect(redacted).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI');
+    expect(redacted).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
+    expect(redacted).not.toContain(oauthToken);
   });
 
   it('is used by command output sanitization', () => {
