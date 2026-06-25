@@ -2,7 +2,7 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation and `S005` personal data disclosure consistency.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, and `S006` sensitive/environment-specific information review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
@@ -19,6 +19,14 @@ S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechan
 Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, redacted parsed summary, and bounded redacted excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references. S005 excerpts are redacted review hints, not PII-safe extracts.
 
 If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
+
+## S006 Sensitive Information Review
+
+S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports use detector-local redaction and must not include raw sensitive values or value fingerprints.
+
+Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
+
+When enabled, S006 agent review runs only for manual findings or material scan-coverage uncertainty. It receives redacted summaries and bounded redacted excerpts only, never raw detector values or fingerprints. Agent review is advisory only and cannot pass or fail S006. If agent review is disabled, unavailable, malformed, or has no material, deterministic evidence remains and S006 records the unavailable reason when applicable.
 
 ## OpenRouter
 

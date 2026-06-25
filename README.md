@@ -14,6 +14,8 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 S005 personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechanics, completion, and bounded source-inspection evidence. Completed forms remain subject to manual review; the tool does not certify legal or privacy compliance.
 
+S006 sensitive-information evaluation scans bounded high-signal text, config, docs, CI, Docker, and env surfaces for committed secrets or environment-specific values. Reports use detector-local redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
+
 **Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 
 ## Security
@@ -31,11 +33,11 @@ folio-eval evaluate <repo-url> --allow-local-commands
 
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
-S005 source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
+S005 and S006 source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
 ### Agent Review
 
-Some criteria, including S005, can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
+Some criteria, including S005 and S006, can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
 
 ### For Local Development: Use Devcontainer
 
