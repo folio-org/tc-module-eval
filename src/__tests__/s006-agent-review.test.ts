@@ -65,6 +65,7 @@ describe('S006 agent review adapter', () => {
     const rawProviderKey = 'sk-proj-doc1234567890abcdefghijklmnopqrstuvwxyz';
     const rawBearerToken = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
     const rawPassword = 'POSTGRES_PASSWORD: postgres';
+    const rawEscapedPassword = 'APP_PASSWORD: "abc\\"defSECRET"';
     const rawCredentialUrl = 'https://admin:s3cr3t@10.0.0.12:9130/admin';
     const rawPrivateUrl = 'http://192.168.1.10:9130/okapi';
     const rawTenantEndpoint = 'https://okapi-prod.library.university.edu/okapi';
@@ -81,7 +82,8 @@ describe('S006 agent review adapter', () => {
       'services:',
       '  postgres:',
       '    environment:',
-      `      ${rawPassword}`
+      `      ${rawPassword}`,
+      `      ${rawEscapedPassword}`
     ].join('\n'));
 
     const analysis = analyzeS006SensitiveInformation(repoPath);
@@ -111,6 +113,8 @@ describe('S006 agent review adapter', () => {
     expect(workspaceText).not.toContain(rawProviderKey);
     expect(workspaceText).not.toContain(rawBearerToken);
     expect(workspaceText).not.toContain(rawPassword);
+    expect(workspaceText).not.toContain(rawEscapedPassword);
+    expect(workspaceText).not.toContain('defSECRET');
     expect(workspaceText).not.toContain(rawCredentialUrl);
     expect(workspaceText).not.toContain(rawPrivateUrl);
     expect(workspaceText).not.toContain(rawTenantEndpoint);

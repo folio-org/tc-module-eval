@@ -206,7 +206,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'password-secret-assignment',
     category: 'password_or_secret_assignment',
     label: 'Password, token, or secret assignment',
-    pattern: /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})/gi,
+    pattern: /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*(?:"(?:\\.|[^"\\\n]){1,200}"|'(?:\\.|[^'\\\n]){1,200}'|[^\s"'`,;#]{1,200})/gi,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_SECRET_ASSIGNMENT]',
     defaultConfidence: 'medium',
@@ -214,7 +214,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
     redactor: rawMatch =>
       rawMatch.replace(
-        /^(\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*)(?:"[^"\n]{1,200}"|'[^'\n]{1,200}'|[^\s"'`,;#]{1,200})$/i,
+        /^(\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*)(?:"(?:\\.|[^"\\\n]){1,200}"|'(?:\\.|[^'\\\n]){1,200}'|[^\s"'`,;#]{1,200})$/i,
         '$1[REDACTED_SECRET_ASSIGNMENT]'
       ),
     classifyValue: rawMatch => classifyAssignmentValue(rawMatch),
