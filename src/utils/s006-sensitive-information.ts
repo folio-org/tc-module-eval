@@ -103,7 +103,7 @@ export interface S006RepositoryCandidateScanResult {
   warnings: S006ScanWarning[];
 }
 
-interface S006RepositoryCandidateScanOptions {
+export interface S006RepositoryCandidateScanOptions {
   traversalEntryLimit?: number;
 }
 

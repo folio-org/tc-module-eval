@@ -9,6 +9,7 @@ import type {
   S005PersonalDataDisclosureAnalysisResult,
   S006SensitiveInformationAnalysisResult
 } from '../types';
+import type { S006RedactedReportDetails as RootS006RedactedReportDetails } from '../index';
 import { EvaluationStatus } from '../types';
 import {
   analyzeS006SensitiveInformation,
@@ -1266,5 +1267,7 @@ describe('S006 context labels and type exports', () => {
     expect(s004.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(s005.classification.parseState).toBe('not_parsed');
     expect(s006.criterionId).toBe('S006');
+    const rootExportedDetails: RootS006RedactedReportDetails = buildS006RedactedReportDetails(s006);
+    expect(rootExportedDetails.criterionId).toBe('S006');
   });
 });

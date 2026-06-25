@@ -50,3 +50,4 @@ export {
   CriterionFunction,
   ReportOptions
 } from './types';
+export type * from './types';
