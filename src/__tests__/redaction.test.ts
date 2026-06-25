@@ -23,6 +23,14 @@ describe('redaction', () => {
     expect(redacted).not.toContain('refresh-secret');
   });
 
+  it('redacts escaped quote suffixes in quoted secret assignments', () => {
+    const redacted = redactSensitiveText('APP_PASSWORD: "abc\\"defSECRET"');
+
+    expect(redacted).toContain('APP_PASSWORD:"[REDACTED]"');
+    expect(redacted).not.toContain('abc');
+    expect(redacted).not.toContain('defSECRET');
+  });
+
   it('redacts raw provider tokens and OpenCode auth JSON keys', () => {
     const redacted = redactSensitiveText('{"openai":{"type":"api","key":"sk-secret"},"openrouter":{"key":"sk-or-v1-secret"}} raw sk-live-token');
 

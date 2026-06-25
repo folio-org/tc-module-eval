@@ -23,6 +23,8 @@ import {
   MAX_S006_SCAN_BYTES_PER_FILE,
   MAX_S006_SCAN_CANDIDATE_FILES,
   MAX_S006_SCAN_TOTAL_BYTES,
+  MAX_S006_SCAN_TRAVERSAL_ENTRIES,
+  MAX_S006_RETAINED_FINDINGS,
   scanS006RepositoryCandidates,
   strongestS006ReportFindings,
   S006_CONTEXT_LABELS,
@@ -338,6 +340,24 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
+  it('marks coverage materially weakened when traversal reaches the entry cap', () => {
+    repoPath = createTempRepo();
+    for (let index = 0; index < MAX_S006_SCAN_TRAVERSAL_ENTRIES + 1; index++) {
+      writeRepoFile(repoPath, `docs/page-${String(index).padStart(5, '0')}.md`, '# docs\n');
+    }
+
+    const result = scanS006RepositoryCandidates(repoPath);
+
+    expect(result.coverage.complete).toBe(false);
+    expect(result.coverage.materiallyWeakened).toBe(true);
+    expect(result.coverage.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'traversal-limit',
+        materialToCoverage: true
+      })
+    ]));
+  });
+
   it('stops at the total byte cap and marks coverage material when high-signal candidates remain unread', () => {
     repoPath = createTempRepo();
     for (let index = 0; index < 30; index++) {
@@ -427,6 +447,28 @@ describe('S006 sensitive information finding extraction', () => {
       })
     });
     expect(serialized).not.toContain(rawKey);
+  });
+
+  it('caps retained findings and reports material finding-limit coverage', () => {
+    repoPath = createTempRepo();
+    const lines = Array.from({ length: MAX_S006_RETAINED_FINDINGS + 3 }, (_entry, index) =>
+      `SERVICE_${index}_PASSWORD=CorrectHorseBatteryStaple${String(index).padStart(3, '0')}`
+    );
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `${lines.join('\n')}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+    const serialized = JSON.stringify(result);
+
+    expect(result.findings).toHaveLength(MAX_S006_RETAINED_FINDINGS);
+    expect(result.coverage.complete).toBe(false);
+    expect(result.coverage.materiallyWeakened).toBe(true);
+    expect(result.coverage.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'finding-limit',
+        materialToCoverage: true
+      })
+    ]));
+    expect(serialized).not.toContain('CorrectHorseBatteryStaple');
   });
 
   it('detects multiline private key blocks with stable redacted placeholders', () => {
