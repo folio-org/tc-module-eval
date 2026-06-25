@@ -10,7 +10,6 @@ import {
   S006FindingContext,
   S006FindingSeverity,
   S006RedactedDetectorMatch,
-  S006RedactedReportDetails,
   S006RunLocalValueFingerprint,
   S006ScanCoverage,
   S006ScanWarning,
@@ -19,8 +18,13 @@ import {
   S006SkippedFile,
   S006ValueClassification
 } from '../types';
-import { redactSensitiveText } from './redaction';
 import { decodeBoundedUtf8, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+export {
+  buildS006CriterionDetails,
+  buildS006RedactedReportDetails,
+  formatS006Evidence,
+  strongestS006ReportFindings
+} from './s006-sensitive-information-report';
 
 export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
   'production_source_or_configuration',
@@ -666,32 +670,6 @@ export function analyzeS006SensitiveInformation(repoPath: string): S006Sensitive
     coverage,
     classification,
     warnings
-  };
-}
-
-export function buildS006RedactedReportDetails(
-  analysis: S006SensitiveInformationAnalysisResult
-): S006RedactedReportDetails {
-  return {
-    criterionId: 'S006',
-    findings: analysis.findings.map(finding => ({
-      path: redactSensitiveText(finding.path),
-      line: finding.line,
-      endLine: finding.endLine,
-      detectorId: finding.detectorId,
-      category: finding.category,
-      context: finding.context,
-      confidence: finding.confidence,
-      severity: finding.severity,
-      redactedExcerpt: {
-        ...finding.redactedExcerpt,
-        text: redactSensitiveText(finding.redactedExcerpt.text)
-      },
-      rationale: redactSensitiveText(finding.rationale)
-    })),
-    coverage: analysis.coverage,
-    classification: analysis.classification,
-    warnings: analysis.warnings
   };
 }
 

@@ -188,8 +188,18 @@ export interface S006SensitiveInformationAnalysisResult {
 
 export interface S006RedactedReportDetails {
   criterionId: 'S006';
+  findingCount: number;
+  retainedFindingCount: number;
   findings: S006RedactedReportFinding[];
   coverage: S006ScanCoverage;
+  coverageSummary: {
+    skippedFileCount: number;
+    materialSkippedFileCount: number;
+    warningCount: number;
+    materialWarningCount: number;
+    skippedFileReasonCounts: Partial<Record<S006SkippedFileReason, number>>;
+    scanLimitWarnings: S006ScanWarning[];
+  };
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
 }

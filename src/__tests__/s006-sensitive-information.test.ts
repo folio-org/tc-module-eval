@@ -4,6 +4,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 
 import type {
+  CriterionAgentReviewResult,
   S004InstallationDocumentationResult,
   S005PersonalDataDisclosureAnalysisResult,
   S006SensitiveInformationAnalysisResult
@@ -11,16 +12,19 @@ import type {
 import { EvaluationStatus } from '../types';
 import {
   analyzeS006SensitiveInformation,
+  buildS006CriterionDetails,
   buildS006RedactedDetectorMatch,
   buildS006RedactedReportDetails,
   classifyS006SourceContext,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
+  formatS006Evidence,
   getS006DetectorById,
   MAX_S006_SCAN_BYTES_PER_FILE,
   MAX_S006_SCAN_CANDIDATE_FILES,
   MAX_S006_SCAN_TOTAL_BYTES,
   scanS006RepositoryCandidates,
+  strongestS006ReportFindings,
   S006_CONTEXT_LABELS,
   S006_DETECTOR_REGISTRY
 } from '../utils/s006-sensitive-information';
@@ -958,6 +962,188 @@ describe('S006 deterministic classification by context, confidence, and coverage
 
     expect(result.findings).toEqual([]);
     expect(result.classification.status).toBe(EvaluationStatus.PASS);
+  });
+});
+
+describe('S006 report formatting and criterion details', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath && fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true });
+    }
+  });
+
+  it('formats fail details with deterministic production findings before manual documentation evidence', () => {
+    repoPath = createTempRepo();
+    const rawProductionKey = 'sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz';
+    const rawDocumentationToken = 'abcdefghijklmnopqrstuvwxyz123456';
+    writeRepoFile(repoPath, 'docs/auth.md', `curl -H "X-Okapi-Token: ${rawDocumentationToken}"\n`);
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawProductionKey}\n`);
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+    const deterministicIndex = rendered.details.indexOf('src/main/resources/application.yml:1');
+    const documentationIndex = rendered.details.indexOf('docs/auth.md:1');
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(deterministicIndex).toBeGreaterThanOrEqual(0);
+    expect(documentationIndex).toBeGreaterThan(deterministicIndex);
+    expect(rendered.details).toContain('[REDACTED_PROVIDER_API_KEY]');
+    expect(rendered.details).toContain('X-Okapi-Token=[REDACTED]');
+    expect(rendered.details).toContain('documentation evidence');
+    expect(rendered.details).not.toContain(rawProductionKey);
+    expect(rendered.details).not.toContain(rawDocumentationToken);
+  });
+
+  it('renders local Docker defaults with local-default context and reviewer rationale', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'docker-compose.yml',
+      [
+        'services:',
+        '  postgres:',
+        '    environment:',
+        '      POSTGRES_PASSWORD: postgres'
+      ].join('\n')
+    );
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(rendered.details).toContain('local_docker_defaults');
+    expect(rendered.details).toContain('local-default context');
+    expect(rendered.details).toContain('verify values are not reused outside local development');
+    expect(rendered.details).toContain('POSTGRES_PASSWORD=[REDACTED]');
+    expect(rendered.details).not.toContain('postgres');
+  });
+
+  it('renders documentation snippets as manual evidence without raw token exposure', () => {
+    repoPath = createTempRepo();
+    const rawToken = 'abcdefghijklmnopqrstuvwxyz123456';
+    writeRepoFile(repoPath, 'README.md', `Example: curl -H "Authorization: Bearer ${rawToken}"\n`);
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(rendered.details).toContain('documentation evidence');
+    expect(rendered.details).toContain('Bearer [REDACTED_TOKEN]');
+    expect(rendered.details).not.toContain(rawToken);
+  });
+
+  it('reports pass scan coverage, skipped-file counts, and non-material warnings', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'README.md', '# Clean module\n');
+    writeRepoFile(repoPath, 'node_modules/pkg/config.yml', 'ignored=true\n');
+    for (let index = 0; index < MAX_S006_SCAN_CANDIDATE_FILES + 2; index++) {
+      writeRepoFile(repoPath, `docs/page-${String(index).padStart(3, '0')}.md`, '# docs\n');
+    }
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+    const details = buildS006CriterionDetails(analysis);
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.PASS);
+    expect(rendered.details).toContain('Files scanned:');
+    expect(rendered.details).toContain('Skipped files: 1 (0 material, 1 non-material)');
+    expect(rendered.details).toContain('Non-material coverage warnings:');
+    expect(details.coverageSummary.skippedFileCount).toBe(1);
+    expect(details.coverageSummary.materialSkippedFileCount).toBe(0);
+    expect(details.coverageSummary.warningCount).toBeGreaterThan(0);
+    expect(details.coverageSummary.scanLimitWarnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'candidate-limit', materialToCoverage: false })
+    ]));
+  });
+
+  it('reports material scan-limit warnings and manual status rationale for incomplete scans', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, '.env.production', `COMMENT=${'x'.repeat(MAX_S006_SCAN_BYTES_PER_FILE + 1024)}\n`);
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+    const details = buildS006CriterionDetails(analysis);
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(rendered.details).toContain('Status rationale:');
+    expect(rendered.details).toContain('Material scan-limit warnings:');
+    expect(rendered.details).toContain('file-truncated .env.production');
+    expect(details.coverageSummary.materialWarningCount).toBeGreaterThan(0);
+    expect(details.coverageSummary.scanLimitWarnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'file-truncated', path: '.env.production', materialToCoverage: true })
+    ]));
+  });
+
+  it('builds bounded redacted JSON criterionDetails without value fingerprints or raw secret values', () => {
+    repoPath = createTempRepo();
+    const rawKey = 'sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz';
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
+    writeRepoFile(repoPath, 'node_modules/pkg/config.yml', 'ignored=true\n');
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const details = buildS006CriterionDetails(analysis);
+    const serialized = JSON.stringify(details);
+
+    expect(details.findingCount).toBe(1);
+    expect(details.retainedFindingCount).toBe(1);
+    expect(details.coverageSummary.skippedFileCount).toBe(1);
+    expect(details.findings[0]).toMatchObject({
+      path: 'src/main/resources/application.yml',
+      redactedExcerpt: expect.objectContaining({ text: '[REDACTED_PROVIDER_API_KEY]' })
+    });
+    expect(serialized).not.toContain(rawKey);
+    expect(serialized).not.toContain('valueFingerprint');
+  });
+
+  it('bounds strongest finding objects and keeps deterministic failures first for JSON consumers', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', 'OPENAI_API_KEY=sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz\n');
+    for (let index = 0; index < 25; index++) {
+      writeRepoFile(repoPath, `docs/token-${String(index).padStart(2, '0')}.md`, `Bearer abcdefghijklmnopqrstuvwxyz${String(index).padStart(6, '0')}\n`);
+    }
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const details = buildS006CriterionDetails(analysis);
+    const strongest = strongestS006ReportFindings(analysis.findings);
+
+    expect(details.findingCount).toBeGreaterThan(16);
+    expect(details.findings).toHaveLength(16);
+    expect(details.findings[0].path).toBe('src/main/resources/application.yml');
+    expect(strongest[0].context).toBe('production_source_or_configuration');
+  });
+
+  it('includes available agent-review state in human details', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'README.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const agentReview: CriterionAgentReviewResult = {
+      available: true,
+      criterionId: 'S006',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium',
+      summary: 'Reviewer should inspect the docs token example.',
+      rationale: 'Example contains private URL http://192.168.1.10/admin and token=secretish',
+      evidenceReferences: ['README.md'],
+      metadata: {
+        adapter: 'fake',
+        modelLabel: 'fake-model',
+        reviewMode: 'read-only',
+        promptInputSanitized: true,
+        reviewWorkspaceSanitized: true
+      },
+      warnings: [],
+      errors: []
+    };
+
+    const rendered = formatS006Evidence(analysis, agentReview);
+
+    expect(rendered.details).toContain('Agent review:');
+    expect(rendered.details).toContain('Advisory recommendation: needs_reviewer_judgment');
+    expect(rendered.details).toContain('[REDACTED_PRIVATE_URL]');
+    expect(rendered.details).toContain('token=[REDACTED]');
+    expect(rendered.details).not.toContain('secretish');
   });
 });
 
