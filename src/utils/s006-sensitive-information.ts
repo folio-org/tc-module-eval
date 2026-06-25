@@ -79,13 +79,13 @@ const S006_SKIPPED_DIRECTORY_REASONS: ReadonlyMap<string, S006SkippedFile['reaso
   ['gen', 'generated-artifact']
 ]);
 const S006_SUPPORTED_TEXT_FILE_PATTERN =
-  /\.(?:bash|cjs|cfg|conf|env|gradle|groovy|ini|java|js|json|jsx|kt|kts|md|mjs|properties|py|rb|sh|sql|toml|ts|tsx|txt|xml|yaml|yml|zsh)$/i;
+  /\.(?:bash|cjs|cfg|conf|crt|env|gradle|groovy|ini|java|js|json|jsx|key|kt|kts|md|mjs|pem|properties|py|rb|sh|sql|tf|tfvars|toml|ts|tsx|txt|xml|yaml|yml|zsh)$/i;
 const S006_SUPPORTED_SPECIAL_FILE_PATTERN =
-  /(?:^|\/)(?:\.env(?:[.\w-]*)?|Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|Makefile|\.gitlab-ci\.ya?ml)$/i;
+  /(?:^|\/)(?:\.env(?:[.\w-]*)?|Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|Makefile|\.gitlab-ci\.ya?ml|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?)$/i;
 const S006_HIGH_SIGNAL_PATH_PATTERN =
-  /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|Makefile|\.gitlab-ci\.ya?ml)$/i;
+  /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/|terraform\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|Makefile|\.gitlab-ci\.ya?ml|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?)$|\.(?:pem|key|crt|tf|tfvars)$/i;
 const S006_MATERIAL_TRUNCATED_PATH_PATTERN =
-  /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|\.gitlab-ci\.ya?ml)$|\.(?:ya?ml|properties)$/i;
+  /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/|terraform\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|\.gitlab-ci\.ya?ml|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?)$|\.(?:ya?ml|properties|pem|key|crt|tf|tfvars)$/i;
 const S006_GENERATED_REPORT_PATH_PATTERN =
   /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
 
@@ -753,8 +753,8 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   }
   if (
     /(?:^|\/)\.env(?:[.\w-]*)?$/.test(normalized) ||
-    /(?:^|\/)(?:application|bootstrap|module-descriptor|package|pom|settings|config|configuration|service|server)(?:[.\w-]*)?\.(?:json|ya?ml|properties|xml|toml|ini|conf|cfg|env)$/.test(normalized) ||
-    /(^|\/)(src|conf|config|configuration|resources?|properties|profiles?)(\/|$)|\.(?:java|js|ts|tsx|jsx|json|ya?ml|properties|xml|sql|sh|conf|cfg|ini)$/.test(normalized)
+    /(?:^|\/)(?:application|bootstrap|module-descriptor|package|pom|settings|config|configuration|service|server)(?:[.\w-]*)?\.(?:json|ya?ml|properties|xml|toml|ini|conf|cfg|env|pem|key|crt|tf|tfvars)$/.test(normalized) ||
+    /(^|\/)(src|conf|config|configuration|resources?|properties|profiles?|terraform)(\/|$)|(?:^|\/)id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?$|\.(?:java|js|ts|tsx|jsx|json|ya?ml|properties|xml|sql|sh|conf|cfg|ini|pem|key|crt|tf|tfvars)$/.test(normalized)
   ) {
     return 'production_source_or_configuration';
   }

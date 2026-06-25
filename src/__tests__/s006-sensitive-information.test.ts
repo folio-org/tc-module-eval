@@ -225,7 +225,11 @@ describe('S006 bounded repository candidate scanning', () => {
       'src/main/resources/log4j.xml',
       'src/main/resources/application.properties',
       'sql/init.sql',
-      'scripts/start.sh'
+      'scripts/start.sh',
+      'server.pem',
+      'id_rsa',
+      'main.tf',
+      'terraform.tfvars'
     ];
     for (const candidatePath of expectedPaths) {
       writeRepoFile(repoPath, candidatePath, `${candidatePath}\n`);
@@ -783,6 +787,25 @@ describe('S006 deterministic classification by context, confidence, and coverage
     });
     expect(finding.rationale).toContain('deterministic failure candidate');
     expect(JSON.stringify(result)).not.toContain(rawKey);
+  });
+
+  it('fails root PEM private-key material instead of treating it as clean coverage', () => {
+    repoPath = createTempRepo();
+    const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----';
+    writeRepoFile(repoPath, 'server.pem', `${privateKey}\n`);
+
+    const result = analyzeS006SensitiveInformation(repoPath);
+
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'server.pem',
+        detectorId: 'private-key-block',
+        context: 'production_source_or_configuration',
+        statusImpact: 'deterministic_fail'
+      })
+    ]));
+    expect(JSON.stringify(result)).not.toContain('MIIEvQIB');
   });
 
   it('returns manual for mod-search-style docker env defaults instead of failing local passwords', () => {
