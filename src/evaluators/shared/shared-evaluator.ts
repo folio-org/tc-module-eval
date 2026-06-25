@@ -23,13 +23,18 @@ import {
   formatS005Evidence
 } from '../../utils/s005-personal-data-disclosure';
 import { hasS005AgentReviewMaterial, reviewS005WithAgent } from '../../utils/s005-agent-review';
+import {
+  analyzeS006SensitiveInformation,
+  buildS006CriterionDetails,
+  formatS006Evidence
+} from '../../utils/s006-sensitive-information';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
  * IDs and their fallback results are derived from the acceptance-criterion catalog
  * by CatalogSectionEvaluator. Automated criteria are supplied as handler overrides
- * to super() (here S001, S002, S003, and S004); every other criterion falls back to the
- * catalog-defined default result for the given language.
+ * to super(); every other criterion falls back to the catalog-defined default result
+ * for the given language.
  */
 export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   constructor(language: CriterionLanguage = 'java') {
@@ -38,7 +43,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS002(repoPath, evaluationRun),
       S003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS003(repoPath, evaluationRun),
       S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun),
-      S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun)
+      S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun),
+      S006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS006(repoPath, evaluationRun)
     });
   }
 
@@ -194,6 +200,26 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       details: rendered.details,
       criterionDetails: buildS005CriterionDetails(analysis),
       agentReview
+    };
+  }
+
+  private async evaluateS006(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    if (!evaluationRun) {
+      createEvaluationRun({
+        repositoryPath: repoPath,
+        language: this.language,
+        criteriaFilter: ['S006']
+      });
+    }
+
+    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const rendered = formatS006Evidence(analysis);
+    return {
+      criterionId: 'S006',
+      status: analysis.classification.status,
+      evidence: rendered.evidence,
+      details: rendered.details,
+      criterionDetails: buildS006CriterionDetails(analysis)
     };
   }
 

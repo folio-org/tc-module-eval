@@ -101,7 +101,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     languages: ['java', 'javascript'],
     defaultEvaluation: {
       type: 'not_implemented',
-      reason: 'Code quality and static analysis'
+      reason: 'Sensitive information repository scan'
     }
   },
   {

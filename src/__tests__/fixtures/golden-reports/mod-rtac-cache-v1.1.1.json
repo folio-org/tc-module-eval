@@ -222,8 +222,412 @@
     {
       "criterionId": "S006",
       "status": "manual",
-      "evidence": "Code quality and static analysis - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S006 manual: S006 retained 18 sensitive or environment-specific findings that require reviewer judgment based on context, confidence, severity, and redacted evidence.",
+      "details": "Status rationale:\n  - Deterministic status: manual\n  - Reason: S006 retained 18 sensitive or environment-specific findings that require reviewer judgment based on context, confidence, severity, and redacted evidence.\n  - Materially weakened coverage: yes\n  - Finding references: .github/workflows/api-doc.yml:3:tenant-host-endpoint, .github/workflows/api-doc.yml:27:password-secret-assignment, .github/workflows/api-doc.yml:28:password-secret-assignment, .github/workflows/api-doc.yml:84:password-secret-assignment, .github/workflows/api-doc.yml:85:password-secret-assignment, .github/workflows/api-lint.yml:3:tenant-host-endpoint, .github/workflows/api-schema-lint.yml:3:tenant-host-endpoint, .github/workflows/maven.yml:13:password-secret-assignment, ... 10 more\n\nScan coverage:\n  - Candidate files discovered: 290\n  - Files scanned: 250\n  - Bytes scanned: 657649\n  - Skipped files: 4 (2 material, 2 non-material)\n  - Coverage complete: no\n  - Coverage warnings: 3 (2 material, 1 non-material)\n  - Material scan-limit warnings:\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/error.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/error.sample was not scanned.\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/errors.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/errors.sample was not scanned.\n  - Non-material coverage warnings:\n    - candidate-limit: S006 candidate discovery retained first 250 supported files; additional candidates were not scanned.\n  - Material skipped files:\n    - src/main/resources/swagger.api/examples/error.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n    - src/main/resources/swagger.api/examples/errors.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n  - Non-material skipped files:\n    - .git (generated-artifact)\n    - target (generated-artifact)\n\nDeterministic failure findings:\n  - none\n\nManual review findings:\n  - .github/workflows/api-doc.yml:27 [ci_or_deployment_configuration/medium/high/password_or_secret_assignment] password-secret-assignment\n    rationale: Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: AWS_S3_ACCESS_KEY_ID=[REDACTED]\n  - .github/workflows/api-doc.yml:28 [ci_or_deployment_configuration/medium/high/password_or_secret_assignment] password-secret-assignment\n    rationale: Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: AWS_S3_ACCESS_KEY=[REDACTED]\n  - .github/workflows/api-doc.yml:84 [ci_or_deployment_configuration/medium/high/password_or_secret_assignment] password-secret-assignment\n    rationale: Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: access_key=[REDACTED]\n  - .github/workflows/api-doc.yml:85 [ci_or_deployment_configuration/medium/high/password_or_secret_assignment] password-secret-assignment\n    rationale: Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: secret_access_key=[REDACTED]\n  - .github/workflows/maven.yml:13 [ci_or_deployment_configuration/medium/high/password_or_secret_assignment] password-secret-assignment\n    rationale: Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: secrets=[REDACTED]\n  - src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java:10 [production_source_or_configuration/medium/medium/tenant_or_host_endpoint] tenant-host-endpoint\n    rationale: Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: [REDACTED_TENANT_OR_HOST_ENDPOINT]\n  - src/main/resources/application.yml:18 [production_source_or_configuration/medium/medium/tenant_or_host_endpoint] tenant-host-endpoint\n    rationale: Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: [REDACTED_TENANT_OR_HOST_ENDPOINT]\n  - src/main/resources/application.yml:60 [production_source_or_configuration/medium/medium/private_url] private-url\n    rationale: Private URL without embedded credentials is a manual review candidate: category=private_url, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence.\n    excerpt: [REDACTED_PRIVATE_URL]\n  - Additional retained findings omitted from report details: 10\n\nAgent review:\n  - Not applied or unavailable for this S006 result.",
+      "criterionDetails": {
+        "criterionId": "S006",
+        "findingCount": 18,
+        "retainedFindingCount": 16,
+        "findings": [
+          {
+            "path": ".github/workflows/api-doc.yml",
+            "line": 27,
+            "endLine": 27,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "redactedExcerpt": {
+              "text": "AWS_S3_ACCESS_KEY_ID=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 27,
+              "endLine": 27
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-doc.yml",
+            "line": 28,
+            "endLine": 28,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "redactedExcerpt": {
+              "text": "AWS_S3_ACCESS_KEY=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 28,
+              "endLine": 28
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-doc.yml",
+            "line": 84,
+            "endLine": 84,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "redactedExcerpt": {
+              "text": "access_key=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 84,
+              "endLine": 84
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-doc.yml",
+            "line": 85,
+            "endLine": 85,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "redactedExcerpt": {
+              "text": "secret_access_key=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 85,
+              "endLine": 85
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/maven.yml",
+            "line": 13,
+            "endLine": 13,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "redactedExcerpt": {
+              "text": "secrets=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 13,
+              "endLine": 13
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=ci_or_deployment_configuration, confidence=medium, severity=high, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java",
+            "line": 10,
+            "endLine": 10,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "production_source_or_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 10,
+              "endLine": 10
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 18,
+            "endLine": 18,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "production_source_or_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 18,
+              "endLine": 18
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 60,
+            "endLine": 60,
+            "detectorId": "private-url",
+            "category": "private_url",
+            "context": "production_source_or_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_PRIVATE_URL]",
+              "placeholder": "[REDACTED_PRIVATE_URL]",
+              "multiline": false,
+              "startLine": 60,
+              "endLine": 60
+            },
+            "rationale": "Private URL without embedded credentials is a manual review candidate: category=private_url, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=synthetic; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/swagger.api/schemas/uuid.json",
+            "line": 2,
+            "endLine": 2,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "production_source_or_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 2,
+              "endLine": 2
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=production_source_or_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-doc.yml",
+            "line": 3,
+            "endLine": 3,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 3,
+              "endLine": 3
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=ci_or_deployment_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-lint.yml",
+            "line": 3,
+            "endLine": 3,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 3,
+              "endLine": 3
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=ci_or_deployment_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": ".github/workflows/api-schema-lint.yml",
+            "line": 3,
+            "endLine": 3,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "ci_or_deployment_configuration",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 3,
+              "endLine": 3
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=ci_or_deployment_configuration, confidence=medium, severity=medium, valueClassification=live-looking; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/test/java/org/folio/rtaccache/integration/KafkaMessageListenerIT.java",
+            "line": 18,
+            "endLine": 18,
+            "detectorId": "tenant-host-endpoint",
+            "category": "tenant_or_host_endpoint",
+            "context": "test_fixture",
+            "confidence": "medium",
+            "severity": "medium",
+            "redactedExcerpt": {
+              "text": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "placeholder": "[REDACTED_TENANT_OR_HOST_ENDPOINT]",
+              "multiline": false,
+              "startLine": 18,
+              "endLine": 18
+            },
+            "rationale": "Tenant or host endpoint is a manual review candidate: category=tenant_or_host_endpoint, context=test_fixture, confidence=medium, severity=medium, valueClassification=live-looking; context limits deterministic failure and preserves the finding for reviewer judgment; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 14,
+            "endLine": 14,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "production_source_or_configuration",
+            "confidence": "low",
+            "severity": "low",
+            "redactedExcerpt": {
+              "text": "password=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 14,
+              "endLine": 14
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=production_source_or_configuration, confidence=low, severity=low, valueClassification=placeholder; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 53,
+            "endLine": 53,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "production_source_or_configuration",
+            "confidence": "low",
+            "severity": "low",
+            "redactedExcerpt": {
+              "text": "key-store-password=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 53,
+              "endLine": 53
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=production_source_or_configuration, confidence=low, severity=low, valueClassification=placeholder; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          },
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 55,
+            "endLine": 55,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "production_source_or_configuration",
+            "confidence": "low",
+            "severity": "low",
+            "redactedExcerpt": {
+              "text": "trust-store-password=[REDACTED]",
+              "placeholder": "[REDACTED_SECRET_ASSIGNMENT]",
+              "multiline": false,
+              "startLine": 55,
+              "endLine": 55
+            },
+            "rationale": "Password, token, or secret assignment is a manual review candidate: category=password_or_secret_assignment, context=production_source_or_configuration, confidence=low, severity=low, valueClassification=placeholder; production or CI/deployment context can elevate high-confidence live-looking secrets; detector-local redaction was applied before retaining evidence."
+          }
+        ],
+        "coverage": {
+          "scannedFiles": 250,
+          "scannedBytes": 657649,
+          "candidateFiles": 290,
+          "skippedFiles": [
+            {
+              "path": ".git",
+              "reason": "generated-artifact",
+              "materialToCoverage": false
+            },
+            {
+              "path": "src/main/resources/swagger.api/examples/error.sample",
+              "reason": "unsupported-file",
+              "message": "Unsupported high-signal S006 candidate path.",
+              "materialToCoverage": true
+            },
+            {
+              "path": "src/main/resources/swagger.api/examples/errors.sample",
+              "reason": "unsupported-file",
+              "message": "Unsupported high-signal S006 candidate path.",
+              "materialToCoverage": true
+            },
+            {
+              "path": "target",
+              "reason": "generated-artifact",
+              "materialToCoverage": false
+            }
+          ],
+          "warnings": [
+            {
+              "kind": "unsupported-high-signal-file",
+              "message": "Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/error.sample was not scanned.",
+              "path": "src/main/resources/swagger.api/examples/error.sample",
+              "materialToCoverage": true
+            },
+            {
+              "kind": "unsupported-high-signal-file",
+              "message": "Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/errors.sample was not scanned.",
+              "path": "src/main/resources/swagger.api/examples/errors.sample",
+              "materialToCoverage": true
+            },
+            {
+              "kind": "candidate-limit",
+              "message": "S006 candidate discovery retained first 250 supported files; additional candidates were not scanned.",
+              "materialToCoverage": false
+            }
+          ],
+          "materiallyWeakened": true,
+          "complete": false
+        },
+        "coverageSummary": {
+          "skippedFileCount": 4,
+          "materialSkippedFileCount": 2,
+          "warningCount": 3,
+          "materialWarningCount": 2,
+          "skippedFileReasonCounts": {
+            "generated-artifact": 2,
+            "unsupported-file": 2
+          },
+          "scanLimitWarnings": [
+            {
+              "kind": "candidate-limit",
+              "message": "S006 candidate discovery retained first 250 supported files; additional candidates were not scanned.",
+              "materialToCoverage": false
+            }
+          ]
+        },
+        "classification": {
+          "status": "manual",
+          "reason": "S006 retained 18 sensitive or environment-specific findings that require reviewer judgment based on context, confidence, severity, and redacted evidence.",
+          "findingReferences": [
+            ".github/workflows/api-doc.yml:3:tenant-host-endpoint",
+            ".github/workflows/api-doc.yml:27:password-secret-assignment",
+            ".github/workflows/api-doc.yml:28:password-secret-assignment",
+            ".github/workflows/api-doc.yml:84:password-secret-assignment",
+            ".github/workflows/api-doc.yml:85:password-secret-assignment",
+            ".github/workflows/api-lint.yml:3:tenant-host-endpoint",
+            ".github/workflows/api-schema-lint.yml:3:tenant-host-endpoint",
+            ".github/workflows/maven.yml:13:password-secret-assignment",
+            "src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java:10:tenant-host-endpoint",
+            "src/main/resources/application.yml:14:password-secret-assignment",
+            "src/main/resources/application.yml:18:tenant-host-endpoint",
+            "src/main/resources/application.yml:53:password-secret-assignment",
+            "src/main/resources/application.yml:55:password-secret-assignment",
+            "src/main/resources/application.yml:60:private-url",
+            "src/main/resources/application.yml:116:password-secret-assignment",
+            "src/main/resources/swagger.api/schemas/uuid.json:2:tenant-host-endpoint"
+          ],
+          "materiallyWeakenedCoverage": true
+        },
+        "warnings": [
+          {
+            "kind": "unsupported-high-signal-file",
+            "message": "Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/error.sample was not scanned.",
+            "path": "src/main/resources/swagger.api/examples/error.sample",
+            "materialToCoverage": true
+          },
+          {
+            "kind": "unsupported-high-signal-file",
+            "message": "Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/errors.sample was not scanned.",
+            "path": "src/main/resources/swagger.api/examples/errors.sample",
+            "materialToCoverage": true
+          },
+          {
+            "kind": "candidate-limit",
+            "message": "S006 candidate discovery retained first 250 supported files; additional candidates were not scanned.",
+            "materialToCoverage": false
+          }
+        ]
+      }
     },
     {
       "criterionId": "S007",
