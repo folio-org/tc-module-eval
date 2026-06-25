@@ -97,6 +97,11 @@ export function readBoundedFileBytes(filePath: string, maxBytes: number): Buffer
   }
 }
 
+export function decodeBoundedUtf8(buffer: Buffer, truncated: boolean): string {
+  const text = buffer.toString('utf-8');
+  return truncated ? text.replace(/\uFFFD$/, '') : text;
+}
+
 export function relativePosixPath(repoPath: string, candidatePath: string): string {
   return path.relative(repoPath, candidatePath).split(path.sep).join('/');
 }
