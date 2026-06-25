@@ -9,6 +9,7 @@ import {
   S006FindingConfidence,
   S006FindingContext,
   S006FindingSeverity,
+  S006FindingStatusImpact,
   S006RedactedDetectorMatch,
   S006RunLocalValueFingerprint,
   S006ScanCoverage,
@@ -1073,7 +1074,7 @@ function buildS006Finding(
 ): S006SensitiveInformationFinding {
   const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, fingerprintRun, line);
   const confidence = adjustS006FindingConfidenceForContext(detector, redacted.valueClassification, redacted.confidence, context);
-  const finding: Omit<S006SensitiveInformationFinding, 'rationale'> = {
+  const baseFinding: Omit<S006SensitiveInformationFinding, 'rationale' | 'statusImpact'> = {
     path: filePath,
     line,
     endLine: redacted.redactedExcerpt.endLine,
@@ -1085,6 +1086,13 @@ function buildS006Finding(
     severity: getS006Severity(detector, confidence),
     redactedExcerpt: redacted.redactedExcerpt,
     valueFingerprint: redacted.valueFingerprint
+  };
+  const statusImpact: S006FindingStatusImpact = isS006DeterministicFailFinding(baseFinding)
+    ? 'deterministic_fail'
+    : 'manual_review';
+  const finding: Omit<S006SensitiveInformationFinding, 'rationale'> = {
+    ...baseFinding,
+    statusImpact
   };
   return {
     ...finding,
@@ -1247,7 +1255,7 @@ function buildS006FindingRationale(
   finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
   detector: S006DetectorRegistryEntry
 ): string {
-  const statusImpact = isS006DeterministicFailFinding(finding)
+  const statusImpact = finding.statusImpact === 'deterministic_fail'
     ? 'deterministic failure candidate'
     : 'manual review candidate';
   const contextNote = isS006FailCapableContext(finding.context)

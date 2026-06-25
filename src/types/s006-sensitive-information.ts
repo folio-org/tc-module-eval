@@ -40,6 +40,8 @@ export type S006DetectorId =
 
 export type S006ValueClassification = 'placeholder' | 'synthetic' | 'live-looking';
 
+export type S006FindingStatusImpact = 'deterministic_fail' | 'manual_review';
+
 export interface S006RedactedExcerpt {
   text: string;
   placeholder: string;
@@ -112,6 +114,7 @@ export interface S006SensitiveInformationFinding {
   severity: S006FindingSeverity;
   redactedExcerpt: S006RedactedExcerpt;
   valueFingerprint: S006RunLocalValueFingerprint;
+  statusImpact: S006FindingStatusImpact;
   rationale: string;
 }
 

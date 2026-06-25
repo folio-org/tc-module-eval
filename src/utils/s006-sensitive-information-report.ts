@@ -17,15 +17,13 @@ const MAX_CRITERION_FINDINGS = 16;
 const MAX_CRITERION_SKIPPED_FILES = 40;
 const MAX_CRITERION_WARNINGS = 40;
 
-type S006FindingStatusImpact = 'deterministic_fail' | 'manual_review';
-
 export function formatS006Evidence(
   analysis: S006SensitiveInformationAnalysisResult,
   agentReview?: CriterionAgentReviewResult
 ): { evidence: string; details: string } {
   const strongestFindings = strongestS006ReportFindings(analysis.findings);
-  const deterministicFailures = strongestFindings.filter(isS006ReportFailureFinding);
-  const manualFindings = strongestFindings.filter(finding => !isS006ReportFailureFinding(finding));
+  const deterministicFailures = strongestFindings.filter(finding => finding.statusImpact === 'deterministic_fail');
+  const manualFindings = strongestFindings.filter(finding => finding.statusImpact !== 'deterministic_fail');
   const materialWarnings = analysis.coverage.warnings.filter(warning => warning.materialToCoverage);
   const nonMaterialWarnings = analysis.coverage.warnings.filter(warning => !warning.materialToCoverage);
   const materialSkippedFiles = analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage);
@@ -275,7 +273,7 @@ function isS006ScanLimitWarning(warning: S006ScanWarning): boolean {
 }
 
 function impactRank(finding: S006SensitiveInformationFinding): number {
-  return isS006ReportFailureFinding(finding) ? 0 : 1;
+  return finding.statusImpact === 'deterministic_fail' ? 0 : 1;
 }
 
 function severityRank(severity: S006FindingSeverity): number {
@@ -312,17 +310,6 @@ function contextRank(context: S006FindingContext): number {
   return ranks[context];
 }
 
-function isS006ReportFailureFinding(finding: S006SensitiveInformationFinding): boolean {
-  return (
-    finding.rationale.includes('deterministic failure candidate') ||
-    (
-      finding.confidence === 'high' &&
-      finding.valueClassification === 'live-looking' &&
-      (finding.context === 'production_source_or_configuration' || finding.context === 'ci_or_deployment_configuration') &&
-      (finding.severity === 'critical' || finding.severity === 'high')
-    )
-  );
-}
 
 function formatReferences(references: string[]): string {
   const visible = references.slice(0, MAX_REPORT_LIST_ITEMS).map(redactS006Path).join(', ');
