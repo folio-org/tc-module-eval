@@ -376,9 +376,11 @@ describe('S006 bounded repository candidate scanning', () => {
         expect.objectContaining({
           path: 'config/unreadable.yml',
           reason: 'read-error',
+          message: 'Unable to read S006 candidate file.',
           materialToCoverage: true
         })
       ]));
+      expect(JSON.stringify(result.coverage.skippedFiles)).not.toContain(repoPath);
       expect(result.coverage.warnings).toEqual(expect.arrayContaining([
         expect.objectContaining({
           kind: 'unreadable-file',

@@ -67,11 +67,15 @@ describe('S006 agent review adapter', () => {
     const rawPassword = 'POSTGRES_PASSWORD: postgres';
     const rawCredentialUrl = 'https://admin:s3cr3t@10.0.0.12:9130/admin';
     const rawPrivateUrl = 'http://192.168.1.10:9130/okapi';
+    const rawTenantEndpoint = 'https://okapi-prod.library.university.edu/okapi';
+    const rawLocalPath = '/var/lib/folio/private-config.yml';
     writeFile('docs/private.md', [
       `Example key: ${rawProviderKey}`,
       `Example token: ${rawBearerToken}`,
       rawCredentialUrl,
-      rawPrivateUrl
+      rawPrivateUrl,
+      rawTenantEndpoint,
+      rawLocalPath
     ].join('\n'));
     writeFile('docker-compose.yml', [
       'services:',
@@ -95,11 +99,13 @@ describe('S006 agent review adapter', () => {
     expect(request.instructions).toContain('run repository commands');
     expect(request.instructions).toContain('make network calls');
     expect(request.instructions).toContain('Do not claim that any credential');
-    expect(workspaceText).toContain('[REDACTED_PROVIDER_TOKEN]');
+    expect(workspaceText).toContain('[REDACTED_PROVIDER_API_KEY]');
     expect(workspaceText).toContain('Bearer [REDACTED]');
     expect(workspaceText).toContain('POSTGRES_PASSWORD=[REDACTED]');
     expect(workspaceText).toContain('[REDACTED_CREDENTIAL_URL]');
     expect(workspaceText).toContain('[REDACTED_PRIVATE_URL]');
+    expect(workspaceText).toContain('[REDACTED_TENANT_OR_HOST_ENDPOINT]');
+    expect(workspaceText).toContain('[REDACTED_LOCAL_ABSOLUTE_PATH]');
     expect(workspaceText).not.toContain('valueFingerprint');
     expect(workspaceText).not.toContain('hmac-sha256');
     expect(workspaceText).not.toContain(rawProviderKey);
@@ -107,6 +113,8 @@ describe('S006 agent review adapter', () => {
     expect(workspaceText).not.toContain(rawPassword);
     expect(workspaceText).not.toContain(rawCredentialUrl);
     expect(workspaceText).not.toContain(rawPrivateUrl);
+    expect(workspaceText).not.toContain(rawTenantEndpoint);
+    expect(workspaceText).not.toContain(rawLocalPath);
     expect(request.files.every(file => !path.isAbsolute(file.repoRelativePath))).toBe(true);
   });
 

@@ -36,9 +36,11 @@ export function redactSensitiveText(input: string, maxBytes?: number): string {
 
 export function redactLocalUserPaths(input: string): string {
   return input
-    .replace(/\/Users\/[^/\s]+/g, '/Users/[REDACTED_USER]')
-    .replace(/\/home\/[^/\s]+/g, '/home/[REDACTED_USER]')
-    .replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\[REDACTED_USER]');
+    .replace(/\/private\/var\/[^\s"'`<>)]*/g, '/private/var/[REDACTED_PATH]')
+    .replace(/\/var\/[^\s"'`<>)]*/g, '/var/[REDACTED_PATH]')
+    .replace(/\/Users\/[^\s"'`<>)]*/g, '/Users/[REDACTED_PATH]')
+    .replace(/\/home\/[^\s"'`<>)]*/g, '/home/[REDACTED_PATH]')
+    .replace(/[A-Za-z]:\\Users\\[^"'`<>)]*/g, 'C:\\Users\\[REDACTED_PATH]');
 }
 
 export function redactJsonValue<T>(value: T): T {

@@ -343,5 +343,5 @@ function redactS006Path(path: string): string {
 }
 
 function redactS006ReportText(input: string, maxBytes?: number): string {
-  return redactSensitiveText(input, maxBytes);
+  return redactLocalUserPaths(redactSensitiveText(input, maxBytes));
 }

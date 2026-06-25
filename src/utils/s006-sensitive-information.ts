@@ -19,6 +19,7 @@ import {
   S006ValueClassification
 } from '../types';
 import { decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { redactLocalUserPaths, redactSensitiveText } from './redaction';
 export {
   buildS006CriterionDetails,
   buildS006RedactedReportDetails,
@@ -359,6 +360,26 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     ]
   }
 ];
+
+export function redactS006SensitiveInformationText(input: string, maxBytes?: number): string {
+  let redacted = input;
+  for (const detector of S006_DETECTOR_REGISTRY) {
+    const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+    redacted = redacted.replace(pattern, rawMatch => redactDetectorMatch(detector, rawMatch));
+  }
+  redacted = redactLocalUserPaths(redactSensitiveText(redacted));
+
+  if (maxBytes === undefined) {
+    return redacted;
+  }
+
+  const buffer = Buffer.from(redacted);
+  if (buffer.length <= maxBytes) {
+    return redacted;
+  }
+
+  return `${buffer.subarray(0, maxBytes).toString('utf-8').replace(/\uFFFD$/, '')}\n[output truncated to ${maxBytes} bytes]`;
+}
 
 export function getS006DetectorById(detectorId: S006DetectorId): S006DetectorRegistryEntry {
   const detector = S006_DETECTOR_REGISTRY.find(entry => entry.id === detectorId);
@@ -957,7 +978,7 @@ function readBoundedS006CandidateText(
   } catch (error) {
     return {
       status: 'read-error',
-      message: boundedS006Message(error instanceof Error ? error.message : String(error))
+      message: 'Unable to read S006 candidate file.'
     };
   }
 }

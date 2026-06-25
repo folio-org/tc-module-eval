@@ -18,10 +18,10 @@ import {
   MAX_S006_EXCERPT_BYTES,
   MAX_S006_SCAN_BYTES_PER_FILE,
   S006_CONTEXT_LABELS,
+  redactS006SensitiveInformationText,
   strongestS006ReportFindings
 } from './s006-sensitive-information';
 import { isWithinRepo, readBoundedFileBytes, realPath } from './repo-files';
-import { redactLocalUserPaths, redactSensitiveText } from './redaction';
 
 const REDACTED_SUMMARY_REVIEW_PATH = '.criterion-agent/S006/redacted-finding-summary.json';
 const MAX_S006_AGENT_SUMMARY_BYTES = 24 * 1024;
@@ -246,5 +246,5 @@ function countFindingsByContext(findings: S006SensitiveInformationFinding[]): Pa
 }
 
 function redactS006AgentText(input: string, maxBytes?: number): string {
-  return redactLocalUserPaths(redactSensitiveText(input, maxBytes));
+  return redactS006SensitiveInformationText(input, maxBytes);
 }
