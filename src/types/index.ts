@@ -299,7 +299,6 @@ export interface S005PersonalDataDeterministicClassification {
   status: EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
   parseState: S005PersonalDataDisclosureParseState;
   reason: string;
-  warnings: string[];
 }
 
 export type S005PersonalDataEvidenceAssessmentKind =

@@ -343,6 +343,22 @@ describe('S005 personal data disclosure artifact discovery', () => {
     ]);
   });
 
+  it('reports root directory read failures as unreadable instead of missing', () => {
+    repoPath = createTempRepo();
+    fs.chmodSync(repoPath, 0o000);
+
+    try {
+      const result = discoverS005PersonalDataDisclosureArtifact(repoPath);
+
+      expect(result.status).toBe('unreadable');
+      expect(result.artifact).toBeUndefined();
+      expect(result.attempts).toEqual([]);
+      expect(result.readError).toContain('permission denied');
+    } finally {
+      fs.chmodSync(repoPath, 0o700);
+    }
+  });
+
   it('bounds oversized disclosure artifacts and checklist retention', () => {
     repoPath = createTempRepo();
     writeRepoFile(
@@ -563,6 +579,28 @@ class UserEventsProducer {
     expect(excerpts).not.toContain('Mary Smith');
     expect(excerpts).not.toContain('12345');
     expect(excerpts).not.toContain('12 Oak St');
+    expect(excerpts).toContain('[REDACTED_VALUE]');
+  });
+
+  it('redacts network identifiers from evidence excerpts', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/resources/schemas/network-user.json', `
+{
+  "ipAddress": "192.168.10.42",
+  "clientIp": "203.0.113.42",
+  "macAddress": "aa:bb:cc:dd:ee:ff"
+}
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+    const excerpts = result.signals.map(signal => signal.excerpt).join('\n');
+
+    expect(result.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'ip_or_mac_address' })
+    ]));
+    expect(excerpts).not.toContain('192.168.10.42');
+    expect(excerpts).not.toContain('203.0.113.42');
+    expect(excerpts).not.toContain('aa:bb:cc:dd:ee:ff');
     expect(excerpts).toContain('[REDACTED_VALUE]');
   });
 

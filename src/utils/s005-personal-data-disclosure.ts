@@ -54,9 +54,10 @@ const HIGH_RISK_PERSONAL_EXAMPLE_PATTERN = /\b(?:john|jane)\s+doe\b|\b(?:ssn|soc
 const LONG_FREE_FORM_VALUE_PATTERN = /(["'`])([^"'`\n]{180,})\1/g;
 const PATH_SECRET_PATTERN = /\b(api[-_]?key|token|secret|password|passwd|pwd|credential|auth)([-_:=])[^/\\\s]+/gi;
 const PERSONAL_FIELD_VALUE_PATTERN = new RegExp(
-  '(["\']?\\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name|username|userName|user_name|loginName|login_name|userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier|emailAddress|email_address|email|phone|telephone|mobilePhone|mobile_phone|address|streetAddress|street_address|addressLine\\d*|address_line\\d*|postalCode|postal_code|zipCode|zip_code|city|province|state|country|location|dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob|notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)["\']?\\s*[:=]\\s*)(?:"[^"\\n]{1,180}"|\'[^\'\\n]{1,180}\'|`[^`\\n]{1,180}`|[A-Za-z0-9._@+\\-]{2,180})',
+  '(["\']?\\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name|username|userName|user_name|loginName|login_name|userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier|emailAddress|email_address|email|phone|telephone|mobilePhone|mobile_phone|address|streetAddress|street_address|addressLine\\d*|address_line\\d*|postalCode|postal_code|zipCode|zip_code|city|province|country|location|dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob|ipAddress|ip_address|clientIp|client_ip|remoteAddr|remote_addr|macAddress|mac_address|notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)["\']?\\s*[:=]\\s*)(?:"[^"\\n]{1,180}"|\'[^\'\\n]{1,180}\'|`[^`\\n]{1,180}`|[A-Za-z0-9._@+\\-:]{2,180})',
   'gi'
 );
+const NETWORK_IDENTIFIER_VALUE_PATTERN = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b|\b(?:[0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4}\b|\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/gi;
 const S005_EVIDENCE_SKIPPED_DIRS: ReadonlySet<string> = new Set([
   '.git',
   '.hg',
@@ -150,10 +151,25 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
     };
   }
 
-  const attempts = discoverS005AttemptedDisclosureFiles(repoRoot);
+  let rootEntries: string[];
+  try {
+    rootEntries = readSortedDir(repoRoot);
+  } catch (error) {
+    return {
+      status: 'unreadable',
+      attempts: [],
+      readError: redactS005PersonalDataPath(
+        error instanceof Error ? error.message : String(error),
+        MAX_DISCOVERY_READ_ERROR_BYTES
+      ),
+      warnings
+    };
+  }
+
+  const attempts = discoverS005AttemptedDisclosureFiles(repoRoot, rootEntries);
   const exactPath = path.join(repoRoot, REQUIRED_DISCLOSURE_FILENAME);
 
-  if (!hasExactRootFileName(repoRoot, REQUIRED_DISCLOSURE_FILENAME)) {
+  if (!hasExactRootFileName(rootEntries, REQUIRED_DISCLOSURE_FILENAME)) {
     return {
       status: 'missing',
       attempts,
@@ -266,8 +282,7 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
       classification: {
         status: EvaluationStatus.FAIL,
         parseState: 'unparseable',
-        reason: parseError.message,
-        warnings
+        reason: parseError.message
       },
       parseError,
       warnings
@@ -298,8 +313,7 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
       parseState: completed ? 'completed' : 'incomplete',
       reason: completed
         ? 'Disclosure form has at least one checked meaningful answer and requires reviewer judgment.'
-        : 'No checked disclosure answers were found for personal-data or processing questions.',
-      warnings
+        : 'No checked disclosure answers were found for personal-data or processing questions.'
     },
     warnings
   };
@@ -447,8 +461,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
       classification: {
         status: EvaluationStatus.FAIL,
         parseState: parseResult.classification.parseState,
-        reason,
-        warnings: [...warnings]
+        reason
       },
       possibleMismatches: contradictionMismatches(parseResult.contradictions),
       matchingEvidence: [],
@@ -471,8 +484,7 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
     classification: {
       status: EvaluationStatus.MANUAL,
       parseState: 'completed',
-      reason: classified.reason,
-      warnings: [...warnings]
+      reason: classified.reason
     },
     possibleMismatches: classified.possibleMismatches,
     matchingEvidence: classified.matchingEvidence,
@@ -494,8 +506,7 @@ function unparsedS005DisclosureResult(
     classification: {
       status: EvaluationStatus.FAIL,
       parseState: 'not_parsed',
-      reason,
-      warnings: [...warnings]
+      reason
     },
     possibleMismatches: [],
     matchingEvidence: [],
@@ -799,8 +810,10 @@ export function normalizeS005ChecklistCategory(label: string): S005PersonalDataC
 export function redactS005PersonalDataText(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
   return boundUtf8(
     redactSensitiveText(input)
+      .replace(PERSONAL_FIELD_VALUE_PATTERN, (_match, prefix: string) => `${prefix}[REDACTED_VALUE]`)
       .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
       .replace(/\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g, '[REDACTED_PHONE]')
+      .replace(NETWORK_IDENTIFIER_VALUE_PATTERN, '[REDACTED_NETWORK_IDENTIFIER]')
       .replace(HIGH_RISK_PERSONAL_EXAMPLE_PATTERN, '[REDACTED_PERSONAL_EXAMPLE]')
       .replace(LONG_FREE_FORM_VALUE_PATTERN, (_match, quote) => `${quote}[REDACTED_LONG_TEXT]${quote}`),
     maxBytes
@@ -814,10 +827,7 @@ export function redactS005PersonalDataPath(input: string, maxBytes: number = MAX
 }
 
 function redactS005EvidenceExcerpt(input: string): string {
-  return redactS005PersonalDataText(
-    input.replace(PERSONAL_FIELD_VALUE_PATTERN, (_match, prefix: string) => `${prefix}[REDACTED_VALUE]`),
-    MAX_S005_EVIDENCE_EXCERPT_BYTES
-  );
+  return redactS005PersonalDataText(input, MAX_S005_EVIDENCE_EXCERPT_BYTES);
 }
 
 function collectBoundedS005EvidenceCandidates(repoPath: string): {
@@ -1220,10 +1230,10 @@ function uniqueNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
 }
 
-function discoverS005AttemptedDisclosureFiles(repoPath: string): S005PersonalDataDisclosureAttempt[] {
+function discoverS005AttemptedDisclosureFiles(repoPath: string, rootEntries: string[]): S005PersonalDataDisclosureAttempt[] {
   const attempts: S005PersonalDataDisclosureAttempt[] = [];
 
-  for (const entry of safeReadDir(repoPath)) {
+  for (const entry of rootEntries) {
     const absolutePath = path.join(repoPath, entry);
     if (!safeIsFile(absolutePath) || entry === REQUIRED_DISCLOSURE_FILENAME) {
       continue;
@@ -1249,8 +1259,8 @@ function discoverS005AttemptedDisclosureFiles(repoPath: string): S005PersonalDat
   return attempts;
 }
 
-function hasExactRootFileName(repoPath: string, fileName: string): boolean {
-  return safeReadDir(repoPath).includes(fileName);
+function hasExactRootFileName(rootEntries: string[], fileName: string): boolean {
+  return rootEntries.includes(fileName);
 }
 
 function collectBoundedNestedAttempts(
@@ -1299,10 +1309,14 @@ function normalizeDisclosureFileName(fileName: string): string {
 
 function safeReadDir(directoryPath: string): string[] {
   try {
-    return fs.readdirSync(directoryPath).sort((left, right) => left.localeCompare(right));
+    return readSortedDir(directoryPath);
   } catch {
     return [];
   }
+}
+
+function readSortedDir(directoryPath: string): string[] {
+  return fs.readdirSync(directoryPath).sort((left, right) => left.localeCompare(right));
 }
 
 function safeIsDirectory(candidatePath: string): boolean {

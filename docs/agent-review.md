@@ -2,10 +2,7 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria:
-
-- `S004`: installation documentation review.
-- `S005`: personal data disclosure consistency review.
+Supported advisory criteria: `S004` installation documentation and `S005` personal data disclosure consistency.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
@@ -17,21 +14,11 @@ Agent review runs through reusable criterion-agent infrastructure:
 
 ## S005 Personal Data Disclosure Review
 
-S005 evaluates the top-level `PERSONAL_DATA_DISCLOSURE.md` required by the acceptance criterion. The deterministic evaluator checks artifact mechanics, parses disclosure checklist answers, reports obvious placeholders or contradictions, and gathers bounded source-inspection signals for likely personal-data handling.
+S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechanics, checklist answers, placeholders or contradictions, and bounded read-only source signals. It does not certify privacy or legal compliance; completed forms stay `manual`, deterministic `fail` covers only mechanics or completion defects, and explicit FOLIO libraries are `not_applicable`.
 
-S005 does not certify legal, GDPR, CCPA, institutional privacy, or general privacy compliance. Completed disclosure forms remain `manual` so Technical Council reviewers own the interpretation of disclosure accuracy. Deterministic `fail` results are reserved for mechanics or completion problems such as a missing exact file, unreadable or unparseable form, misnamed-only artifact, or blank copied template. Explicit FOLIO libraries are `not_applicable`.
+Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, redacted parsed summary, and bounded redacted excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references. S005 excerpts are redacted review hints, not PII-safe extracts.
 
-S005 evidence gathering is read-only source inspection. It does not mutate the evaluated repository and does not run repository code, tests, builds, services, databases, or Okapi calls.
-
-When agent review is enabled for `S005`, it runs only for completed manual cases that have candidate deterministic evidence or possible mismatches beyond the form itself. The agent receives the disclosure form, a redacted parsed summary, and bounded redacted evidence excerpts. Its advisory JSON includes:
-
-- `recommendation`: `likely_sufficient`, `likely_insufficient`, or `needs_reviewer_judgment`.
-- `confidence`: `low`, `medium`, or `high`.
-- `summary`, `rationale`, and manifest-scoped `evidenceReferences`.
-
-S005 excerpts are bounded and redacted, but they are only review hints; do not treat them as PII-safe extracts.
-
-If agent review is disabled, unconfigured, excluded for `S005`, unavailable, malformed, failed, or has no candidate material, the evaluator still reports deterministic S005 evidence and records a not-applied or unavailable reason. The S005 status remains driven by deterministic mechanics and reviewer-owned manual interpretation, not agent advice.
+If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
 
 ## OpenRouter
 

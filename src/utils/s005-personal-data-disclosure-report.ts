@@ -3,7 +3,6 @@ import {
   EvaluationStatus,
   ModuleKindResult,
   S005PersonalDataCategory,
-  S005PersonalDataDeterministicClassification,
   S005PersonalDataDisclosureAttempt,
   S005PersonalDataDisclosureAnalysisResult,
   S005PersonalDataDisclosureChecklistItem,
@@ -103,7 +102,7 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
           completion: analysis.parseResult.completion,
           placeholders: analysis.parseResult.placeholders.map(redactS005Placeholder),
           contradictions: analysis.parseResult.contradictions,
-          classification: redactS005Classification(analysis.parseResult.classification),
+          classification: analysis.parseResult.classification,
           parseError: analysis.parseResult.parseError
             ? { message: analysis.parseResult.parseError.message }
             : undefined,
@@ -120,7 +119,7 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
           warnings: analysis.evidenceScan.warnings.map(redactS005Warning)
         }
       : undefined,
-    classification: redactS005Classification(analysis.classification),
+    classification: analysis.classification,
     agentReviewUnavailableReason: analysis.agentReviewUnavailableReason,
     possibleMismatches: analysis.possibleMismatches.map(boundS005MismatchDetails),
     matchingEvidence: analysis.matchingEvidence.map(boundS005AssessmentDetails),
@@ -381,15 +380,6 @@ function redactS005Metadata(metadata: S005PersonalDataDisclosureMetadata): S005P
 
 function redactS005Warning(warning: string): string {
   return redactS005PersonalDataPath(warning);
-}
-
-function redactS005Classification(
-  classification: S005PersonalDataDeterministicClassification
-): S005PersonalDataDeterministicClassification {
-  return {
-    ...classification,
-    warnings: classification.warnings.map(redactS005Warning)
-  };
 }
 
 function redactS005Attempt(attempt: S005PersonalDataDisclosureAttempt): S005PersonalDataDisclosureAttempt {

@@ -59,7 +59,7 @@ describe('S005 agent review adapter', () => {
   });
 
   it('builds a redacted repo-relative request with the form, parsed summary, and evidence excerpts', () => {
-    writeCompletedDisclosure('reviewer@example.org');
+    writeCompletedDisclosure('reviewer@example.org firstName: "Patricia Sample"');
     writeFile('schemas/reviewer@example.org-token=abc123/user.json', JSON.stringify({
       email: 'person@example.org',
       firstName: 'Mary Smith',
@@ -84,6 +84,7 @@ describe('S005 agent review adapter', () => {
     expect(request.files.map(file => file.content).join('\n')).not.toContain('reviewer@example.org');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('person@example.org');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('Mary Smith');
+    expect(request.files.map(file => file.content).join('\n')).not.toContain('Patricia Sample');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('abc123');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('555-111-2222');
     expect(request.files.find(file => file.repoRelativePath === '.criterion-agent/S005/evidence/evidence-001.txt')?.content).toContain('S005 bounded evidence excerpts');

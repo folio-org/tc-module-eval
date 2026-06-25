@@ -207,31 +207,7 @@
         "classification": {
           "status": "manual",
           "parseState": "completed",
-          "reason": "Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.",
-          "warnings": [
-            "S005 evidence scan reached the 200-file scan cap; additional candidate files were not scanned.",
-            "S005 evidence retained first 8 signals for category \"patron_data\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"user_identifier\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"name\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"address\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"direct_contract\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"cache\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"storage\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"address\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"logging\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"free_form_notes\" and source class \"implementation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"documentation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"cache\" and source class \"documentation\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"transmission\" and source class \"test_sample\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"cache\" and source class \"test_sample\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"logging\" and source class \"test_sample\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"address\" and source class \"test_sample\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"storage\" and source class \"test_sample\"; additional signals were truncated.",
-            "S005 evidence retained first 8 signals for category \"circulation_transactions\" and source class \"test_sample\"; additional signals were truncated."
-          ]
+          "reason": "Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches."
         },
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured",
         "possibleMismatchCount": 13,
