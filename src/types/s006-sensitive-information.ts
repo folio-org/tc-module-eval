@@ -184,6 +184,7 @@ export interface S006SensitiveInformationAnalysisResult {
   coverage: S006ScanCoverage;
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
+  agentReviewUnavailableReason?: string;
 }
 
 export interface S006RedactedReportDetails {
@@ -202,4 +203,5 @@ export interface S006RedactedReportDetails {
   };
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
+  agentReviewUnavailableReason?: string;
 }

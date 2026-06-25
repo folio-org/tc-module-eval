@@ -108,7 +108,10 @@ export function buildS006CriterionDetails(
         .slice(0, MAX_CRITERION_FINDINGS)
         .map(redactS006Path)
     },
-    warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS).map(redactS006Warning)
+    warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS).map(redactS006Warning),
+    agentReviewUnavailableReason: analysis.agentReviewUnavailableReason
+      ? redactS006ReportText(analysis.agentReviewUnavailableReason)
+      : undefined
   };
 }
 
@@ -200,8 +203,8 @@ function appendAgentReviewLines(
       agentReview.summary ? `  - Summary: ${redactS006ReportText(agentReview.summary)}` : undefined,
       agentReview.rationale ? `  - Rationale: ${redactS006ReportText(agentReview.rationale)}` : undefined,
       agentReview.evidenceReferences.length ? `  - Evidence references: ${agentReview.evidenceReferences.map(redactS006Path).join(', ')}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.map(redactS006ReportText).join('; ')}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${agentReview.errors.map(redactS006ReportText).join('; ')}` : undefined,
+      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.map(warning => redactS006ReportText(warning)).join('; ')}` : undefined,
+      agentReview.errors.length ? `  - Errors: ${agentReview.errors.map(error => redactS006ReportText(error)).join('; ')}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
     );
@@ -215,7 +218,7 @@ function appendAgentReviewLines(
   lines.push(
     '',
     'Agent review:',
-    '  - Not applied or unavailable for this S006 result.'
+    `  - Not applied: ${analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`
   );
 }
 

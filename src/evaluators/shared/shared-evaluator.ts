@@ -28,6 +28,7 @@ import {
   buildS006CriterionDetails,
   formatS006Evidence
 } from '../../utils/s006-sensitive-information';
+import { hasS006AgentReviewMaterial, reviewS006WithAgent } from '../../utils/s006-agent-review';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -204,22 +205,32 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS006(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    if (!evaluationRun) {
-      createEvaluationRun({
+    const run = evaluationRun ?? createEvaluationRun({
         repositoryPath: repoPath,
         language: this.language,
         criteriaFilter: ['S006']
       });
-    }
 
     const analysis = analyzeS006SensitiveInformation(repoPath);
-    const rendered = formatS006Evidence(analysis);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S006',
+      status: analysis.classification.status,
+      hasReviewMaterial: hasS006AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS006WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) {
+      analysis.agentReviewUnavailableReason = unavailableReason;
+    }
+
+    const rendered = formatS006Evidence(analysis, agentReview);
     return {
       criterionId: 'S006',
       status: analysis.classification.status,
       evidence: rendered.evidence,
       details: rendered.details,
-      criterionDetails: buildS006CriterionDetails(analysis)
+      criterionDetails: buildS006CriterionDetails(analysis),
+      agentReview
     };
   }
 
