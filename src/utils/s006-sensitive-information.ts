@@ -18,7 +18,7 @@ import {
   S006SkippedFile,
   S006ValueClassification
 } from '../types';
-import { decodeBoundedUtf8, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 export {
   buildS006CriterionDetails,
   buildS006RedactedReportDetails,
@@ -519,12 +519,10 @@ export function scanS006RepositoryCandidates(repoPath: string): S006RepositoryCa
   let stoppedByByteLimit = false;
 
   if (discovery.files.length > MAX_S006_SCAN_CANDIDATE_FILES) {
-    const truncatedCandidates = discovery.files.slice(MAX_S006_SCAN_CANDIDATE_FILES);
-    const material = truncatedCandidates.some(candidatePath => isS006HighSignalPath(relativePosixPath(repoRoot, candidatePath)));
     warnings.push(buildS006Warning(
       'candidate-limit',
       `S006 candidate discovery retained first ${MAX_S006_SCAN_CANDIDATE_FILES} supported files; additional candidates were not scanned.`,
-      material || discovery.truncatedBeforePriorityComplete
+      discovery.truncatedBeforePriorityComplete
     ));
   }
 
@@ -940,7 +938,7 @@ function readBoundedS006CandidateText(
 
     const bytesToRead = Math.min(stats.size, MAX_S006_SCAN_BYTES_PER_FILE, remainingTotalBytes);
     const slice = readBoundedFileBytes(filePath, bytesToRead);
-    if (isS006BinaryBuffer(slice)) {
+    if (isBinaryBuffer(slice)) {
       return { status: 'binary' };
     }
 
@@ -970,16 +968,6 @@ function isS006HighSignalPath(relativePath: string): boolean {
 
 function isS006MaterialCoveragePath(relativePath: string): boolean {
   return S006_MATERIAL_TRUNCATED_PATH_PATTERN.test(relativePath.replace(/\\/g, '/'));
-}
-
-function isS006BinaryBuffer(buffer: Buffer): boolean {
-  const sampleLength = Math.min(buffer.length, 1024);
-  for (let index = 0; index < sampleLength; index++) {
-    if (buffer[index] === 0) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function pushS006SkippedFile(skippedFiles: S006SkippedFile[], skippedFile: S006SkippedFile): void {
@@ -1064,7 +1052,7 @@ function buildS006Finding(
 ): S006SensitiveInformationFinding {
   const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, fingerprintRun, line);
   const confidence = adjustS006FindingConfidenceForContext(detector, redacted.valueClassification, redacted.confidence, context);
-  const finding = {
+  const finding: Omit<S006SensitiveInformationFinding, 'rationale'> = {
     path: filePath,
     line,
     endLine: redacted.redactedExcerpt.endLine,
@@ -1075,8 +1063,7 @@ function buildS006Finding(
     confidence,
     severity: getS006Severity(detector, confidence),
     redactedExcerpt: redacted.redactedExcerpt,
-    valueFingerprint: redacted.valueFingerprint,
-    rationale: ''
+    valueFingerprint: redacted.valueFingerprint
   };
   return {
     ...finding,
@@ -1153,8 +1140,9 @@ function redactDetectorMatch(detector: S006DetectorRegistryEntry, rawMatch: stri
 }
 
 function boundS006RedactedExcerptText(input: string): string {
-  return Buffer.from(input).length > MAX_S006_EXCERPT_BYTES
-    ? `${Buffer.from(input).subarray(0, MAX_S006_EXCERPT_BYTES).toString('utf-8').replace(/\uFFFD$/, '')}...`
+  const buffer = Buffer.from(input);
+  return buffer.length > MAX_S006_EXCERPT_BYTES
+    ? `${buffer.subarray(0, MAX_S006_EXCERPT_BYTES).toString('utf-8').replace(/\uFFFD$/, '')}...`
     : input;
 }
 
@@ -1218,7 +1206,9 @@ function classifyS006DeterministicResult(
   };
 }
 
-function isS006DeterministicFailFinding(finding: S006SensitiveInformationFinding): boolean {
+function isS006DeterministicFailFinding(
+  finding: Pick<S006SensitiveInformationFinding, 'detectorId' | 'confidence' | 'valueClassification' | 'context'>
+): boolean {
   const detector = getS006DetectorById(finding.detectorId);
   return (
     detector.statusContributionByConfidence[finding.confidence] === 'fail_candidate' &&
@@ -1236,7 +1226,7 @@ function buildS006FindingRationale(
   finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
   detector: S006DetectorRegistryEntry
 ): string {
-  const statusImpact = isS006DeterministicFailFinding({ ...finding, rationale: '' })
+  const statusImpact = isS006DeterministicFailFinding(finding)
     ? 'deterministic failure candidate'
     : 'manual review candidate';
   const contextNote = isS006FailCapableContext(finding.context)

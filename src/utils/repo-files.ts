@@ -102,6 +102,16 @@ export function decodeBoundedUtf8(buffer: Buffer, truncated: boolean): string {
   return truncated ? text.replace(/\uFFFD$/, '') : text;
 }
 
+export function isBinaryBuffer(buffer: Buffer): boolean {
+  const sampleLength = Math.min(buffer.length, 1024);
+  for (let index = 0; index < sampleLength; index++) {
+    if (buffer[index] === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function relativePosixPath(repoPath: string, candidatePath: string): string {
   return path.relative(repoPath, candidatePath).split(path.sep).join('/');
 }

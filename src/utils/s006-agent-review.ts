@@ -17,26 +17,16 @@ import {
 import {
   MAX_S006_EXCERPT_BYTES,
   MAX_S006_SCAN_BYTES_PER_FILE,
+  S006_CONTEXT_LABELS,
   strongestS006ReportFindings
 } from './s006-sensitive-information';
 import { isWithinRepo, readBoundedFileBytes, realPath } from './repo-files';
-import { redactSensitiveText } from './redaction';
+import { redactLocalUserPaths, redactSensitiveText } from './redaction';
 
 const REDACTED_SUMMARY_REVIEW_PATH = '.criterion-agent/S006/redacted-finding-summary.json';
 const MAX_S006_AGENT_SUMMARY_BYTES = 24 * 1024;
 const MAX_S006_AGENT_SOURCE_BYTES = MAX_S006_SCAN_BYTES_PER_FILE;
 const MAX_S006_AGENT_SOURCE_WINDOW_LINES = 12;
-const S006_CONTEXT_ORDER: S006FindingContext[] = [
-  'production_source_or_configuration',
-  'ci_or_deployment_configuration',
-  'documentation',
-  'test_fixture',
-  'sample_or_example',
-  'local_docker_defaults',
-  'generated_content',
-  'unknown'
-];
-
 export async function reviewS006WithAgent(
   repoPath: string,
   analysis: S006SensitiveInformationAnalysisResult,
@@ -74,12 +64,13 @@ export function buildS006AgentReviewRequest(
   repoPath: string,
   analysis: S006SensitiveInformationAnalysisResult
 ): CriterionAgentReviewRequest {
+  const strongestFindings = strongestS006ReportFindings(analysis.findings, analysis.findings.length);
   const files = [
     {
       repoRelativePath: REDACTED_SUMMARY_REVIEW_PATH,
-      content: buildRedactedSummaryContent(analysis)
+      content: buildRedactedSummaryContent(analysis, strongestFindings)
     },
-    ...buildContextExcerptFiles(repoPath, analysis)
+    ...buildContextExcerptFiles(repoPath, strongestFindings)
   ];
 
   return {
@@ -100,8 +91,10 @@ export function buildS006AgentReviewRequest(
   };
 }
 
-function buildRedactedSummaryContent(analysis: S006SensitiveInformationAnalysisResult): string {
-  const strongestFindings = strongestS006ReportFindings(analysis.findings, analysis.findings.length);
+function buildRedactedSummaryContent(
+  analysis: S006SensitiveInformationAnalysisResult,
+  strongestFindings: S006SensitiveInformationFinding[]
+): string {
   const summary = {
     criterionId: analysis.criterionId,
     classification: analysis.classification,
@@ -148,10 +141,10 @@ function buildRedactedSummaryContent(analysis: S006SensitiveInformationAnalysisR
 
 function buildContextExcerptFiles(
   repoPath: string,
-  analysis: S006SensitiveInformationAnalysisResult
+  strongestFindings: S006SensitiveInformationFinding[]
 ): Array<{ repoRelativePath: string; content: string }> {
   const findingsByContext = new Map<S006FindingContext, S006SensitiveInformationFinding[]>();
-  for (const finding of strongestS006ReportFindings(analysis.findings, analysis.findings.length)) {
+  for (const finding of strongestFindings) {
     const contextFindings = findingsByContext.get(finding.context);
     if (contextFindings) {
       contextFindings.push(finding);
@@ -160,7 +153,7 @@ function buildContextExcerptFiles(
     }
   }
 
-  return S006_CONTEXT_ORDER
+  return S006_CONTEXT_LABELS
     .filter(context => findingsByContext.has(context))
     .map(context => ({
       repoRelativePath: `.criterion-agent/S006/excerpts/${context}.txt`,
@@ -253,8 +246,5 @@ function countFindingsByContext(findings: S006SensitiveInformationFinding[]): Pa
 }
 
 function redactS006AgentText(input: string, maxBytes?: number): string {
-  return redactSensitiveText(input, maxBytes)
-    .replace(/\/Users\/[^/\s]+/g, '/Users/[REDACTED_USER]')
-    .replace(/\/home\/[^/\s]+/g, '/home/[REDACTED_USER]')
-    .replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\[REDACTED_USER]');
+  return redactLocalUserPaths(redactSensitiveText(input, maxBytes));
 }

@@ -19,7 +19,7 @@ import {
   S005PersonalDataEvidenceStrength,
   S005PersonalDataPossibleMismatch
 } from '../types';
-import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
@@ -1107,22 +1107,6 @@ function readBoundedDisclosureText(filePath: string, warnings: string[]): string
     );
   }
   return buffer.toString('utf-8').replace(/\uFFFD$/, '');
-}
-
-function isBinaryBuffer(buffer: Buffer): boolean {
-  if (!buffer.length) {
-    return false;
-  }
-
-  const sampleLength = Math.min(buffer.length, 1024);
-  for (let index = 0; index < sampleLength; index++) {
-    const value = buffer[index];
-    if (value === 0) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function captureMetadata(

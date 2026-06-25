@@ -10,7 +10,7 @@ import {
   S006SkippedFile,
   S006ScanWarning
 } from '../types';
-import { redactSensitiveText } from './redaction';
+import { redactLocalUserPaths, redactSensitiveText } from './redaction';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_CRITERION_FINDINGS = 16;
@@ -339,10 +339,7 @@ function overflowLine(total: number, visible: number): string[] {
 }
 
 function redactS006Path(path: string): string {
-  return redactS006ReportText(path)
-    .replace(/\/Users\/[^/\s]+/g, '/Users/[REDACTED_USER]')
-    .replace(/\/home\/[^/\s]+/g, '/home/[REDACTED_USER]')
-    .replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\[REDACTED_USER]');
+  return redactLocalUserPaths(redactS006ReportText(path));
 }
 
 function redactS006ReportText(input: string, maxBytes?: number): string {
