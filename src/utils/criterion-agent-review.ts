@@ -70,7 +70,22 @@ export async function reviewCriterionWithAgent(
     return { unavailableReason: `agent review is not enabled for ${request.criterionId}` };
   }
 
-  const agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+  let agentReview: CriterionAgentReviewResult;
+  try {
+    agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      agentReview: {
+        available: false,
+        criterionId: request.criterionId,
+        evidenceReferences: [],
+        warnings: [],
+        errors: [`Agent review failed unexpectedly: ${redactSensitiveText(message)}`]
+      },
+      unavailableReason: `Agent review failed unexpectedly: ${redactSensitiveText(message)}`
+    };
+  }
   if (!agentReview.available) {
     return {
       agentReview,
@@ -100,7 +115,7 @@ export async function runCriterionAgentReview(
   }
 
   if (config.adapter === 'fake') {
-    return config.fakeResult ?? {
+    return normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
       available: true,
       criterionId: request.criterionId,
       recommendation: 'needs_reviewer_judgment',
@@ -118,7 +133,7 @@ export async function runCriterionAgentReview(
       },
       warnings: [],
       errors: []
-    };
+    });
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
@@ -256,13 +271,158 @@ function unavailableResult(criterionId: string): CriterionAgentReviewResult {
   };
 }
 
+function normalizeFakeCriterionReviewResult(
+  request: CriterionAgentReviewRequest,
+  config: CriterionAgentReviewConfig,
+  rawResult: CriterionAgentReviewResult
+): CriterionAgentReviewResult {
+  const normalized = normalizeCriterionAgentAdvisoryPayload(
+    rawResult as unknown as Record<string, unknown>,
+    request.files.map(file => file.repoRelativePath)
+  );
+  const warnings = [
+    ...stringArray(rawResult.warnings).map(warning => redactSensitiveText(warning)),
+    ...normalized.warnings
+  ];
+  const errors = stringArray(rawResult.errors).map(error => redactSensitiveText(error));
+  const metadata = rawResult.metadata ?? {
+    adapter: 'fake' as const,
+    modelLabel: config.modelLabel,
+    endpointFamily: config.endpointFamily,
+    reviewMode: 'read-only' as const,
+    promptInputSanitized: true,
+    reviewWorkspaceSanitized: true
+  };
+
+  if (rawResult.available === false) {
+    return {
+      available: false,
+      criterionId: request.criterionId,
+      evidenceReferences: normalized.evidenceReferences,
+      metadata,
+      warnings,
+      errors: errors.length ? errors : ['Fake criterion-agent review was unavailable']
+    };
+  }
+
+  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
+    return {
+      available: false,
+      criterionId: request.criterionId,
+      evidenceReferences: [],
+      metadata,
+      warnings,
+      errors: [...errors, 'Fake criterion-agent review returned incomplete advisory JSON']
+    };
+  }
+
+  return {
+    available: true,
+    criterionId: request.criterionId,
+    recommendation: normalized.recommendation,
+    confidence: normalized.confidence,
+    summary: normalized.summary,
+    rationale: normalized.rationale,
+    evidenceReferences: normalized.evidenceReferences,
+    metadata,
+    warnings,
+    errors
+  };
+}
+
+export interface NormalizedCriterionAgentAdvisoryPayload {
+  recommendation?: CriterionAgentReviewResult['recommendation'];
+  confidence?: CriterionAgentReviewResult['confidence'];
+  summary?: string;
+  rationale?: string;
+  evidenceReferences: string[];
+  warnings: string[];
+}
+
+export function normalizeCriterionAgentAdvisoryPayload(
+  payload: Record<string, unknown>,
+  manifestEntries: string[]
+): NormalizedCriterionAgentAdvisoryPayload {
+  const rawEvidenceReferences = Array.isArray(payload.evidenceReferences) ? payload.evidenceReferences : [];
+  const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
+  return {
+    recommendation: parseAdvisoryRecommendation(payload.recommendation),
+    confidence: parseAdvisoryConfidence(payload.confidence),
+    summary: typeof payload.summary === 'string' ? redactSensitiveText(payload.summary) : undefined,
+    rationale: typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale) : undefined,
+    evidenceReferences,
+    warnings: rawEvidenceReferences.length !== evidenceReferences.length
+      ? ['Dropped uncited or unknown advisory evidence references']
+      : []
+  };
+}
+
+function parseAdvisoryRecommendation(value: unknown): CriterionAgentReviewResult['recommendation'] | undefined {
+  if (value === 'likely_sufficient' || value === 'likely_insufficient' || value === 'needs_reviewer_judgment') {
+    return value;
+  }
+  const normalized = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  if (['pass', 'passed', 'sufficient', 'likely pass', 'likely_pass'].includes(normalized)) {
+    return 'likely_sufficient';
+  }
+  if (['fail', 'failed', 'insufficient', 'likely fail', 'likely_fail'].includes(normalized)) {
+    return 'likely_insufficient';
+  }
+  if (['manual', 'manual_review', 'needs manual review', 'needs_reviewer_judgment'].includes(normalized)) {
+    return 'needs_reviewer_judgment';
+  }
+  return undefined;
+}
+
+function parseAdvisoryConfidence(value: unknown): CriterionAgentReviewResult['confidence'] | undefined {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (value >= 0.75) {
+      return 'high';
+    }
+    if (value >= 0.4) {
+      return 'medium';
+    }
+    return 'low';
+  }
+  return undefined;
+}
+
+function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestEntries: string[]): string[] {
+  const references = rawReferences
+    .map(reference => {
+      if (typeof reference === 'string') {
+        return reference;
+      }
+      if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+        const candidate = reference as Record<string, unknown>;
+        if (typeof candidate.repoRelativePath === 'string') {
+          return candidate.repoRelativePath;
+        }
+        if (typeof candidate.path === 'string') {
+          return candidate.path;
+        }
+      }
+      return undefined;
+    })
+    .filter((reference): reference is string => typeof reference === 'string' && manifestEntries.includes(reference));
+
+  return [...new Set(references)];
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
 function pathIsInsideRepository(repositoryPath: string, candidatePath: string): boolean {
   const repoRoot = path.resolve(repositoryPath);
   const resolvedCandidate = path.resolve(candidatePath);
   return resolvedCandidate === repoRoot || resolvedCandidate.startsWith(`${repoRoot}${path.sep}`) || isWithinRepo(repositoryPath, candidatePath);
 }
 
-function safeWorkspaceRelativePath(repoRelativePath: string): string {
+export function safeWorkspaceRelativePath(repoRelativePath: string): string {
   const forwardSlashPath = repoRelativePath.replace(/\\/g, '/');
   if (path.posix.isAbsolute(forwardSlashPath)) {
     throw new Error(`Agent review file path must be repository-relative: ${repoRelativePath}`);

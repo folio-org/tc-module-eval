@@ -1,5 +1,11 @@
 import * as fs from 'fs';
-import { CriterionResult, EvaluationRun, EvaluationStatus, ModuleDescriptorArtifact } from '../../types';
+import {
+  CriterionResult,
+  EvaluationRun,
+  EvaluationStatus,
+  ModuleDescriptorArtifact,
+  ModuleKindResult
+} from '../../types';
 import { CriterionLanguage } from '../../criteria-definitions';
 import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { LicenseUtils } from '../../utils/license-utils';
@@ -11,6 +17,12 @@ import { analyzeS004Documentation, formatS004Evidence } from '../../utils/s004-i
 import { classifyModuleKind } from '../../utils/module-kind';
 import { reviewS004WithAgent } from '../../utils/s004-agent-review';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
+import {
+  analyzeS005PersonalDataDisclosure,
+  buildS005CriterionDetails,
+  formatS005Evidence
+} from '../../utils/s005-personal-data-disclosure';
+import { hasS005AgentReviewMaterial, reviewS005WithAgent } from '../../utils/s005-agent-review';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -25,7 +37,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S001: async (repoPath: string) => this.evaluateS001(repoPath),
       S002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS002(repoPath, evaluationRun),
       S003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS003(repoPath, evaluationRun),
-      S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun)
+      S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun),
+      S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun)
     });
   }
 
@@ -112,12 +125,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
         criterionId: 'S004',
         status: EvaluationStatus.NOT_APPLICABLE,
         evidence: 'S004 does not apply to explicit FOLIO library repositories',
-        details: [
-          'Repository kind: library',
-          'Evidence:',
-          ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
-          ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
-        ].join('\n')
+        details: this.formatModuleKindDetails('Repository kind: library', moduleKind)
       };
     }
 
@@ -141,6 +149,50 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       evidence: rendered.evidence,
       details: rendered.details,
       criterionDetails: documentation,
+      agentReview
+    };
+  }
+
+  private async evaluateS005(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S005']
+    });
+
+    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    if (moduleKind.kind === 'library') {
+      return {
+        criterionId: 'S005',
+        status: EvaluationStatus.NOT_APPLICABLE,
+        evidence: 'S005 does not apply to explicit FOLIO library repositories',
+        details: this.formatModuleKindDetails('Repository kind: library', moduleKind),
+        criterionDetails: {
+          moduleKind
+        }
+      };
+    }
+
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.warnings.push(...moduleKind.warnings);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S005',
+      status: analysis.classification.status,
+      hasReviewMaterial: hasS005AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS005WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) {
+      analysis.agentReviewUnavailableReason = unavailableReason;
+    }
+
+    const rendered = formatS005Evidence(analysis, moduleKind, agentReview);
+    return {
+      criterionId: 'S005',
+      status: analysis.classification.status,
+      evidence: rendered.evidence,
+      details: rendered.details,
+      criterionDetails: buildS005CriterionDetails(analysis),
       agentReview
     };
   }
@@ -172,5 +224,14 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     ];
 
     return lines.filter((line): line is string => Boolean(line)).join('\n');
+  }
+
+  private formatModuleKindDetails(heading: string, moduleKind: ModuleKindResult): string {
+    return [
+      heading,
+      'Module-kind evidence:',
+      ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
+      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
+    ].join('\n');
   }
 }

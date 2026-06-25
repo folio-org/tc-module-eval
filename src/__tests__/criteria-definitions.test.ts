@@ -184,6 +184,7 @@ describe('criteria-definitions', () => {
       const catalogEntry = getAcceptanceCriterionDefinition('S002');
       expect(catalogEntry?.languages).toEqual(['java', 'javascript']);
       expect(catalogEntry?.defaultEvaluation?.reason).toBe('Module descriptor validation');
+      expect(getAcceptanceCriterionDefinition('S005')?.defaultEvaluation?.reason).toBe('Personal data disclosure form evaluation');
 
       expect(getCriterionDefinition('S002')).toEqual({
         id: 'S002',

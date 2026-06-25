@@ -50,6 +50,36 @@ describe('EvaluationReportRenderer', () => {
         criterionId: 'S004',
         status: EvaluationStatus.NOT_APPLICABLE,
         evidence: 'Not applicable evidence'
+      },
+      {
+        criterionId: 'S005',
+        status: EvaluationStatus.MANUAL,
+        evidence: 'S005 manual: Completed disclosure with <checked> fields',
+        details: [
+          'Parsed disclosure fields:',
+          '  - Checked answers: email',
+          'Deterministic evidence:',
+          '  - Strongest signals:',
+          '    - schemas/user.json:1 [direct_contract/strong/email] Email field: **email** <script>bad()</script>'
+        ].join('\n'),
+        criterionDetails: {
+          parseResult: {
+            checkedCategories: ['email'],
+            checklistItems: [
+              {
+                rawLabel: 'Email <address>',
+                checked: true
+              }
+            ]
+          },
+          evidenceScan: {
+            signals: [
+              {
+                excerpt: '[REDACTED_EMAIL] token=s005secret'
+              }
+            ]
+          }
+        }
       }
     ]
   };
@@ -60,9 +90,9 @@ describe('EvaluationReportRenderer', () => {
     expect(renderer.calculateStats(result)).toEqual({
       pass: 1,
       fail: 1,
-      manual: 1,
+      manual: 2,
       notApplicable: 1,
-      total: 4
+      total: 5
     });
   });
 
@@ -71,7 +101,7 @@ describe('EvaluationReportRenderer', () => {
     const json = renderer.renderJson(result);
 
     expect(json).toContain('\n  "moduleName": "test-module"');
-    expect(JSON.parse(json).criteria).toHaveLength(4);
+    expect(JSON.parse(json).criteria).toHaveLength(5);
   });
 
   it('should escape HTML and preserve multiline details', () => {
@@ -106,10 +136,15 @@ describe('EvaluationReportRenderer', () => {
     expect(json).toContain('"criterionDetails"');
     expect(json).toContain('OPENAI_API_KEY=[REDACTED]');
     expect(json).toContain('[REDACTED_PRIVATE_URL]');
+    expect(json).toContain('[REDACTED_EMAIL]');
+    expect(json).toContain('token=[REDACTED]');
     expect(json).not.toContain('abc123');
     expect(json).not.toContain('hunter2');
     expect(json).not.toContain('sk-details-secret');
+    expect(json).not.toContain('s005secret');
     expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+    expect(html).toContain('**email** &lt;script&gt;bad()&lt;/script&gt;');
+    expect(html).not.toContain('<script>bad()</script>');
     expect(html).not.toContain('token=abc123');
   });
 

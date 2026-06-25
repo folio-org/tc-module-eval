@@ -5,10 +5,13 @@ import {
   CommandExecutionRequest,
   CommandExecutionResult,
   CommandRunner,
-  CriterionAgentReviewConfig
+  CriterionAgentReviewConfig,
+  EvaluationRun,
+  EvaluationStatus
 } from '../types';
 import {
   prepareCriterionReviewWorkspace,
+  reviewCriterionWithAgent,
   runCriterionAgentReview,
   validateEndpointUrl
 } from '../utils/criterion-agent-review';
@@ -109,6 +112,97 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('disabled');
+  });
+
+  it('converts unexpected optional review exceptions into unavailable results', async () => {
+    const result = await reviewCriterionWithAgent({
+      criterionId: 'S005',
+      status: EvaluationStatus.MANUAL,
+      hasReviewMaterial: true,
+      evaluationRun: {
+        agentReview: {
+          enabled: true,
+          enabledCriteria: ['S005'],
+          adapter: 'fake'
+        }
+      } as EvaluationRun,
+      review: async () => {
+        throw new Error('agent crashed with token=abc123');
+      }
+    });
+
+    expect(result.agentReview?.available).toBe(false);
+    expect(result.agentReview?.errors.join('\n')).toContain('Agent review failed unexpectedly');
+    expect(result.agentReview?.errors.join('\n')).not.toContain('abc123');
+    expect(result.unavailableReason).toContain('Agent review failed unexpectedly');
+  });
+
+  it('normalizes fake adapter advisory output against manifest references', async () => {
+    const result = await runCriterionAgentReview({
+      criterionId: 'S005',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'schemas/user.json', content: 'email' }],
+      schemaDescription: 'schema'
+    }, {
+      enabled: true,
+      enabledCriteria: ['S005'],
+      adapter: 'fake',
+      modelLabel: 'fake-model',
+      fakeResult: {
+        available: true,
+        criterionId: 'S005',
+        recommendation: 'fail',
+        confidence: 0.78,
+        summary: 'Fake summary.',
+        rationale: 'Fake rationale.',
+        evidenceReferences: [
+          { repoRelativePath: 'schemas/user.json' },
+          'missing.md'
+        ],
+        warnings: [],
+        errors: []
+      } as unknown as CriterionAgentReviewConfig['fakeResult']
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.recommendation).toBe('likely_insufficient');
+    expect(result.confidence).toBe('high');
+    expect(result.evidenceReferences).toEqual(['schemas/user.json']);
+    expect(result.warnings.join('\n')).toContain('Dropped');
+  });
+
+  it('treats incomplete fake adapter advisory output as unavailable', async () => {
+    const result = await runCriterionAgentReview({
+      criterionId: 'S005',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'schemas/user.json', content: 'email' }],
+      schemaDescription: 'schema'
+    }, {
+      enabled: true,
+      enabledCriteria: ['S005'],
+      adapter: 'fake',
+      modelLabel: 'fake-model',
+      fakeResult: {
+        available: true,
+        criterionId: 'S005',
+        recommendation: 'definitely_compliant',
+        confidence: 'certain',
+        summary: 'Fake summary.',
+        rationale: 'Fake rationale.',
+        evidenceReferences: ['schemas/user.json'],
+        warnings: ['warning token=abc123 should be redacted'],
+        errors: ['error password=hunter2 should be redacted']
+      } as unknown as CriterionAgentReviewConfig['fakeResult']
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
+    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED] should be redacted');
+    expect(result.errors.join('\n')).toContain('error password=[REDACTED] should be redacted');
+    expect(result.warnings.join('\n')).not.toContain('abc123');
+    expect(result.errors.join('\n')).not.toContain('hunter2');
   });
 
   it('prepares a sanitized manifest workspace', () => {

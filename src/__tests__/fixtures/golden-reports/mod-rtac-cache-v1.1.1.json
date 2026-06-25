@@ -140,8 +140,84 @@
     {
       "criterionId": "S005",
       "status": "manual",
-      "evidence": "Version control and branching strategy - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S005 manual: Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.",
+      "details": "Artifact mechanics:\n  - Repository kind: backend-module\n  - Required file: PERSONAL_DATA_DISCLOSURE.md\n  - Discovery status: found\nParsed disclosure fields:\n  - Parse state: completed\nDeterministic evidence:\n  - Evidence files scanned: 200\n  - Evidence signals found: 184\nPossible mismatches:\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "discovery": {
+          "status": "found",
+          "artifact": {
+            "path": "PERSONAL_DATA_DISCLOSURE.md",
+            "sizeBytes": 4601
+          },
+          "attemptCount": 0,
+          "warningCount": 0
+        },
+        "parseResult": {
+          "metadata": {
+            "templateIdentity": "current-like"
+          },
+          "checkedCategories": [
+            "no_personal_data"
+          ],
+          "uncheckedCategories": [
+            "other",
+            "free_form_notes",
+            "logging",
+            "financial_information",
+            "name",
+            "birth_date",
+            "address",
+            "phone",
+            "username",
+            "email",
+            "circulation_transactions",
+            "profile_picture"
+          ],
+          "completion": {
+            "completed": true,
+            "checkedMeaningfulAnswers": 2,
+            "checkedCategories": [
+              "no_personal_data"
+            ],
+            "uncheckedCategories": [
+              "other",
+              "free_form_notes",
+              "logging",
+              "financial_information",
+              "name",
+              "birth_date",
+              "address",
+              "phone",
+              "username",
+              "email",
+              "circulation_transactions",
+              "profile_picture"
+            ]
+          },
+          "checklistItemCount": 33,
+          "placeholderCount": 0,
+          "contradictionCount": 0
+        },
+        "evidenceScan": {
+          "signalCount": 184,
+          "scannedFileCount": 200,
+          "skippedFileCount": 0,
+          "warningCount": 22
+        },
+        "classification": {
+          "status": "manual",
+          "parseState": "completed",
+          "reason": "Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches."
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured",
+        "possibleMismatchCount": 13,
+        "matchingEvidenceCount": 0,
+        "supportingEvidenceCount": 0,
+        "uncheckedAnswerCount": 31,
+        "placeholderCount": 0,
+        "contradictionCount": 0,
+        "warningCount": 22
+      }
     },
     {
       "criterionId": "S006",

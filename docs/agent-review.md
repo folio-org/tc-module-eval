@@ -2,6 +2,8 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
+Supported advisory criteria: `S004` installation documentation and `S005` personal data disclosure consistency.
+
 Agent review runs through reusable criterion-agent infrastructure:
 
 - The evaluated repository is copied into a bounded, sanitized review workspace.
@@ -9,6 +11,14 @@ Agent review runs through reusable criterion-agent infrastructure:
 - Provider keys are read from environment variables, not CLI arguments.
 - The generated OpenCode agent is read-only and rejects mutating tools.
 - Evaluated-repository `.opencode/`, `opencode.json`, and `.env` files are ignored.
+
+## S005 Personal Data Disclosure Review
+
+S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechanics, checklist answers, placeholders or contradictions, and bounded read-only source signals. It does not certify privacy or legal compliance; completed forms stay `manual`, deterministic `fail` covers only mechanics or completion defects, and explicit FOLIO libraries are `not_applicable`.
+
+Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, redacted parsed summary, and bounded redacted excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references. S005 excerpts are redacted review hints, not PII-safe extracts.
+
+If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
 
 ## OpenRouter
 

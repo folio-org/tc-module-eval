@@ -13,7 +13,83 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
   return {
     ...report,
     evaluatedAt: GOLDEN_EVALUATED_AT,
+    criteria: report.criteria.map(criterion => criterion.criterionId === 'S005'
+      ? normalizeS005GoldenCriterion(criterion)
+      : criterion
+    ),
   };
+}
+
+function normalizeS005GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) {
+    return criterion;
+  }
+
+  return {
+    ...criterion,
+    details: normalizeS005DetailsText(criterion.details),
+    criterionDetails: {
+      discovery: {
+        status: details.discovery?.status,
+        artifact: details.discovery?.artifact,
+        attemptCount: details.discovery?.attempts?.length ?? 0,
+        warningCount: details.discovery?.warnings?.length ?? 0
+      },
+      parseResult: details.parseResult
+        ? {
+            metadata: details.parseResult.metadata,
+            checkedCategories: details.parseResult.checkedCategories,
+            uncheckedCategories: details.parseResult.uncheckedCategories,
+            completion: details.parseResult.completion,
+            checklistItemCount: details.parseResult.checklistItems?.length ?? 0,
+            placeholderCount: details.parseResult.placeholders?.length ?? 0,
+            contradictionCount: details.parseResult.contradictions?.length ?? 0
+          }
+        : undefined,
+      evidenceScan: details.evidenceScan
+        ? {
+            signalCount: details.evidenceScan.signalCount,
+            scannedFileCount: details.evidenceScan.scannedFileCount,
+            skippedFileCount: details.evidenceScan.skippedFiles?.length ?? 0,
+            warningCount: details.evidenceScan.warnings?.length ?? 0
+          }
+        : undefined,
+      classification: details.classification,
+      agentReviewUnavailableReason: details.agentReviewUnavailableReason,
+      possibleMismatchCount: details.possibleMismatches?.length ?? 0,
+      matchingEvidenceCount: details.matchingEvidence?.length ?? 0,
+      supportingEvidenceCount: details.supportingEvidence?.length ?? 0,
+      uncheckedAnswerCount: details.uncheckedAnswerDetails?.length ?? 0,
+      placeholderCount: details.placeholders?.length ?? 0,
+      contradictionCount: details.contradictions?.length ?? 0,
+      warningCount: details.warnings?.length ?? 0
+    }
+  };
+}
+
+function normalizeS005DetailsText(details: string | undefined): string | undefined {
+  if (!details) {
+    return details;
+  }
+
+  return details
+    .split('\n')
+    .filter(line =>
+      line.startsWith('Artifact mechanics:') ||
+      line.startsWith('Parsed disclosure fields:') ||
+      line.startsWith('Deterministic evidence:') ||
+      line.startsWith('Possible mismatches:') ||
+      line.startsWith('Agent review:') ||
+      line.includes('Repository kind:') ||
+      line.includes('Required file:') ||
+      line.includes('Discovery status:') ||
+      line.includes('Parse state:') ||
+      line.includes('Evidence files scanned:') ||
+      line.includes('Evidence signals found:') ||
+      line.includes('Not applied:')
+    )
+    .join('\n');
 }
 
 async function createLocalGitRepo(name: string, files: Record<string, string>): Promise<string> {
