@@ -103,6 +103,10 @@ export interface S006RepositoryCandidateScanResult {
   warnings: S006ScanWarning[];
 }
 
+interface S006RepositoryCandidateScanOptions {
+  traversalEntryLimit?: number;
+}
+
 interface S006LineWithOffset {
   text: string;
   lineNumber: number;
@@ -520,7 +524,10 @@ export function extractS006SensitiveInformationFindings(
   return { findings, warnings };
 }
 
-export function scanS006RepositoryCandidates(repoPath: string): S006RepositoryCandidateScanResult {
+export function scanS006RepositoryCandidates(
+  repoPath: string,
+  options: S006RepositoryCandidateScanOptions = {}
+): S006RepositoryCandidateScanResult {
   const repoRoot = realPath(repoPath);
   if (!repoRoot) {
     const warning = buildS006Warning(
@@ -532,7 +539,7 @@ export function scanS006RepositoryCandidates(repoPath: string): S006RepositoryCa
     return { files: [], coverage, warnings: [warning] };
   }
 
-  const discovery = collectBoundedS006EvidenceCandidates(repoRoot);
+  const discovery = collectBoundedS006EvidenceCandidates(repoRoot, options);
   const warnings = [...discovery.warnings];
   const skippedFiles = [...discovery.skippedFiles];
   const candidateFiles = discovery.files.slice(0, MAX_S006_SCAN_CANDIDATE_FILES);
@@ -755,7 +762,7 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   return 'unknown';
 }
 
-function collectBoundedS006EvidenceCandidates(repoPath: string): {
+function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006RepositoryCandidateScanOptions = {}): {
   files: string[];
   truncated: boolean;
   truncatedBeforePriorityComplete: boolean;
@@ -767,9 +774,10 @@ function collectBoundedS006EvidenceCandidates(repoPath: string): {
   const warnings: S006ScanWarning[] = [];
   let truncated = false;
   let visitedEntries = 0;
+  const traversalEntryLimit = options.traversalEntryLimit ?? MAX_S006_SCAN_TRAVERSAL_ENTRIES;
 
   const walk = (currentPath: string): void => {
-    if (visitedEntries >= MAX_S006_SCAN_TRAVERSAL_ENTRIES) {
+    if (visitedEntries >= traversalEntryLimit) {
       truncated = true;
       return;
     }
@@ -840,8 +848,24 @@ function collectBoundedS006EvidenceCandidates(repoPath: string): {
     }
 
     let entries: string[];
+    let unreadDirectoryEntries = false;
     try {
-      entries = fs.readdirSync(currentPath).sort((left, right) => left.localeCompare(right));
+      const remainingEntryBudget = Math.max(0, traversalEntryLimit - visitedEntries);
+      const directory = fs.opendirSync(currentPath);
+      entries = [];
+      try {
+        while (entries.length < remainingEntryBudget) {
+          const entry = directory.readSync();
+          if (!entry) {
+            break;
+          }
+          entries.push(entry.name);
+        }
+        unreadDirectoryEntries = directory.readSync() !== null;
+      } finally {
+        directory.closeSync();
+      }
+      entries.sort((left, right) => left.localeCompare(right));
     } catch {
       const materialToCoverage = isS006MaterialCoveragePath(relativePath);
       pushS006SkippedFile(skippedFiles, {
@@ -867,13 +891,16 @@ function collectBoundedS006EvidenceCandidates(repoPath: string): {
         return;
       }
     }
+    if (unreadDirectoryEntries) {
+      truncated = true;
+    }
   };
 
   walk(repoPath);
   if (truncated) {
     warnings.push(buildS006Warning(
       'traversal-limit',
-      `S006 candidate discovery reached the ${MAX_S006_SCAN_TRAVERSAL_ENTRIES}-entry traversal cap; additional paths were not inspected.`,
+      `S006 candidate discovery reached the ${traversalEntryLimit}-entry traversal cap; additional paths were not inspected.`,
       true
     ));
   }

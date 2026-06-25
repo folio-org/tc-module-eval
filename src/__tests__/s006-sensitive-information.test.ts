@@ -23,7 +23,6 @@ import {
   MAX_S006_SCAN_BYTES_PER_FILE,
   MAX_S006_SCAN_CANDIDATE_FILES,
   MAX_S006_SCAN_TOTAL_BYTES,
-  MAX_S006_SCAN_TRAVERSAL_ENTRIES,
   MAX_S006_RETAINED_FINDINGS,
   scanS006RepositoryCandidates,
   strongestS006ReportFindings,
@@ -342,17 +341,19 @@ describe('S006 bounded repository candidate scanning', () => {
 
   it('marks coverage materially weakened when traversal reaches the entry cap', () => {
     repoPath = createTempRepo();
-    for (let index = 0; index < MAX_S006_SCAN_TRAVERSAL_ENTRIES + 1; index++) {
-      writeRepoFile(repoPath, `docs/page-${String(index).padStart(5, '0')}.md`, '# docs\n');
+    const traversalEntryLimit = 12;
+    for (let index = 0; index < traversalEntryLimit + 2; index++) {
+      writeRepoFile(repoPath, `docs/page-${String(index).padStart(2, '0')}.md`, '# docs\n');
     }
 
-    const result = scanS006RepositoryCandidates(repoPath);
+    const result = scanS006RepositoryCandidates(repoPath, { traversalEntryLimit });
 
     expect(result.coverage.complete).toBe(false);
     expect(result.coverage.materiallyWeakened).toBe(true);
     expect(result.coverage.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'traversal-limit',
+        message: expect.stringContaining(`${traversalEntryLimit}-entry traversal cap`),
         materialToCoverage: true
       })
     ]));
