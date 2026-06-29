@@ -14,6 +14,7 @@ import {
   S006RedactedReportDetails
 } from '../types';
 import * as EvaluationRunUtils from '../utils/evaluation-run';
+import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 
 class TestSharedEvaluator extends SharedEvaluator {}
 
@@ -38,12 +39,12 @@ describe('S006 shared evaluator', () => {
   it('evaluates S006 instead of returning the catalog fallback for Java and JavaScript repositories', async () => {
     writeRepoFile('README.md', '# Clean module\n');
 
-    const javaResult = await evaluator.evaluateCriterion('S006', tempRoot);
-    const javascriptResult = await new JavaScriptSharedEvaluator().evaluateCriterion('S006', tempRoot);
+    const javaResult = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
+    const javascriptResult = await new JavaScriptSharedEvaluator().evaluateCriterion('S006', tempRoot, createRun());
 
     for (const result of [javaResult, javascriptResult]) {
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.evidence).toContain('S006 found no retained sensitive or environment-specific findings');
+      expect(result.evidence).toContain('S006 pass: no retained sensitive/environment-specific findings');
       expect(result.evidence).not.toContain('evaluation logic not yet implemented');
       expect(result.evidence).not.toContain('Sensitive information repository scan');
       expect(result.agentReview).toBeUndefined();
@@ -61,18 +62,32 @@ describe('S006 shared evaluator', () => {
       language: 'java',
       criteriaFilter: ['S006']
     });
-    expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.criterionDetails).toBeDefined();
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('Secret scanner: Gitleaks unavailable');
+    expect(result.details).toContain('scanner-unavailable');
+    expect(result.criterionDetails).toMatchObject({
+      scanner: {
+        name: 'Gitleaks',
+        status: 'unavailable',
+        findingCount: 0,
+        warning: expect.objectContaining({ kind: 'scanner-unavailable' })
+      }
+    });
   });
 
   it('returns pass through SharedEvaluator when no findings are present and scan coverage is complete', async () => {
     writeRepoFile('README.md', '# Clean module\n');
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot);
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
     const details = result.criterionDetails as S006RedactedReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(details.findingCount).toBe(0);
+    expect(details.scanner).toMatchObject({
+      name: 'Gitleaks',
+      status: 'completed',
+      findingCount: 0
+    });
     expect(details.coverage.complete).toBe(true);
     expect(details.coverage.materiallyWeakened).toBe(false);
   });
@@ -81,10 +96,10 @@ describe('S006 shared evaluator', () => {
     const rawKey = 'sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile('src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot);
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.evidence).toContain('high-confidence live-looking secret');
+    expect(result.evidence).toContain('S006 fail: 1 deterministic failure finding');
     expect(result.details).toContain('src/main/resources/application.yml:1');
     expect(result.details).toContain('[REDACTED_PROVIDER_API_KEY]');
     expect(JSON.stringify(result)).not.toContain(rawKey);
@@ -96,7 +111,7 @@ describe('S006 shared evaluator', () => {
       files: {
         'README.md': 'Example: curl -H "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"\n'
       },
-      expectedDetail: 'documentation evidence'
+      expectedDetail: 'Confirm documentation, sample, and test findings are examples'
     },
     {
       name: 'local Docker default password',
@@ -108,17 +123,17 @@ describe('S006 shared evaluator', () => {
           '      POSTGRES_PASSWORD: postgres'
         ].join('\n')
       },
-      expectedDetail: 'local-default context'
+      expectedDetail: 'Confirm local Docker defaults are not reused outside local development'
     }
   ])('returns manual through SharedEvaluator for $name', async ({ files, expectedDetail }) => {
     for (const [relativePath, content] of Object.entries(files)) {
       writeRepoFile(relativePath, content);
     }
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot);
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toContain('require reviewer judgment');
+    expect(result.evidence).toContain('S006 manual: 1 retained finding');
     expect(result.details).toContain(expectedDetail);
   });
 
@@ -164,13 +179,14 @@ describe('S006 shared evaluator', () => {
     expect(result.agentReview?.evidenceReferences).toEqual([expectedReference]);
     expect(result.details).toContain('Agent review:');
     expect(result.details).toContain('Advisory recommendation: needs_reviewer_judgment');
-    expect(result.details).toContain(`Evidence references: ${expectedReference}`);
+    expect(result.details).not.toContain('Evidence references:');
+    expect(result.details).not.toContain(expectedReference);
   });
 
   it.each([
     {
       name: 'disabled',
-      run: undefined,
+      run: () => createRun(),
       expected: 'agent review is disabled or unconfigured'
     },
     {
@@ -181,13 +197,13 @@ describe('S006 shared evaluator', () => {
   ])('records unavailable reason while preserving deterministic evidence when agent review is $name', async ({ run, expected }) => {
     writeRepoFile('docs/secrets.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot, run?.());
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, run());
     const details = result.criterionDetails as S006RedactedReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview).toBeUndefined();
     expect(result.evidence).toContain('S006 manual');
-    expect(result.details).toContain('Manual review findings:');
+    expect(result.details).toContain('Top redacted examples:');
     expect(details.agentReviewUnavailableReason).toContain(expected);
     expect(result.details).toContain(expected);
   });
@@ -295,7 +311,7 @@ describe('S006 shared evaluator', () => {
       readOnlyAgentName: 'reviewer',
       endpoint: 'https://api.example.test',
       endpointFamily: 'openai-compatible'
-    }, new FailingOpenCodeRunner());
+    }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner()));
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, run);
     const details = result.criterionDetails as S006RedactedReportDetails;
@@ -311,7 +327,7 @@ describe('S006 shared evaluator', () => {
     writeRepoFile('package.json', JSON.stringify({ name: '@folio/stripes-components' }));
     writeRepoFile('.env.production', `OPENAI_API_KEY=${rawKey}\n`);
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot);
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
     const details = result.criterionDetails as S006RedactedReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
@@ -325,7 +341,8 @@ describe('S006 shared evaluator', () => {
     const run = EvaluationRunUtils.createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',
-      criteriaFilter: ['S006']
+      criteriaFilter: ['S006'],
+      commandRunner: new FakeS006GitleaksRunner()
     });
 
     const results = await evaluator.evaluate(tempRoot, ['S006'], run);
@@ -349,6 +366,15 @@ describe('S006 shared evaluator', () => {
       language: 'java',
       criteriaFilter: ['S006'],
       agentReview,
+      commandRunner: commandRunner ?? new FakeS006GitleaksRunner()
+    });
+  }
+
+  function createRun(commandRunner: CommandRunner = new FakeS006GitleaksRunner()) {
+    return EvaluationRunUtils.createEvaluationRun({
+      repositoryPath: tempRoot,
+      language: 'java',
+      criteriaFilter: ['S006'],
       commandRunner
     });
   }
@@ -418,5 +444,24 @@ class FailingOpenCodeRunner implements CommandRunner {
         todowrite: false
       }
     });
+  }
+}
+
+class CompositeS006Runner implements CommandRunner {
+  constructor(
+    private readonly gitleaksRunner: CommandRunner,
+    private readonly fallbackRunner: CommandRunner
+  ) {}
+
+  normalize(request: CommandExecutionRequest): string {
+    return this.selectRunner(request).normalize(request);
+  }
+
+  async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+    return await this.selectRunner(request).run(request);
+  }
+
+  private selectRunner(request: CommandExecutionRequest): CommandRunner {
+    return request.command.includes('gitleaks') ? this.gitleaksRunner : this.fallbackRunner;
   }
 }

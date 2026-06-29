@@ -162,7 +162,8 @@ Last Reviewed: 2026-06-12
     expect(result.agentReview?.evidenceReferences).toEqual(['.criterion-agent/S005/evidence/evidence-001.txt']);
     expect(result.details).toContain('Agent review');
     expect(result.details).toContain('Advisory recommendation: likely_insufficient');
-    expect(result.details).toContain('Evidence references: .criterion-agent/S005/evidence/evidence-001.txt');
+    expect(result.details).not.toContain('Evidence references:');
+    expect(result.details).not.toContain('.criterion-agent/S005/evidence/evidence-001.txt');
   });
 
   it('records disabled agent review for completed forms with candidate evidence when unconfigured', async () => {

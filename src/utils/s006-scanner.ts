@@ -10,7 +10,7 @@ import { decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, 
 import { MAX_S006_EXCERPT_BYTES } from './s006-detectors';
 
 export const MAX_S006_SCAN_TRAVERSAL_ENTRIES = 5000;
-export const MAX_S006_SCAN_CANDIDATE_FILES = 250;
+export const MAX_S006_SCAN_CANDIDATE_FILES = 300;
 export const MAX_S006_SCAN_BYTES_PER_FILE = 96 * 1024;
 export const MAX_S006_SCAN_TOTAL_BYTES = 2 * 1024 * 1024;
 

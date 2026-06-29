@@ -1,12 +1,12 @@
 const SECRET_KEY = '[A-Za-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|access[_-]?key|refresh[_-]?token)[A-Za-z0-9_-]*';
-const QUOTED_SECRET_ASSIGNMENT_PATTERN = new RegExp(`(["']?)\\b(${SECRET_KEY})\\b\\1\\s*([:=])\\s*(["'])((?:\\\\.|(?!\\4)[^\\\\\\n])+)\\4`, 'gi');
-const SECRET_ASSIGNMENT_PATTERN = new RegExp(`\\b(${SECRET_KEY})\\b\\s*([:=])\\s*([^\\s"'\\\`,;]+)`, 'gi');
+const QUOTED_SECRET_ASSIGNMENT_PATTERN = new RegExp(`(["']?)\\b(${SECRET_KEY})\\b\\1\\s*([:=])\\s*(["'])((?:\\\\.|(?!\\4)[^\\\\])+)\\4`, 'gi');
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(`\\b(${SECRET_KEY})\\b\\s*([:=])\\s*([^\\r\\n"'\\\`,;]+?)(?=\\s+\\b(?:${SECRET_KEY}|Authorization)\\b\\s*[:=]|[\\r\\n"'\\\`,;]|$)`, 'gi');
 const PROVIDER_TOKEN_PATTERN = /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{2,}|sk-or-v1-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]{8,}|AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{8,})\b/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/g;
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const OKAPI_TOKEN_PATTERN = /\b(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*[A-Za-z0-9._~+/=-]{8,}/gi;
-const URL_CREDENTIAL_PATTERN = /\bhttps?:\/\/[^:\s/@]+:[^@\s/]+@[^\s"'`<>)]*/gi;
-const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|[^/\s"'`<>)]*\.(?:internal|local|corp|lan))[^\s"'`<>)]*/gi;
+const URL_CREDENTIAL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
+const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
 const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
 
 export function redactSensitiveText(input: string, maxBytes?: number): string {

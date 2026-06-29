@@ -199,8 +199,10 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
-    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED] should be redacted');
-    expect(result.errors.join('\n')).toContain('error password=[REDACTED] should be redacted');
+    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED]');
+    expect(result.errors.join('\n')).toContain('error password=[REDACTED]');
+    expect(result.warnings.join('\n')).not.toContain('should be redacted');
+    expect(result.errors.join('\n')).not.toContain('should be redacted');
     expect(result.warnings.join('\n')).not.toContain('abc123');
     expect(result.errors.join('\n')).not.toContain('hunter2');
   });

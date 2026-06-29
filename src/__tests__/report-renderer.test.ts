@@ -147,6 +147,7 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Criterion S001');
     expect(html).toContain('Apache &lt;2.0&gt; &amp; compatible');
     expect(html).toContain('Line one<br>Line two');
+    expect(html).toContain('overflow-wrap: anywhere;');
   });
 
   it('escapes untrusted module names in the HTML title', () => {

@@ -211,7 +211,9 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
         criteriaFilter: ['S006']
       });
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: run.commandRunner
+    });
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S006',
       status: analysis.classification.status,

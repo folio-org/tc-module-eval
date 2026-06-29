@@ -16,6 +16,12 @@ const PLACEHOLDER_VALUE_PATTERN =
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
 const BASE64ISH_PATTERN = /^[A-Za-z0-9._~+/=-]{20,}$/;
+const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';
+const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
+const SECRET_ASSIGNMENT_REDACTION_PATTERN = new RegExp(`^(${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*)${SECRET_ASSIGNMENT_VALUE}$`, 'i');
+const CREDENTIAL_URL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
+const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
 
 export const MAX_S006_EXCERPT_BYTES = 700;
 
@@ -112,15 +118,16 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'password-secret-assignment',
     category: 'password_or_secret_assignment',
     label: 'Password, token, or secret assignment',
-    pattern: /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*(?:"(?:\\.|[^"\\\n]){1,200}"|'(?:\\.|[^'\\\n]){1,200}'|[^\s"'`,;#]{1,200})/gi,
+    pattern: SECRET_ASSIGNMENT_PATTERN,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_SECRET_ASSIGNMENT]',
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'high', high: 'critical' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
+    contextualDowngradeWhenNonLive: 'low',
     redactor: rawMatch =>
       rawMatch.replace(
-        /^(\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\b\s*[:=]\s*)(?:"(?:\\.|[^"\\\n]){1,200}"|'(?:\\.|[^'\\\n]){1,200}'|[^\s"'`,;#]{1,200})$/i,
+        SECRET_ASSIGNMENT_REDACTION_PATTERN,
         '$1[REDACTED_SECRET_ASSIGNMENT]'
       ),
     classifyValue: rawMatch => classifyAssignmentValue(rawMatch),
@@ -145,7 +152,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'credential-url',
     category: 'credential_url',
     label: 'Credential-bearing URL',
-    pattern: /\bhttps?:\/\/[^:\s/@]+:[^@\s/]+@[^\s"'`<>)]*/gi,
+    pattern: CREDENTIAL_URL_PATTERN,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_CREDENTIAL_URL]',
     defaultConfidence: 'high',
@@ -167,7 +174,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'private-url',
     category: 'private_url',
     label: 'Private URL without embedded credentials',
-    pattern: /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|[^/\s"'`<>)]*\.(?:internal|local|corp|lan))(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
+    pattern: PRIVATE_URL_PATTERN,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_PRIVATE_URL]',
     defaultConfidence: 'medium',
@@ -266,11 +273,18 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     ]
   }
 ];
+const S006_COMPILED_DETECTOR_PATTERNS = new Map(
+  S006_DETECTOR_REGISTRY.map(detector => [
+    detector.id,
+    new RegExp(detector.pattern.source, detector.pattern.flags)
+  ])
+);
 
 export function redactS006SensitiveInformationText(input: string, maxBytes?: number): string {
   let redacted = input;
   for (const detector of S006_DETECTOR_REGISTRY) {
-    const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+    const pattern = getCompiledS006DetectorPattern(detector);
+    pattern.lastIndex = 0;
     redacted = redacted.replace(pattern, rawMatch => redactDetectorMatch(detector, rawMatch));
   }
   redacted = redactLocalUserPaths(redactSensitiveText(redacted));
@@ -296,7 +310,8 @@ export function getS006DetectorById(detectorId: S006DetectorId): S006DetectorReg
 }
 
 export function findFirstS006DetectorMatch(detector: S006DetectorRegistryEntry, input: string): string | undefined {
-  const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+  const pattern = getCompiledS006DetectorPattern(detector);
+  pattern.lastIndex = 0;
   const match = pattern.exec(input);
   return match?.[0];
 }
@@ -328,7 +343,7 @@ export function buildS006RedactedDetectorMatch(
   const valueClassification = detector.classifyValue(rawMatch);
   const confidence = getS006Confidence(detector, valueClassification);
   const redactedText = boundS006RedactedExcerptText(redactDetectorMatch(detector, rawMatch));
-  const lineSpan = rawMatch.split(/\r?\n/).length;
+  const lineSpan = rawMatch.split(/\r\n|\n|\r/).length;
 
   return {
     detectorId: detector.id,
@@ -373,6 +388,14 @@ function redactDetectorMatch(detector: S006DetectorRegistryEntry, rawMatch: stri
     return detector.redactionPlaceholder;
   }
   return redacted;
+}
+
+export function getCompiledS006DetectorPattern(detector: S006DetectorRegistryEntry): RegExp {
+  const pattern = S006_COMPILED_DETECTOR_PATTERNS.get(detector.id);
+  if (!pattern) {
+    throw new Error(`Unknown S006 detector: ${detector.id}`);
+  }
+  return pattern;
 }
 
 function boundS006RedactedExcerptText(input: string): string {

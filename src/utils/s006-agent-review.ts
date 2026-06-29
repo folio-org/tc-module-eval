@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   CommandRunner,
   CriterionAgentReviewConfig,
@@ -11,8 +9,8 @@ import {
 } from '../types';
 import {
   CriterionAgentReviewRequest,
+  resolveReviewPathWithinRepo,
   runCriterionAgentReview,
-  safeWorkspaceRelativePath
 } from './criterion-agent-review';
 import {
   MAX_S006_EXCERPT_BYTES,
@@ -21,7 +19,7 @@ import {
   redactS006SensitiveInformationText,
   strongestS006ReportFindings
 } from './s006-sensitive-information';
-import { isWithinRepo, readBoundedFileBytes, realPath } from './repo-files';
+import { readBoundedFileBytes } from './repo-files';
 
 const REDACTED_SUMMARY_REVIEW_PATH = '.criterion-agent/S006/redacted-finding-summary.json';
 const MAX_S006_AGENT_SUMMARY_BYTES = 24 * 1024;
@@ -195,7 +193,7 @@ function readRedactedSourceWindow(repoPath: string, finding: S006SensitiveInform
   const content = readBoundedFileBytes(absolutePath, MAX_S006_AGENT_SOURCE_BYTES)
     .toString('utf-8')
     .replace(/\uFFFD$/, '');
-  const sourceLines = content.split(/\r?\n/);
+  const sourceLines = content.split(/\r\n|\n|\r/);
   const startLine = Math.max(1, finding.line ?? 1);
   const endLine = Math.max(startLine, finding.endLine ?? startLine);
   const windowStart = Math.max(1, startLine - 1);
@@ -212,29 +210,7 @@ function readRedactedSourceWindow(repoPath: string, finding: S006SensitiveInform
 }
 
 function resolveS006ReviewPath(repoPath: string, repoRelativePath: string): string {
-  const repoRoot = realPath(repoPath);
-  if (!repoRoot) {
-    throw new Error('Unable to resolve repository path');
-  }
-
-  let normalized: string;
-  try {
-    normalized = safeWorkspaceRelativePath(repoRelativePath);
-  } catch {
-    throw new Error(`S006 review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const absolutePath = path.resolve(repoRoot, normalized);
-  if (!isWithinRepo(repoRoot, absolutePath)) {
-    throw new Error(`S006 review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const stats = fs.lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    throw new Error(`S006 review material path is not a regular file: ${repoRelativePath}`);
-  }
-
-  return absolutePath;
+  return resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S006');
 }
 
 function countFindingsByContext(findings: S006SensitiveInformationFinding[]): Partial<Record<S006FindingContext, number>> {

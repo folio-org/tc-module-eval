@@ -9,7 +9,7 @@ import {
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { isWithinRepo } from './repo-files';
+import { isWithinRepo, realPath } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText } from './redaction';
 
@@ -438,4 +438,34 @@ export function safeWorkspaceRelativePath(repoRelativePath: string): string {
     throw new Error(`Agent review file path must stay inside the repository: ${repoRelativePath}`);
   }
   return normalized;
+}
+
+export function resolveReviewPathWithinRepo(
+  repoPath: string,
+  repoRelativePath: string,
+  criterionId: string
+): string {
+  const repoRoot = realPath(repoPath);
+  if (!repoRoot) {
+    throw new Error('Unable to resolve repository path');
+  }
+
+  let normalized: string;
+  try {
+    normalized = safeWorkspaceRelativePath(repoRelativePath);
+  } catch {
+    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
+  }
+
+  const absolutePath = path.resolve(repoRoot, normalized);
+  if (!isWithinRepo(repoRoot, absolutePath)) {
+    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
+  }
+
+  const stats = fs.lstatSync(absolutePath);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`${criterionId} review material path is not a regular file: ${repoRelativePath}`);
+  }
+
+  return absolutePath;
 }

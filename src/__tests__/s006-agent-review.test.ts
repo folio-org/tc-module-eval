@@ -7,6 +7,7 @@ import {
   S006SensitiveInformationAnalysisResult
 } from '../types';
 import { analyzeS006SensitiveInformation } from '../utils/s006-sensitive-information';
+import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 import {
   buildS006AgentReviewRequest,
   hasS006AgentReviewMaterial,
@@ -25,14 +26,14 @@ describe('S006 agent review adapter', () => {
     fs.rmSync(repoPath, { recursive: true, force: true });
   });
 
-  it('detects agent-review material only for manual findings or material coverage uncertainty', () => {
+  it('detects agent-review material only for manual findings or material coverage uncertainty', async () => {
     writeFile('README.md', '# Clean module\n');
-    const pass = analyzeS006SensitiveInformation(repoPath);
+    const pass = await analyzeRepo();
     expect(pass.classification.status).toBe(EvaluationStatus.PASS);
     expect(hasS006AgentReviewMaterial(pass)).toBe(false);
 
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const manualFinding = analyzeS006SensitiveInformation(repoPath);
+    const manualFinding = await analyzeRepo();
     expect(manualFinding.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(hasS006AgentReviewMaterial(manualFinding)).toBe(true);
 
@@ -56,12 +57,12 @@ describe('S006 agent review adapter', () => {
     expect(hasS006AgentReviewMaterial(coverageOnly)).toBe(true);
 
     writeFile('src/main/resources/application.yml', 'OPENAI_API_KEY=sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz\n');
-    const fail = analyzeS006SensitiveInformation(repoPath);
+    const fail = await analyzeRepo();
     expect(fail.classification.status).toBe(EvaluationStatus.FAIL);
     expect(hasS006AgentReviewMaterial(fail)).toBe(false);
   });
 
-  it('builds a redacted request with summary and context-grouped bounded excerpts only', () => {
+  it('builds a redacted request with summary and context-grouped bounded excerpts only', async () => {
     const rawProviderKey = 'sk-proj-doc1234567890abcdefghijklmnopqrstuvwxyz';
     const rawBearerToken = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
     const rawPassword = 'POSTGRES_PASSWORD: postgres';
@@ -86,7 +87,7 @@ describe('S006 agent review adapter', () => {
       `      ${rawEscapedPassword}`
     ].join('\n'));
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
     const request = buildS006AgentReviewRequest(repoPath, analysis);
     const manifestPaths = request.files.map(file => file.repoRelativePath);
     const workspaceText = request.files.map(file => file.content).join('\n');
@@ -122,9 +123,9 @@ describe('S006 agent review adapter', () => {
     expect(request.files.every(file => !path.isAbsolute(file.repoRelativePath))).toBe(true);
   });
 
-  it('rejects review-material paths outside the repository before reading them', () => {
+  it('rejects review-material paths outside the repository before reading them', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
     analysis.findings[0] = {
       ...analysis.findings[0],
       path: '../outside.txt'
@@ -143,7 +144,7 @@ describe('S006 agent review adapter', () => {
 
   it('returns unavailable agent review when request preparation fails', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
     analysis.findings[0] = {
       ...analysis.findings[0],
       path: '../outside.txt'
@@ -168,7 +169,7 @@ describe('S006 agent review adapter', () => {
 
   it('returns allowed fake advisory output with manifest evidence references', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
 
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
       available: true,
@@ -190,7 +191,7 @@ describe('S006 agent review adapter', () => {
 
   it('drops fake advisory evidence references that are not in the review manifest', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
 
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
       available: true,
@@ -211,7 +212,7 @@ describe('S006 agent review adapter', () => {
 
   it('preserves manual fallback when fake advisory JSON is malformed', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo();
 
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
       available: true,
@@ -243,5 +244,9 @@ describe('S006 agent review adapter', () => {
     const absolutePath = path.join(repoPath, relativePath);
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
     fs.writeFileSync(absolutePath, content.trim());
+  }
+
+  function analyzeRepo(): Promise<S006SensitiveInformationAnalysisResult> {
+    return analyzeS006SensitiveInformation(repoPath, { commandRunner: new FakeS006GitleaksRunner() });
   }
 });

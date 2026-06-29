@@ -1,8 +1,10 @@
 import {
+  CommandRunner,
   EvaluationStatus,
   S006DetectorRegistryEntry,
   S006FindingConfidence,
   S006FindingContext,
+  S006FindingSeverity,
   S006FindingStatusImpact,
   S006ScanCoverage,
   S006ScanWarning,
@@ -13,11 +15,17 @@ import {
 import {
   buildS006RedactedDetectorMatch,
   createS006FingerprintRun,
+  getCompiledS006DetectorPattern,
   getS006DetectorById,
+  getS006Confidence,
   getS006Severity,
-  S006_DETECTOR_REGISTRY,
   S006FingerprintRun
 } from './s006-detectors';
+import { redactS006SensitiveInformationText } from './s006-detectors';
+import {
+  runS006GitleaksScan,
+  S006GitleaksFinding
+} from './s006-gitleaks';
 import {
   buildS006Warning,
   scanS006RepositoryCandidates,
@@ -43,50 +51,67 @@ interface S006LineWithOffset {
   offset: number;
 }
 
-interface S006PrivateKeyRange {
-  start: number;
-  end: number;
+export interface S006AnalysisOptions {
+  commandRunner?: CommandRunner;
+  gitleaksTimeoutMs?: number;
 }
+
+const S006_LOCAL_DETECTOR_IDS = ['tenant-host-endpoint', 'private-url', 'local-absolute-path'] as const;
+const S006_LINE_DETECTORS = S006_LOCAL_DETECTOR_IDS
+  .map(detectorId => getS006DetectorById(detectorId))
+  .map(detector => ({
+    detector,
+    pattern: getCompiledS006DetectorPattern(detector)
+  }));
 
 export function extractS006SensitiveInformationFindings(
   files: ReadonlyArray<S006ScannedCandidateTextFile>,
+  gitleaksFindings: ReadonlyArray<S006GitleaksFinding> = [],
   fingerprintRun: S006FingerprintRun = createS006FingerprintRun()
 ): { findings: S006SensitiveInformationFinding[]; warnings: S006ScanWarning[] } {
   const findings: S006SensitiveInformationFinding[] = [];
   const warnings: S006ScanWarning[] = [];
   const dedupeKeys = new Set<string>();
+  const scannedTextByPath = new Map(files.map(file => [file.path, file.text]));
   let findingLimitReached = false;
 
-  for (const file of files) {
-    const context = classifyS006SourceContext(file.path, file.text);
-    const privateKeyRanges = extractS006PrivateKeyFindings(file, context, fingerprintRun, findings, dedupeKeys);
+  for (const gitleaksFinding of gitleaksFindings) {
+    const finding = buildS006GitleaksFinding(gitleaksFinding, fingerprintRun, scannedTextByPath);
+    if (!finding) {
+      continue;
+    }
+    retainS006Finding(findings, dedupeKeys, finding);
     if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
       findingLimitReached = true;
       break;
     }
+  }
+
+  for (const file of files) {
+    if (findingLimitReached) {
+      break;
+    }
+    const context = classifyS006SourceContext(file.path, file.text);
 
     const lines = splitS006Lines(file.text);
     for (const line of lines) {
       const occupiedLineRanges: Array<{ start: number; end: number }> = [];
-      for (const detector of S006_DETECTOR_REGISTRY) {
-        if (detector.id === 'private-key-block') {
-          continue;
-        }
-
-        const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
+      for (const { detector, pattern } of S006_LINE_DETECTORS) {
+        pattern.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(line.text)) !== null) {
           const rawMatch = match[0];
           const matchStart = match.index;
           const matchEnd = matchStart + rawMatch.length;
-          const absoluteStart = line.offset + matchStart;
-          const absoluteEnd = line.offset + matchEnd;
 
           if (
             rawMatch.length === 0 ||
-            occupiedLineRanges.some(range => rangesOverlap(matchStart, matchEnd, range.start, range.end)) ||
-            privateKeyRanges.some(range => rangesOverlap(absoluteStart, absoluteEnd, range.start, range.end))
+            occupiedLineRanges.some(range => rangesOverlap(matchStart, matchEnd, range.start, range.end))
           ) {
+            continue;
+          }
+
+          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text)) {
             continue;
           }
 
@@ -126,21 +151,35 @@ export function extractS006SensitiveInformationFindings(
   return { findings, warnings };
 }
 
-export function analyzeS006SensitiveInformation(repoPath: string): S006SensitiveInformationAnalysisResult {
+export async function analyzeS006SensitiveInformation(
+  repoPath: string,
+  options: S006AnalysisOptions = {}
+): Promise<S006SensitiveInformationAnalysisResult> {
   const scan = scanS006RepositoryCandidates(repoPath);
-  const extraction = extractS006SensitiveInformationFindings(scan.files);
-  const warnings = [...scan.warnings, ...extraction.warnings];
+  const gitleaks = await runS006GitleaksScan(repoPath, {
+    commandRunner: options.commandRunner,
+    timeoutMs: options.gitleaksTimeoutMs
+  });
+  const extraction = extractS006SensitiveInformationFindings(scan.files, gitleaks.findings);
+  const warnings = [...scan.warnings, ...gitleaks.warnings, ...extraction.warnings];
+  const scannerWarning = gitleaks.warnings.find(warning => warning.kind === 'scanner-unavailable');
   const coverage = {
     ...scan.coverage,
-    warnings,
-    materiallyWeakened: scan.coverage.materiallyWeakened || extraction.warnings.some(warning => warning.materialToCoverage),
-    complete: scan.coverage.complete && extraction.warnings.every(warning => !warning.materialToCoverage)
+    warnings: [...warnings],
+    materiallyWeakened: scan.coverage.materiallyWeakened || [...gitleaks.warnings, ...extraction.warnings].some(warning => warning.materialToCoverage),
+    complete: scan.coverage.complete && [...gitleaks.warnings, ...extraction.warnings].every(warning => !warning.materialToCoverage)
   };
   const classification = classifyS006DeterministicResult(extraction.findings, coverage);
 
   return {
     criterionId: 'S006',
     findings: extraction.findings,
+    scanner: {
+      name: 'Gitleaks',
+      status: scannerWarning ? 'unavailable' : 'completed',
+      findingCount: gitleaks.findings.length,
+      warning: scannerWarning
+    },
     coverage,
     classification,
     warnings
@@ -157,7 +196,7 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   if (/\b(?:auto-generated|autogenerated|generated by|do not edit|codegen|openapi generator)\b/.test(contentCue)) {
     return 'generated_content';
   }
-  if (/(^|\/)(docs?|documentation)(\/|$)|(?:^|\/)(readme|changelog|contributing|license)(?:\.[^.]+)?$/.test(normalized)) {
+  if (/(^|\/)(docs?|documentation)(\/|$)|(?:^|\/)(?:readme|changelog|contributing|license|module_self_evaluation|personal_data_disclosure)(?:\.[^.]+)?$|^[^/]+\.md$/.test(normalized)) {
     return 'documentation';
   }
   if (/(^|\/)(fixtures?|__fixtures__|__tests__|tests?|spec)(\/|$)|(?:test|spec|fixture)\.[^.\/]+$/.test(normalized)) {
@@ -166,7 +205,7 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   if (/\b(?:test fixture|fixture data|for tests only|generated test token|mock token|fake password|dummy password)\b/.test(contentCue)) {
     return 'test_fixture';
   }
-  if (/(^|\/)(examples?|samples?)(\/|$)|(?:example|sample|template)\.[^.\/]+$/.test(normalized)) {
+  if (/(^|\/)(examples?|samples?)(\/|$)|(?:^|\/)[^/]*(?:example|sample|template)[^/]*\.[^.\/]+$/.test(normalized)) {
     return 'sample_or_example';
   }
   if (/\b(?:example only|sample only|sample configuration|example configuration|template value|replace with your)\b/.test(contentCue)) {
@@ -189,35 +228,260 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   return 'unknown';
 }
 
-function extractS006PrivateKeyFindings(
-  file: S006ScannedCandidateTextFile,
+function shouldSuppressS006LineFinding(
+  filePath: string,
   context: S006FindingContext,
-  fingerprintRun: S006FingerprintRun,
-  findings: S006SensitiveInformationFinding[],
-  dedupeKeys: Set<string>
-): S006PrivateKeyRange[] {
-  const detector = getS006DetectorById('private-key-block');
-  const privateKeyRanges: S006PrivateKeyRange[] = [];
-  const pattern = new RegExp(detector.pattern.source, detector.pattern.flags);
-  let match: RegExpExecArray | null;
+  detector: S006DetectorRegistryEntry,
+  rawMatch: string,
+  lineText: string
+): boolean {
+  void filePath;
+  if (detector.id === 'private-url') {
+    return shouldSuppressS006PrivateUrl(context, rawMatch);
+  }
+  if (detector.id === 'tenant-host-endpoint') {
+    return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText);
+  }
+  return false;
+}
 
-  while ((match = pattern.exec(file.text)) !== null) {
-    const rawMatch = match[0];
-    if (rawMatch.length === 0) {
-      continue;
-    }
-
-    const line = getS006LineForOffset(file.text, match.index);
-    const finding = buildS006Finding(file.path, context, detector, rawMatch, fingerprintRun, line);
-    if (retainS006Finding(findings, dedupeKeys, finding)) {
-      privateKeyRanges.push({ start: match.index, end: match.index + rawMatch.length });
-    }
-    if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
-      break;
-    }
+function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: string): boolean {
+  if (!['documentation', 'test_fixture', 'sample_or_example', 'local_docker_defaults'].includes(context)) {
+    return false;
   }
 
-  return privateKeyRanges;
+  const url = parseS006UrlLike(rawMatch);
+  const hostname = url?.hostname.toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '[::1]';
+}
+
+function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string): boolean {
+  const normalizedMatch = rawMatch.toLowerCase();
+  const trimmedLine = lineText.trim();
+
+  if (/^(?:import\s+|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,};?$/i.test(trimmedLine)) {
+    return true;
+  }
+  if (isS006KnownJavaConfigReference(trimmedLine)) {
+    return true;
+  }
+  if (isS006PublicReferenceUrl(rawMatch)) {
+    return true;
+  }
+  if (/^https?:\/\/(?:dev|docs)\.folio\.org(?:\/|$)/i.test(normalizedMatch)) {
+    return true;
+  }
+  if (/^https?:\/\/github\.com\/folio-org\//i.test(normalizedMatch)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isS006KnownJavaConfigReference(trimmedLine: string): boolean {
+  const uncommentedLine = trimmedLine.replace(/^#\s*/, '');
+  const keyValueMatch = uncommentedLine.match(/^([\w.-]+)\s*:\s*(.+)$/);
+  if (!keyValueMatch) {
+    return false;
+  }
+
+  const key = keyValueMatch[1];
+  const value = keyValueMatch[2].trim();
+  return /(?:^|[-_.])(?:serializer|deserializer)$/i.test(key) && isS006JavaPackageReference(value);
+}
+
+function isS006JavaPackageReference(value: string): boolean {
+  return /^org\.(?:apache|folio|springframework)\.[a-z0-9_.]+;?$/i.test(value);
+}
+
+const S006_PUBLIC_REFERENCE_HOSTS = new Set([
+  'dev.folio.org',
+  'discuss.folio.org',
+  'docs.folio.org',
+  'folio-org.atlassian.net',
+  'folio.org',
+  'github.com',
+  'issues.folio.org',
+  'jdbc.postgresql.org',
+  'maven.apache.org',
+  'repository.folio.org',
+  'wiki.folio.org',
+  'www.apache.org'
+]);
+
+function isS006PublicReferenceUrl(rawMatch: string): boolean {
+  const url = parseS006UrlLike(rawMatch);
+  if (!url) {
+    return false;
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (!S006_PUBLIC_REFERENCE_HOSTS.has(hostname)) {
+    return false;
+  }
+
+  if (hostname === 'github.com') {
+    return /^\/folio-org(?:\/|$)/i.test(url.pathname);
+  }
+
+  return true;
+}
+
+function parseS006UrlLike(rawMatch: string): URL | null {
+  const cleaned = rawMatch.trim().replace(/[.,;:]+$/, '');
+  const candidate = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+
+  try {
+    return new URL(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function buildS006GitleaksFinding(
+  source: S006GitleaksFinding,
+  fingerprintRun: S006FingerprintRun,
+  scannedTextByPath: ReadonlyMap<string, string>
+): S006SensitiveInformationFinding | undefined {
+  const filePath = normalizeS006GitleaksPath(source.File);
+  if (!filePath) {
+    return undefined;
+  }
+
+  const detector = getS006GitleaksDetector(source);
+  const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
+  const excerptText = buildS006GitleaksRedactedExcerpt(source, detector.redactionPlaceholder);
+  const valueClassification = classifyS006GitleaksValue(source, excerptText);
+  const confidence = adjustS006FindingConfidenceForContext(
+    detector,
+    valueClassification,
+    getS006GitleaksConfidence(detector, source, valueClassification),
+    context
+  );
+  const severity = getS006Severity(detector, confidence);
+  const line = normalizeS006PositiveInteger(source.StartLine);
+  const endLine = normalizeS006PositiveInteger(source.EndLine);
+  const baseFinding: Omit<S006SensitiveInformationFinding, 'rationale' | 'statusImpact'> = {
+    path: filePath,
+    line,
+    endLine: endLine && line && endLine !== line ? endLine : undefined,
+    detectorId: detector.id,
+    category: detector.category,
+    context,
+    valueClassification,
+    confidence,
+    severity,
+    redactedExcerpt: {
+      text: excerptText,
+      placeholder: detector.redactionPlaceholder,
+      multiline: Boolean(endLine && line && endLine > line),
+      startLine: line,
+      endLine: endLine && line && endLine !== line ? endLine : line
+    },
+    valueFingerprint: fingerprintRun.fingerprint(source.Fingerprint || [
+      source.RuleID,
+      source.File,
+      source.StartLine,
+      source.EndLine,
+      excerptText
+    ].join(':'))
+  };
+  const statusImpact: S006FindingStatusImpact = isS006DeterministicFailFinding(baseFinding)
+    ? 'deterministic_fail'
+    : 'manual_review';
+  const finding: Omit<S006SensitiveInformationFinding, 'rationale'> = {
+    ...baseFinding,
+    statusImpact
+  };
+
+  return {
+    ...finding,
+    rationale: buildS006GitleaksFindingRationale(finding, source, detector)
+  };
+}
+
+function getS006GitleaksDetector(source: S006GitleaksFinding): S006DetectorRegistryEntry {
+  if (source.RuleID === 'provider-api-key') {
+    return getS006DetectorById('provider-api-key');
+  }
+  if (source.RuleID === 'private-key-block') {
+    return getS006DetectorById('private-key-block');
+  }
+  if (source.RuleID === 'bearer-or-jwt-token') {
+    return getS006DetectorById('bearer-or-jwt-token');
+  }
+  if (source.RuleID === 'password-secret-assignment') {
+    return getS006DetectorById('password-secret-assignment');
+  }
+  if (source.RuleID === 'credential-url') {
+    return getS006DetectorById('credential-url');
+  }
+
+  const ruleText = `${source.RuleID ?? ''} ${source.Description ?? ''}`.toLowerCase();
+  const matchText = `${source.Match ?? ''} ${source.Secret ?? ''}`;
+
+  if (/\b(?:private[-_ ]?key|pem|rsa|dsa|ecdsa|ed25519)\b/.test(ruleText)) {
+    return getS006DetectorById('private-key-block');
+  }
+  if (/https?:\/\/[^:\s/@]+:[^@\s/]+@/i.test(matchText)) {
+    return getS006DetectorById('credential-url');
+  }
+  if (/\b(?:openai|github|aws|amazon|google|gcp|azure|anthropic|openrouter|api[-_ ]?key|access[-_ ]?key)\b/.test(ruleText)) {
+    return getS006DetectorById('provider-api-key');
+  }
+  if (/\b(?:bearer|jwt|token)\b/.test(ruleText)) {
+    return getS006DetectorById('bearer-or-jwt-token');
+  }
+  return getS006DetectorById('password-secret-assignment');
+}
+
+function getS006GitleaksConfidence(
+  detector: S006DetectorRegistryEntry,
+  source: S006GitleaksFinding,
+  valueClassification: S006ValueClassification
+): S006FindingConfidence {
+  if (valueClassification !== 'live-looking') {
+    return getS006Confidence(detector, valueClassification);
+  }
+  if (source.Entropy !== undefined && source.Entropy < 3) {
+    return detector.defaultConfidence === 'high' ? 'medium' : detector.defaultConfidence;
+  }
+  return detector.defaultConfidence;
+}
+
+function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: string): S006ValueClassification {
+  const valueText = `${source.RuleID ?? ''} ${source.Description ?? ''} ${excerptText}`.toLowerCase();
+  if (source.Entropy !== undefined && source.Entropy < 3) {
+    return 'synthetic';
+  }
+  if (/\b(?:example|sample|dummy|fake|test|fixture|mock|changeme|change[_-]?me|replace[_-]?me)\b/.test(valueText)) {
+    return 'synthetic';
+  }
+  if (/\b(?:redacted|\*{3,}|x{3,})\b/i.test(excerptText)) {
+    return 'live-looking';
+  }
+  return 'live-looking';
+}
+
+function buildS006GitleaksRedactedExcerpt(source: S006GitleaksFinding, fallbackPlaceholder: string): string {
+  const preferred = source.Match || source.Secret || fallbackPlaceholder;
+  if (/REDACTED/.test(preferred)) {
+    return preferred;
+  }
+  const redacted = redactS006SensitiveInformationText(preferred, 700);
+  if (!redacted || redacted === preferred) {
+    return fallbackPlaceholder;
+  }
+  return redacted;
+}
+
+function normalizeS006GitleaksPath(filePath: string | undefined): string | undefined {
+  const normalized = filePath?.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
+  return normalized || undefined;
+}
+
+function normalizeS006PositiveInteger(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function buildS006Finding(
@@ -254,6 +518,23 @@ function buildS006Finding(
     ...finding,
     rationale: buildS006FindingRationale(finding, detector)
   };
+}
+
+function buildS006GitleaksFindingRationale(
+  finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
+  source: S006GitleaksFinding,
+  detector: S006DetectorRegistryEntry
+): string {
+  const statusImpact = finding.statusImpact === 'deterministic_fail'
+    ? 'deterministic failure candidate'
+    : 'manual review candidate';
+  const rule = source.RuleID ? `; gitleaksRule=${source.RuleID}` : '';
+  const description = source.Description ? `; gitleaksDescription=${source.Description}` : '';
+  const contextNote = isS006FailCapableContext(finding.context)
+    ? 'production or CI/deployment context can elevate high-confidence live-looking secrets'
+    : 'context limits deterministic failure and preserves the finding for reviewer judgment';
+
+  return `${detector.label} from Gitleaks is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}${rule}${description}; ${contextNote}; Gitleaks redaction was applied before retaining evidence.`;
 }
 
 function retainS006Finding(
@@ -305,7 +586,7 @@ function splitS006Lines(text: string): S006LineWithOffset[] {
 function getS006LineForOffset(text: string, offset: number): number {
   let line = 1;
   for (let index = 0; index < offset && index < text.length; index++) {
-    if (text[index] === '\n') {
+    if (text[index] === '\n' || (text[index] === '\r' && text[index + 1] !== '\n')) {
       line += 1;
     }
   }
@@ -400,11 +681,11 @@ function adjustS006FindingConfidenceForContext(
   context: S006FindingContext
 ): S006FindingConfidence {
   if (
-    detector.id === 'password-secret-assignment' &&
+    detector.contextualDowngradeWhenNonLive &&
     valueClassification !== 'live-looking' &&
     isS006ContextualManualContext(context)
   ) {
-    return 'low';
+    return detector.contextualDowngradeWhenNonLive;
   }
 
   return confidence;

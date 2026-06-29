@@ -2,8 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createHash } from 'crypto';
+import { spawnSync } from 'child_process';
 
 import type {
+  CommandExecutionRequest,
+  CommandExecutionResult,
+  CommandRunner,
   CriterionAgentReviewResult,
   S004InstallationDocumentationResult,
   S005PersonalDataDisclosureAnalysisResult,
@@ -11,6 +15,7 @@ import type {
 } from '../types';
 import type { S006RedactedReportDetails as RootS006RedactedReportDetails } from '../index';
 import { EvaluationStatus } from '../types';
+import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 import {
   analyzeS006SensitiveInformation,
   buildS006CriterionDetails,
@@ -28,7 +33,8 @@ import {
   scanS006RepositoryCandidates,
   strongestS006ReportFindings,
   S006_CONTEXT_LABELS,
-  S006_DETECTOR_REGISTRY
+  S006_DETECTOR_REGISTRY,
+  runS006GitleaksScan
 } from '../utils/s006-sensitive-information';
 
 function createTempRepo(): string {
@@ -47,8 +53,20 @@ function writeRepoBinaryFile(repoPath: string, relativePath: string, content: Bu
   fs.writeFileSync(absolutePath, content);
 }
 
+function analyzeRepo(repoPath: string): Promise<S006SensitiveInformationAnalysisResult> {
+  return analyzeS006SensitiveInformation(repoPath, { commandRunner: new FakeS006GitleaksRunner() });
+}
+
+function hasRealGitleaksBinary(): boolean {
+  const command = process.env.GITLEAKS_PATH || 'gitleaks';
+  const result = spawnSync(command, ['version'], { encoding: 'utf-8' });
+  return result.status === 0;
+}
+
+const realGitleaksIt = hasRealGitleaksBinary() ? it : it.skip;
+
 describe('S006 detector vocabulary', () => {
-  it('models provider-shaped API keys with category, detector id, confidence, and required redaction', () => {
+  it('models provider-shaped API keys with category, detector id, confidence, and required redaction', async () => {
     const detector = getS006DetectorById('provider-api-key');
     const rawMatch = findFirstS006DetectorMatch(detector, 'OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz');
 
@@ -71,7 +89,7 @@ describe('S006 detector vocabulary', () => {
     expect(JSON.stringify(redacted)).not.toContain(rawMatch);
   });
 
-  it('models private key blocks as high-confidence multiline secret evidence', () => {
+  it('models private key blocks as high-confidence multiline secret evidence', async () => {
     const detector = getS006DetectorById('private-key-block');
     const rawMatch = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----';
     const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, createS006FingerprintRun(), 7);
@@ -92,7 +110,7 @@ describe('S006 detector vocabulary', () => {
     expect(JSON.stringify(redacted)).not.toContain('MIIEvQIB');
   });
 
-  it('distinguishes credential-bearing URLs from private URLs without credentials', () => {
+  it('distinguishes credential-bearing URLs from private URLs without credentials', async () => {
     const credentialUrl = getS006DetectorById('credential-url');
     const privateUrl = getS006DetectorById('private-url');
 
@@ -116,7 +134,7 @@ describe('S006 detector vocabulary', () => {
     });
   });
 
-  it('requires every detector to redact at least one matching calibration value before JSON serialization', () => {
+  it('requires every detector to redact at least one matching calibration value before JSON serialization', async () => {
     const run = createS006FingerprintRun();
 
     for (const detector of S006_DETECTOR_REGISTRY) {
@@ -138,7 +156,7 @@ describe('S006 detector vocabulary', () => {
     }
   });
 
-  it('runs table-driven detector calibration cases for classification, confidence, and severity', () => {
+  it('runs table-driven detector calibration cases for classification, confidence, and severity', async () => {
     for (const detector of S006_DETECTOR_REGISTRY) {
       for (const calibrationCase of detector.calibrationCases) {
         const rawMatch = findFirstS006DetectorMatch(detector, calibrationCase.rawValue);
@@ -158,7 +176,7 @@ describe('S006 detector vocabulary', () => {
 });
 
 describe('S006 run-local fingerprints', () => {
-  it('keeps fingerprints stable within one analysis run and unstable across separate runs', () => {
+  it('keeps fingerprints stable within one analysis run and unstable across separate runs', async () => {
     const rawValue = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
     const firstRun = createS006FingerprintRun();
     const secondRun = createS006FingerprintRun();
@@ -182,7 +200,7 @@ describe('S006 bounded repository candidate scanning', () => {
     }
   });
 
-  it('scans a small supported repository with complete coverage data and repo-relative paths', () => {
+  it('scans a small supported repository with complete coverage data and repo-relative paths', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'README.md', '# Clean module\n');
     writeRepoFile(repoPath, 'src/main/java/org/folio/App.java', 'class App {}\n');
@@ -209,7 +227,7 @@ describe('S006 bounded repository candidate scanning', () => {
       .every(scannedPath => !path.isAbsolute(scannedPath))).toBe(true);
   });
 
-  it('treats common S006 text, config, Docker, CI, Compose, and env files as eligible candidates', () => {
+  it('treats common S006 text, config, Docker, CI, Compose, and env files as eligible candidates', async () => {
     repoPath = createTempRepo();
     const expectedPaths = [
       '.env',
@@ -241,7 +259,7 @@ describe('S006 bounded repository candidate scanning', () => {
     expect(result.coverage.complete).toBe(true);
   });
 
-  it('skips binary files, symlinks, dependency directories, build output, coverage output, VCS metadata, and generated reports', () => {
+  it('skips binary files, symlinks, dependency directories, build output, coverage output, VCS metadata, and generated reports', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'src/main/resources/application.yml', 'okapi: http://localhost:9130\n');
     writeRepoBinaryFile(repoPath, 'src/main/resources/binary.yml', Buffer.from([0, 1, 2, 3]));
@@ -275,7 +293,7 @@ describe('S006 bounded repository candidate scanning', () => {
     }
   });
 
-  it('truncates oversized text files without replacement-character corruption and marks high-signal truncation material', () => {
+  it('truncates oversized text files without replacement-character corruption and marks high-signal truncation material', async () => {
     repoPath = createTempRepo();
     const prefix = Buffer.alloc(MAX_S006_SCAN_BYTES_PER_FILE - 1, 'a');
     const splitCharacter = Buffer.from('€');
@@ -307,7 +325,7 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
-  it('prioritizes high-signal candidates before applying candidate caps and reports incomplete capped coverage', () => {
+  it('prioritizes high-signal candidates before applying candidate caps and reports incomplete capped coverage', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, '.env', 'LOCAL_ONLY=true\n');
     writeRepoFile(repoPath, '.github/workflows/build.yml', 'name: build\n');
@@ -327,7 +345,7 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
-  it('reports material candidate truncation when priority scan cannot retain every high-signal path', () => {
+  it('reports material candidate truncation when priority scan cannot retain every high-signal path', async () => {
     repoPath = createTempRepo();
     for (let index = 0; index < MAX_S006_SCAN_CANDIDATE_FILES + 5; index++) {
       writeRepoFile(repoPath, `config/service-${String(index).padStart(3, '0')}.yml`, 'enabled: true\n');
@@ -344,7 +362,7 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
-  it('marks coverage materially weakened when traversal reaches the entry cap', () => {
+  it('marks coverage materially weakened when traversal reaches the entry cap', async () => {
     repoPath = createTempRepo();
     const traversalEntryLimit = 12;
     for (let index = 0; index < traversalEntryLimit + 2; index++) {
@@ -364,7 +382,7 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
-  it('stops at the total byte cap and marks coverage material when high-signal candidates remain unread', () => {
+  it('stops at the total byte cap and marks coverage material when high-signal candidates remain unread', async () => {
     repoPath = createTempRepo();
     for (let index = 0; index < 30; index++) {
       writeRepoFile(
@@ -387,7 +405,7 @@ describe('S006 bounded repository candidate scanning', () => {
     ]));
   });
 
-  it('records read errors as skipped-file evidence and continues scanning later candidates', () => {
+  it('records read errors as skipped-file evidence and continues scanning later candidates', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'config/unreadable.yml', 'secret: value\n');
     writeRepoFile(repoPath, 'src/main/resources/application.yml', 'server:\n  port: 8081\n');
@@ -429,12 +447,12 @@ describe('S006 sensitive information finding extraction', () => {
     }
   });
 
-  it('detects provider-shaped API keys in source config without returning raw key material', () => {
+  it('detects provider-shaped API keys in source config without returning raw key material', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const providerFinding = result.findings.find(finding => finding.detectorId === 'provider-api-key');
     const serialized = JSON.stringify({
       analysis: result,
@@ -455,14 +473,14 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain(rawKey);
   });
 
-  it('caps retained findings and reports material finding-limit coverage', () => {
+  it('caps retained findings and reports material finding-limit coverage', async () => {
     repoPath = createTempRepo();
     const lines = Array.from({ length: MAX_S006_RETAINED_FINDINGS + 3 }, (_entry, index) =>
       `SERVICE_${index}_PASSWORD=CorrectHorseBatteryStaple${String(index).padStart(3, '0')}`
     );
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `${lines.join('\n')}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const serialized = JSON.stringify(result);
 
     expect(result.findings).toHaveLength(MAX_S006_RETAINED_FINDINGS);
@@ -474,10 +492,11 @@ describe('S006 sensitive information finding extraction', () => {
         materialToCoverage: true
       })
     ]));
+    expect(result.coverage.warnings).not.toBe(result.warnings);
     expect(serialized).not.toContain('CorrectHorseBatteryStaple');
   });
 
-  it('detects multiline private key blocks with stable redacted placeholders', () => {
+  it('detects multiline private key blocks with stable redacted placeholders', async () => {
     repoPath = createTempRepo();
     const privateKeyBody = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC';
     writeRepoFile(
@@ -486,7 +505,7 @@ describe('S006 sensitive information finding extraction', () => {
       `before\n-----BEGIN PRIVATE KEY-----\n${privateKeyBody}\n-----END PRIVATE KEY-----\nafter\n`
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const finding = result.findings.find(candidate => candidate.detectorId === 'private-key-block');
 
     expect(finding).toMatchObject({
@@ -507,7 +526,29 @@ describe('S006 sensitive information finding extraction', () => {
     expect(JSON.stringify(result)).not.toContain(privateKeyBody);
   });
 
-  it('marks truncated possible private key blocks as material uncertainty without leaking partial body lines', () => {
+  it('reports private-key block line numbers consistently for bare CR line endings', async () => {
+    repoPath = createTempRepo();
+    const privateKeyBody = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC';
+    writeRepoFile(
+      repoPath,
+      'server.pem',
+      `one\rtwo\r-----BEGIN PRIVATE KEY-----\r${privateKeyBody}\r-----END PRIVATE KEY-----\r`
+    );
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'private-key-block',
+        path: 'server.pem',
+        line: 3,
+        endLine: 5
+      })
+    ]));
+    expect(JSON.stringify(result)).not.toContain(privateKeyBody);
+  });
+
+  it('marks truncated possible private key blocks as material uncertainty without leaking partial body lines', async () => {
     repoPath = createTempRepo();
     const partialBody = 'PRIVATEKEYBODYSHOULDNOTLEAK';
     const prefix = 'a'.repeat(MAX_S006_SCAN_BYTES_PER_FILE - 45);
@@ -517,7 +558,7 @@ describe('S006 sensitive information finding extraction', () => {
       `${prefix}\n-----BEGIN PRIVATE KEY-----\n${partialBody}\n${'b'.repeat(1024)}`
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const serialized = JSON.stringify(result);
 
     expect(result.coverage.materiallyWeakened).toBe(true);
@@ -533,7 +574,7 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain('bbbbbbbb');
   });
 
-  it('detects live-looking password and token assignments while downgrading empty and placeholder values', () => {
+  it('detects live-looking password and token assignments without retaining placeholders', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -549,7 +590,7 @@ describe('S006 sensitive information finding extraction', () => {
       ].join('\n')
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const assignments = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
 
     expect(assignments).toEqual(expect.arrayContaining([
@@ -564,29 +605,90 @@ describe('S006 sensitive information finding extraction', () => {
         valueClassification: 'live-looking',
         confidence: 'medium',
         severity: 'high'
-      }),
-      expect.objectContaining({
-        line: 3,
-        valueClassification: 'placeholder',
-        confidence: 'low'
-      }),
-      expect.objectContaining({
-        line: 4,
-        valueClassification: 'placeholder',
-        confidence: 'low'
       })
     ]));
-    expect(assignments.some(finding => finding.line === 5 || finding.line === 6 || finding.line === 7)).toBe(false);
+    expect(assignments.some(finding => finding.line === 3 || finding.line === 4 || finding.line === 5 || finding.line === 6 || finding.line === 7)).toBe(false);
     expect(JSON.stringify(result)).not.toContain('CorrectHorseBatteryStaple');
     expect(JSON.stringify(result)).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
   });
 
-  it('redacts credential URLs without preserving username, password, host, or the full URL', () => {
+  it('suppresses secret references that do not commit secret values', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      '.github/workflows/api-doc.yml',
+      [
+        'env:',
+        '  AWS_S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}',
+        '  AWS_S3_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}',
+        'jobs:',
+        '  publish:',
+        '    with:',
+        '      access_key: ${{ env.AWS_S3_ACCESS_KEY_ID }}',
+        '      secret_access_key: ${{ env.AWS_S3_ACCESS_KEY }}'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      '.github/workflows/maven.yml',
+      [
+        'jobs:',
+        '  maven:',
+        '    uses: folio-org/.github/.github/workflows/maven.yml@v1',
+        '    secrets: inherit'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      [
+        'spring:',
+        '  datasource:',
+        '    password: ${DB_PASSWORD:folio_admin}',
+        '  kafka:',
+        '    ssl:',
+        '      key-store-password: ${KAFKA_SSL_KEYSTORE_PASSWORD:}',
+        '      trust-store-password: ${KAFKA_SSL_TRUSTSTORE_PASSWORD:}',
+        'folio:',
+        '  system-user:',
+        '    password: ${SYSTEM_USER_PASSWORD}'
+      ].join('\n')
+    );
+    writeRepoFile(repoPath, 'src/test/java/org/folio/rtaccache/BaseIntegrationTest.java', 'protected static final String TOKEN = "test-token";\n');
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings.filter(finding => finding.detectorId === 'password-secret-assignment')).toEqual([]);
+  });
+
+  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', async () => {
+    repoPath = createTempRepo();
+    const tokenTail = 'abcdefghijklmnopqrstuvwxyz123456';
+    const detector = getS006DetectorById('password-secret-assignment');
+    const rawMatch = findFirstS006DetectorMatch(detector, `access_token = Bearer ${tokenTail}`);
+    writeRepoFile(repoPath, 'config/application.properties', `access_token = Bearer ${tokenTail}\n`);
+
+    const result = await analyzeRepo(repoPath);
+    const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, createS006FingerprintRun());
+
+    expect(rawMatch).toBe(`access_token = Bearer ${tokenTail}`);
+    expect(redacted).toMatchObject({
+      detectorId: 'password-secret-assignment',
+      redactedExcerpt: expect.objectContaining({
+        text: 'access_token = [REDACTED_SECRET_ASSIGNMENT]'
+      })
+    });
+    expect(JSON.stringify(result)).toContain('Bearer [REDACTED_TOKEN]');
+    expect(JSON.stringify(result)).not.toContain(`Bearer ${tokenTail}`);
+    expect(JSON.stringify(result)).not.toContain(tokenTail);
+  });
+
+  it('redacts credential URLs without preserving username, password, host, or the full URL', async () => {
     repoPath = createTempRepo();
     const credentialUrl = 'https://admin:s3cr3t@10.0.0.12:9130/admin';
     writeRepoFile(repoPath, 'config/service.yml', `proxy: ${credentialUrl}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const finding = result.findings.find(candidate => candidate.detectorId === 'credential-url');
     const serialized = JSON.stringify(result);
 
@@ -603,7 +705,26 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain(credentialUrl);
   });
 
-  it('detects private URLs and local absolute paths as environment-specific findings', () => {
+  it('redacts credential URLs with token-only credentials without preserving token, host, or the full URL', async () => {
+    repoPath = createTempRepo();
+    const credentialUrl = 'https://SECRETTOKEN1234567890@github.com/folio/repo.git';
+    writeRepoFile(repoPath, 'config/service.yml', `repo: ${credentialUrl}\n`);
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'credential-url',
+        redactedExcerpt: expect.objectContaining({
+          text: '[REDACTED_CREDENTIAL_URL]'
+        })
+      })
+    ]));
+    expect(JSON.stringify(result)).not.toContain('SECRETTOKEN1234567890');
+    expect(JSON.stringify(result)).not.toContain('github.com/folio/repo.git');
+  });
+
+  it('detects private URLs and local absolute paths as environment-specific findings', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -611,7 +732,7 @@ describe('S006 sensitive information finding extraction', () => {
       'okapi: http://10.0.0.12:9130/okapi\nlocal: /Users/alice/work/private-config.yml\n'
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -630,7 +751,173 @@ describe('S006 sensitive information finding extraction', () => {
     expect(JSON.stringify(result)).not.toContain('/Users/alice');
   });
 
-  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', () => {
+  it('ignores public localhost-adjacent domains that are not private URLs', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      'docs: https://www.corporate.com/docs\nlocalish: https://api.localhost.example.com/path\n'
+    );
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings.some(finding => finding.detectorId === 'private-url')).toBe(false);
+    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('detects tenant endpoints while suppressing common public FOLIO documentation URLs', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      '.github/workflows/api-lint.yml',
+      [
+        '# https://dev.folio.org/guides/api-lint/',
+        'name: api-lint'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'README.md',
+      [
+        '[Requirements](https://folio-org.atlassian.net/wiki/spaces/FOLIJET/pages/1564004/Design)',
+        'See https://dev.folio.org/reference/api/#mod-rtac-cache',
+        'Issues live at https://folio-org.atlassian.net/browse/MODRTAC-1',
+        'Community site: https://folio.org',
+        'Forum: https://discuss.folio.org/t/hello',
+        'Issue tracker: https://issues.folio.org/browse/FOLIO-1'
+      ].join('\n')
+    );
+    writeRepoFile(repoPath, 'CONTRIBUTING.md', 'Follow https://dev.folio.org/guidelines/contributing\n');
+    writeRepoFile(
+      repoPath,
+      'MODULE_SELF_EVALUATION.md',
+      [
+        'Docs: https://wiki.folio.org/display/TC/Module+Evaluation',
+        'Source: https://github.com/folio-org/mod-rtac-cache',
+        'Reference: https://docs.folio.org/docs/platform-essentials/okapi/'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'pom.xml',
+      [
+        '<repository>',
+        '  <url>https://repository.folio.org/repository/maven-folio</url>',
+        '</repository>',
+        '<url>https://maven.apache.org/POM/4.0.0</url>'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java',
+      [
+        'package org.folio.rtaccache.config;',
+        'import org.apache.kafka.common.serialization.StringDeserializer;',
+        'import org.springframework.kafka.core.ConsumerFactory;',
+        'class KafkaConfiguration {}'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      [
+        '# https://jdbc.postgresql.org/documentation/use/#connection-parameters',
+        'okapi: https://okapi-prod.library.example.edu',
+        'endpoint: org.folio.prod.example.com'
+      ].join('\n')
+    );
+    writeRepoFile(
+      repoPath,
+      'src/test/resources/application-test.yml',
+      [
+        '#      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer',
+        '      key-serializer: org.apache.kafka.common.serialization.StringSerializer',
+        '      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer'
+      ].join('\n')
+    );
+    writeRepoFile(repoPath, 'src/main/resources/endpoint.properties', 'okapi-prod.library.example.edu\n');
+
+    const result = await analyzeRepo(repoPath);
+    const tenantEndpoints = result.findings.filter(finding => finding.detectorId === 'tenant-host-endpoint');
+
+    expect(tenantEndpoints).toEqual([
+      expect.objectContaining({
+        path: 'src/main/resources/application.yml',
+        line: 2,
+        category: 'tenant_or_host_endpoint'
+      }),
+      expect.objectContaining({
+        path: 'src/main/resources/application.yml',
+        line: 3,
+        category: 'tenant_or_host_endpoint'
+      }),
+      expect.objectContaining({
+        path: 'src/main/resources/endpoint.properties',
+        line: 1,
+        category: 'tenant_or_host_endpoint'
+      })
+    ]);
+  });
+
+  it('suppresses examples and local defaults while retaining production private URL and password evidence', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'README.md',
+      [
+        'DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\',
+        'OKAPI_URL=http://localhost:8081'
+      ].join('\n')
+    );
+    writeRepoFile(repoPath, 'src/test/resources/application-test.yml', '# okapi: http://localhost:8081\n');
+    writeRepoFile(repoPath, 'src/test/resources/security-test.yml', 'password: test-password\n');
+    writeRepoFile(repoPath, 'descriptors/ModuleDescriptor-template.json', '{ "value": "http://localhost:8081" }\n');
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      [
+        'okapi: http://10.0.0.12:9130/okapi',
+        'DB_PASSWORD=CorrectHorseBatteryStaple'
+      ].join('\n')
+    );
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'private-url',
+        path: 'src/main/resources/application.yml'
+      }),
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        path: 'src/main/resources/application.yml'
+      })
+    ]));
+    expect(result.findings).toEqual(expect.not.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'private-url',
+        path: 'README.md'
+      }),
+      expect.objectContaining({
+        detectorId: 'private-url',
+        path: 'src/test/resources/application-test.yml'
+      }),
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        path: 'src/test/resources/security-test.yml'
+      }),
+      expect.objectContaining({
+        detectorId: 'private-url',
+        path: 'descriptors/ModuleDescriptor-template.json'
+      }),
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        path: 'README.md'
+      })
+    ]));
+  });
+
+  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', async () => {
     const run = createS006FingerprintRun();
     const cases = [
       {
@@ -690,23 +977,23 @@ describe('S006 sensitive information finding extraction', () => {
     }
   });
 
-  it('collapses duplicate detector hits for the same location and value fingerprint', () => {
+  it('collapses duplicate detector hits for the same location and value fingerprint', async () => {
     repoPath = createTempRepo();
     const repeated = 'abcdefghijklmnopqrstuvwxyz123456';
     writeRepoFile(repoPath, 'config/repeated.properties', `token=${repeated} token=${repeated}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const tokenFindings = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
 
     expect(tokenFindings).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain(repeated);
   });
 
-  it('does not expose default passwords as raw values or bare hashes in serialized output', () => {
+  it('does not expose default passwords as raw values or bare hashes in serialized output', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'docker-compose.yml', 'POSTGRES_PASSWORD=postgres\nADMIN_PASSWORD=admin\n');
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const serialized = JSON.stringify(result);
 
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -721,14 +1008,14 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain(createHash('sha256').update('admin').digest('hex'));
   });
 
-  it('redacts long bearer and JWT-like values in docs and tests before returned objects are inspectable', () => {
+  it('redacts bearer and JWT findings from Gitleaks-backed analysis', async () => {
     repoPath = createTempRepo();
     const bearer = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
     const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123';
     writeRepoFile(repoPath, 'docs/auth.md', `curl -H "Authorization: ${bearer}"\n`);
     writeRepoFile(repoPath, 'src/__tests__/fixtures/token.txt', jwt);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const serialized = JSON.stringify(result);
 
     expect(result.findings.filter(finding => finding.detectorId === 'bearer-or-jwt-token')).toHaveLength(2);
@@ -738,12 +1025,12 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).toContain('[REDACTED_JWT]');
   });
 
-  it('keeps report details redacted as defense-in-depth without rescuing raw S006 detector values', () => {
+  it('keeps Gitleaks-backed criterion details redacted', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-abcdef1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, '.env.production', `OPENAI_API_KEY=${rawKey}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const reportDetails = buildS006RedactedReportDetails(result);
 
     expect(JSON.stringify(result)).not.toContain(rawKey);
@@ -762,12 +1049,12 @@ describe('S006 deterministic classification by context, confidence, and coverage
     }
   });
 
-  it('returns fail for a live-looking provider key in production configuration with reviewer-facing rationale', () => {
+  it('fails high-confidence production provider keys deterministically', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
     const finding = result.findings[0];
 
     expect(result.classification).toMatchObject({
@@ -789,12 +1076,12 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(JSON.stringify(result)).not.toContain(rawKey);
   });
 
-  it('fails root PEM private-key material instead of treating it as clean coverage', () => {
+  it('fails root PEM private-key material instead of treating it as clean coverage', async () => {
     repoPath = createTempRepo();
     const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----';
     writeRepoFile(repoPath, 'server.pem', `${privateKey}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -808,7 +1095,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(JSON.stringify(result)).not.toContain('MIIEvQIB');
   });
 
-  it('returns manual for mod-search-style docker env defaults instead of failing local passwords', () => {
+  it('returns manual for mod-search-style docker env defaults instead of failing local passwords', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -821,7 +1108,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       ].join('\n')
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -834,7 +1121,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(result.findings.every(finding => finding.context === 'local_docker_defaults')).toBe(true);
   });
 
-  it('returns manual for README Okapi token examples with documentation context', () => {
+  it('returns manual for README Okapi token examples with documentation context', async () => {
     repoPath = createTempRepo();
     const okapiToken = 'abcdefghijklmnopqrstuvwxyz123456';
     writeRepoFile(
@@ -843,7 +1130,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       `Example request:\n\ncurl -H "X-Okapi-Token: ${okapiToken}" http://localhost:9130/users\n`
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -857,7 +1144,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(JSON.stringify(result)).not.toContain(okapiToken);
   });
 
-  it('keeps test credentials low impact or manual without deterministic failure', () => {
+  it('keeps test credentials low impact or manual without deterministic failure', async () => {
     repoPath = createTempRepo();
     const generatedTestToken = 'sk-test-1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(
@@ -870,7 +1157,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       ].join('\n')
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -891,7 +1178,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(JSON.stringify(result)).not.toContain(generatedTestToken);
   });
 
-  it('retains provider-shaped and private-key findings under docs, samples, and tests as manual evidence', () => {
+  it('retains provider-shaped and private-key findings under docs, samples, and tests as manual evidence', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'docs/provider.md', 'OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n');
     writeRepoFile(
@@ -901,7 +1188,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     );
     writeRepoFile(repoPath, 'src/test/resources/provider.txt', 'OPENAI_API_KEY=sk-proj-abcdef1234567890abcdefghijklmnop\n');
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings).toEqual(expect.arrayContaining([
@@ -911,7 +1198,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     ]));
   });
 
-  it('routes an unusual production-looking fixture cue to manual rather than deterministic fail', () => {
+  it('routes an unusual production-looking fixture cue to manual rather than deterministic fail', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -919,7 +1206,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       '# Test fixture for parser coverage\nOPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n'
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings[0]).toMatchObject({
@@ -929,12 +1216,12 @@ describe('S006 deterministic classification by context, confidence, and coverage
     });
   });
 
-  it('returns pass with scan coverage evidence when no findings remain and coverage is complete', () => {
+  it('returns pass with scan coverage evidence when no findings remain and coverage is complete', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'README.md', '# Clean module\n');
     writeRepoFile(repoPath, 'src/main/resources/application.yml', 'server:\n  port: 8081\n');
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.findings).toEqual([]);
     expect(result.coverage).toMatchObject({
@@ -946,11 +1233,11 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(result.classification.reason).toContain('no material coverage warnings');
   });
 
-  it('returns manual with coverage-warning evidence when material truncation weakens a no-finding scan', () => {
+  it('returns manual with coverage-warning evidence when material truncation weakens a no-finding scan', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, '.env.production', `COMMENT=${'x'.repeat(MAX_S006_SCAN_BYTES_PER_FILE + 1024)}\n`);
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.findings).toEqual([]);
     expect(result.classification).toMatchObject({
@@ -967,12 +1254,12 @@ describe('S006 deterministic classification by context, confidence, and coverage
     expect(result.classification.reason).toContain('materially weakened');
   });
 
-  it('keeps private key blocks in fixtures manual while production-like private keys fail', () => {
+  it('keeps private key blocks in fixtures manual while production-like private keys fail', async () => {
     repoPath = createTempRepo();
     const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n';
     writeRepoFile(repoPath, 'src/test/resources/key.txt', privateKey);
 
-    let result = analyzeS006SensitiveInformation(repoPath);
+    let result = await analyzeRepo(repoPath);
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings[0]).toMatchObject({
       detectorId: 'private-key-block',
@@ -983,7 +1270,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'config/key.txt', privateKey);
 
-    result = analyzeS006SensitiveInformation(repoPath);
+    result = await analyzeRepo(repoPath);
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings[0]).toMatchObject({
       detectorId: 'private-key-block',
@@ -991,12 +1278,12 @@ describe('S006 deterministic classification by context, confidence, and coverage
     });
   });
 
-  it('fails credential-bearing URLs in CI while keeping the same shape manual in documentation', () => {
+  it('fails credential-bearing URLs in CI while keeping the same shape manual in documentation', async () => {
     const credentialUrl = 'https://ci-user:s3cr3t@10.0.0.12:9130/admin';
 
     repoPath = createTempRepo();
     writeRepoFile(repoPath, '.github/workflows/build.yml', `env:\n  ADMIN_URL: ${credentialUrl}\n`);
-    let result = analyzeS006SensitiveInformation(repoPath);
+    let result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings[0]).toMatchObject({
@@ -1010,7 +1297,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     fs.rmSync(repoPath, { recursive: true, force: true });
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'docs/ci.md', `Example admin URL: ${credentialUrl}\n`);
-    result = analyzeS006SensitiveInformation(repoPath);
+    result = await analyzeRepo(repoPath);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings[0]).toMatchObject({
@@ -1019,7 +1306,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
     });
   });
 
-  it('does not change status for paths or comments that only mention password, token, or secret names', () => {
+  it('does not change status for paths or comments that only mention password, token, or secret names', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -1027,10 +1314,184 @@ describe('S006 deterministic classification by context, confidence, and coverage
       '# password token secret labels only\nname: no committed values here\n'
     );
 
-    const result = analyzeS006SensitiveInformation(repoPath);
+    const result = await analyzeRepo(repoPath);
 
     expect(result.findings).toEqual([]);
     expect(result.classification.status).toBe(EvaluationStatus.PASS);
+  });
+});
+
+describe('S006 Gitleaks adapter', () => {
+  let repoPath: string;
+
+  beforeEach(() => {
+    repoPath = createTempRepo();
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  });
+
+  it('runs gitleaks dir with redacted JSON report output', async () => {
+    const runner = new StaticGitleaksRunner({
+      status: 'success',
+      exitCode: 0,
+      report: []
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+    const request = runner.requests[0];
+
+    expect(result.findings).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(request.command).toBe('gitleaks');
+    expect(request.cwd).toBe(repoPath);
+    expect(request.args).toEqual(expect.arrayContaining([
+      'dir',
+      repoPath,
+      '--report-format',
+      'json',
+      '--redact=100',
+      '--no-banner',
+      '--no-color',
+      '--exit-code',
+      '1'
+    ]));
+    expect(request.args).toContain('--report-path');
+  });
+
+  it('parses exit-code-one Gitleaks findings from the JSON report', async () => {
+    const runner = new StaticGitleaksRunner({
+      status: 'failed',
+      exitCode: 1,
+      report: [{
+        RuleID: 'generic-api-key',
+        Description: 'Generic API key',
+        File: 'src/main/resources/application.yml',
+        StartLine: 1,
+        EndLine: 1,
+        Match: 'token=REDACTED',
+        Secret: 'REDACTED',
+        Entropy: 4,
+        Fingerprint: 'fingerprint'
+      }]
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.warnings).toEqual([]);
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        RuleID: 'generic-api-key',
+        File: 'src/main/resources/application.yml',
+        Secret: 'REDACTED'
+      })
+    ]);
+  });
+
+  it('normalizes absolute Gitleaks file paths to repo-relative report paths', async () => {
+    const absoluteFindingPath = path.join(repoPath, 'config', 'server.key');
+    const runner = new StaticGitleaksRunner({
+      status: 'failed',
+      exitCode: 1,
+      report: [{
+        RuleID: 'private-key',
+        Description: 'Private key',
+        File: absoluteFindingPath,
+        StartLine: 1,
+        EndLine: 3,
+        Match: 'REDACTED',
+        Secret: 'REDACTED',
+        Entropy: 5,
+        Fingerprint: `${absoluteFindingPath}:private-key:1`
+      }]
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.findings[0]).toMatchObject({
+      File: 'config/server.key',
+      Fingerprint: 'config/server.key:private-key:1'
+    });
+  });
+
+  realGitleaksIt('lets the real Gitleaks binary find and redact a private-key fixture when available', async () => {
+    const privateKeyBody = 'MIIEpAIBAAKCAQEA7uFqW+o0fakeprivatekeymaterialforgitleakstest';
+    const privateKeyTail = 'gitleaksRealBinarySmokeTestPrivateKeyBody1234567890';
+    writeRepoFile(
+      repoPath,
+      'config/server.key',
+      [
+        '-----BEGIN RSA PRIVATE KEY-----',
+        privateKeyBody,
+        privateKeyTail,
+        '-----END RSA PRIVATE KEY-----'
+      ].join('\n')
+    );
+
+    const result = await runS006GitleaksScan(repoPath);
+
+    expect(result.warnings).toEqual([]);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        RuleID: 'private-key',
+        File: 'config/server.key',
+        Match: 'REDACTED',
+        Secret: 'REDACTED'
+      })
+    ]));
+    const serializedFindings = JSON.stringify(result.findings);
+    expect(serializedFindings).not.toContain(repoPath);
+    expect(serializedFindings).not.toContain(privateKeyBody);
+    expect(serializedFindings).not.toContain(privateKeyTail);
+  });
+
+  it.each([
+    {
+      name: 'blocked command',
+      status: 'blocked' as const,
+      exitCode: undefined
+    },
+    {
+      name: 'timeout',
+      status: 'timed_out' as const,
+      exitCode: null
+    },
+    {
+      name: 'unexpected exit',
+      status: 'failed' as const,
+      exitCode: 2
+    }
+  ])('returns material scanner warning for $name', async ({ status, exitCode }) => {
+    const runner = new StaticGitleaksRunner({ status, exitCode, report: [] });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.findings).toEqual([]);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        kind: 'scanner-unavailable',
+        materialToCoverage: true
+      })
+    ]);
+  });
+
+  it('returns material scanner warning for invalid Gitleaks JSON', async () => {
+    const runner = new StaticGitleaksRunner({
+      status: 'failed',
+      exitCode: 1,
+      reportText: '{not json'
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.findings).toEqual([]);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        kind: 'scanner-unavailable',
+        materialToCoverage: true
+      })
+    ]);
   });
 });
 
@@ -1043,14 +1504,14 @@ describe('S006 report formatting and criterion details', () => {
     }
   });
 
-  it('formats fail details with deterministic production findings before manual documentation evidence', () => {
+  it('formats fail details with deterministic production findings before manual documentation evidence', async () => {
     repoPath = createTempRepo();
     const rawProductionKey = 'sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz';
     const rawDocumentationToken = 'abcdefghijklmnopqrstuvwxyz123456';
     writeRepoFile(repoPath, 'docs/auth.md', `curl -H "X-Okapi-Token: ${rawDocumentationToken}"\n`);
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawProductionKey}\n`);
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const rendered = formatS006Evidence(analysis);
     const deterministicIndex = rendered.details.indexOf('src/main/resources/application.yml:1');
     const documentationIndex = rendered.details.indexOf('docs/auth.md:1');
@@ -1060,12 +1521,12 @@ describe('S006 report formatting and criterion details', () => {
     expect(documentationIndex).toBeGreaterThan(deterministicIndex);
     expect(rendered.details).toContain('[REDACTED_PROVIDER_API_KEY]');
     expect(rendered.details).toContain('X-Okapi-Token=[REDACTED]');
-    expect(rendered.details).toContain('documentation evidence');
+    expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
     expect(rendered.details).not.toContain(rawProductionKey);
     expect(rendered.details).not.toContain(rawDocumentationToken);
   });
 
-  it('renders local Docker defaults with local-default context and reviewer rationale', () => {
+  it('renders local Docker defaults with local-default context and reviewer rationale', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -1078,32 +1539,31 @@ describe('S006 report formatting and criterion details', () => {
       ].join('\n')
     );
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const rendered = formatS006Evidence(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('local_docker_defaults');
-    expect(rendered.details).toContain('local-default context');
-    expect(rendered.details).toContain('verify values are not reused outside local development');
+    expect(rendered.details).toContain('local docker defaults');
+    expect(rendered.details).toContain('Confirm local Docker defaults are not reused outside local development');
     expect(rendered.details).toContain('POSTGRES_PASSWORD=[REDACTED]');
     expect(rendered.details).not.toContain('postgres');
   });
 
-  it('renders documentation snippets as manual evidence without raw token exposure', () => {
+  it('renders documentation snippets as manual evidence without raw token exposure', async () => {
     repoPath = createTempRepo();
     const rawToken = 'abcdefghijklmnopqrstuvwxyz123456';
     writeRepoFile(repoPath, 'README.md', `Example: curl -H "Authorization: Bearer ${rawToken}"\n`);
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const rendered = formatS006Evidence(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('documentation evidence');
+    expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
     expect(rendered.details).toContain('Bearer [REDACTED_TOKEN]');
     expect(rendered.details).not.toContain(rawToken);
   });
 
-  it('reports pass scan coverage, skipped-file counts, and non-material warnings', () => {
+  it('reports pass scan coverage, skipped-file counts, and non-material warnings', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'README.md', '# Clean module\n');
     writeRepoFile(repoPath, 'node_modules/pkg/config.yml', 'ignored=true\n');
@@ -1111,14 +1571,20 @@ describe('S006 report formatting and criterion details', () => {
       writeRepoFile(repoPath, `docs/page-${String(index).padStart(3, '0')}.md`, '# docs\n');
     }
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const rendered = formatS006Evidence(analysis);
     const details = buildS006CriterionDetails(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.PASS);
+    expect(rendered.details).toContain('Secret scanner: Gitleaks completed');
     expect(rendered.details).toContain('Files scanned:');
     expect(rendered.details).toContain('Skipped files: 1 (0 material, 1 non-material)');
     expect(rendered.details).toContain('Non-material coverage warnings:');
+    expect(details.scanner).toMatchObject({
+      name: 'Gitleaks',
+      status: 'completed',
+      findingCount: 0
+    });
     expect(details.coverageSummary.skippedFileCount).toBe(1);
     expect(details.coverageSummary.materialSkippedFileCount).toBe(0);
     expect(details.coverageSummary.warningCount).toBeGreaterThan(0);
@@ -1127,17 +1593,17 @@ describe('S006 report formatting and criterion details', () => {
     ]));
   });
 
-  it('reports material scan-limit warnings and manual status rationale for incomplete scans', () => {
+  it('reports material scan-limit warnings and manual status rationale for incomplete scans', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, '.env.production', `COMMENT=${'x'.repeat(MAX_S006_SCAN_BYTES_PER_FILE + 1024)}\n`);
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const rendered = formatS006Evidence(analysis);
     const details = buildS006CriterionDetails(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('Status rationale:');
-    expect(rendered.details).toContain('Material scan-limit warnings:');
+    expect(rendered.details).toContain('Review summary:');
+    expect(rendered.details).toContain('Material coverage warnings:');
     expect(rendered.details).toContain('file-truncated .env.production');
     expect(details.coverageSummary.materialWarningCount).toBeGreaterThan(0);
     expect(details.coverageSummary.scanLimitWarnings).toEqual(expect.arrayContaining([
@@ -1145,13 +1611,13 @@ describe('S006 report formatting and criterion details', () => {
     ]));
   });
 
-  it('builds bounded redacted JSON criterionDetails without value fingerprints or raw secret values', () => {
+  it('builds bounded redacted JSON criterionDetails without value fingerprints or raw secret values', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
     writeRepoFile(repoPath, 'node_modules/pkg/config.yml', 'ignored=true\n');
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const details = buildS006CriterionDetails(analysis);
     const serialized = JSON.stringify(details);
 
@@ -1166,14 +1632,14 @@ describe('S006 report formatting and criterion details', () => {
     expect(serialized).not.toContain('valueFingerprint');
   });
 
-  it('bounds strongest finding objects and keeps deterministic failures first for JSON consumers', () => {
+  it('bounds strongest finding objects and keeps deterministic failures first for JSON consumers', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'src/main/resources/application.yml', 'OPENAI_API_KEY=sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz\n');
     for (let index = 0; index < 25; index++) {
       writeRepoFile(repoPath, `docs/token-${String(index).padStart(2, '0')}.md`, `Bearer abcdefghijklmnopqrstuvwxyz${String(index).padStart(6, '0')}\n`);
     }
 
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const details = buildS006CriterionDetails(analysis);
     const strongest = strongestS006ReportFindings(analysis.findings);
 
@@ -1183,10 +1649,10 @@ describe('S006 report formatting and criterion details', () => {
     expect(strongest[0].context).toBe('production_source_or_configuration');
   });
 
-  it('includes available agent-review state in human details', () => {
+  it('includes available agent-review state in human details', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'README.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const analysis = analyzeS006SensitiveInformation(repoPath);
+    const analysis = await analyzeRepo(repoPath);
     const agentReview: CriterionAgentReviewResult = {
       available: true,
       criterionId: 'S006',
@@ -1217,7 +1683,7 @@ describe('S006 report formatting and criterion details', () => {
 });
 
 describe('S006 context labels and type exports', () => {
-  it('includes all planned context labels', () => {
+  it('includes all planned context labels', async () => {
     expect(S006_CONTEXT_LABELS).toEqual([
       'production_source_or_configuration',
       'ci_or_deployment_configuration',
@@ -1232,14 +1698,16 @@ describe('S006 context labels and type exports', () => {
     expect(classifyS006SourceContext('src/main/resources/application.yml')).toBe('production_source_or_configuration');
     expect(classifyS006SourceContext('.github/workflows/build.yml')).toBe('ci_or_deployment_configuration');
     expect(classifyS006SourceContext('docs/secrets.md')).toBe('documentation');
+    expect(classifyS006SourceContext('MODULE_SELF_EVALUATION.md')).toBe('documentation');
     expect(classifyS006SourceContext('src/__tests__/fixtures/token.json')).toBe('test_fixture');
     expect(classifyS006SourceContext('examples/env.ts')).toBe('sample_or_example');
+    expect(classifyS006SourceContext('descriptors/ModuleDescriptor-template.json')).toBe('sample_or_example');
     expect(classifyS006SourceContext('docker-compose.yml')).toBe('local_docker_defaults');
     expect(classifyS006SourceContext('generated/openapi.json')).toBe('generated_content');
     expect(classifyS006SourceContext('unclassified.file')).toBe('unknown');
   });
 
-  it('exports S006 criterion details without weakening S004 or S005 type exports', () => {
+  it('exports S006 criterion details without weakening S004 or S005 type exports', async () => {
     const s004: S004InstallationDocumentationResult = {
       candidates: [],
       classification: {
@@ -1269,6 +1737,11 @@ describe('S006 context labels and type exports', () => {
     const s006: S006SensitiveInformationAnalysisResult = {
       criterionId: 'S006',
       findings: [],
+      scanner: {
+        name: 'Gitleaks',
+        status: 'completed',
+        findingCount: 0
+      },
       coverage: {
         scannedFiles: 0,
         scannedBytes: 0,
@@ -1294,3 +1767,55 @@ describe('S006 context labels and type exports', () => {
     expect(rootExportedDetails.criterionId).toBe('S006');
   });
 });
+
+class StaticGitleaksRunner implements CommandRunner {
+  public readonly requests: CommandExecutionRequest[] = [];
+
+  constructor(
+    private readonly response: {
+      status: CommandExecutionResult['status'];
+      exitCode?: number | null;
+      report?: unknown;
+      reportText?: string;
+    }
+  ) {}
+
+  normalize(request: CommandExecutionRequest): string {
+    return JSON.stringify(request);
+  }
+
+  async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+    this.requests.push(request);
+    const reportPath = this.reportPath(request);
+    if (reportPath && (this.response.report !== undefined || this.response.reportText !== undefined)) {
+      fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+      fs.writeFileSync(
+        reportPath,
+        this.response.reportText ?? JSON.stringify(this.response.report, null, 2)
+      );
+    }
+
+    return {
+      identity: this.normalize(request),
+      command: request.command,
+      args: request.args ?? [],
+      cwd: request.cwd,
+      commandExecutionEnvironment: 'local',
+      localCommandsAllowed: true,
+      status: this.response.status,
+      exitCode: this.response.exitCode,
+      signal: null,
+      durationMs: 1,
+      stdout: '',
+      stderr: this.response.status === 'failed' ? 'gitleaks failed' : '',
+      errorMessage: this.response.status === 'success' ? undefined : 'gitleaks failed',
+      sanitized: true
+    };
+  }
+
+  private reportPath(request: CommandExecutionRequest): string | undefined {
+    const args = request.args ?? [];
+    const index = args.indexOf('--report-path');
+    return index >= 0 ? args[index + 1] : undefined;
+  }
+}

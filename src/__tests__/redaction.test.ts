@@ -31,6 +31,22 @@ describe('redaction', () => {
     expect(redacted).not.toContain('defSECRET');
   });
 
+  it('redacts multiline quoted secret assignments', () => {
+    const redacted = redactSensitiveText('client_secret: "AAAA1111\nBBBB2222"');
+
+    expect(redacted).toContain('client_secret:"[REDACTED]"');
+    expect(redacted).not.toContain('AAAA1111');
+    expect(redacted).not.toContain('BBBB2222');
+  });
+
+  it('redacts space-containing secret assignment values', () => {
+    const redacted = redactSensitiveText('access_token = Bearer abcdefghijklmnopqrstuvwxyz123456');
+
+    expect(redacted).toContain('access_token=[REDACTED]');
+    expect(redacted).not.toContain('Bearer');
+    expect(redacted).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
+  });
+
   it('redacts raw provider tokens and OpenCode auth JSON keys', () => {
     const redacted = redactSensitiveText('{"openai":{"type":"api","key":"sk-secret"},"openrouter":{"key":"sk-or-v1-secret"}} raw sk-live-token');
 
@@ -55,6 +71,20 @@ describe('redaction', () => {
     expect(redacted).not.toContain('example.com');
     expect(redacted).not.toContain('admin:s3cr3t');
     expect(redacted).not.toContain('192.168.1.10');
+  });
+
+  it('redacts single-token credential URLs', () => {
+    const redacted = redactSensitiveText('repo=https://SECRETTOKEN1234567890@github.com/org/repo.git');
+
+    expect(redacted).toContain('[REDACTED_CREDENTIAL_URL]');
+    expect(redacted).not.toContain('SECRETTOKEN1234567890');
+  });
+
+  it('does not redact public hosts containing private-url substrings', () => {
+    const redacted = redactSensitiveText('docs=https://www.corporate.com/docs localish=https://api.localhost.example.com/path');
+
+    expect(redacted).toContain('https://www.corporate.com/docs');
+    expect(redacted).toContain('https://api.localhost.example.com/path');
   });
 
   it('redacts private key blocks, JWTs, Okapi tokens, and OAuth-like provider tokens', () => {

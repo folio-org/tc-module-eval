@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: "20"
+      gitleaks_version:
+        description: "Gitleaks version to install for S006 secret detection"
+        required: false
+        type: string
+        default: "8.30.0"
       evaluator_ref:
         description: "tc-module-eval ref (branch/tag) to use"
         required: false
@@ -101,6 +106,23 @@ jobs:
         with:
           java-version: ${{ inputs.java_version }}
           distribution: "temurin"
+
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: ${{ inputs.gitleaks_version }}
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) GITLEAKS_ARCH="x64" ;;
+            aarch64|arm64) GITLEAKS_ARCH="arm64" ;;
+            *) echo "Unsupported architecture for Gitleaks: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          ARCHIVE="gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${ARCHIVE}"
+          sudo tar -xzf "$ARCHIVE" -C /usr/local/bin gitleaks
+          rm "$ARCHIVE"
+          gitleaks version
 
       - name: Cache Maven dependencies
         uses: actions/cache@v5

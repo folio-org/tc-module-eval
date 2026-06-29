@@ -87,6 +87,7 @@ export interface S006DetectorRegistryEntry {
   defaultConfidence: S006FindingConfidence;
   severityByConfidence: S006DetectorSeverityMapping;
   statusContributionByConfidence: S006DetectorStatusContributionMapping;
+  contextualDowngradeWhenNonLive?: S006FindingConfidence;
   redactor: (rawMatch: string) => string;
   classifyValue: (rawMatch: string) => S006ValueClassification;
   calibrationCases: S006DetectorCalibrationCase[];
@@ -155,6 +156,7 @@ export type S006ScanWarningKind =
   | 'file-truncated'
   | 'unreadable-file'
   | 'unsupported-high-signal-file'
+  | 'scanner-unavailable'
   | 'finding-limit';
 
 export interface S006ScanWarning {
@@ -174,6 +176,13 @@ export interface S006ScanCoverage {
   complete: boolean;
 }
 
+export interface S006SecretScannerSummary {
+  name: 'Gitleaks';
+  status: 'completed' | 'unavailable';
+  findingCount: number;
+  warning?: S006ScanWarning;
+}
+
 export interface S006DeterministicClassification {
   status: EvaluationStatus.PASS | EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
   reason: string;
@@ -184,6 +193,7 @@ export interface S006DeterministicClassification {
 export interface S006SensitiveInformationAnalysisResult {
   criterionId: 'S006';
   findings: S006SensitiveInformationFinding[];
+  scanner: S006SecretScannerSummary;
   coverage: S006ScanCoverage;
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
@@ -195,6 +205,7 @@ export interface S006RedactedReportDetails {
   findingCount: number;
   retainedFindingCount: number;
   findings: S006RedactedReportFinding[];
+  scanner: S006SecretScannerSummary;
   coverage: S006ScanCoverage;
   coverageSummary: {
     skippedFileCount: number;

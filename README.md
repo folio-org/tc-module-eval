@@ -14,7 +14,9 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 S005 personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechanics, completion, and bounded source-inspection evidence. Completed forms remain subject to manual review; the tool does not certify legal or privacy compliance.
 
-S006 sensitive-information evaluation scans bounded high-signal text, config, docs, CI, Docker, and env surfaces for committed secrets or environment-specific values. Reports use detector-local redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
+S006 sensitive-information evaluation uses Gitleaks for committed secret detection, plus bounded local checks for FOLIO/environment-specific endpoints and local paths. Reports use redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
+
+The devcontainer and GitHub Actions workflows install Gitleaks automatically. For other local runs, install the `gitleaks` binary on `PATH`, or set `GITLEAKS_PATH` to use a specific binary. If Gitleaks is unavailable or fails, S006 reports a material scanner warning and returns manual review rather than silently passing.
 
 **Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 

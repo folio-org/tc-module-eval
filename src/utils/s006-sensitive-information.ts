@@ -31,6 +31,16 @@ export {
   MAX_S006_RETAINED_FINDINGS,
   S006_CONTEXT_LABELS
 } from './s006-extraction';
+export type { S006AnalysisOptions } from './s006-extraction';
+
+export {
+  runS006GitleaksScan
+} from './s006-gitleaks';
+export type {
+  S006GitleaksFinding,
+  S006GitleaksScanOptions,
+  S006GitleaksScanResult
+} from './s006-gitleaks';
 
 export {
   buildS006CriterionDetails,
