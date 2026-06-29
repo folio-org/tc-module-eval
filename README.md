@@ -12,17 +12,13 @@ Version 2.0. See the file "[LICENSE](LICENSE)" for more information.
 This tool provides a modular, extensible framework for automatically evaluating a module against
 [FOLIO module acceptance criteria](https://github.com/folio-org/tech-council/blob/master/MODULE_ACCEPTANCE_CRITERIA.MD).
 
-S005 personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechanics, completion, and bounded source-inspection evidence. Completed forms remain subject to manual review; the tool does not certify legal or privacy compliance.
-
-S006 sensitive-information evaluation uses Gitleaks for committed secret detection, plus bounded local checks for FOLIO/environment-specific endpoints and local paths. Reports use redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
-
-The devcontainer and GitHub Actions workflows install Gitleaks automatically. For other local runs, install the `gitleaks` binary on `PATH`, or set `GITLEAKS_PATH` to use a specific binary. If Gitleaks is unavailable or fails, S006 reports a material scanner warning and returns manual review rather than silently passing.
+See [Criterion Notes](docs/criterion-notes.md) for criterion-specific behavior, runtime requirements, and review boundaries.
 
 **Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
 
 ## Security
 
-**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm). S002 may also run descriptor-producing build commands when descriptor generation is required.
+**⚠️ WARNING**: This tool executes build commands (Maven, Gradle, npm). Some criteria may also run descriptor-producing build commands when generated artifacts are required.
 
 - **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
 - **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege [job level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and/or [workflow level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) `permissions` to reduce risk.
@@ -35,11 +31,11 @@ folio-eval evaluate <repo-url> --allow-local-commands
 
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
-S005 and S006 source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
+Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
 ### Agent Review
 
-Some criteria, including S005 and S006, can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
+Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
 
 ### For Local Development: Use Devcontainer
 
