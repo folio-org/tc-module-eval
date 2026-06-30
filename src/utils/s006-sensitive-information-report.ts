@@ -4,43 +4,39 @@ import {
   S006FindingConfidence,
   S006FindingContext,
   S006FindingSeverity,
-  S006RedactedReportDetails,
   S006SensitiveInformationAnalysisResult,
   S006SensitiveInformationFinding,
   S006SkippedFile,
   S006ScanWarning
 } from '../types';
-import { redactLocalUserPaths, redactSensitiveText } from './redaction';
+import {
+  rankS006Confidence,
+  rankS006Context,
+  rankS006Severity,
+  strongestS006ReportFindings
+} from './s006-ranking';
+import { redactS006Path, redactS006ReportText } from './s006-report-redaction';
 
 const MAX_REPORT_LIST_ITEMS = 8;
-const MAX_CRITERION_FINDINGS = 16;
-const MAX_CRITERION_SKIPPED_FILES = 40;
-const MAX_CRITERION_WARNINGS = 40;
 
 export function formatS006Evidence(
   analysis: S006SensitiveInformationAnalysisResult,
   agentReview?: CriterionAgentReviewResult
 ): { evidence: string; details: string } {
-  const strongestFindings = strongestS006ReportFindings(analysis.findings);
-  const deterministicFailures = analysis.findings.filter(finding => finding.statusImpact === 'deterministic_fail');
-  const manualFindings = analysis.findings.filter(finding => finding.statusImpact !== 'deterministic_fail');
-  const materialWarnings = analysis.coverage.warnings.filter(warning => warning.materialToCoverage);
-  const nonMaterialWarnings = analysis.coverage.warnings.filter(warning => !warning.materialToCoverage);
-  const materialSkippedFiles = analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage);
-  const nonMaterialSkippedFiles = analysis.coverage.skippedFiles.filter(skippedFile => !skippedFile.materialToCoverage);
+  const report = summarizeS006Report(analysis);
 
   const evidence = formatS006EvidenceSummary(
     analysis,
-    deterministicFailures.length,
-    materialWarnings.length,
-    materialSkippedFiles.length
+    report.deterministicFailures.length,
+    report.materialWarnings.length,
+    report.materialSkippedFiles.length
   );
   const lines: Array<string | undefined> = [
     'Review summary:',
     `  - Status: ${analysis.classification.status}`,
-    `  - Findings: ${analysis.findings.length} retained (${deterministicFailures.length} deterministic failure${deterministicFailures.length === 1 ? '' : 's'}, ${manualFindings.length} manual review)`,
+    `  - Findings: ${analysis.findings.length} retained (${report.deterministicFailures.length} deterministic failure${report.deterministicFailures.length === 1 ? '' : 's'}, ${report.manualFindings.length} manual review)`,
     `  - Secret scanner: ${formatScannerSummary(analysis)}`,
-    `  - Coverage: ${formatCoverageSummary(analysis, materialSkippedFiles.length, materialWarnings.length)}`,
+    `  - Coverage: ${formatCoverageSummary(analysis, report.materialSkippedFiles.length, report.materialWarnings.length)}`,
     agentReview?.available
       ? `  - Agent review: ${agentReview.recommendation ?? 'completed'}${agentReview.confidence ? ` (${agentReview.confidence} confidence)` : ''}`
       : analysis.classification.status === EvaluationStatus.MANUAL
@@ -48,29 +44,29 @@ export function formatS006Evidence(
         : undefined,
     '',
     'Why:',
-    ...formatWhyLines(analysis, deterministicFailures.length, materialWarnings.length, materialSkippedFiles.length),
+    ...formatWhyLines(analysis, report.deterministicFailures.length, report.materialWarnings.length, report.materialSkippedFiles.length),
     '',
     'Reviewer focus:',
-    ...formatReviewerFocusLines(analysis, deterministicFailures.length, materialWarnings, materialSkippedFiles, agentReview),
+    ...formatReviewerFocusLines(analysis, report.deterministicFailures.length, report.materialWarnings, report.materialSkippedFiles, agentReview),
     '',
     'Finding groups:',
     ...formatFindingGroupLines(analysis.findings),
     '',
     'Top redacted examples:',
-    ...formatCompactFindingLines(strongestFindings),
-    ...formatFindingOverflowLine(analysis.findings.length, strongestFindings.length),
+    ...formatCompactFindingLines(report.strongestFindings),
+    ...formatFindingOverflowLine(analysis.findings.length, report.strongestFindings.length),
     '',
     'Coverage:',
     `  - Candidate files discovered: ${analysis.coverage.candidateFiles}`,
     `  - Files scanned: ${analysis.coverage.scannedFiles}`,
     `  - Bytes scanned: ${analysis.coverage.scannedBytes}`,
-    `  - Skipped files: ${analysis.coverage.skippedFiles.length} (${materialSkippedFiles.length} material, ${nonMaterialSkippedFiles.length} non-material)`,
+    `  - Skipped files: ${analysis.coverage.skippedFiles.length} (${report.materialSkippedFiles.length} material, ${report.nonMaterialSkippedFiles.length} non-material)`,
     `  - Coverage complete: ${analysis.coverage.complete ? 'yes' : 'no'}`,
-    `  - Coverage warnings: ${analysis.coverage.warnings.length} (${materialWarnings.length} material, ${nonMaterialWarnings.length} non-material)`,
-    ...formatWarningLines('Material coverage warnings:', materialWarnings),
-    ...formatWarningLines('Non-material coverage warnings:', nonMaterialWarnings),
-    ...formatSkippedLines('Material skipped files:', materialSkippedFiles),
-    ...formatSkippedLines('Non-material skipped files:', nonMaterialSkippedFiles)
+    `  - Coverage warnings: ${analysis.coverage.warnings.length} (${report.materialWarnings.length} material, ${report.nonMaterialWarnings.length} non-material)`,
+    ...formatWarningLines('Material coverage warnings:', report.materialWarnings),
+    ...formatWarningLines('Non-material coverage warnings:', report.nonMaterialWarnings),
+    ...formatSkippedLines('Material skipped files:', report.materialSkippedFiles),
+    ...formatSkippedLines('Non-material skipped files:', report.nonMaterialSkippedFiles)
   ];
 
   appendAgentReviewLines(lines, analysis, agentReview);
@@ -78,53 +74,6 @@ export function formatS006Evidence(
   return {
     evidence: redactS006ReportText(evidence, 700),
     details: redactS006ReportText(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
-  };
-}
-
-export function buildS006CriterionDetails(
-  analysis: S006SensitiveInformationAnalysisResult
-): S006RedactedReportDetails {
-  return {
-    criterionId: 'S006',
-    findingCount: analysis.findings.length,
-    retainedFindingCount: Math.min(analysis.findings.length, MAX_CRITERION_FINDINGS),
-    findings: strongestS006ReportFindings(analysis.findings, MAX_CRITERION_FINDINGS).map(redactS006Finding),
-    scanner: redactS006ScannerSummary(analysis),
-    coverage: {
-      scannedFiles: analysis.coverage.scannedFiles,
-      scannedBytes: analysis.coverage.scannedBytes,
-      candidateFiles: analysis.coverage.candidateFiles,
-      skippedFiles: analysis.coverage.skippedFiles
-        .slice(0, MAX_CRITERION_SKIPPED_FILES)
-        .map(redactS006SkippedFile),
-      warnings: analysis.coverage.warnings
-        .slice(0, MAX_CRITERION_WARNINGS)
-        .map(redactS006Warning),
-      materiallyWeakened: analysis.coverage.materiallyWeakened,
-      complete: analysis.coverage.complete
-    },
-    coverageSummary: {
-      skippedFileCount: analysis.coverage.skippedFiles.length,
-      materialSkippedFileCount: analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage).length,
-      warningCount: analysis.coverage.warnings.length,
-      materialWarningCount: analysis.coverage.warnings.filter(warning => warning.materialToCoverage).length,
-      skippedFileReasonCounts: countSkippedReasons(analysis.coverage.skippedFiles),
-      scanLimitWarnings: analysis.coverage.warnings
-        .filter(isS006ScanLimitWarning)
-        .slice(0, MAX_CRITERION_WARNINGS)
-        .map(redactS006Warning)
-    },
-    classification: {
-      ...analysis.classification,
-      reason: redactS006ReportText(analysis.classification.reason),
-      findingReferences: analysis.classification.findingReferences
-        .slice(0, MAX_CRITERION_FINDINGS)
-        .map(redactS006Path)
-    },
-    warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS).map(redactS006Warning),
-    agentReviewUnavailableReason: analysis.agentReviewUnavailableReason
-      ? redactS006ReportText(analysis.agentReviewUnavailableReason)
-      : undefined
   };
 }
 
@@ -141,36 +90,26 @@ function formatScannerSummary(analysis: S006SensitiveInformationAnalysisResult):
   return `Gitleaks unavailable; ${findingLabel}${warningText}`;
 }
 
-function redactS006ScannerSummary(analysis: S006SensitiveInformationAnalysisResult) {
+interface S006ReportSummary {
+  strongestFindings: S006SensitiveInformationFinding[];
+  deterministicFailures: S006SensitiveInformationFinding[];
+  manualFindings: S006SensitiveInformationFinding[];
+  materialWarnings: S006ScanWarning[];
+  nonMaterialWarnings: S006ScanWarning[];
+  materialSkippedFiles: S006SkippedFile[];
+  nonMaterialSkippedFiles: S006SkippedFile[];
+}
+
+function summarizeS006Report(analysis: S006SensitiveInformationAnalysisResult): S006ReportSummary {
   return {
-    name: analysis.scanner.name,
-    status: analysis.scanner.status,
-    findingCount: analysis.scanner.findingCount,
-    warning: analysis.scanner.warning ? redactS006Warning(analysis.scanner.warning) : undefined
+    strongestFindings: strongestS006ReportFindings(analysis.findings, MAX_REPORT_LIST_ITEMS),
+    deterministicFailures: analysis.findings.filter(finding => finding.statusImpact === 'deterministic_fail'),
+    manualFindings: analysis.findings.filter(finding => finding.statusImpact !== 'deterministic_fail'),
+    materialWarnings: analysis.coverage.warnings.filter(warning => warning.materialToCoverage),
+    nonMaterialWarnings: analysis.coverage.warnings.filter(warning => !warning.materialToCoverage),
+    materialSkippedFiles: analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage),
+    nonMaterialSkippedFiles: analysis.coverage.skippedFiles.filter(skippedFile => !skippedFile.materialToCoverage)
   };
-}
-
-export function buildS006RedactedReportDetails(
-  analysis: S006SensitiveInformationAnalysisResult
-): S006RedactedReportDetails {
-  return buildS006CriterionDetails(analysis);
-}
-
-export function strongestS006ReportFindings(
-  findings: S006SensitiveInformationFinding[],
-  limit: number = MAX_REPORT_LIST_ITEMS
-): S006SensitiveInformationFinding[] {
-  return [...findings]
-    .sort((left, right) =>
-      impactRank(left) - impactRank(right) ||
-      severityRank(left.severity) - severityRank(right.severity) ||
-      confidenceRank(left.confidence) - confidenceRank(right.confidence) ||
-      contextRank(left.context) - contextRank(right.context) ||
-      left.path.localeCompare(right.path) ||
-      (left.line ?? 0) - (right.line ?? 0) ||
-      left.detectorId.localeCompare(right.detectorId)
-    )
-    .slice(0, limit);
 }
 
 function formatS006EvidenceSummary(
@@ -285,8 +224,8 @@ function formatFindingGroupLines(findings: S006SensitiveInformationFinding[]): s
     const existing = groups.get(key);
     if (existing) {
       existing.count += 1;
-      existing.maxSeverity = severityRank(finding.severity) < severityRank(existing.maxSeverity) ? finding.severity : existing.maxSeverity;
-      existing.maxConfidence = confidenceRank(finding.confidence) < confidenceRank(existing.maxConfidence) ? finding.confidence : existing.maxConfidence;
+      existing.maxSeverity = rankS006Severity(finding.severity) < rankS006Severity(existing.maxSeverity) ? finding.severity : existing.maxSeverity;
+      existing.maxConfidence = rankS006Confidence(finding.confidence) < rankS006Confidence(existing.maxConfidence) ? finding.confidence : existing.maxConfidence;
     } else {
       groups.set(key, {
         count: 1,
@@ -300,9 +239,9 @@ function formatFindingGroupLines(findings: S006SensitiveInformationFinding[]): s
 
   return [...groups.values()]
     .sort((left, right) =>
-      severityRank(left.maxSeverity) - severityRank(right.maxSeverity) ||
-      confidenceRank(left.maxConfidence) - confidenceRank(right.maxConfidence) ||
-      contextRank(left.context) - contextRank(right.context) ||
+      rankS006Severity(left.maxSeverity) - rankS006Severity(right.maxSeverity) ||
+      rankS006Confidence(left.maxConfidence) - rankS006Confidence(right.maxConfidence) ||
+      rankS006Context(left.context) - rankS006Context(right.context) ||
       right.count - left.count ||
       left.category.localeCompare(right.category)
     )
@@ -400,109 +339,10 @@ function appendAgentReviewLines(
   );
 }
 
-function redactS006Finding(finding: S006SensitiveInformationFinding) {
-  return {
-    path: redactS006Path(finding.path),
-    line: finding.line,
-    endLine: finding.endLine,
-    detectorId: finding.detectorId,
-    category: finding.category,
-    context: finding.context,
-    confidence: finding.confidence,
-    severity: finding.severity,
-    redactedExcerpt: {
-      ...finding.redactedExcerpt,
-      text: redactS006ReportText(finding.redactedExcerpt.text)
-    },
-    rationale: redactS006ReportText(finding.rationale)
-  };
-}
-
-function redactS006SkippedFile(skippedFile: S006SkippedFile): S006SkippedFile {
-  return {
-    ...skippedFile,
-    path: redactS006Path(skippedFile.path),
-    message: skippedFile.message ? redactS006ReportText(skippedFile.message) : undefined
-  };
-}
-
-function redactS006Warning(warning: S006ScanWarning): S006ScanWarning {
-  return {
-    ...warning,
-    message: redactS006ReportText(warning.message),
-    path: warning.path ? redactS006Path(warning.path) : undefined
-  };
-}
-
-function countSkippedReasons(skippedFiles: S006SkippedFile[]): Partial<Record<S006SkippedFile['reason'], number>> {
-  const counts: Partial<Record<S006SkippedFile['reason'], number>> = {};
-  for (const skippedFile of skippedFiles) {
-    counts[skippedFile.reason] = (counts[skippedFile.reason] ?? 0) + 1;
-  }
-  return counts;
-}
-
-function isS006ScanLimitWarning(warning: S006ScanWarning): boolean {
-  return (
-    warning.kind === 'traversal-limit' ||
-    warning.kind === 'candidate-limit' ||
-    warning.kind === 'byte-limit' ||
-    warning.kind === 'file-truncated' ||
-    warning.kind === 'finding-limit'
-  );
-}
-
-function impactRank(finding: S006SensitiveInformationFinding): number {
-  return finding.statusImpact === 'deterministic_fail' ? 0 : 1;
-}
-
-function severityRank(severity: S006FindingSeverity): number {
-  const ranks: Record<S006FindingSeverity, number> = {
-    critical: 0,
-    high: 1,
-    medium: 2,
-    low: 3,
-    info: 4
-  };
-  return ranks[severity];
-}
-
-function confidenceRank(confidence: S006FindingConfidence): number {
-  const ranks: Record<S006FindingConfidence, number> = {
-    high: 0,
-    medium: 1,
-    low: 2
-  };
-  return ranks[confidence];
-}
-
-function contextRank(context: S006FindingContext): number {
-  const ranks: Record<S006FindingContext, number> = {
-    production_source_or_configuration: 0,
-    ci_or_deployment_configuration: 1,
-    local_docker_defaults: 2,
-    documentation: 3,
-    test_fixture: 4,
-    sample_or_example: 5,
-    unknown: 6,
-    generated_content: 7
-  };
-  return ranks[context];
-}
-
-
 function formatFindingOverflowLine(total: number, visible: number): string[] {
   return total > visible ? [`  - Additional retained findings omitted from report details: ${total - visible}`] : [];
 }
 
 function overflowLine(total: number, visible: number): string[] {
   return total > visible ? [`    - ... ${total - visible} more`] : [];
-}
-
-function redactS006Path(path: string): string {
-  return redactLocalUserPaths(redactS006ReportText(path));
-}
-
-function redactS006ReportText(input: string, maxBytes?: number): string {
-  return redactLocalUserPaths(redactSensitiveText(input, maxBytes));
 }

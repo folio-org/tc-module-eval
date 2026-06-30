@@ -43,8 +43,13 @@ export type {
 } from './s006-gitleaks';
 
 export {
-  buildS006CriterionDetails,
-  buildS006RedactedReportDetails,
-  formatS006Evidence,
-  strongestS006ReportFindings
+  buildS006CriterionDetails
+} from './s006-report-details';
+
+export {
+  formatS006Evidence
 } from './s006-sensitive-information-report';
+
+export {
+  strongestS006ReportFindings
+} from './s006-ranking';

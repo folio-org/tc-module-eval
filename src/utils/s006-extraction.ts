@@ -4,7 +4,6 @@ import {
   S006DetectorRegistryEntry,
   S006FindingConfidence,
   S006FindingContext,
-  S006FindingSeverity,
   S006FindingStatusImpact,
   S006ScanCoverage,
   S006ScanWarning,
@@ -48,7 +47,6 @@ export const MAX_S006_RETAINED_FINDINGS = 100;
 interface S006LineWithOffset {
   text: string;
   lineNumber: number;
-  offset: number;
 }
 
 export interface S006AnalysisOptions {
@@ -111,7 +109,7 @@ export function extractS006SensitiveInformationFindings(
             continue;
           }
 
-          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text)) {
+          if (shouldSuppressS006LineFinding(context, detector, rawMatch, line.text)) {
             continue;
           }
 
@@ -155,11 +153,12 @@ export async function analyzeS006SensitiveInformation(
   repoPath: string,
   options: S006AnalysisOptions = {}
 ): Promise<S006SensitiveInformationAnalysisResult> {
-  const scan = scanS006RepositoryCandidates(repoPath);
-  const gitleaks = await runS006GitleaksScan(repoPath, {
+  const gitleaksPromise = runS006GitleaksScan(repoPath, {
     commandRunner: options.commandRunner,
     timeoutMs: options.gitleaksTimeoutMs
   });
+  const scan = scanS006RepositoryCandidates(repoPath);
+  const gitleaks = await gitleaksPromise;
   const extraction = extractS006SensitiveInformationFindings(scan.files, gitleaks.findings);
   const warnings = [...scan.warnings, ...gitleaks.warnings, ...extraction.warnings];
   const scannerWarning = gitleaks.warnings.find(warning => warning.kind === 'scanner-unavailable');
@@ -229,13 +228,11 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
 }
 
 function shouldSuppressS006LineFinding(
-  filePath: string,
   context: S006FindingContext,
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
   lineText: string
 ): boolean {
-  void filePath;
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
   }
@@ -572,8 +569,7 @@ function splitS006Lines(text: string): S006LineWithOffset[] {
     }
     lines.push({
       text: match[1],
-      lineNumber: lines.length + 1,
-      offset: match.index
+      lineNumber: lines.length + 1
     });
     if (match[2] === '') {
       break;
@@ -581,16 +577,6 @@ function splitS006Lines(text: string): S006LineWithOffset[] {
   }
 
   return lines;
-}
-
-function getS006LineForOffset(text: string, offset: number): number {
-  let line = 1;
-  for (let index = 0; index < offset && index < text.length; index++) {
-    if (text[index] === '\n' || (text[index] === '\r' && text[index + 1] !== '\n')) {
-      line += 1;
-    }
-  }
-  return line;
 }
 
 function rangesOverlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number): boolean {

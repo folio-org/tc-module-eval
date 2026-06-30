@@ -8,6 +8,7 @@ import {
   S006ScanWarning
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
+import { relativePosixPath } from './repo-files';
 import { buildS006Warning } from './s006-scanner';
 
 const DEFAULT_GITLEAKS_TIMEOUT_MS = 120000;
@@ -136,18 +137,24 @@ function normalizeGitleaksFindingPath(finding: S006GitleaksFinding, repoPath: st
 }
 
 function normalizeGitleaksReportPath(filePath: string | undefined, repoPath: string): string | undefined {
-  const normalized = filePath?.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
+  if (!filePath) {
+    return undefined;
+  }
+
+  const normalized = filePath.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
   if (!normalized) {
     return undefined;
   }
 
-  if (!path.isAbsolute(filePath!)) {
+  if (!path.isAbsolute(filePath)) {
     return normalized;
   }
 
-  const relativePath = path.relative(path.resolve(repoPath), path.resolve(filePath!));
+  const repoRoot = path.resolve(repoPath);
+  const absolutePath = path.resolve(filePath);
+  const relativePath = path.relative(repoRoot, absolutePath);
   if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
-    return relativePath.split(path.sep).join('/');
+    return relativePosixPath(repoRoot, absolutePath);
   }
 
   return normalized;

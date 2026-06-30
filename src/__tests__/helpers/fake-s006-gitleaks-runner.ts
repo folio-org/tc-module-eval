@@ -11,6 +11,7 @@ import {
   createS006FingerprintRun,
   S006_DETECTOR_REGISTRY
 } from '../../utils/s006-sensitive-information';
+import { findCandidateFiles, relativePosixPath } from '../../utils/repo-files';
 
 const GITLEAKS_DETECTOR_IDS = new Set([
   'provider-api-key',
@@ -91,22 +92,14 @@ export class FakeS006GitleaksRunner implements CommandRunner {
   }
 
   private listFiles(repoPath: string): string[] {
-    const files: string[] = [];
-    const walk = (currentPath: string): void => {
-      for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
-        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'target') {
-          continue;
-        }
-        const absolutePath = path.join(currentPath, entry.name);
-        if (entry.isDirectory()) {
-          walk(absolutePath);
-        } else if (entry.isFile()) {
-          files.push(path.relative(repoPath, absolutePath).split(path.sep).join('/'));
-        }
-      }
-    };
-    walk(repoPath);
-    return files.sort();
+    return findCandidateFiles(
+      repoPath,
+      repoPath,
+      () => true,
+      new Set(['.git', 'node_modules', 'target'])
+    )
+      .map(filePath => relativePosixPath(repoPath, filePath))
+      .sort();
   }
 
   private lineForOffset(text: string, offset: number): number {

@@ -20,7 +20,6 @@ import {
   analyzeS006SensitiveInformation,
   buildS006CriterionDetails,
   buildS006RedactedDetectorMatch,
-  buildS006RedactedReportDetails,
   classifyS006SourceContext,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
@@ -456,7 +455,7 @@ describe('S006 sensitive information finding extraction', () => {
     const providerFinding = result.findings.find(finding => finding.detectorId === 'provider-api-key');
     const serialized = JSON.stringify({
       analysis: result,
-      report: buildS006RedactedReportDetails(result)
+      report: buildS006CriterionDetails(result)
     });
 
     expect(providerFinding).toMatchObject({
@@ -1031,7 +1030,7 @@ describe('S006 sensitive information finding extraction', () => {
     writeRepoFile(repoPath, '.env.production', `OPENAI_API_KEY=${rawKey}\n`);
 
     const result = await analyzeRepo(repoPath);
-    const reportDetails = buildS006RedactedReportDetails(result);
+    const reportDetails = buildS006CriterionDetails(result);
 
     expect(JSON.stringify(result)).not.toContain(rawKey);
     expect(JSON.stringify(reportDetails)).not.toContain(rawKey);
@@ -1763,7 +1762,7 @@ describe('S006 context labels and type exports', () => {
     expect(s004.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(s005.classification.parseState).toBe('not_parsed');
     expect(s006.criterionId).toBe('S006');
-    const rootExportedDetails: RootS006RedactedReportDetails = buildS006RedactedReportDetails(s006);
+    const rootExportedDetails: RootS006RedactedReportDetails = buildS006CriterionDetails(s006);
     expect(rootExportedDetails.criterionId).toBe('S006');
   });
 });
