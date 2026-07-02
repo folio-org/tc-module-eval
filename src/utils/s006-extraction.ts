@@ -48,6 +48,12 @@ interface S006LineWithOffset {
   lineNumber: number;
 }
 
+interface S006FindingDedupeState {
+  exactKeys: Set<string>;
+  scannerBroadCounts: Map<string, number>;
+  localBroadSeenCounts: Map<string, number>;
+}
+
 export interface S006AnalysisOptions {
   commandRunner?: CommandRunner;
   gitleaksTimeoutMs?: number;
@@ -74,7 +80,11 @@ export function extractS006SensitiveInformationFindings(
 ): { findings: S006SensitiveInformationFinding[]; warnings: S006ScanWarning[] } {
   const findings: S006SensitiveInformationFinding[] = [];
   const warnings: S006ScanWarning[] = [];
-  const dedupeKeys = new Set<string>();
+  const dedupeState: S006FindingDedupeState = {
+    exactKeys: new Set<string>(),
+    scannerBroadCounts: new Map<string, number>(),
+    localBroadSeenCounts: new Map<string, number>()
+  };
   const scannedTextByPath = new Map(files.map(file => [file.path, file.text]));
   let findingLimitReached = false;
 
@@ -83,7 +93,7 @@ export function extractS006SensitiveInformationFindings(
     if (!finding) {
       continue;
     }
-    retainS006Finding(findings, dedupeKeys, finding);
+    retainS006Finding(findings, dedupeState, finding, 'scanner');
     if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
       findingLimitReached = true;
       break;
@@ -119,7 +129,7 @@ export function extractS006SensitiveInformationFindings(
           }
 
           const finding = buildS006Finding(file.path, context, detector, rawMatch, fingerprintRun, line.lineNumber);
-          if (retainS006Finding(findings, dedupeKeys, finding)) {
+          if (retainS006Finding(findings, dedupeState, finding, 'local')) {
             occupiedLineRanges.push({ start: matchStart, end: matchEnd });
           }
           if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
@@ -561,24 +571,43 @@ function buildS006GitleaksFindingRationale(
 
 function retainS006Finding(
   findings: S006SensitiveInformationFinding[],
-  dedupeKeys: Set<string>,
-  finding: S006SensitiveInformationFinding
+  dedupeState: S006FindingDedupeState,
+  finding: S006SensitiveInformationFinding,
+  source: 'scanner' | 'local'
 ): boolean {
-  const dedupeKey = [
+  const broadKey = [
     finding.detectorId,
     finding.path,
     finding.line ?? '',
     finding.endLine ?? finding.line ?? '',
     finding.redactedExcerpt.placeholder
   ].join('\0');
-  if (dedupeKeys.has(dedupeKey)) {
+  const exactKey = [
+    broadKey,
+    finding.valueFingerprint.value
+  ].join('\0');
+  if (dedupeState.exactKeys.has(exactKey)) {
     return false;
   }
+
+  if (source === 'local') {
+    const scannerCount = dedupeState.scannerBroadCounts.get(broadKey) ?? 0;
+    const localSeenCount = dedupeState.localBroadSeenCounts.get(broadKey) ?? 0;
+    dedupeState.localBroadSeenCounts.set(broadKey, localSeenCount + 1);
+    if (localSeenCount < scannerCount) {
+      dedupeState.exactKeys.add(exactKey);
+      return false;
+    }
+  }
+
   if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
     return false;
   }
 
-  dedupeKeys.add(dedupeKey);
+  dedupeState.exactKeys.add(exactKey);
+  if (source === 'scanner') {
+    dedupeState.scannerBroadCounts.set(broadKey, (dedupeState.scannerBroadCounts.get(broadKey) ?? 0) + 1);
+  }
   findings.push(finding);
   return true;
 }

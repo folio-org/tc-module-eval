@@ -979,13 +979,29 @@ describe('S006 sensitive information finding extraction', () => {
   it('collapses duplicate detector hits for the same location and value fingerprint', async () => {
     repoPath = createTempRepo();
     const repeated = 'abcdefghijklmnopqrstuvwxyz123456';
-    writeRepoFile(repoPath, 'config/repeated.properties', `token=${repeated} token=${repeated}\n`);
+    writeRepoFile(repoPath, 'config/repeated.properties', `token=${repeated}; access_token=${repeated}\n`);
 
     const result = await analyzeRepo(repoPath);
     const tokenFindings = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
 
     expect(tokenFindings).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain(repeated);
+  });
+
+  it('retains distinct detector hits on the same line when fingerprints differ', async () => {
+    repoPath = createTempRepo();
+    const first = 'CorrectHorseBatteryStaple';
+    const second = 'AnotherHorseBatteryStaple99';
+    writeRepoFile(repoPath, 'config/secrets.properties', `first_password=${first}; second_password=${second}\n`);
+
+    const result = await analyzeRepo(repoPath);
+    const passwordFindings = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
+
+    expect(passwordFindings).toHaveLength(2);
+    expect(passwordFindings.map(finding => finding.valueFingerprint.value)).toHaveLength(2);
+    expect(new Set(passwordFindings.map(finding => finding.valueFingerprint.value)).size).toBe(2);
+    expect(JSON.stringify(result)).not.toContain(first);
+    expect(JSON.stringify(result)).not.toContain(second);
   });
 
   it('does not expose default passwords as raw values or bare hashes in serialized output', async () => {
