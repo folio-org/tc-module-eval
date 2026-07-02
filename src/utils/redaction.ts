@@ -5,9 +5,9 @@ const PROVIDER_TOKEN_PATTERN = /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{2,}|
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/g;
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const OKAPI_TOKEN_PATTERN = /\b(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*[A-Za-z0-9._~+/=-]{8,}/gi;
-const URL_CREDENTIAL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
-const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
-const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
+export const URL_CREDENTIAL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
+export const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
+export const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
 
 export function redactSensitiveText(input: string, maxBytes?: number): string {
   let redacted = input
@@ -25,13 +25,17 @@ export function redactSensitiveText(input: string, maxBytes?: number): string {
     return redacted;
   }
 
-  const buffer = Buffer.from(redacted);
+  return truncateToByteBudget(redacted, maxBytes);
+}
+
+export function truncateToByteBudget(text: string, maxBytes: number): string {
+  const buffer = Buffer.from(text);
   if (buffer.length <= maxBytes) {
-    return redacted;
+    return text;
   }
 
-  redacted = buffer.subarray(0, maxBytes).toString('utf-8').replace(/\uFFFD$/, '');
-  return `${redacted}\n[output truncated to ${maxBytes} bytes]`;
+  const truncated = buffer.subarray(0, maxBytes).toString('utf-8').replace(/\uFFFD$/, '');
+  return `${truncated}\n[output truncated to ${maxBytes} bytes]`;
 }
 
 export function redactLocalUserPaths(input: string): string {

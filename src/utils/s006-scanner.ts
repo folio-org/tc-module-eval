@@ -6,7 +6,7 @@ import {
   S006ScanWarning,
   S006SkippedFile
 } from '../types';
-import { decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { GENERATED_REPORT_DIRECTORY_PATTERN, decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { MAX_S006_EXCERPT_BYTES } from './s006-detectors';
 
 export const MAX_S006_SCAN_TRAVERSAL_ENTRIES = 5000;
@@ -49,9 +49,6 @@ const S006_HIGH_SIGNAL_PATH_PATTERN =
   /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/|terraform\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|Makefile|\.gitlab-ci\.ya?ml|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?)$|\.(?:pem|key|crt|tf|tfvars)$/i;
 const S006_MATERIAL_TRUNCATED_PATH_PATTERN =
   /(?:^|\/)(?:\.env(?:[.\w-]*)?|\.github\/|\.gitlab\/|\.circleci\/|ci\/|buildkite\/|deploy(?:ment)?\/|helm\/|k8s\/|kubernetes\/|okapi\/|conf\/|config(?:uration)?\/|src\/main\/resources\/|src\/main\/config\/|terraform\/)|(?:^|\/)(?:Dockerfile(?:\.[\w-]+)?|docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|Jenkinsfile|\.gitlab-ci\.ya?ml|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?)$|\.(?:ya?ml|properties|pem|key|crt|tf|tfvars)$/i;
-const S006_GENERATED_REPORT_PATH_PATTERN =
-  /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
-
 export interface S006ScannedCandidateTextFile {
   path: string;
   text: string;
@@ -398,7 +395,7 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
 
 function classifyS006CandidatePath(relativePath: string): { eligible: boolean; materialUnsupported: boolean } {
   const normalized = relativePath.replace(/\\/g, '/');
-  if (S006_GENERATED_REPORT_PATH_PATTERN.test(normalized)) {
+  if (GENERATED_REPORT_DIRECTORY_PATTERN.test(normalized)) {
     return { eligible: false, materialUnsupported: false };
   }
   if (S006_SUPPORTED_SPECIAL_FILE_PATTERN.test(normalized) || S006_SUPPORTED_TEXT_FILE_PATTERN.test(normalized)) {

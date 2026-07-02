@@ -3,6 +3,8 @@ import * as path from 'path';
 
 const DEFAULT_SKIPPED_REPO_DIRS: ReadonlySet<string> = new Set(['node_modules', '.git']);
 
+export const GENERATED_REPORT_DIRECTORY_PATTERN = /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
+
 export function findCandidateFiles(
   repoPath: string,
   startPath: string,

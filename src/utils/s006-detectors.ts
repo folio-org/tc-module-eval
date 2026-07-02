@@ -9,7 +9,14 @@ import {
   S006RunLocalValueFingerprint,
   S006ValueClassification
 } from '../types';
-import { redactLocalUserPaths, redactSensitiveText } from './redaction';
+import {
+  PRIVATE_KEY_BLOCK_PATTERN,
+  PRIVATE_URL_PATTERN,
+  URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN,
+  redactLocalUserPaths,
+  redactSensitiveText,
+  truncateToByteBudget
+} from './redaction';
 
 const PLACEHOLDER_VALUE_PATTERN =
   /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
@@ -19,8 +26,6 @@ const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|t
 const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
 const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
 const SECRET_ASSIGNMENT_REDACTION_PATTERN = new RegExp(`^(${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*)${SECRET_ASSIGNMENT_VALUE}$`, 'i');
-const CREDENTIAL_URL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
-const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
 
 export const MAX_S006_EXCERPT_BYTES = 700;
 
@@ -58,7 +63,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'private-key-block',
     category: 'private_key',
     label: 'Private key block',
-    pattern: /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g,
+    pattern: PRIVATE_KEY_BLOCK_PATTERN,
     redactionRequired: true,
     redactionPlaceholder: '[REDACTED_PRIVATE_KEY_BLOCK]',
     defaultConfidence: 'high',
@@ -292,12 +297,7 @@ export function redactS006SensitiveInformationText(input: string, maxBytes?: num
     return redacted;
   }
 
-  const buffer = Buffer.from(redacted);
-  if (buffer.length <= maxBytes) {
-    return redacted;
-  }
-
-  return `${buffer.subarray(0, maxBytes).toString('utf-8').replace(/\uFFFD$/, '')}\n[output truncated to ${maxBytes} bytes]`;
+  return truncateToByteBudget(redacted, maxBytes);
 }
 
 export function getS006DetectorById(detectorId: S006DetectorId): S006DetectorRegistryEntry {

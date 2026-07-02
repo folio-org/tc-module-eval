@@ -177,11 +177,12 @@ export async function analyzeS006SensitiveInformation(
   const extraction = extractS006SensitiveInformationFindings(scan.files, gitleaks.findings);
   const warnings = [...scan.warnings, ...gitleaks.warnings, ...extraction.warnings];
   const scannerWarning = gitleaks.warnings.find(warning => warning.kind === 'scanner-unavailable');
+  const newWarningsAreMaterial = [...gitleaks.warnings, ...extraction.warnings].some(warning => warning.materialToCoverage);
   const coverage = {
     ...scan.coverage,
     warnings: [...warnings],
-    materiallyWeakened: scan.coverage.materiallyWeakened || [...gitleaks.warnings, ...extraction.warnings].some(warning => warning.materialToCoverage),
-    complete: scan.coverage.complete && [...gitleaks.warnings, ...extraction.warnings].every(warning => !warning.materialToCoverage)
+    materiallyWeakened: scan.coverage.materiallyWeakened || newWarningsAreMaterial,
+    complete: scan.coverage.complete && !newWarningsAreMaterial
   };
   const classification = classifyS006DeterministicResult(extraction.findings, coverage);
 
@@ -276,13 +277,14 @@ function shouldSuppressS006SecretAssignment(detector: S006DetectorRegistryEntry,
     /^(?:test|fake|mock|dummy)(?:[-_](?:password|secret|token|jwt|bearer))?$/i.test(value);
 }
 
+const S006_GITLEAKS_OWNED_SHAPE_PATTERNS = (['provider-api-key', 'bearer-or-jwt-token'] as const)
+  .map(detectorId => getCompiledS006DetectorPattern(getS006DetectorById(detectorId)));
+
 function isS006GitleaksOwnedSecretShape(value: string): boolean {
-  return (['provider-api-key', 'bearer-or-jwt-token'] as const)
-    .map(detectorId => getCompiledS006DetectorPattern(getS006DetectorById(detectorId)))
-    .some(pattern => {
-      pattern.lastIndex = 0;
-      return pattern.test(value);
-    });
+  return S006_GITLEAKS_OWNED_SHAPE_PATTERNS.some(pattern => {
+    pattern.lastIndex = 0;
+    return pattern.test(value);
+  });
 }
 
 function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: string): boolean {
@@ -557,16 +559,30 @@ function buildS006GitleaksFindingRationale(
   source: S006GitleaksFinding,
   detector: S006DetectorRegistryEntry
 ): string {
+  const rule = source.RuleID ? `; gitleaksRule=${source.RuleID}` : '';
+  const description = source.Description ? `; gitleaksDescription=${source.Description}` : '';
+
+  return buildS006RationaleCore(finding, detector, {
+    sourceLabel: 'from Gitleaks',
+    extraFields: `${rule}${description}`,
+    redactionNote: 'Gitleaks redaction was applied before retaining evidence'
+  });
+}
+
+function buildS006RationaleCore(
+  finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
+  detector: S006DetectorRegistryEntry,
+  options: { sourceLabel?: string; extraFields?: string; redactionNote: string }
+): string {
   const statusImpact = finding.statusImpact === 'deterministic_fail'
     ? 'deterministic failure candidate'
     : 'manual review candidate';
-  const rule = source.RuleID ? `; gitleaksRule=${source.RuleID}` : '';
-  const description = source.Description ? `; gitleaksDescription=${source.Description}` : '';
   const contextNote = isS006FailCapableContext(finding.context)
     ? 'production or CI/deployment context can elevate high-confidence live-looking secrets'
     : 'context limits deterministic failure and preserves the finding for reviewer judgment';
+  const label = options.sourceLabel ? `${detector.label} ${options.sourceLabel}` : detector.label;
 
-  return `${detector.label} from Gitleaks is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}${rule}${description}; ${contextNote}; Gitleaks redaction was applied before retaining evidence.`;
+  return `${label} is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}${options.extraFields ?? ''}; ${contextNote}; ${options.redactionNote}.`;
 }
 
 function retainS006Finding(
@@ -704,14 +720,9 @@ function buildS006FindingRationale(
   finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
   detector: S006DetectorRegistryEntry
 ): string {
-  const statusImpact = finding.statusImpact === 'deterministic_fail'
-    ? 'deterministic failure candidate'
-    : 'manual review candidate';
-  const contextNote = isS006FailCapableContext(finding.context)
-    ? 'production or CI/deployment context can elevate high-confidence live-looking secrets'
-    : 'context limits deterministic failure and preserves the finding for reviewer judgment';
-
-  return `${detector.label} is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}; ${contextNote}; detector-local redaction was applied before retaining evidence.`;
+  return buildS006RationaleCore(finding, detector, {
+    redactionNote: 'detector-local redaction was applied before retaining evidence'
+  });
 }
 
 function adjustS006FindingConfidenceForContext(

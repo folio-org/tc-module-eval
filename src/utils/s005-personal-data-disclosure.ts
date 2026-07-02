@@ -19,7 +19,7 @@ import {
   S005PersonalDataEvidenceStrength,
   S005PersonalDataPossibleMismatch
 } from '../types';
-import { isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { GENERATED_REPORT_DIRECTORY_PATTERN, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { redactSensitiveText } from './redaction';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
@@ -42,7 +42,6 @@ const VERSION_PATTERN = /\b(?:form\s+version|template\s+version|version)\s*[:|-]
 const LAST_UPDATED_PATTERN = /\blast\s+updated\s*[:|-]\s*(.+)$/i;
 const LAST_REVIEWED_PATTERN = /\blast\s+reviewed\s*[:|-]\s*(.+)$/i;
 const PLACEHOLDER_PATTERN = /^(?:todo|tbd|n\/a|\[.*\]|<.*>|yyyy-mm-dd|mm\/dd\/yyyy|date|last updated|last reviewed)$/i;
-const GENERATED_REPORT_DIRECTORY_PATTERN = /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
 const TEXT_FILE_EXTENSION_PATTERN = /\.(?:avram|conf|cfg|ini|java|js|json|jsx|kt|md|mjs|properties|raml|sql|ts|tsx|txt|xml|yaml|yml)$/i;
 const DIRECT_CONTRACT_FILE_PATTERN = /(?:^|\/)(?:schemas?|schema|ramls?|api|apis|descriptors?|interfaces?|module-descriptor)(?:\/|$)|(?:^|\/)(?:module-descriptor|package)\.json$|(?:openapi|swagger|raml|schema)\.(?:json|ya?ml|raml)$/i;
 const DOCUMENTATION_FILE_PATTERN = /(?:^|\/)(?:readme|privacy|personal-data|data-handling)[^/]*\.md$|(?:^|\/)(?:docs?|documentation)(?:\/|$)/i;
