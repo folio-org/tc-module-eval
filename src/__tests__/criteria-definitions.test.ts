@@ -185,6 +185,7 @@ describe('criteria-definitions', () => {
       expect(catalogEntry?.languages).toEqual(['java', 'javascript']);
       expect(catalogEntry?.defaultEvaluation?.reason).toBe('Module descriptor validation');
       expect(getAcceptanceCriterionDefinition('S005')?.defaultEvaluation?.reason).toBe('Personal data disclosure form evaluation');
+      expect(getAcceptanceCriterionDefinition('S006')?.defaultEvaluation?.reason).toBe('Sensitive information repository scan');
 
       expect(getCriterionDefinition('S002')).toEqual({
         id: 'S002',

@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   CommandRunner,
   CriterionAgentReviewConfig,
@@ -10,10 +8,10 @@ import {
 } from '../types';
 import {
   CriterionAgentReviewRequest,
+  resolveReviewPathWithinRepo,
   runCriterionAgentReview,
-  safeWorkspaceRelativePath
 } from './criterion-agent-review';
-import { isWithinRepo, readBoundedFileBytes, realPath } from './repo-files';
+import { readBoundedFileBytes } from './repo-files';
 import {
   MAX_S005_EVIDENCE_EXCERPT_BYTES,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
@@ -186,27 +184,5 @@ function readS005ReviewFile(repoPath: string, repoRelativePath: string): string 
 }
 
 function resolveS005ReviewPath(repoPath: string, repoRelativePath: string): string {
-  const repoRoot = realPath(repoPath);
-  if (!repoRoot) {
-    throw new Error('Unable to resolve repository path');
-  }
-
-  let normalized: string;
-  try {
-    normalized = safeWorkspaceRelativePath(repoRelativePath);
-  } catch {
-    throw new Error(`S005 review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const absolutePath = path.resolve(repoRoot, normalized);
-  if (!isWithinRepo(repoRoot, absolutePath)) {
-    throw new Error(`S005 review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const stats = fs.lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    throw new Error(`S005 review material path is not a regular file: ${repoRelativePath}`);
-  }
-
-  return absolutePath;
+  return resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S005');
 }

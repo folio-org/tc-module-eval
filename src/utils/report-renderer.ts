@@ -176,8 +176,14 @@ export class EvaluationReportRenderer implements ReportRenderer {
         
         .details {
             margin-top: 10px;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
             font-size: 0.9rem;
-            color: #6c757d;
+            line-height: 1.5;
+            color: #343a40;
+            overflow-wrap: anywhere;
         }
         
         .footer {

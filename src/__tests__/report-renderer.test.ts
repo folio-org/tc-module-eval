@@ -80,6 +80,40 @@ describe('EvaluationReportRenderer', () => {
             ]
           }
         }
+      },
+      {
+        criterionId: 'S006',
+        status: EvaluationStatus.FAIL,
+        evidence: 'S006 fail: <script>alert("s006")</script> OPENAI_API_KEY=sk-proj-renderersecret1234567890',
+        details: [
+          'Deterministic failure findings:',
+          '  - src/main/resources/application.yml:1 [production_source_or_configuration/high/critical/provider_api_key] provider-api-key',
+          '    rationale: <img src=x onerror=alert(1)>',
+          '    excerpt: OPENAI_API_KEY=sk-proj-renderersecret1234567890',
+          'Manual review findings:',
+          '  - docs/auth.md:1 [documentation/high/high/bearer_or_jwt_token] bearer-or-jwt-token',
+          '    excerpt: Bearer abcdefghijklmnopqrstuvwxyz123456'
+        ].join('\n'),
+        criterionDetails: {
+          findings: [
+            {
+              redactedExcerpt: {
+                text: 'OPENAI_API_KEY=sk-proj-renderersecret1234567890'
+              }
+            }
+          ],
+          coverageSummary: {
+            skippedFileCount: 1,
+            scanLimitWarnings: [
+              {
+                kind: 'file-truncated',
+                path: '/Users/alice/private/.env.production',
+                message: 'token=renderersecret',
+                materialToCoverage: true
+              }
+            ]
+          }
+        }
       }
     ]
   };
@@ -89,10 +123,10 @@ describe('EvaluationReportRenderer', () => {
 
     expect(renderer.calculateStats(result)).toEqual({
       pass: 1,
-      fail: 1,
+      fail: 2,
       manual: 2,
       notApplicable: 1,
-      total: 5
+      total: 6
     });
   });
 
@@ -101,7 +135,7 @@ describe('EvaluationReportRenderer', () => {
     const json = renderer.renderJson(result);
 
     expect(json).toContain('\n  "moduleName": "test-module"');
-    expect(JSON.parse(json).criteria).toHaveLength(5);
+    expect(JSON.parse(json).criteria).toHaveLength(6);
   });
 
   it('should escape HTML and preserve multiline details', () => {
@@ -113,6 +147,7 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Criterion S001');
     expect(html).toContain('Apache &lt;2.0&gt; &amp; compatible');
     expect(html).toContain('Line one<br>Line two');
+    expect(html).toContain('overflow-wrap: anywhere;');
   });
 
   it('escapes untrusted module names in the HTML title', () => {
@@ -138,14 +173,24 @@ describe('EvaluationReportRenderer', () => {
     expect(json).toContain('[REDACTED_PRIVATE_URL]');
     expect(json).toContain('[REDACTED_EMAIL]');
     expect(json).toContain('token=[REDACTED]');
+    expect(json).toContain('OPENAI_API_KEY=[REDACTED]');
+    expect(json).toContain('Bearer [REDACTED]');
     expect(json).not.toContain('abc123');
     expect(json).not.toContain('hunter2');
     expect(json).not.toContain('sk-details-secret');
     expect(json).not.toContain('s005secret');
+    expect(json).not.toContain('sk-proj-renderersecret1234567890');
+    expect(json).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
+    expect(json).not.toContain('renderersecret');
     expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
     expect(html).toContain('**email** &lt;script&gt;bad()&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('OPENAI_API_KEY=[REDACTED]');
+    expect(html).toContain('Bearer [REDACTED]');
     expect(html).not.toContain('<script>bad()</script>');
+    expect(html).not.toContain('<img src=x onerror=alert(1)>');
     expect(html).not.toContain('token=abc123');
+    expect(html).not.toContain('sk-proj-renderersecret1234567890');
   });
 
   it('should expose escaping helpers for focused renderer tests', () => {

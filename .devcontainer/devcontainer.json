@@ -7,7 +7,8 @@
       "GIT_DELTA_VERSION": "0.18.2",
       "ZSH_IN_DOCKER_VERSION": "1.2.0",
       "MAVEN_VERSION": "3.9.9",
-      "GRADLE_VERSION": "8.12"
+      "GRADLE_VERSION": "8.12",
+      "GITLEAKS_VERSION": "8.30.0"
     }
   },
   "customizations": {

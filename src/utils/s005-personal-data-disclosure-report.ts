@@ -282,7 +282,6 @@ function appendAgentReviewLines(
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
       agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
       agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
-      agentReview.evidenceReferences.length ? `  - Evidence references: ${agentReview.evidenceReferences.join(', ')}` : undefined,
       agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
       agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,

@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: "20"
+      gitleaks_version:
+        description: "Gitleaks version"
+        required: false
+        type: string
+        default: "8.30.0"
       # OpenCode advisory review is local/trusted CLI-only for now. The manual
       # remote workflow delegates to the deterministic reusable workflow.
 
@@ -53,3 +58,4 @@ jobs:
       criteria_filter: ${{ inputs.criteria_filter }}
       java_version: ${{ inputs.java_version }}
       node_version: ${{ inputs.node_version }}
+      gitleaks_version: ${{ inputs.gitleaks_version }}

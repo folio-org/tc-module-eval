@@ -45,6 +45,19 @@ RUN wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.
   ln -s /opt/gradle-${GRADLE_VERSION} /opt/gradle && \
   rm gradle-${GRADLE_VERSION}-bin.zip
 
+# Install Gitleaks for S006 secret detection
+ARG GITLEAKS_VERSION=8.30.0
+RUN ARCH="$(dpkg --print-architecture)" && \
+  case "$ARCH" in \
+    amd64) GITLEAKS_ARCH="x64" ;; \
+    arm64) GITLEAKS_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture for Gitleaks: $ARCH" >&2; exit 1 ;; \
+  esac && \
+  wget "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz" && \
+  tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz" -C /usr/local/bin gitleaks && \
+  chmod +x /usr/local/bin/gitleaks && \
+  rm "gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz"
+
 # Set Java environment variables
 ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk
 ENV MAVEN_HOME=/opt/maven
@@ -89,6 +102,10 @@ USER node
 # Configure yarn and npm global directories
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 ENV PATH=$PATH:/usr/local/share/npm-global/bin
+
+# Install OpenCode for criterion-agent advisory reviews
+ARG OPENCODE_VERSION=1.17.11
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
