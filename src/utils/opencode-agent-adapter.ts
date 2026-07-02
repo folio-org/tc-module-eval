@@ -389,6 +389,7 @@ function normalizeOpenCodeResult(
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
+      metadata: openCodeMetadata(config, workspace),
       warnings: [],
       errors: ['OpenCode returned malformed JSON']
     };
@@ -469,6 +470,11 @@ function extractOpenCodeEventText(event: Record<string, unknown>): string | unde
     }
   }
 
+  const partsText = extractTextParts(event.parts);
+  if (partsText) {
+    return partsText;
+  }
+
   if (event.type === 'text') {
     return firstString(event.text, event.content);
   }
@@ -482,15 +488,22 @@ function extractOpenCodeEventText(event: Record<string, unknown>): string | unde
 }
 
 function extractMessageText(message: Record<string, unknown>): string | undefined {
-  const content = message.content;
-  if (typeof content === 'string') {
-    return content;
+  const contentText = extractTextParts(message.content);
+  if (contentText) {
+    return contentText;
   }
-  if (!Array.isArray(content)) {
+  return extractTextParts(message.parts);
+}
+
+function extractTextParts(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (!Array.isArray(value)) {
     return undefined;
   }
 
-  const parts = content.flatMap(entry => {
+  const parts = value.flatMap(entry => {
     if (typeof entry === 'string') {
       return [entry];
     }

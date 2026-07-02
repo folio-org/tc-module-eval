@@ -407,6 +407,34 @@ describe('criterion agent review', () => {
     expect(result.summary).toBe('Message content summary.');
   });
 
+  it('parses OpenCode parts-array text event streams', async () => {
+    const runner = new FakeRunner(undefined, undefined, JSON.stringify({
+      type: 'message',
+      parts: [{
+        type: 'text',
+        text: JSON.stringify({
+          recommendation: 'likely_sufficient',
+          confidence: 'high',
+          summary: 'Parts array summary.',
+          rationale: 'Parts array rationale.',
+          evidenceReferences: ['README.md']
+        })
+      }]
+    }));
+
+    const result = await runCriterionAgentReview({
+      criterionId: 'S004',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
+      schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+
+    expect(result.available).toBe(true);
+    expect(result.summary).toBe('Parts array summary.');
+    expect(result.evidenceReferences).toEqual(['README.md']);
+  });
+
   it('parses fenced JSON from OpenCode text events', async () => {
     const runner = new FakeRunner(undefined, undefined, JSON.stringify({
       type: 'text',
@@ -427,6 +455,23 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(true);
     expect(result.summary).toBe('Fenced summary.');
     expect(result.evidenceReferences).toEqual(['README.md']);
+  });
+
+  it('keeps OpenCode metadata on malformed advisory output', async () => {
+    const result = await runCriterionAgentReview({
+      criterionId: 'S004',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
+      schemaDescription: 'schema'
+    }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json'));
+
+    expect(result.available).toBe(false);
+    expect(result.errors).toEqual(['OpenCode returned malformed JSON']);
+    expect(result.metadata).toMatchObject({
+      adapter: 'opencode',
+      modelLabel: 'test-model'
+    });
   });
 
   it('extracts valid advisory JSON after stray prose braces and non-advisory JSON', async () => {

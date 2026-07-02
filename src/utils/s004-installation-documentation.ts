@@ -131,16 +131,20 @@ export function formatS004Evidence(
   ];
 
   if (agentReview) {
+    const unavailableReason = !agentReview.available
+      ? agentReview.errors.join('; ') || 'agent review was unavailable'
+      : undefined;
     lines.push(
       '',
       'Agent review:',
+      unavailableReason ? `  - Not available: ${unavailableReason}` : undefined,
       agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
       agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
       agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined
+      agentReview.available && agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined
     );
   } else if (classification.status === EvaluationStatus.MANUAL) {
     lines.push('', 'Agent review:', `  - Not applied: ${result.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`);

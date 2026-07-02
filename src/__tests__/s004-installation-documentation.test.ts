@@ -1,8 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { EvaluationStatus } from '../types';
-import { analyzeS004Documentation, classifyS004Documentation } from '../utils/s004-installation-documentation';
+import { CriterionAgentReviewResult, EvaluationStatus } from '../types';
+import {
+  analyzeS004Documentation,
+  classifyS004Documentation,
+  formatS004Evidence
+} from '../utils/s004-installation-documentation';
 
 describe('S004 installation documentation analysis', () => {
   let tempRoot: string;
@@ -36,6 +40,38 @@ Set environment variable ELASTICSEARCH_URL for production search.
     expect(result.classification.filesConsidered).toEqual(['README.md']);
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('docker_runtime');
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('okapi_tenant_enablement');
+  });
+
+  it('renders unavailable agent review as advisory context instead of a bare error', () => {
+    writeFile('README.md', `
+# mod-search
+
+## Running with Docker Compose
+Use docker compose up to start Kafka, PostgreSQL, and OpenSearch for the module.
+`);
+    const analysis = analyzeS004Documentation(tempRoot);
+    const agentReview: CriterionAgentReviewResult = {
+      available: false,
+      criterionId: 'S004',
+      evidenceReferences: [],
+      metadata: {
+        adapter: 'opencode',
+        modelLabel: 'openrouter/openrouter/free',
+        reviewMode: 'read-only',
+        promptInputSanitized: true,
+        reviewWorkspaceSanitized: true
+      },
+      warnings: [],
+      errors: ['OpenCode returned malformed JSON']
+    };
+
+    const rendered = formatS004Evidence(analysis, agentReview);
+
+    expect(rendered.details).toContain('Agent review:');
+    expect(rendered.details).toContain('Not available: OpenCode returned malformed JSON');
+    expect(rendered.details).toContain('Adapter: opencode');
+    expect(rendered.details).toContain('Model label: openrouter/openrouter/free');
+    expect(rendered.details).not.toContain('Errors: OpenCode returned malformed JSON');
   });
 
   it('returns manual with frontend Stripes and Okapi installation evidence', () => {
