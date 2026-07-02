@@ -17,7 +17,7 @@ export function redactSensitiveText(input: string, maxBytes?: number): string {
     .replace(SECRET_ASSIGNMENT_PATTERN, (match, key, _separator, value) => value === '[REDACTED]' ? match : `${key}=[REDACTED]`)
     .replace(PROVIDER_TOKEN_PATTERN, '[REDACTED_PROVIDER_TOKEN]')
     .replace(BEARER_PATTERN, 'Bearer [REDACTED]')
-    .replace(JWT_PATTERN, '[REDACTED_JWT]')
+    .replace(JWT_PATTERN, '[REDACTED_TOKEN]')
     .replace(URL_CREDENTIAL_PATTERN, '[REDACTED_CREDENTIAL_URL]')
     .replace(PRIVATE_URL_PATTERN, '[REDACTED_PRIVATE_URL]');
 

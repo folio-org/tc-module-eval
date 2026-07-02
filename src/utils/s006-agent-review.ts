@@ -19,17 +19,10 @@ import {
   redactS006SensitiveInformationText,
   strongestS006ReportFindings
 } from './s006-sensitive-information';
-import { readBoundedFileBytes } from './repo-files';
 
 const REDACTED_SUMMARY_REVIEW_PATH = '.criterion-agent/S006/redacted-finding-summary.json';
 const MAX_S006_AGENT_SUMMARY_BYTES = 24 * 1024;
 const MAX_S006_AGENT_SOURCE_BYTES = MAX_S006_SCAN_BYTES_PER_FILE;
-const MAX_S006_AGENT_SOURCE_WINDOW_LINES = 12;
-
-interface S006SourceWindowCacheEntry {
-  absolutePath: string;
-  sourceLines?: string[];
-}
 
 export async function reviewS006WithAgent(
   repoPath: string,
@@ -148,7 +141,6 @@ function buildContextExcerptFiles(
   strongestFindings: S006SensitiveInformationFinding[]
 ): Array<{ repoRelativePath: string; content: string }> {
   const findingsByContext = new Map<S006FindingContext, S006SensitiveInformationFinding[]>();
-  const sourceWindowCache = new Map<string, S006SourceWindowCacheEntry>();
   for (const finding of strongestFindings) {
     const contextFindings = findingsByContext.get(finding.context);
     if (contextFindings) {
@@ -162,15 +154,14 @@ function buildContextExcerptFiles(
     .filter(context => findingsByContext.has(context))
     .map(context => ({
       repoRelativePath: `.criterion-agent/S006/excerpts/${context}.txt`,
-      content: buildContextExcerptContent(repoPath, context, findingsByContext.get(context) ?? [], sourceWindowCache)
+      content: buildContextExcerptContent(repoPath, context, findingsByContext.get(context) ?? [])
     }));
 }
 
 function buildContextExcerptContent(
   repoPath: string,
   context: S006FindingContext,
-  findings: S006SensitiveInformationFinding[],
-  sourceWindowCache: Map<string, S006SourceWindowCacheEntry>
+  findings: S006SensitiveInformationFinding[]
 ): string {
   const lines = [
     `S006 bounded redacted excerpts for context ${context}.`,
@@ -179,12 +170,13 @@ function buildContextExcerptContent(
   ];
 
   for (const finding of findings) {
+    assertS006ReviewPathWithinRepo(repoPath, finding.path);
     lines.push(
       `- source ${redactS006AgentText(finding.path)}${finding.line === undefined ? '' : `:${finding.line}`}${finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : ''}`,
       `  detector: ${finding.detectorId}; category: ${finding.category}; confidence: ${finding.confidence}; severity: ${finding.severity}; valueClassification: ${finding.valueClassification}`,
       `  rationale: ${redactS006AgentText(finding.rationale)}`,
       `  detector-redacted excerpt: ${redactS006AgentText(finding.redactedExcerpt.text, MAX_S006_EXCERPT_BYTES)}`,
-      ...readRedactedSourceWindow(repoPath, finding, sourceWindowCache).map(line => `  ${line}`),
+      '  source window omitted; use the detector-redacted excerpt above.',
       ''
     );
   }
@@ -192,59 +184,8 @@ function buildContextExcerptContent(
   return redactS006AgentText(lines.join('\n'), MAX_S006_AGENT_SOURCE_BYTES);
 }
 
-function readRedactedSourceWindow(
-  repoPath: string,
-  finding: S006SensitiveInformationFinding,
-  sourceWindowCache: Map<string, S006SourceWindowCacheEntry>
-): string[] {
-  const cacheEntry = getS006SourceWindowCacheEntry(repoPath, finding.path, sourceWindowCache);
-  if (finding.detectorId === 'private-key-block') {
-    return ['source excerpt omitted for private-key block; use detector-redacted excerpt above.'];
-  }
-
-  const sourceLines = cacheEntry.sourceLines ?? readS006SourceLines(cacheEntry.absolutePath);
-  cacheEntry.sourceLines = sourceLines;
-  const startLine = Math.max(1, finding.line ?? 1);
-  const endLine = Math.max(startLine, finding.endLine ?? startLine);
-  const windowStart = Math.max(1, startLine - 1);
-  const windowEnd = Math.min(sourceLines.length, endLine + 1, windowStart + MAX_S006_AGENT_SOURCE_WINDOW_LINES - 1);
-  const excerpt = sourceLines
-    .slice(windowStart - 1, windowEnd)
-    .map((line, index) => `${String(windowStart + index).padStart(4, ' ')} | ${line}`)
-    .join('\n');
-
-  return [
-    `source-redacted window lines ${windowStart}-${windowEnd}:`,
-    redactS006AgentText(excerpt, MAX_S006_EXCERPT_BYTES)
-  ];
-}
-
-function getS006SourceWindowCacheEntry(
-  repoPath: string,
-  repoRelativePath: string,
-  sourceWindowCache: Map<string, S006SourceWindowCacheEntry>
-): S006SourceWindowCacheEntry {
-  const cached = sourceWindowCache.get(repoRelativePath);
-  if (cached) {
-    return cached;
-  }
-
-  const cacheEntry = {
-    absolutePath: resolveS006ReviewPath(repoPath, repoRelativePath)
-  };
-  sourceWindowCache.set(repoRelativePath, cacheEntry);
-  return cacheEntry;
-}
-
-function readS006SourceLines(absolutePath: string): string[] {
-  const content = readBoundedFileBytes(absolutePath, MAX_S006_AGENT_SOURCE_BYTES)
-    .toString('utf-8')
-    .replace(/\uFFFD$/, '');
-  return content.split(/\r\n|\n|\r/);
-}
-
-function resolveS006ReviewPath(repoPath: string, repoRelativePath: string): string {
-  return resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S006');
+function assertS006ReviewPathWithinRepo(repoPath: string, repoRelativePath: string): void {
+  resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S006');
 }
 
 function countFindingsByContext(findings: S006SensitiveInformationFinding[]): Partial<Record<S006FindingContext, number>> {

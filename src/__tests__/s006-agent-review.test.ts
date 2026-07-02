@@ -6,7 +6,10 @@ import {
   EvaluationStatus,
   S006SensitiveInformationAnalysisResult
 } from '../types';
-import { analyzeS006SensitiveInformation } from '../utils/s006-sensitive-information';
+import {
+  analyzeS006SensitiveInformation,
+  createS006FingerprintRun
+} from '../utils/s006-sensitive-information';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 import {
   buildS006AgentReviewRequest,
@@ -104,7 +107,7 @@ describe('S006 agent review adapter', () => {
     expect(request.instructions).toContain('Do not claim that any credential');
     expect(workspaceText).toContain('[REDACTED_PROVIDER_API_KEY]');
     expect(workspaceText).toContain('Bearer [REDACTED]');
-    expect(workspaceText).toContain('POSTGRES_PASSWORD=[REDACTED]');
+    expect(workspaceText).toContain('[REDACTED_SECRET_ASSIGNMENT]');
     expect(workspaceText).toContain('[REDACTED_CREDENTIAL_URL]');
     expect(workspaceText).toContain('[REDACTED_PRIVATE_URL]');
     expect(workspaceText).toContain('[REDACTED_TENANT_OR_HOST_ENDPOINT]');
@@ -121,6 +124,42 @@ describe('S006 agent review adapter', () => {
     expect(workspaceText).not.toContain(rawTenantEndpoint);
     expect(workspaceText).not.toContain(rawLocalPath);
     expect(request.files.every(file => !path.isAbsolute(file.repoRelativePath))).toBe(true);
+  });
+
+  it('does not read source windows that could expose scanner-only secrets to agent review', async () => {
+    const rawSlackWebhook = 'https://hooks.slack.com/services/T00000000/B00000000/abcdefABCDEF123456';
+    writeFile('docs/slack.md', `Webhook used in review repro: ${rawSlackWebhook}\n`);
+    const analysis = await analyzeRepo();
+    analysis.findings.push({
+      path: 'docs/slack.md',
+      line: 1,
+      endLine: 1,
+      detectorId: 'password-secret-assignment',
+      category: 'password_or_secret_assignment',
+      context: 'documentation',
+      valueClassification: 'live-looking',
+      confidence: 'medium',
+      severity: 'high',
+      redactedExcerpt: {
+        text: '[REDACTED_SECRET_ASSIGNMENT]',
+        placeholder: '[REDACTED_SECRET_ASSIGNMENT]',
+        multiline: false,
+        startLine: 1,
+        endLine: 1
+      },
+      valueFingerprint: createS006FingerprintRun().fingerprint(rawSlackWebhook),
+      statusImpact: 'manual_review',
+      rationale: 'Scanner-only finding mapped to redacted S006 evidence.'
+    });
+
+    const request = buildS006AgentReviewRequest(repoPath, analysis);
+    const workspaceText = request.files.map(file => file.content).join('\n');
+
+    expect(workspaceText).toContain('source window omitted');
+    expect(workspaceText).toContain('[REDACTED_SECRET_ASSIGNMENT]');
+    expect(workspaceText).not.toContain(rawSlackWebhook);
+    expect(workspaceText).not.toContain('hooks.slack.com');
+    expect(workspaceText).not.toContain('abcdefABCDEF123456');
   });
 
   it('rejects review-material paths outside the repository before reading them', async () => {

@@ -677,7 +677,7 @@ describe('S006 sensitive information finding extraction', () => {
         text: 'access_token = [REDACTED_SECRET_ASSIGNMENT]'
       })
     });
-    expect(JSON.stringify(result)).toContain('Bearer [REDACTED_TOKEN]');
+    expect(JSON.stringify(result)).toContain('[REDACTED_TOKEN]');
     expect(JSON.stringify(result)).not.toContain(`Bearer ${tokenTail}`);
     expect(JSON.stringify(result)).not.toContain(tokenTail);
   });
@@ -959,7 +959,7 @@ describe('S006 sensitive information finding extraction', () => {
         detectorId: 'bearer-or-jwt-token' as const,
         raw: 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123',
         absent: ['eyJhbGciOiJIUzI1NiIsInR5cCI'],
-        expected: '[REDACTED_JWT]'
+        expected: '[REDACTED_TOKEN]'
       }
     ];
 
@@ -1021,7 +1021,6 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
     expect(serialized).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI');
     expect(serialized).toContain('[REDACTED_TOKEN]');
-    expect(serialized).toContain('[REDACTED_JWT]');
   });
 
   it('keeps Gitleaks-backed criterion details redacted', async () => {
@@ -1036,6 +1035,79 @@ describe('S006 sensitive information finding extraction', () => {
     expect(JSON.stringify(reportDetails)).not.toContain(rawKey);
     expect(JSON.stringify(reportDetails)).not.toContain('valueFingerprint');
     expect(reportDetails.findings[0].redactedExcerpt.text).toBe('[REDACTED_PROVIDER_API_KEY]');
+  });
+
+  it('keeps local credential URL and assignment coverage when Gitleaks reports clean', async () => {
+    repoPath = createTempRepo();
+    const credentialUrl = 'https://deploy:tiny@10.0.0.12:9130/admin';
+    const password = 'localpass';
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      `proxy: ${credentialUrl}\npassword=${password}\n`
+    );
+
+    const result = await analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({
+        status: 'success',
+        exitCode: 0,
+        report: []
+      })
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.scanner).toMatchObject({
+      status: 'completed',
+      findingCount: 0
+    });
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        detectorId: 'credential-url',
+        redactedExcerpt: expect.objectContaining({ text: '[REDACTED_CREDENTIAL_URL]' })
+      }),
+      expect.objectContaining({
+        detectorId: 'password-secret-assignment',
+        redactedExcerpt: expect.objectContaining({ text: 'password=[REDACTED_SECRET_ASSIGNMENT]' })
+      })
+    ]));
+    expect(serialized).not.toContain(credentialUrl);
+    expect(serialized).not.toContain(password);
+  });
+
+  it('does not trust raw Gitleaks Match or Secret fields for retained excerpts', async () => {
+    repoPath = createTempRepo();
+    const rawSlackWebhook = 'https://hooks.slack.com/services/T00000000/B00000000/abcdefABCDEF123456';
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `webhook: ${rawSlackWebhook}\n`);
+
+    const result = await analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({
+        status: 'failed',
+        exitCode: 1,
+        report: [{
+          RuleID: 'slack-webhook-url',
+          Description: 'Slack webhook',
+          File: 'src/main/resources/application.yml',
+          StartLine: 1,
+          EndLine: 1,
+          Match: `webhook: ${rawSlackWebhook}`,
+          Secret: rawSlackWebhook,
+          Entropy: 5,
+          Fingerprint: 'src/main/resources/application.yml:slack-webhook-url:1'
+        }]
+      })
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.findings[0]).toMatchObject({
+      path: 'src/main/resources/application.yml',
+      redactedExcerpt: expect.objectContaining({
+        text: '[REDACTED_SECRET_ASSIGNMENT]'
+      })
+    });
+    expect(serialized).not.toContain(rawSlackWebhook);
+    expect(serialized).not.toContain('hooks.slack.com');
+    expect(serialized).not.toContain('abcdefABCDEF123456');
   });
 });
 
@@ -1544,7 +1616,7 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('local docker defaults');
     expect(rendered.details).toContain('Confirm local Docker defaults are not reused outside local development');
-    expect(rendered.details).toContain('POSTGRES_PASSWORD=[REDACTED]');
+    expect(rendered.details).toContain('[REDACTED_SECRET_ASSIGNMENT]');
     expect(rendered.details).not.toContain('postgres');
   });
 
@@ -1558,7 +1630,7 @@ describe('S006 report formatting and criterion details', () => {
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
-    expect(rendered.details).toContain('Bearer [REDACTED_TOKEN]');
+    expect(rendered.details).toContain('[REDACTED_TOKEN]');
     expect(rendered.details).not.toContain(rawToken);
   });
 

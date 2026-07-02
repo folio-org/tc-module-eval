@@ -15,7 +15,6 @@ const PLACEHOLDER_VALUE_PATTERN =
   /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
-const BASE64ISH_PATTERN = /^[A-Za-z0-9._~+/=-]{20,}$/;
 const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';
 const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
 const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
@@ -94,7 +93,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
       if (/^(?:X-Okapi-Token|Okapi-Token)\s*[:=]/i.test(rawMatch)) {
         return rawMatch.replace(/^((?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*)[A-Za-z0-9._~+/=-]{20,}$/i, '$1[REDACTED_TOKEN]');
       }
-      return '[REDACTED_JWT]';
+      return '[REDACTED_TOKEN]';
     },
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
@@ -425,9 +424,6 @@ function classifyAssignmentValue(rawMatch: string): S006ValueClassification {
   }
   if (DEFAULT_CREDENTIAL_VALUE_PATTERN.test(value) || SYNTHETIC_VALUE_PATTERN.test(value) || value.length < 8) {
     return 'synthetic';
-  }
-  if (BASE64ISH_PATTERN.test(value)) {
-    return 'live-looking';
   }
   return 'live-looking';
 }

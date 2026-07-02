@@ -16,7 +16,7 @@ Personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechani
 
 ## S006 Sensitive Information Review
 
-Sensitive-information evaluation uses Gitleaks for committed secret detection, plus bounded local checks for FOLIO/environment-specific endpoints and local paths. Reports use redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
+Sensitive-information evaluation uses Gitleaks against the checked-out working tree, plus bounded local checks for credential URLs, concrete secret assignments, FOLIO/environment-specific endpoints, and local paths. Reports use redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
 
 The devcontainer and GitHub Actions workflows install Gitleaks automatically. For other local runs, install the `gitleaks` binary on `PATH`, or set `GITLEAKS_PATH` to use a specific binary. If Gitleaks is unavailable or fails, sensitive-information review reports a material scanner warning and returns manual review rather than silently passing.
 

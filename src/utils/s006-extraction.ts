@@ -20,7 +20,6 @@ import {
   getS006Severity,
   S006FingerprintRun
 } from './s006-detectors';
-import { redactS006SensitiveInformationText } from './s006-detectors';
 import {
   runS006GitleaksScan,
   S006GitleaksFinding
@@ -54,7 +53,13 @@ export interface S006AnalysisOptions {
   gitleaksTimeoutMs?: number;
 }
 
-const S006_LOCAL_DETECTOR_IDS = ['tenant-host-endpoint', 'private-url', 'local-absolute-path'] as const;
+const S006_LOCAL_DETECTOR_IDS = [
+  'credential-url',
+  'password-secret-assignment',
+  'tenant-host-endpoint',
+  'private-url',
+  'local-absolute-path'
+] as const;
 const S006_LINE_DETECTORS = S006_LOCAL_DETECTOR_IDS
   .map(detectorId => getS006DetectorById(detectorId))
   .map(detector => ({
@@ -233,6 +238,9 @@ function shouldSuppressS006LineFinding(
   rawMatch: string,
   lineText: string
 ): boolean {
+  if (detector.id === 'password-secret-assignment') {
+    return shouldSuppressS006SecretAssignment(detector, rawMatch);
+  }
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
   }
@@ -240,6 +248,31 @@ function shouldSuppressS006LineFinding(
     return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText);
   }
   return false;
+}
+
+function shouldSuppressS006SecretAssignment(detector: S006DetectorRegistryEntry, rawMatch: string): boolean {
+  if (detector.classifyValue(rawMatch) === 'placeholder') {
+    return true;
+  }
+
+  const value = rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
+  if (isS006GitleaksOwnedSecretShape(value)) {
+    return true;
+  }
+
+  return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}$/.test(value) ||
+    /^\$\{\{\s*(?:secrets|env|vars|github|inputs)\.[^}]+\}\}$/i.test(value) ||
+    /^inherit$/i.test(value) ||
+    /^(?:test|fake|mock|dummy)(?:[-_](?:password|secret|token|jwt|bearer))?$/i.test(value);
+}
+
+function isS006GitleaksOwnedSecretShape(value: string): boolean {
+  return (['provider-api-key', 'bearer-or-jwt-token'] as const)
+    .map(detectorId => getCompiledS006DetectorPattern(getS006DetectorById(detectorId)))
+    .some(pattern => {
+      pattern.lastIndex = 0;
+      return pattern.test(value);
+    });
 }
 
 function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: string): boolean {
@@ -460,16 +493,8 @@ function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: str
   return 'live-looking';
 }
 
-function buildS006GitleaksRedactedExcerpt(source: S006GitleaksFinding, fallbackPlaceholder: string): string {
-  const preferred = source.Match || source.Secret || fallbackPlaceholder;
-  if (/REDACTED/.test(preferred)) {
-    return preferred;
-  }
-  const redacted = redactS006SensitiveInformationText(preferred, 700);
-  if (!redacted || redacted === preferred) {
-    return fallbackPlaceholder;
-  }
-  return redacted;
+function buildS006GitleaksRedactedExcerpt(_source: S006GitleaksFinding, fallbackPlaceholder: string): string {
+  return fallbackPlaceholder;
 }
 
 function normalizeS006GitleaksPath(filePath: string | undefined): string | undefined {
@@ -543,8 +568,8 @@ function retainS006Finding(
     finding.detectorId,
     finding.path,
     finding.line ?? '',
-    finding.endLine ?? '',
-    finding.valueFingerprint.value
+    finding.endLine ?? finding.line ?? '',
+    finding.redactedExcerpt.placeholder
   ].join('\0');
   if (dedupeKeys.has(dedupeKey)) {
     return false;

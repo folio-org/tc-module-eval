@@ -100,7 +100,7 @@ describe('redaction', () => {
     ].join('\n'));
 
     expect(redacted).toContain('[REDACTED_PRIVATE_KEY_BLOCK]');
-    expect(redacted).toContain('[REDACTED_JWT]');
+    expect(redacted).toContain('[REDACTED_TOKEN]');
     expect(redacted).toContain('X-Okapi-Token: [REDACTED]');
     expect(redacted).toContain('[REDACTED_PROVIDER_TOKEN]');
     expect(redacted).not.toContain('MIIEvQIB');
