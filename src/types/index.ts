@@ -145,6 +145,7 @@ export interface EvaluationConfig {
 export * from './s004-installation-documentation';
 export * from './s005-personal-data-disclosure';
 export * from './s006-sensitive-information';
+export * from './s007-officially-supported-technologies';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
