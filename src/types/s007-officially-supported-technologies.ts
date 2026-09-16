@@ -125,3 +125,58 @@ export type S007PolicyLoadResult =
       sourcePath: string;
       diagnostics: S007PolicyDiagnostic[];
     };
+
+export type S007EvidenceKind =
+  | 'language-indicator'
+  | 'dependency-declaration'
+  | 'plugin-declaration'
+  | 'build-setting';
+
+export interface S007TechnologyObservation {
+  identityCandidates: string[];
+  displayName: string;
+  ecosystem: S007Ecosystem;
+  technologyType: 'language' | 'framework' | 'library';
+  evidenceKind: S007EvidenceKind;
+  sourcePath: string;
+  sourceDetail: string;
+  declaredVersion?: string;
+  resolvedVersion?: string;
+  versionSourcePath?: string;
+  confidence: 'confident' | 'partial';
+  provenance: 'repository-static';
+  unlistedFrameworkCandidate?: true;
+  conflictPaths?: string[];
+}
+
+export interface S007EvidenceDiagnostic {
+  code:
+    | 'manifest_missing'
+    | 'manifest_malformed'
+    | 'manifest_too_large'
+    | 'insufficient_evidence'
+    | 'version_unresolved'
+    | 'maven_remote_parent'
+    | 'maven_imported_bom'
+    | 'gradle_dynamic_expression'
+    | 'gradle_version_catalog'
+    | 'gradle_build_logic'
+    | 'local_module_missing'
+    | 'local_module_outside_repository'
+    | 'local_module_symlink'
+    | 'traversal_limit'
+    | 'yarn_lock_missing'
+    | 'yarn_lock_malformed'
+    | 'yarn_lock_unsupported'
+    | 'conflicting_versions';
+  message: string;
+  material: boolean;
+  path?: string;
+}
+
+export interface S007TechnologyEvidenceResult {
+  observations: S007TechnologyObservation[];
+  diagnostics: S007EvidenceDiagnostic[];
+  manifestPaths: string[];
+  complete: boolean;
+}
