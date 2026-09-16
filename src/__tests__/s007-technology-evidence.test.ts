@@ -75,6 +75,49 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('reads the Java version from Maven compiler-plugin configuration', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><compiler.java>17</compiler.java></properties>
+        <build><plugins><plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration><release>\${compiler.java}</release></configuration>
+        </plugin></plugins></build>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version></dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '17',
+      sourceDetail: 'maven-compiler-plugin.configuration.release',
+      versionSourcePath: 'pom.xml'
+    });
+  });
+
+  it('marks Maven coverage incomplete when relevant evidence has no Java version', async () => {
+    await write('pom.xml', `
+      <project><dependencies><dependency>
+        <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version>
+      </dependency></dependencies></project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toBeDefined();
+    expect(find(result, 'java')).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        path: 'pom.xml',
+        message: expect.stringContaining('Maven Java version')
+      })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
   it('reads literal Groovy and Kotlin Gradle evidence while flagging dynamic coverage', async () => {
     await write('settings.gradle', "include 'service', '../outside'\n");
     await write('gradle.properties', 'lombokVersion=1.18.32\n');
@@ -165,6 +208,35 @@ describe('S007 static technology evidence', () => {
     expect(result.complete).toBe(true);
   });
 
+  it('preserves duplicate JavaScript declarations and resolves each Yarn selector', async () => {
+    await writeJson('package.json', {
+      dependencies: { react: '^17.0.0' },
+      peerDependencies: { react: '^18.2.0' }
+    });
+    await write('yarn.lock', `
+      # yarn lockfile v1
+
+      "react@^17.0.0":
+        version "17.0.2"
+
+      "react@^18.2.0":
+        version "18.2.0"
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'javascript');
+    const react = result.observations.filter(observation => observation.identityCandidates.includes('react'));
+
+    expect(react).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceDetail: 'dependencies.react', declaredVersion: '^17.0.0', resolvedVersion: '17.0.2' }),
+      expect.objectContaining({ sourceDetail: 'peerDependencies.react', declaredVersion: '^18.2.0', resolvedVersion: '18.2.0' })
+    ]));
+    expect(react).toHaveLength(2);
+    expect(react.every(observation => observation.confidence === 'partial')).toBe(true);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'conflicting_versions', material: true })
+    ]));
+  });
+
   it.each([
     ['missing', undefined, 'yarn_lock_missing'],
     ['berry', '__metadata:\n  version: 8\n', 'yarn_lock_unsupported'],
@@ -209,6 +281,29 @@ describe('S007 static technology evidence', () => {
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'conflicting_versions', material: true })
     ]));
+  });
+
+  it('rejects Gradle modules that escape through an ancestor symlink', async () => {
+    const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), 's007-outside-'));
+    try {
+      await fs.outputFile(path.join(outsidePath, 'service', 'build.gradle'), `
+        java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+        dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+      `);
+      await write('settings.gradle', "include 'linked:service'\n");
+      await write('build.gradle', 'plugins { id \'java\' }\n');
+      await fs.symlink(outsidePath, path.join(repoPath, 'linked'), 'dir');
+
+      const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+      expect(find(result, 'vertx')).toBeUndefined();
+      expect(result.manifestPaths).not.toContain('linked/service/build.gradle');
+      expect(result.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'local_module_outside_repository', material: true, path: 'settings.gradle' })
+      ]));
+    } finally {
+      await fs.remove(outsidePath);
+    }
   });
 
   async function write(relativePath: string, content: string): Promise<void> {

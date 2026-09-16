@@ -42,6 +42,37 @@ describe('S007 deterministic evaluator', () => {
     ]));
   });
 
+  it('applies the Java 17 exception when Grails evidence is present', () => {
+    const result = evaluateS007(policy, evidence([
+      observation('java', '17', '17'),
+      observation('grails', '7', '7')
+    ]), 'java');
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'java',
+        classification: 'compliant',
+        matchedPolicy: expect.objectContaining({
+          sourceStatement: 'Grails modules use at least Java 17',
+          constraint: { kind: 'minimum', expression: '17.0.0' }
+        })
+      }),
+      expect.objectContaining({ technologyId: 'grails', classification: 'compliant' })
+    ]));
+  });
+
+  it('keeps Java exception applicability manual when evidence coverage is incomplete', () => {
+    const result = evaluateS007(policy, {
+      ...evidence([observation('java', '17', '17')]),
+      complete: false,
+      diagnostics: [{ code: 'maven_remote_parent', message: 'remote parent', material: true, path: 'pom.xml' }]
+    }, 'java');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
+  });
+
   it('returns manual for an explicit unlisted framework candidate', () => {
     const candidate = observation('angular', '^18.0.0');
     candidate.unlistedFrameworkCandidate = true;
@@ -114,6 +145,15 @@ describe('S007 deterministic evaluator', () => {
   it('returns manual for a partially overlapping declared range without an exact resolution', () => {
     const result = evaluateS007(policy, evidence([
       observation('react', '>=18.0.0 <19.0.0')
+    ]), 'javascript');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
+  });
+
+  it('treats a bare npm major as a range rather than an exact version', () => {
+    const result = evaluateS007(policy, evidence([
+      observation('react', '18', undefined, 'package.json')
     ]), 'javascript');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);

@@ -13,10 +13,59 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
   return {
     ...report,
     evaluatedAt: GOLDEN_EVALUATED_AT,
-    criteria: report.criteria.map(criterion => criterion.criterionId === 'S005'
-      ? normalizeS005GoldenCriterion(criterion)
-      : criterion
-    ),
+    criteria: report.criteria.map(criterion => {
+      if (criterion.criterionId === 'S005') {
+        return normalizeS005GoldenCriterion(criterion);
+      }
+      if (criterion.criterionId === 'S007') {
+        return normalizeS007GoldenCriterion(criterion);
+      }
+      return criterion;
+    }),
+  };
+}
+
+function normalizeS007GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) {
+    return criterion;
+  }
+
+  const countBy = (items: any[], key: string): Record<string, number> => items.reduce((counts, item) => {
+    const value = item[key] ?? 'none';
+    counts[value] = (counts[value] ?? 0) + 1;
+    return counts;
+  }, {} as Record<string, number>);
+
+  const findings = details.findings ?? [];
+  const diagnostics = details.evidenceDiagnostics ?? [];
+  const projectedFindings = findings
+    .map((finding: any) => ({
+      technologyId: finding.technologyId,
+      classification: finding.classification,
+      contribution: finding.contribution,
+      statusDetermining: finding.statusDetermining,
+      ...(finding.matchedPolicy?.entryId
+        ? { matchedPolicy: { entryId: finding.matchedPolicy.entryId } }
+        : {})
+    }))
+    .sort((left: any, right: any) => {
+      const leftKey = JSON.stringify(left);
+      const rightKey = JSON.stringify(right);
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    });
+
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      policyFormatVersion: details.policyFormatVersion,
+      findingCount: findings.length,
+      findings: projectedFindings,
+      policyDiagnosticCount: details.policyDiagnostics?.length ?? 0,
+      evidenceDiagnosticCounts: countBy(diagnostics, 'code'),
+      agentReviewUnavailableReason: details.agentReviewUnavailableReason,
+    },
   };
 }
 

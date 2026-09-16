@@ -35,7 +35,7 @@ export function evaluateS007(
     section.consumer === 's007' && section.area === (language === 'javascript' ? 'frontend' : 'backend')
   );
   const findings = evidence.observations.map(observation =>
-    evaluateObservation(observation, applicableSections)
+    evaluateObservation(observation, applicableSections, evidence)
   );
 
   if (evidence.observations.length === 0) {
@@ -70,7 +70,8 @@ export function evaluateS007(
 
 function evaluateObservation(
   observation: S007TechnologyObservation,
-  sections: S007PolicySection[]
+  sections: S007PolicySection[],
+  evidence: S007TechnologyEvidenceResult
 ): S007TechnologyFinding {
   const match = findPolicyEntry(observation, sections);
   const base = {
@@ -98,7 +99,8 @@ function evaluateObservation(
   }
 
   const { entry, section } = match;
-  const matchedPolicy = toMatchedPolicy(entry, section);
+  const applicableRule = resolveApplicableRule(entry, sections, evidence);
+  const matchedPolicy = toMatchedPolicy(entry, section, applicableRule);
   const advisories = [
     ...(entry.deprecation ? [entry.deprecation.note] : []),
     ...(entry.recommendations ?? []),
@@ -113,17 +115,21 @@ function evaluateObservation(
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
       `Conflicting declarations were found in ${observation.conflictPaths.join(', ')}.`);
   }
-  if (entry.strength === 'contested') {
+  if (applicableRule.unresolved) {
+    return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
+      'The applicability of a policy exception could not be established from the available repository evidence.');
+  }
+  if (applicableRule.strength === 'contested') {
     return finding(base, matchedPolicy, advisories, 'contested', 'manual',
       'The matched OST statement is contested or time-bound and requires reviewer judgment.');
   }
-  if (entry.strength === 'provisional' || entry.provisional) {
+  if (applicableRule.strength === 'provisional' || entry.provisional) {
     return finding(base, matchedPolicy, advisories, 'provisional', 'manual',
       'The matched OST entry is provisional and cannot determine compliance automatically.');
   }
 
-  const comparison = compareObservationToConstraint(observation, entry.constraint);
-  if (entry.strength === 'advisory') {
+  const comparison = compareObservationToConstraint(observation, applicableRule.constraint);
+  if (applicableRule.strength === 'advisory') {
     return comparison === 'noncompliant'
       ? finding(base, matchedPolicy, advisories, 'advisory-mismatch', 'manual',
         'Repository evidence differs from advisory OST guidance; advisory wording cannot cause failure.')
@@ -131,7 +137,7 @@ function evaluateObservation(
         'The technology is covered only by advisory OST guidance and requires reviewer judgment.');
   }
 
-  if (!entry.constraint) {
+  if (!applicableRule.constraint) {
     return finding(base, matchedPolicy, advisories, 'compliant', 'pass',
       'The technology is listed by a definitive OST rule with no version comparison required.');
   }
@@ -141,7 +147,7 @@ function evaluateObservation(
   }
   if (comparison === 'noncompliant') {
     return finding(base, matchedPolicy, advisories, 'normative-violation', 'fail',
-      `Repository version ${displayVersion(observation)} violates ${entry.sourceStatement}.`);
+      `Repository version ${displayVersion(observation)} violates ${applicableRule.sourceStatement}.`);
   }
   return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
     comparison === 'overlap'
@@ -174,11 +180,12 @@ function compareObservationToConstraint(
   if (!declared) {
     return 'unresolved';
   }
-  const exact = normalizeExactVersion(declared);
-  if (exact) {
-    return semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant';
+  if (observation.ecosystem === 'java') {
+    const exact = normalizeExactVersion(declared);
+    if (exact) {
+      return semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant';
+    }
   }
-
   const translated = translateMavenRange(declared) ?? semver.validRange(declared, { includePrerelease: true });
   if (!translated) {
     return 'unresolved';
@@ -257,14 +264,60 @@ function normalizeIdentity(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySection): S007MatchedPolicyEntry {
+interface ApplicableRule {
+  constraint?: S007VersionConstraint;
+  strength: S007TechnologyPolicyEntry['strength'];
+  sourceStatement: string;
+  unresolved: boolean;
+}
+
+function resolveApplicableRule(
+  entry: S007TechnologyPolicyEntry,
+  sections: S007PolicySection[],
+  evidence: S007TechnologyEvidenceResult
+): ApplicableRule {
+  const base = {
+    constraint: entry.constraint,
+    strength: entry.strength,
+    sourceStatement: entry.sourceStatement,
+    unresolved: false
+  };
+  if (!entry.exceptions?.length) return base;
+
+  for (const exception of entry.exceptions) {
+    if (exception.appliesTo !== 'grails-modules') {
+      return { ...base, unresolved: true };
+    }
+
+    const grailsEvidence = evidence.observations.some(observation =>
+      observation.provenance === 'repository-static'
+      && findPolicyEntry(observation, sections)?.entry.id === 'grails'
+    );
+    if (grailsEvidence) {
+      return {
+        constraint: exception.constraint,
+        strength: exception.strength,
+        sourceStatement: exception.sourceStatement,
+        unresolved: false
+      };
+    }
+  }
+
+  return evidence.complete ? base : { ...base, unresolved: true };
+}
+
+function toMatchedPolicy(
+  entry: S007TechnologyPolicyEntry,
+  section: S007PolicySection,
+  rule: ApplicableRule
+): S007MatchedPolicyEntry {
   return {
     sectionId: section.id,
     entryId: entry.id,
     displayName: entry.displayName,
-    strength: entry.strength,
-    sourceStatement: entry.sourceStatement,
-    constraint: entry.constraint
+    strength: rule.strength,
+    sourceStatement: rule.sourceStatement,
+    constraint: rule.constraint
   };
 }
 

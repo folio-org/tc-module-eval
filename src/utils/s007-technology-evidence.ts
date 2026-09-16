@@ -34,6 +34,13 @@ interface MavenContext {
   dependencyManagement: Map<string, { value: string; sourcePath: string }>;
 }
 
+interface JavaScriptDeclaration {
+  packageName: string;
+  range: string;
+  field: string;
+  identity: Identity;
+}
+
 const JAVASCRIPT_IDENTITIES: Record<string, Identity> = {
   '@folio/stripes-core': identity('stripes', 'Stripes', 'javascript', 'framework'),
   react: identity('react', 'React', 'javascript', 'framework'),
@@ -114,7 +121,7 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
   }
 
   const dependencyFields = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
-  const declarations = new Map<string, { range: string; field: string; identity: Identity }>();
+  const declarations: JavaScriptDeclaration[] = [];
   for (const field of dependencyFields) {
     const dependencies = manifest[field];
     if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
@@ -123,7 +130,7 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
     for (const [packageName, range] of Object.entries(dependencies)) {
       const matched = JAVASCRIPT_IDENTITIES[packageName];
       if (matched && typeof range === 'string') {
-        declarations.set(packageName, { range, field, identity: matched });
+        declarations.push({ packageName, range, field, identity: matched });
       }
     }
   }
@@ -146,19 +153,21 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
   });
 
   const lockVersions = collectYarnClassicVersions(context, declarations);
-  for (const [packageName, declaration] of declarations) {
+  for (const declaration of declarations) {
+    const selector = yarnSelector(declaration);
+    const resolvedVersion = lockVersions.get(selector);
     addObservation(context, {
-      identityCandidates: [declaration.identity.id, packageName],
+      identityCandidates: [declaration.identity.id, declaration.packageName],
       displayName: declaration.identity.displayName,
       ecosystem: declaration.identity.ecosystem,
       technologyType: declaration.identity.technologyType,
       evidenceKind: 'dependency-declaration',
       sourcePath: 'package.json',
-      sourceDetail: `${declaration.field}.${packageName}`,
+      sourceDetail: `${declaration.field}.${declaration.packageName}`,
       declaredVersion: declaration.range,
-      resolvedVersion: lockVersions.get(packageName),
-      versionSourcePath: lockVersions.has(packageName) ? 'yarn.lock' : undefined,
-      confidence: lockVersions.has(packageName) || isExactVersion(declaration.range) ? 'confident' : 'partial',
+      resolvedVersion,
+      versionSourcePath: resolvedVersion ? 'yarn.lock' : undefined,
+      confidence: resolvedVersion || isExactVersion(declaration.range) ? 'confident' : 'partial',
       provenance: 'repository-static',
       unlistedFrameworkCandidate: declaration.identity.unlisted
     });
@@ -167,10 +176,10 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
 
 function collectYarnClassicVersions(
   context: EvidenceContext,
-  declarations: Map<string, { range: string }>
+  declarations: JavaScriptDeclaration[]
 ): Map<string, string> {
   const versions = new Map<string, string>();
-  if (declarations.size === 0) {
+  if (declarations.length === 0) {
     return versions;
   }
 
@@ -196,12 +205,12 @@ function collectYarnClassicVersions(
       return versions;
     }
 
-    for (const [packageName, declaration] of declarations) {
-      const selector = `${packageName}@${declaration.range}`;
+    for (const declaration of declarations) {
+      const selector = yarnSelector(declaration);
       for (const [combinedSelectors, resolution] of Object.entries(parsed.object)) {
         const selectors = combinedSelectors.split(/,\s*/).map(value => value.replace(/^"|"$/g, ''));
         if (selectors.includes(selector) && typeof resolution.version === 'string') {
-          versions.set(packageName, resolution.version);
+          versions.set(selector, resolution.version);
           break;
         }
       }
@@ -218,7 +227,21 @@ async function collectMavenEvidence(context: EvidenceContext): Promise<void> {
   if (!fs.existsSync(pomPath)) {
     return;
   }
+  const firstMavenObservation = context.observations.length;
   await visitMavenPom(context, pomPath, emptyMavenContext());
+  const mavenObservations = context.observations.slice(firstMavenObservation);
+  if (
+    mavenObservations.some(observation => observation.identityCandidates[0] !== 'java')
+    && !mavenObservations.some(observation => observation.identityCandidates[0] === 'java')
+  ) {
+    diagnostic(
+      context,
+      'version_unresolved',
+      'The Maven Java version could not be established from local properties or maven-compiler-plugin configuration.',
+      true,
+      'pom.xml'
+    );
+  }
 }
 
 async function visitMavenPom(
@@ -273,10 +296,11 @@ async function visitMavenPom(
     }
   }
 
-  const javaVersion = firstResolvedValue(
-    effective,
-    ['maven.compiler.release', 'java.version', 'maven.compiler.source', 'maven.compiler.target']
-  );
+  const javaVersion = findMavenCompilerVersion(project, effective, sourcePath)
+    ?? firstResolvedValue(
+      effective,
+      ['maven.compiler.release', 'java.version', 'maven.compiler.source', 'maven.compiler.target']
+    );
   if (javaVersion) {
     addObservation(context, {
       identityCandidates: ['java'],
@@ -392,17 +416,22 @@ function collectGradleEvidence(context: EvidenceContext): void {
   }
   for (const moduleName of parseGradleIncludes(settings)) {
     const normalized = moduleName.replace(/^:/, '').replace(/:/g, path.sep);
-    const moduleDir = path.resolve(context.repoPath, normalized);
-    if (!isPathLexicallyInside(context.repoPath, moduleDir)) {
+    const declaredModuleDir = path.resolve(context.repoPath, normalized);
+    if (!isPathLexicallyInside(context.repoPath, declaredModuleDir)) {
       diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} resolves outside the repository.`, true, relativePosixPath(context.repoPath, settingsPath));
       continue;
     }
-    if (!fs.existsSync(moduleDir)) {
+    if (!fs.existsSync(declaredModuleDir)) {
       diagnostic(context, 'local_module_missing', `Gradle module ${moduleName} was declared but not found.`, true, relativePosixPath(context.repoPath, settingsPath));
       continue;
     }
-    if (fs.lstatSync(moduleDir).isSymbolicLink()) {
+    if (fs.lstatSync(declaredModuleDir).isSymbolicLink()) {
       diagnostic(context, 'local_module_symlink', `Gradle module ${moduleName} is a symlink and was not followed.`, true, normalized);
+      continue;
+    }
+    const moduleDir = fs.realpathSync(declaredModuleDir);
+    if (!isPathLexicallyInside(context.repoPath, moduleDir)) {
+      diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} resolves outside the repository.`, true, relativePosixPath(context.repoPath, settingsPath));
       continue;
     }
     const moduleProperties = new Map([...properties, ...readGradleProperties(context, path.join(moduleDir, 'gradle.properties'))]);
@@ -673,6 +702,38 @@ function emptyMavenContext(): MavenContext {
 
 function cloneMavenContext(value: MavenContext): MavenContext {
   return { properties: new Map(value.properties), dependencyManagement: new Map(value.dependencyManagement) };
+}
+
+function findMavenCompilerVersion(
+  project: any,
+  context: MavenContext,
+  sourcePath: string
+): { name: string; value: string; sourcePath: string } | undefined {
+  for (const plugin of asArray(project.build?.plugins?.plugin)) {
+    const groupId = xmlText(plugin?.groupId);
+    if (
+      xmlText(plugin?.artifactId) !== 'maven-compiler-plugin'
+      || (groupId && groupId !== 'org.apache.maven.plugins')
+    ) {
+      continue;
+    }
+    const configurations = [plugin.configuration]
+      .concat(asArray(plugin.executions?.execution).map(execution => execution?.configuration))
+      .filter(Boolean);
+    for (const configuration of configurations) {
+      for (const name of ['release', 'source', 'target']) {
+        const resolved = resolveMavenValue(xmlText(configuration[name]), context.properties, sourcePath);
+        if (resolved) {
+          return { name: `maven-compiler-plugin.configuration.${name}`, ...resolved };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+function yarnSelector(declaration: Pick<JavaScriptDeclaration, 'packageName' | 'range'>): string {
+  return `${declaration.packageName}@${declaration.range}`;
 }
 
 function firstResolvedValue(
