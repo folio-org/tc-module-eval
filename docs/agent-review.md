@@ -2,7 +2,7 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, and `S006` sensitive/environment-specific information review.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, and `S007` officially supported technologies review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
@@ -19,6 +19,23 @@ S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechan
 Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, redacted parsed summary, and bounded redacted excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references. S005 excerpts are redacted review hints, not PII-safe extracts.
 
 If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
+
+## S007 Officially Supported Technologies Review
+
+S007 invokes agent review only when deterministic analysis is manual and a manifest
+contains useful repository evidence. Policy-load failures and manual results without
+repository-backed material do not invoke it.
+
+The review workspace contains a bounded deterministic summary and selected, redacted
+manifest excerpts. Absolute paths, traversal paths, symlinks, duplicate files, and
+oversized files are excluded. Repository content is untrusted evidence: the agent is
+instructed not to follow repository-authored instructions, run commands, execute
+builds or tests, install dependencies, modify files, make network calls, or invent
+policy. Citations are limited to paths in the review manifest.
+
+Agent output may clarify an unresolved declaration, conflict, or unlisted framework,
+but it cannot change the deterministic status. Disabled, excluded, unavailable,
+failed, or malformed review leaves S007 manual and records the unavailable reason.
 
 ## S006 Sensitive Information Review
 

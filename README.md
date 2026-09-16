@@ -33,6 +33,35 @@ When this flag is used, reports record where commands ran: `github-actions` in G
 
 Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
+### S007 Officially Supported Technologies
+
+S007 evaluates a module against the current policy committed at
+`config/officially-supported-technologies.json`. There is no policy selector and no
+separate policy per delivery train. Git history preserves prior policy states.
+
+The evaluation is static and read-only. It inspects local Maven and Gradle metadata,
+`package.json`, and a top-level Yarn Classic lockfile. It does not run a build, install
+dependencies, call Confluence, or modify the evaluated repository. A definitive,
+locally proven violation of a normative rule fails. Unresolved, conflicting,
+advisory, provisional, contested, unlisted-framework, or incomplete evidence remains
+manual. Pass requires complete relevant evidence and compliance with every applicable
+definitive rule.
+
+To update the policy:
+
+1. Edit `config/officially-supported-technologies.json` in place. Do not add another
+   policy file or selector.
+2. Keep `formatVersion` aligned with
+   `src/schemas/officially-supported-technologies.schema.json`. Historical source
+   metadata is optional and does not affect status.
+3. Preserve normative strength, recommendations, provisional or contested wording,
+   applicability exceptions, deprecations, and reviewer notes explicitly.
+4. Run `yarn test --runInBand --testPathPattern=s007-policy` and `yarn build`.
+
+The policy also retains build-tool, testing, and infrastructure sections for future
+criteria. S007 consumes only applicable language and framework entries. See
+[Criterion Notes](docs/criterion-notes.md) for reviewer guidance.
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
