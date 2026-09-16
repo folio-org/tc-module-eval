@@ -12,6 +12,7 @@ import { isWithinRepo, relativePosixPath } from './repo-files';
 
 const MAX_MANIFEST_BYTES = 1024 * 1024;
 const MAX_MANIFESTS = 64;
+const MAX_MAVEN_PROPERTY_DEPTH = 16;
 
 interface EvidenceContext {
   repoPath: string;
@@ -450,13 +451,13 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
     return;
   }
   const sourcePath = relativePosixPath(context.repoPath, buildFile);
+  const staticContent = stripGradleComments(content);
   const properties = new Map(inheritedProperties);
-  for (const match of content.matchAll(/(?:def|val|var)?\s*([A-Za-z][\w.]*)\s*=\s*["']([^"']+)["']/g)) {
+  for (const match of staticContent.matchAll(/(?:def|val|var)?\s*([A-Za-z][\w.]*)\s*=\s*["']([^"']+)["']/g)) {
     properties.set(match[1], match[2]);
   }
 
-  const javaMatch = /JavaLanguageVersion\.of\((\d+)\)|JavaVersion\.VERSION_(\d+)|(?:sourceCompatibility|targetCompatibility)\s*=\s*["']?(\d+)["']?/m.exec(content);
-  const javaVersion = javaMatch?.slice(1).find(Boolean);
+  const javaVersion = findGradleJavaVersion(staticContent);
   if (javaVersion) {
     addObservation(context, {
       identityCandidates: ['java'],
@@ -465,19 +466,19 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
       technologyType: 'language',
       evidenceKind: 'build-setting',
       sourcePath,
-      sourceDetail: 'Gradle Java compatibility/toolchain',
-      declaredVersion: javaVersion,
+      sourceDetail: javaVersion.sourceDetail,
+      declaredVersion: javaVersion.value,
       confidence: 'confident',
       provenance: 'repository-static'
     });
   }
 
   const dependencyPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s*(?:\(\s*)?["']([^"']+)["'](?!\s*\+)/g;
-  for (const match of content.matchAll(dependencyPattern)) {
+  for (const match of staticContent.matchAll(dependencyPattern)) {
     collectGradleCoordinate(context, sourcePath, match[1], properties);
   }
   const concatenatedPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s+["']([^"']+:)["']\s*\+\s*([A-Za-z][\w.]*)/g;
-  for (const match of content.matchAll(concatenatedPattern)) {
+  for (const match of staticContent.matchAll(concatenatedPattern)) {
     const value = properties.get(match[2]);
     collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties);
     if (!value) {
@@ -486,7 +487,7 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
   }
 
   const pluginPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*["']([^"']+)["']/g;
-  for (const match of content.matchAll(pluginPattern)) {
+  for (const match of staticContent.matchAll(pluginPattern)) {
     const matched = matchGradlePlugin(match[1]);
     if (matched) {
       addObservation(context, {
@@ -505,7 +506,7 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
     }
   }
 
-  if (/\blibs\.[A-Za-z]/.test(content)) {
+  if (/\blibs\.[A-Za-z]/.test(staticContent)) {
     diagnostic(context, 'gradle_dynamic_expression', 'Gradle version-catalog references require resolution outside the bounded static reader.', true, sourcePath);
   }
 }
@@ -566,7 +567,8 @@ function readGradleProperties(context: EvidenceContext, propertiesPath: string):
 
 function parseGradleIncludes(content: string): string[] {
   const modules: string[] = [];
-  for (const match of content.matchAll(/\binclude\s*(?:\(([^)]*)\)|([^\n]+))/g)) {
+  const staticContent = stripGradleComments(content);
+  for (const match of staticContent.matchAll(/\binclude\b\s*(?:\(([^)]*)\)|([^\n]+))/g)) {
     const argumentsText = match[1] ?? match[2] ?? '';
     for (const quoted of argumentsText.matchAll(/["']([^"']+)["']/g)) {
       modules.push(quoted[1]);
@@ -741,7 +743,9 @@ function firstResolvedValue(
   names: string[]
 ): { name: string; value: string; sourcePath: string } | undefined {
   for (const name of names) {
-    const value = context.properties.get(name);
+    const property = context.properties.get(name);
+    if (!property) continue;
+    const value = resolveMavenValue(`\${${name}}`, context.properties, property.sourcePath);
     if (value) return { name, ...value };
   }
   return undefined;
@@ -752,11 +756,137 @@ function resolveMavenValue(
   properties: Map<string, { value: string; sourcePath: string }>,
   declarationSourcePath: string
 ): { value: string; sourcePath: string } | undefined {
-  if (!rawValue) return undefined;
-  const property = /^\$\{([^}]+)\}$/.exec(rawValue);
-  if (property) return properties.get(property[1]);
-  if (rawValue.includes('${')) return undefined;
-  return { value: rawValue, sourcePath: declarationSourcePath };
+  return resolveMavenText(rawValue, properties, declarationSourcePath, new Set(), 0);
+}
+
+function resolveMavenText(
+  rawValue: string,
+  properties: Map<string, { value: string; sourcePath: string }>,
+  sourcePath: string,
+  resolving: Set<string>,
+  depth: number
+): { value: string; sourcePath: string } | undefined {
+  if (!rawValue || depth > MAX_MAVEN_PROPERTY_DEPTH) return undefined;
+  const propertyNames = [...rawValue.matchAll(/\$\{([^}]+)\}/g)].map(match => match[1]);
+  if (propertyNames.length === 0) {
+    return { value: rawValue, sourcePath };
+  }
+
+  let value = rawValue;
+  let resolvedSourcePath = sourcePath;
+  for (const name of new Set(propertyNames)) {
+    if (resolving.has(name)) return undefined;
+    const property = properties.get(name);
+    if (!property) return undefined;
+    const nextResolving = new Set(resolving).add(name);
+    const resolved = resolveMavenText(
+      property.value,
+      properties,
+      property.sourcePath,
+      nextResolving,
+      depth + 1
+    );
+    if (!resolved) return undefined;
+    value = value.split(`\${${name}}`).join(resolved.value);
+    resolvedSourcePath = resolved.sourcePath;
+  }
+
+  if (value.includes('${')) return undefined;
+  return { value, sourcePath: resolvedSourcePath };
+}
+
+function findGradleJavaVersion(content: string): { value: string; sourceDetail: string } | undefined {
+  const toolchain = /JavaLanguageVersion\.of\(\s*(\d+)\s*\)/.exec(content);
+  if (toolchain) {
+    return { value: toolchain[1], sourceDetail: 'Gradle Java toolchain' };
+  }
+
+  for (const setting of ['sourceCompatibility', 'targetCompatibility']) {
+    const assignment = new RegExp(
+      `${setting}\\s*=\\s*(?:JavaVersion\\.VERSION_([0-9_]+)|["']?(\\d+)["']?)`
+    ).exec(content);
+    if (assignment) {
+      return {
+        value: assignment[2] ?? normalizeGradleJavaVersion(assignment[1]),
+        sourceDetail: `Gradle ${setting}`
+      };
+    }
+  }
+  return undefined;
+}
+
+function normalizeGradleJavaVersion(value: string): string {
+  return value.startsWith('1_') ? value.slice(2) : value.replace(/_/g, '.');
+}
+
+function stripGradleComments(content: string): string {
+  let result = '';
+  let quote: "'" | '"' | "'''" | '\"\"\"' | undefined;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < content.length;) {
+    const character = content[index];
+    const pair = content.slice(index, index + 2);
+    const triple = content.slice(index, index + 3);
+
+    if (lineComment) {
+      if (character === '\n') {
+        lineComment = false;
+        result += character;
+      } else {
+        result += ' ';
+      }
+      index += 1;
+      continue;
+    }
+    if (blockComment) {
+      if (pair === '*/') {
+        result += '  ';
+        blockComment = false;
+        index += 2;
+      } else {
+        result += character === '\n' ? '\n' : ' ';
+        index += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      if (content.startsWith(quote, index) && content[index - 1] !== '\\') {
+        result += quote;
+        index += quote.length;
+        quote = undefined;
+      } else {
+        result += character;
+        index += 1;
+      }
+      continue;
+    }
+    if (pair === '//') {
+      result += '  ';
+      lineComment = true;
+      index += 2;
+      continue;
+    }
+    if (pair === '/*') {
+      result += '  ';
+      blockComment = true;
+      index += 2;
+      continue;
+    }
+    if (triple === "'''" || triple === '\"\"\"') {
+      quote = triple;
+      result += triple;
+      index += 3;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+    }
+    result += character;
+    index += 1;
+  }
+  return result;
 }
 
 function mavenCoordinates(dependency: any): string | undefined {

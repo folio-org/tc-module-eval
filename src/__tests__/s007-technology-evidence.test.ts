@@ -97,6 +97,56 @@ describe('S007 static technology evidence', () => {
     });
   });
 
+  it('resolves chained Maven properties transitively', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties>
+          <java.version>21</java.version>
+          <revision>5.0.2</revision>
+          <vertx.version>\${revision}</vertx.version>
+        </properties>
+        <dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>\${vertx.version}</version>
+        </dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({
+      declaredVersion: '5.0.2',
+      confidence: 'confident',
+      versionSourcePath: 'pom.xml'
+    });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved' })
+    ]));
+    expect(result.complete).toBe(true);
+  });
+
+  it('marks cyclic Maven properties unresolved without exposing a placeholder as a version', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties>
+          <java.version>21</java.version>
+          <vertx.version>\${revision}</vertx.version>
+          <revision>\${vertx.version}</revision>
+        </properties>
+        <dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>\${vertx.version}</version>
+        </dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: undefined, confidence: 'partial' });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', material: true, path: 'pom.xml' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
   it('marks Maven coverage incomplete when relevant evidence has no Java version', async () => {
     await write('pom.xml', `
       <project><dependencies><dependency>
@@ -153,6 +203,77 @@ describe('S007 static technology evidence', () => {
     expect(result.diagnostics).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'version_unresolved', path: 'build.gradle' })
     ]));
+  });
+
+  it('ignores composite builds and commented-out Gradle includes', async () => {
+    await write('settings.gradle', `
+      includeBuild('../shared-lib')
+      include('service')
+      // include('old-module')
+      /*
+       * include('retired-module')
+       */
+    `);
+    await write('build.gradle', 'java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }\n');
+    await write('service/build.gradle', `
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ sourcePath: 'service/build.gradle' });
+    expect(result.manifestPaths).toEqual(expect.arrayContaining(['build.gradle', 'service/build.gradle', 'settings.gradle']));
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'local_module_missing' }),
+      expect.objectContaining({ code: 'local_module_outside_repository' })
+    ]));
+  });
+
+  it('ignores commented Gradle properties, dependencies, plugins, and dynamic references', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      def vertxVersion = '5.0.3'
+      // def vertxVersion = '4.5.0'
+      plugins { id 'org.springframework.boot' version '4.0.1' }
+      dependencies {
+        implementation 'io.vertx:vertx-core:' + vertxVersion
+        // implementation 'io.vertx:vertx-core:4.5.0'
+      }
+      /*
+        plugins { id 'org.springframework.boot' version '3.5.0' }
+        dependencies { implementation libs.vertx.core }
+      */
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '5.0.3', confidence: 'confident' });
+    expect(find(result, 'spring-boot')).toMatchObject({ declaredVersion: '4.0.1', confidence: 'confident' });
+    expect(result.observations.filter(item => item.identityCandidates.includes('vertx'))).toHaveLength(1);
+    expect(result.observations.filter(item => item.identityCandidates.includes('spring-boot'))).toHaveLength(1);
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'conflicting_versions' }),
+      expect.objectContaining({ code: 'gradle_dynamic_expression' })
+    ]));
+  });
+
+  it('prefers a Gradle Java toolchain over compatibility declarations regardless of order', async () => {
+    await write('build.gradle', `
+      java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        toolchain { languageVersion = JavaLanguageVersion.of(21) }
+        targetCompatibility = JavaVersion.VERSION_11
+      }
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '21',
+      sourceDetail: 'Gradle Java toolchain',
+      confidence: 'confident'
+    });
   });
 
   it('resolves relevant JavaScript declarations from Yarn Classic and ignores ordinary libraries', async () => {
