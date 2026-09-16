@@ -3,7 +3,6 @@ import {
   EvaluationStatus,
   S007AnalysisResult,
   S007MatchedPolicyEntry,
-  S007OfficiallySupportedTechnologiesPolicy,
   S007PolicyLoadResult,
   S007PolicySection,
   S007TechnologyEvidenceResult,

@@ -45,6 +45,18 @@ const JAVASCRIPT_IDENTITIES: Record<string, Identity> = {
   '@nestjs/core': identity('nestjs', 'NestJS', 'javascript', 'framework', true)
 };
 
+const JAVA_EXACT_IDENTITIES: Record<string, Identity> = {
+  'org.folio:folio-spring-base': identity('folio-spring-base', 'folio-spring-base', 'java', 'framework'),
+  'org.folio:folio-vertx-lib': identity('folio-vertx-lib', 'folio-vertx-lib', 'java', 'framework'),
+  'org.folio:raml-module-builder': identity('raml-module-builder', 'raml-module-builder', 'java', 'framework'),
+  'org.folio:edge-common': identity('edge-common', 'edge-common', 'java', 'framework'),
+  'org.folio:edge-common-spring': identity('edge-common-spring', 'edge-common-spring', 'java', 'framework'),
+  'org.folio:folio-s3-client': identity('folio-s3-client', 'folio-s3-client', 'java', 'library'),
+  'org.projectlombok:lombok': identity('lombok', 'Lombok', 'java', 'library'),
+  'io.minio:minio': identity('minio-java', 'MinIO Java Client', 'java', 'library'),
+  'org.keycloak:keycloak-admin-client': identity('keycloak-admin-client', 'Keycloak Admin Client', 'java', 'library')
+};
+
 export async function collectS007TechnologyEvidence(
   repoPath: string,
   language: 'java' | 'javascript'
@@ -287,7 +299,7 @@ async function visitMavenPom(
       continue;
     }
     const rawVersion = xmlText(dependency.version);
-    const resolvedVersion = resolveMavenValue(rawVersion, effective.properties);
+    const resolvedVersion = resolveMavenValue(rawVersion, effective.properties, sourcePath);
     if (resolvedVersion) {
       effective.dependencyManagement.set(coordinates, resolvedVersion);
     }
@@ -323,7 +335,7 @@ function collectMavenDependencies(
       continue;
     }
     const coordinates = `${groupId}:${artifactId}`;
-    const direct = resolveMavenValue(xmlText(dependency.version), effective.properties);
+    const direct = resolveMavenValue(xmlText(dependency.version), effective.properties, sourcePath);
     const managed = effective.dependencyManagement.get(coordinates);
     const resolved = direct ?? managed;
     addObservation(context, {
@@ -431,7 +443,7 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
     });
   }
 
-  const dependencyPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s*(?:\(\s*)?["']([^"']+)["']/g;
+  const dependencyPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s*(?:\(\s*)?["']([^"']+)["'](?!\s*\+)/g;
   for (const match of content.matchAll(dependencyPattern)) {
     collectGradleCoordinate(context, sourcePath, match[1], properties);
   }
@@ -536,19 +548,8 @@ function parseGradleIncludes(content: string): string[] {
 
 function matchJavaIdentity(groupId: string, artifactId: string): Identity | undefined {
   const coordinate = `${groupId}:${artifactId}`;
-  const exact: Record<string, Identity> = {
-    'org.folio:folio-spring-base': identity('folio-spring-base', 'folio-spring-base', 'java', 'framework'),
-    'org.folio:folio-vertx-lib': identity('folio-vertx-lib', 'folio-vertx-lib', 'java', 'framework'),
-    'org.folio:raml-module-builder': identity('raml-module-builder', 'raml-module-builder', 'java', 'framework'),
-    'org.folio:edge-common': identity('edge-common', 'edge-common', 'java', 'framework'),
-    'org.folio:edge-common-spring': identity('edge-common-spring', 'edge-common-spring', 'java', 'framework'),
-    'org.folio:folio-s3-client': identity('folio-s3-client', 'folio-s3-client', 'java', 'library'),
-    'org.projectlombok:lombok': identity('lombok', 'Lombok', 'java', 'library'),
-    'io.minio:minio': identity('minio-java', 'MinIO Java Client', 'java', 'library'),
-    'org.keycloak:keycloak-admin-client': identity('keycloak-admin-client', 'Keycloak Admin Client', 'java', 'library')
-  };
-  if (exact[coordinate]) {
-    return exact[coordinate];
+  if (JAVA_EXACT_IDENTITIES[coordinate]) {
+    return JAVA_EXACT_IDENTITIES[coordinate];
   }
   if (groupId === 'org.springframework.boot') return identity('spring-boot', 'Spring Boot', 'java', 'framework');
   if (groupId === 'org.springframework' || groupId.startsWith('org.springframework.')) return identity('spring-framework', 'Spring Framework', 'java', 'framework');
@@ -687,13 +688,14 @@ function firstResolvedValue(
 
 function resolveMavenValue(
   rawValue: string,
-  properties: Map<string, { value: string; sourcePath: string }>
+  properties: Map<string, { value: string; sourcePath: string }>,
+  declarationSourcePath: string
 ): { value: string; sourcePath: string } | undefined {
   if (!rawValue) return undefined;
   const property = /^\$\{([^}]+)\}$/.exec(rawValue);
   if (property) return properties.get(property[1]);
   if (rawValue.includes('${')) return undefined;
-  return { value: rawValue, sourcePath: '' };
+  return { value: rawValue, sourcePath: declarationSourcePath };
 }
 
 function mavenCoordinates(dependency: any): string | undefined {

@@ -48,7 +48,7 @@ describe('S007 static technology evidence', () => {
     const result = await collectS007TechnologyEvidence(repoPath, 'java');
 
     expect(find(result, 'java')).toMatchObject({ declaredVersion: '21', sourcePath: 'pom.xml' });
-    expect(find(result, 'folio-spring-base')).toMatchObject({ declaredVersion: '8.2.1', sourcePath: 'pom.xml' });
+    expect(find(result, 'folio-spring-base')).toMatchObject({ declaredVersion: '8.2.1', sourcePath: 'pom.xml', versionSourcePath: 'pom.xml' });
     expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '5.0.2', sourcePath: 'pom.xml' });
     expect(find(result, 'spring-framework')).toMatchObject({ declaredVersion: '7.0.1', sourcePath: 'parent/pom.xml' });
     expect(find(result, 'keycloak-admin-client')).toMatchObject({ declaredVersion: '26.1.0', sourcePath: 'child/pom.xml' });
@@ -106,6 +106,9 @@ describe('S007 static technology evidence', () => {
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'gradle_version_catalog', material: true }),
       expect.objectContaining({ code: 'local_module_outside_repository', material: true })
+    ]));
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', path: 'build.gradle' })
     ]));
   });
 
