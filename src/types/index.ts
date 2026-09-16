@@ -48,7 +48,7 @@ export interface EvaluationResult {
   criteria: CriterionResult[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -109,6 +109,7 @@ export interface ModuleDescriptorArtifact {
 export interface EvaluationRunArtifacts {
   moduleDescriptor?: ModuleDescriptorArtifact;
   moduleKind?: ModuleKindResult;
+  s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
 }
 
 export interface EvaluationRun {

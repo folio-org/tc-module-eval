@@ -144,7 +144,7 @@ export interface S007TechnologyObservation {
   resolvedVersion?: string;
   versionSourcePath?: string;
   confidence: 'confident' | 'partial';
-  provenance: 'repository-static';
+  provenance: 'repository-static' | 'shared-remote-resolution';
   unlistedFrameworkCandidate?: true;
   conflictPaths?: string[];
 }
@@ -231,4 +231,5 @@ export interface S007AnalysisResult {
   findings: S007TechnologyFinding[];
   policyDiagnostics: S007PolicyDiagnostic[];
   evidenceDiagnostics: S007EvidenceDiagnostic[];
+  agentReviewUnavailableReason?: string;
 }

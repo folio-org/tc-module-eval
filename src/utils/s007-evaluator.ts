@@ -105,6 +105,10 @@ function evaluateObservation(
     ...(entry.notes ?? [])
   ];
 
+  if (observation.provenance !== 'repository-static') {
+    return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
+      'The available version came from remote resolution and is diagnostic only; local repository evidence is required for deterministic status.');
+  }
   if (observation.conflictPaths?.length) {
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
       `Conflicting declarations were found in ${observation.conflictPaths.join(', ')}.`);

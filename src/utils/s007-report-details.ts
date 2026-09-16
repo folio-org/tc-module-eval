@@ -1,10 +1,13 @@
-import { S007AnalysisResult } from '../types';
+import { CriterionAgentReviewResult, S007AnalysisResult } from '../types';
 
 export function buildS007CriterionDetails(analysis: S007AnalysisResult): S007AnalysisResult {
   return analysis;
 }
 
-export function renderS007HumanDetails(analysis: S007AnalysisResult): string {
+export function renderS007HumanDetails(
+  analysis: S007AnalysisResult,
+  agentReview?: CriterionAgentReviewResult
+): string {
   const lines = [analysis.summary];
   if (analysis.policyFormatVersion) {
     lines.push(`Policy format: ${analysis.policyFormatVersion}`);
@@ -34,6 +37,17 @@ export function renderS007HumanDetails(analysis: S007AnalysisResult): string {
   }
   for (const diagnostic of analysis.evidenceDiagnostics) {
     lines.push(`Evidence diagnostic${diagnostic.path ? ` (${diagnostic.path})` : ''}: ${diagnostic.message}`);
+  }
+  if (agentReview?.available) {
+    lines.push(
+      'Agent review:',
+      `Advisory recommendation: ${agentReview.recommendation}`,
+      `Confidence: ${agentReview.confidence}`,
+      `Summary: ${agentReview.summary}`,
+      `Rationale: ${agentReview.rationale}`
+    );
+  } else if (analysis.agentReviewUnavailableReason) {
+    lines.push('Agent review:', `Unavailable: ${analysis.agentReviewUnavailableReason}`);
   }
   return lines.join('\n');
 }

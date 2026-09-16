@@ -575,4 +575,56 @@ describe('CLI Integration Tests', () => {
       expect(htmlContent).not.toContain('token=abc123');
     });
   });
+
+  describe('Local S007 OST Integration', () => {
+    test('should evaluate S007 and render matching JSON and HTML rationale without repository commands', async () => {
+      const localRepo = await createLocalGitRepo('s007-ui', {
+        'package.json': JSON.stringify({
+          name: 's007-ui',
+          dependencies: {
+            '@folio/stripes-core': '^10.1.0',
+            react: '~18.2.0'
+          },
+          devDependencies: {
+            typescript: '^5.0.0'
+          }
+        }, null, 2),
+        'yarn.lock': [
+          '"@folio/stripes-core@^10.1.0":',
+          '  version "10.1.2"',
+          '"react@~18.2.0":',
+          '  version "18.2.0"',
+          ''
+        ].join('\n')
+      });
+
+      try {
+        const evaluator = new ModuleEvaluator({
+          outputDir: testOutputDir,
+          criteriaFilter: ['S007'],
+          allowLocalCommands: false
+        });
+        const evaluation = await evaluator.evaluateModule(localRepo);
+        const s007 = evaluation.criteria.find(criterion => criterion.criterionId === 'S007');
+
+        expect(evaluation.criteria).toHaveLength(1);
+        expect(s007?.status).toBe(EvaluationStatus.PASS);
+        expect(s007?.details).toContain('frontend-third-party-frameworks/react');
+        expect(s007?.details).not.toMatch(/policy selector|policy release|flower release/i);
+
+        const reports = await new ReportGenerator(testOutputDir).generateReports(evaluation);
+        const json = JSON.parse(await fs.readFile(reports.jsonPath!, 'utf8'));
+        const html = await fs.readFile(reports.htmlPath!, 'utf8');
+        const jsonS007 = json.criteria.find((criterion: any) => criterion.criterionId === 'S007');
+
+        expect(jsonS007.status).toBe('pass');
+        expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
+        expect(html).toContain('Criterion S007');
+        expect(html).toContain('contribution=pass');
+        expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
+      } finally {
+        await fs.remove(localRepo);
+      }
+    });
+  });
 });
