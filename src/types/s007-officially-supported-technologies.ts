@@ -180,3 +180,55 @@ export interface S007TechnologyEvidenceResult {
   manifestPaths: string[];
   complete: boolean;
 }
+
+export type S007FindingClassification =
+  | 'compliant'
+  | 'normative-violation'
+  | 'advisory-only'
+  | 'advisory-mismatch'
+  | 'provisional'
+  | 'contested'
+  | 'unlisted-framework'
+  | 'unresolved'
+  | 'conflicting'
+  | 'coverage-incomplete';
+
+export type S007FindingContribution = 'pass' | 'manual' | 'fail';
+
+export interface S007MatchedPolicyEntry {
+  sectionId: S007PolicySectionId;
+  entryId: string;
+  displayName: string;
+  strength: S007RuleStrength;
+  sourceStatement: string;
+  constraint?: S007VersionConstraint;
+}
+
+export interface S007FindingEvidence {
+  path: string;
+  detail: string;
+  declaredVersion?: string;
+  resolvedVersion?: string;
+}
+
+export interface S007TechnologyFinding {
+  technologyId: string;
+  displayName: string;
+  classification: S007FindingClassification;
+  contribution: S007FindingContribution;
+  rationale: string;
+  evidence: S007FindingEvidence[];
+  matchedPolicy?: S007MatchedPolicyEntry;
+  advisories: string[];
+  statusDetermining: boolean;
+}
+
+export interface S007AnalysisResult {
+  criterionId: 'S007';
+  status: 'pass' | 'fail' | 'manual' | 'not_applicable';
+  summary: string;
+  policyFormatVersion?: string;
+  findings: S007TechnologyFinding[];
+  policyDiagnostics: S007PolicyDiagnostic[];
+  evidenceDiagnostics: S007EvidenceDiagnostic[];
+}
