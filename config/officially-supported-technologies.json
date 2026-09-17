@@ -1,0 +1,199 @@
+{
+  "formatVersion": "1.0",
+  "source": {
+    "url": "https://folio-org.atlassian.net/wiki/spaces/TC/pages/5053681/Officially+Supported+Technologies",
+    "title": "Officially Supported Technologies",
+    "documentStatus": "ACCEPTED",
+    "exportDate": "2026-07-14",
+    "reviewDate": "2026-01-26",
+    "supportPeriod": {
+      "endDate": "2027-06-30",
+      "statement": "The source page identifies this date as the end of the applicable technology support period."
+    },
+    "notes": [
+      "The source export contains stray Sunflower wording that does not change the current policy entries.",
+      "Historical flower context is retained only in quoted source statements and never participates in evaluation."
+    ]
+  },
+  "definitions": {
+    "oneOfSpecifiedVersions": "When versions are provided, a module must use, work with, or support at least one specified version.",
+    "allOfSpecifiedVersions": "When versions are provided, a module must work with all specified versions.",
+    "unspecifiedVersions": "Use the latest supported version where possible; entry-specific guidance may be provided."
+  },
+  "sections": [
+    {
+      "id": "frontend-languages",
+      "area": "frontend",
+      "category": "language",
+      "consumer": "s007",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "javascript", "displayName": "JavaScript", "aliases": ["js"], "ecosystem": "javascript", "technologyType": "language", "sourceStatement": "JavaScript", "strength": "normative" },
+        { "id": "typescript", "displayName": "TypeScript", "aliases": ["ts"], "ecosystem": "javascript", "technologyType": "language", "sourceStatement": "TypeScript", "strength": "normative" }
+      ]
+    },
+    {
+      "id": "frontend-build-tools",
+      "area": "frontend",
+      "category": "build-tool",
+      "consumer": "s012",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "node", "displayName": "Node.js", "aliases": ["nodejs"], "ecosystem": "javascript", "technologyType": "build-tool", "sourceStatement": "Node 22", "strength": "normative", "constraint": { "kind": "major-line", "expression": "22" } },
+        { "id": "yarn", "displayName": "Yarn", "aliases": [], "ecosystem": "javascript", "technologyType": "build-tool", "sourceStatement": "Yarn 1", "strength": "normative", "constraint": { "kind": "major-line", "expression": "1" } },
+        { "id": "github-actions", "displayName": "GitHub Actions", "aliases": [], "ecosystem": "agnostic", "technologyType": "build-tool", "sourceStatement": "GitHub Actions", "strength": "normative" },
+        { "id": "jenkins", "displayName": "Jenkins", "aliases": [], "ecosystem": "agnostic", "technologyType": "build-tool", "sourceStatement": "Jenkins for legacy projects", "strength": "normative", "applicability": ["legacy-projects"] }
+      ]
+    },
+    {
+      "id": "frontend-first-party-frameworks",
+      "area": "frontend",
+      "category": "framework",
+      "consumer": "s007",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "stripes", "displayName": "Stripes", "aliases": ["@folio/stripes-core"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "Stripes 10.1 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "10.1.0" } }
+      ]
+    },
+    {
+      "id": "frontend-third-party-frameworks",
+      "area": "frontend",
+      "category": "framework",
+      "consumer": "s007",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "react", "displayName": "React", "aliases": ["react-dom"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "React 18.2", "strength": "normative", "constraint": { "kind": "minor-line", "expression": "18.2" } }
+      ]
+    },
+    {
+      "id": "frontend-build-testing",
+      "area": "frontend",
+      "category": "testing",
+      "consumer": "s013",
+      "versionPolicy": "unspecified-versions",
+      "entries": [
+        { "id": "jest", "displayName": "Jest", "aliases": [], "ecosystem": "javascript", "technologyType": "testing", "sourceStatement": "Jest should be 29 or greater", "strength": "advisory", "constraint": { "kind": "minimum", "expression": "29.0.0" }, "recommendations": ["Use Jest 29 or greater."] },
+        { "id": "react-testing-library", "displayName": "React Testing Library", "aliases": ["@testing-library/react", "rtl"], "ecosystem": "javascript", "technologyType": "testing", "sourceStatement": "RTL should be 14 or greater", "strength": "advisory", "constraint": { "kind": "minimum", "expression": "14.0.0" }, "recommendations": ["Use React Testing Library 14 or greater."] }
+      ]
+    },
+    {
+      "id": "frontend-integration-testing",
+      "area": "frontend",
+      "category": "testing",
+      "consumer": "s013",
+      "versionPolicy": "provisional",
+      "sourceStatement": "Pending verification",
+      "entries": [
+        { "id": "cypress", "displayName": "Cypress", "aliases": [], "ecosystem": "javascript", "technologyType": "testing", "sourceStatement": "Cypress 12.0, pending verification", "strength": "provisional", "constraint": { "kind": "minimum", "expression": "12.0.0" }, "provisional": true, "notes": ["Pending verification."] }
+      ]
+    },
+    {
+      "id": "backend-languages",
+      "area": "backend",
+      "category": "language",
+      "consumer": "s007",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "java", "displayName": "Java", "aliases": ["jdk"], "ecosystem": "java", "technologyType": "language", "sourceStatement": "Java/JDK 21; Grails modules use at least Java 17", "strength": "normative", "constraint": { "kind": "major-line", "expression": "21" }, "exceptions": [{ "appliesTo": "grails-modules", "constraint": { "kind": "minimum", "expression": "17.0.0" }, "strength": "normative", "sourceStatement": "Grails modules use at least Java 17" }] },
+        { "id": "groovy", "displayName": "Groovy", "aliases": [], "ecosystem": "java", "technologyType": "language", "sourceStatement": "Groovy version determined by Grails", "strength": "normative", "applicability": ["grails-modules"], "notes": ["Version compliance follows the applicable Grails rule."] },
+        { "id": "openapi", "displayName": "OpenAPI", "aliases": ["oas"], "ecosystem": "openapi", "technologyType": "language", "sourceStatement": "OpenAPI 3", "strength": "normative", "constraint": { "kind": "major-line", "expression": "3" } },
+        { "id": "go", "displayName": "Go", "aliases": ["golang"], "ecosystem": "go", "technologyType": "language", "sourceStatement": "Go 1.25 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "1.25.0" } }
+      ]
+    },
+    {
+      "id": "backend-build-tools",
+      "area": "backend",
+      "category": "build-tool",
+      "consumer": "s012",
+      "versionPolicy": "unspecified-versions",
+      "entries": [
+        { "id": "maven", "displayName": "Maven", "aliases": ["mvn"], "ecosystem": "java", "technologyType": "build-tool", "sourceStatement": "Maven 3.8 or later", "strength": "normative", "constraint": { "kind": "minimum", "expression": "3.8.0" } },
+        { "id": "docker", "displayName": "Docker", "aliases": [], "ecosystem": "agnostic", "technologyType": "build-tool", "sourceStatement": "Docker", "strength": "advisory" },
+        { "id": "gradle", "displayName": "Gradle", "aliases": [], "ecosystem": "java", "technologyType": "build-tool", "sourceStatement": "Gradle guidance is unresolved", "strength": "provisional", "provisional": true, "notes": ["No definitive version guidance is supplied."] },
+        { "id": "make", "displayName": "Make", "aliases": ["gnu-make"], "ecosystem": "go", "technologyType": "build-tool", "sourceStatement": "Make guidance is unresolved", "strength": "provisional", "provisional": true, "notes": ["No definitive version guidance is supplied."] }
+      ]
+    },
+    {
+      "id": "backend-first-party-frameworks",
+      "area": "backend",
+      "category": "framework",
+      "consumer": "s007",
+      "versionPolicy": "one-of-specified-versions",
+      "entries": [
+        { "id": "folio-spring-base", "displayName": "folio-spring-base", "aliases": ["org.folio:folio-spring-base"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "folio-spring-base 8.2 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "8.2.0" } },
+        { "id": "folio-vertx-lib", "displayName": "folio-vertx-lib", "aliases": ["org.folio:folio-vertx-lib"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "folio-vertx-lib 3.3 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "3.3.0" } },
+        { "id": "raml-module-builder", "displayName": "raml-module-builder", "aliases": ["org.folio:raml-module-builder"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "raml-module-builder 35 for existing modules only", "strength": "normative", "constraint": { "kind": "major-line", "expression": "35" }, "applicability": ["existing-modules"], "deprecation": { "deprecated": true, "note": "Deprecated; only existing FOLIO modules may continue to use it." } },
+        { "id": "edge-common", "displayName": "edge-common", "aliases": ["org.folio:edge-common"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "edge-common 4.8.0 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "4.8.0" } },
+        { "id": "edge-common-spring", "displayName": "edge-common-spring", "aliases": ["org.folio:edge-common-spring"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "edge-common-spring 2.4.6 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "2.4.6" } },
+        { "id": "folio-s3-client", "displayName": "folio-s3-client", "aliases": ["org.folio:folio-s3-client"], "ecosystem": "java", "technologyType": "library", "sourceStatement": "folio-s3-client 2.2.1 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "2.2.1" } }
+      ]
+    },
+    {
+      "id": "backend-third-party-frameworks",
+      "area": "backend",
+      "category": "framework",
+      "consumer": "s007",
+      "versionPolicy": "unspecified-versions",
+      "entries": [
+        { "id": "spring-boot", "displayName": "Spring Boot", "aliases": ["org.springframework.boot", "org.springframework.boot:spring-boot"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "Spring Boot 4.0 required at Trillium GA", "strength": "contested", "constraint": { "kind": "major-line", "expression": "4" }, "notes": ["The time-bound source wording is retained for manual review and is not an unconditional current rule."] },
+        { "id": "spring-framework", "displayName": "Spring Framework", "aliases": ["org.springframework"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "Spring Framework 7.0 or later recommended", "strength": "advisory", "constraint": { "kind": "minimum", "expression": "7.0.0" }, "recommendations": ["Use Spring Framework 7.0 or later."] },
+        { "id": "grails", "displayName": "Grails", "aliases": ["org.grails"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "Grails 7", "strength": "normative", "constraint": { "kind": "major-line", "expression": "7" } },
+        { "id": "vertx", "displayName": "Eclipse Vert.x", "aliases": ["io.vertx"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "Eclipse Vert.x 5", "strength": "normative", "constraint": { "kind": "major-line", "expression": "5" } },
+        { "id": "lombok", "displayName": "Lombok", "aliases": ["org.projectlombok:lombok"], "ecosystem": "java", "technologyType": "library", "sourceStatement": "Lombok 1.18.30 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "1.18.30" } },
+        { "id": "aws-sdk-java", "displayName": "AWS SDK for Java", "aliases": ["software.amazon.awssdk"], "ecosystem": "java", "technologyType": "library", "sourceStatement": "AWS SDK for Java 2", "strength": "normative", "constraint": { "kind": "major-line", "expression": "2" } },
+        { "id": "minio-java", "displayName": "MinIO Java Client", "aliases": ["io.minio:minio"], "ecosystem": "java", "technologyType": "library", "sourceStatement": "MinIO client 8.5 or greater recommended", "strength": "advisory", "constraint": { "kind": "minimum", "expression": "8.5.0" }, "recommendations": ["Use MinIO client 8.5 or greater."] },
+        { "id": "quarkus", "displayName": "Quarkus", "aliases": ["io.quarkus"], "ecosystem": "java", "technologyType": "framework", "sourceStatement": "Quarkus 3.27 LTS or later LTS", "strength": "normative", "constraint": { "kind": "latest-lts", "expression": "3.27" }, "notes": ["LTS qualification must be established from repository evidence; an ordinary SemVer comparison alone is incomplete."] },
+        { "id": "keycloak-admin-client", "displayName": "Keycloak Admin Client", "aliases": ["org.keycloak:keycloak-admin-client"], "ecosystem": "java", "technologyType": "library", "sourceStatement": "Keycloak Admin Client 26.x", "strength": "normative", "constraint": { "kind": "major-line", "expression": "26.x" } }
+      ]
+    },
+    {
+      "id": "backend-build-testing",
+      "area": "backend",
+      "category": "testing",
+      "consumer": "s013",
+      "versionPolicy": "unspecified-versions",
+      "entries": [
+        { "id": "junit", "displayName": "JUnit", "aliases": ["org.junit"], "ecosystem": "java", "technologyType": "testing", "sourceStatement": "JUnit guidance", "strength": "advisory" },
+        { "id": "rest-assured", "displayName": "REST Assured", "aliases": ["io.rest-assured"], "ecosystem": "java", "technologyType": "testing", "sourceStatement": "rest-assured", "strength": "advisory" },
+        { "id": "testcontainers", "displayName": "Testcontainers", "aliases": ["org.testcontainers"], "ecosystem": "java", "technologyType": "testing", "sourceStatement": "testcontainers", "strength": "advisory" }
+      ]
+    },
+    {
+      "id": "backend-integration-testing",
+      "area": "backend",
+      "category": "testing",
+      "consumer": "s013",
+      "versionPolicy": "provisional",
+      "entries": [
+        { "id": "karate", "displayName": "Karate", "aliases": ["com.intuit.karate"], "ecosystem": "java", "technologyType": "testing", "sourceStatement": "karate", "strength": "provisional", "provisional": true },
+        { "id": "cucumber-reporting", "displayName": "cucumber-reporting", "aliases": ["net.masterthought:cucumber-reporting"], "ecosystem": "java", "technologyType": "testing", "sourceStatement": "cucumber-reporting", "strength": "provisional", "provisional": true }
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "area": "infrastructure",
+      "category": "infrastructure",
+      "consumer": "future",
+      "versionPolicy": "all-of-specified-versions",
+      "entries": [
+        { "id": "postgresql", "displayName": "PostgreSQL", "aliases": ["postgres"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "PostgreSQL 16", "strength": "normative", "constraint": { "kind": "major-line", "expression": "16" } },
+        { "id": "opensearch", "displayName": "OpenSearch", "aliases": [], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "OpenSearch 3", "strength": "normative", "constraint": { "kind": "major-line", "expression": "3" } },
+        { "id": "elasticsearch", "displayName": "Elasticsearch", "aliases": [], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "Elasticsearch 8", "strength": "normative", "constraint": { "kind": "major-line", "expression": "8" } },
+        { "id": "kafka", "displayName": "Apache Kafka", "aliases": ["msk"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "Kafka 4.2 with matching MSK where possible", "strength": "normative", "constraint": { "kind": "minor-line", "expression": "4.2" }, "recommendations": ["Use a matching Amazon MSK version where possible."] },
+        { "id": "minio-storage", "displayName": "MinIO", "aliases": ["s3"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "Current MinIO compatible with S3", "strength": "advisory", "recommendations": ["Use a current S3-compatible MinIO version."] }
+      ]
+    },
+    {
+      "id": "fast-moving-infrastructure",
+      "area": "fast-moving-infrastructure",
+      "category": "infrastructure",
+      "consumer": "future",
+      "versionPolicy": "unspecified-versions",
+      "sourceStatement": "System operators are highly encouraged to update to the latest versions as they are released.",
+      "entries": [
+        { "id": "folio-kong", "displayName": "FOLIO Kong", "aliases": ["kong"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "FOLIO Kong latest-version guidance", "strength": "advisory", "recommendations": ["Update to the latest version as it becomes available."] },
+        { "id": "folio-keycloak", "displayName": "FOLIO Keycloak", "aliases": ["keycloak"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "FOLIO Keycloak latest-version guidance", "strength": "advisory", "recommendations": ["Update to the latest version as it becomes available."] }
+      ]
+    }
+  ]
+}

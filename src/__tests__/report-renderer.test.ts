@@ -1,5 +1,6 @@
 import { EvaluationReportRenderer } from '../utils/report-renderer';
-import { EvaluationResult, EvaluationStatus } from '../types';
+import { EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types';
+import { renderS007HumanDetails } from '../utils/s007-report-details';
 
 describe('EvaluationReportRenderer', () => {
   const result: EvaluationResult = {
@@ -198,5 +199,67 @@ describe('EvaluationReportRenderer', () => {
 
     expect(renderer.escapeHtml(`<&>"'`)).toBe('&lt;&amp;&gt;&quot;&#39;');
     expect(renderer.textToHtml('one\ntwo')).toBe('one<br>two');
+  });
+
+  it('keeps S007 JSON and HTML rationale aligned and escapes repository-controlled evidence', () => {
+    const analysis: S007AnalysisResult = {
+      criterionId: 'S007',
+      status: EvaluationStatus.FAIL,
+      summary: 'S007 fail: normative violation with retained manual evidence.',
+      policyFormatVersion: '1.0',
+      findings: [
+        {
+          technologyId: 'react',
+          displayName: 'React <script>alert("x")</script>',
+          classification: 'normative-violation',
+          contribution: 'fail',
+          rationale: 'React 17 violates the current rule.',
+          evidence: [{ path: 'package<script>.json', detail: 'dependencies.react', declaredVersion: '17.0.2', resolvedVersion: '17.0.2' }],
+          matchedPolicy: {
+            sectionId: 'frontend-third-party-frameworks',
+            entryId: 'react',
+            displayName: 'React',
+            strength: 'normative',
+            sourceStatement: 'React 18.2',
+            constraint: { kind: 'minor-line', expression: '18.2' }
+          },
+          advisories: [],
+          statusDetermining: true
+        },
+        {
+          technologyId: 'vue',
+          displayName: 'Vue',
+          classification: 'unlisted-framework',
+          contribution: 'manual',
+          rationale: 'Unlisted framework candidate.',
+          evidence: [{ path: 'package.json', detail: 'dependencies.vue', declaredVersion: '^3' }],
+          advisories: [],
+          statusDetermining: false
+        }
+      ],
+      policyDiagnostics: [],
+      evidenceDiagnostics: []
+    };
+    const s007Result: EvaluationResult = {
+      ...result,
+      criteria: [{
+        criterionId: 'S007',
+        status: EvaluationStatus.FAIL,
+        evidence: analysis.summary,
+        details: renderS007HumanDetails(analysis),
+        criterionDetails: analysis
+      }]
+    };
+    const renderer = new EvaluationReportRenderer();
+    const json = JSON.parse(renderer.renderJson(s007Result));
+    const html = renderer.renderHtml(s007Result);
+
+    expect(json.criteria[0].criterionDetails.findings.map((finding: any) => finding.contribution)).toEqual(['fail', 'manual']);
+    expect(json.criteria[0].criterionDetails.findings[0].matchedPolicy.entryId).toBe('react');
+    expect(html).toContain('frontend-third-party-frameworks/react');
+    expect(html).toContain('contribution=fail');
+    expect(html).toContain('contribution=manual');
+    expect(html).toContain('package&lt;script&gt;.json');
+    expect(html).not.toContain('<script>alert("x")</script>');
   });
 });

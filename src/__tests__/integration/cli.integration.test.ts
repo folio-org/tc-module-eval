@@ -13,10 +13,59 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
   return {
     ...report,
     evaluatedAt: GOLDEN_EVALUATED_AT,
-    criteria: report.criteria.map(criterion => criterion.criterionId === 'S005'
-      ? normalizeS005GoldenCriterion(criterion)
-      : criterion
-    ),
+    criteria: report.criteria.map(criterion => {
+      if (criterion.criterionId === 'S005') {
+        return normalizeS005GoldenCriterion(criterion);
+      }
+      if (criterion.criterionId === 'S007') {
+        return normalizeS007GoldenCriterion(criterion);
+      }
+      return criterion;
+    }),
+  };
+}
+
+function normalizeS007GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) {
+    return criterion;
+  }
+
+  const countBy = (items: any[], key: string): Record<string, number> => items.reduce((counts, item) => {
+    const value = item[key] ?? 'none';
+    counts[value] = (counts[value] ?? 0) + 1;
+    return counts;
+  }, {} as Record<string, number>);
+
+  const findings = details.findings ?? [];
+  const diagnostics = details.evidenceDiagnostics ?? [];
+  const projectedFindings = findings
+    .map((finding: any) => ({
+      technologyId: finding.technologyId,
+      classification: finding.classification,
+      contribution: finding.contribution,
+      statusDetermining: finding.statusDetermining,
+      ...(finding.matchedPolicy?.entryId
+        ? { matchedPolicy: { entryId: finding.matchedPolicy.entryId } }
+        : {})
+    }))
+    .sort((left: any, right: any) => {
+      const leftKey = JSON.stringify(left);
+      const rightKey = JSON.stringify(right);
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    });
+
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      policyFormatVersion: details.policyFormatVersion,
+      findingCount: findings.length,
+      findings: projectedFindings,
+      policyDiagnosticCount: details.policyDiagnostics?.length ?? 0,
+      evidenceDiagnosticCounts: countBy(diagnostics, 'code'),
+      agentReviewUnavailableReason: details.agentReviewUnavailableReason,
+    },
   };
 }
 
@@ -573,6 +622,58 @@ describe('CLI Integration Tests', () => {
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
       expect(htmlContent).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
       expect(htmlContent).not.toContain('token=abc123');
+    });
+  });
+
+  describe('Local S007 OST Integration', () => {
+    test('should evaluate S007 and render matching JSON and HTML rationale without repository commands', async () => {
+      const localRepo = await createLocalGitRepo('s007-ui', {
+        'package.json': JSON.stringify({
+          name: 's007-ui',
+          dependencies: {
+            '@folio/stripes-core': '^10.1.0',
+            react: '~18.2.0'
+          },
+          devDependencies: {
+            typescript: '^5.0.0'
+          }
+        }, null, 2),
+        'yarn.lock': [
+          '"@folio/stripes-core@^10.1.0":',
+          '  version "10.1.2"',
+          '"react@~18.2.0":',
+          '  version "18.2.0"',
+          ''
+        ].join('\n')
+      });
+
+      try {
+        const evaluator = new ModuleEvaluator({
+          outputDir: testOutputDir,
+          criteriaFilter: ['S007'],
+          allowLocalCommands: false
+        });
+        const evaluation = await evaluator.evaluateModule(localRepo);
+        const s007 = evaluation.criteria.find(criterion => criterion.criterionId === 'S007');
+
+        expect(evaluation.criteria).toHaveLength(1);
+        expect(s007?.status).toBe(EvaluationStatus.PASS);
+        expect(s007?.details).toContain('frontend-third-party-frameworks/react');
+        expect(s007?.details).not.toMatch(/policy selector|policy release|flower release/i);
+
+        const reports = await new ReportGenerator(testOutputDir).generateReports(evaluation);
+        const json = JSON.parse(await fs.readFile(reports.jsonPath!, 'utf8'));
+        const html = await fs.readFile(reports.htmlPath!, 'utf8');
+        const jsonS007 = json.criteria.find((criterion: any) => criterion.criterionId === 'S007');
+
+        expect(jsonS007.status).toBe('pass');
+        expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
+        expect(html).toContain('Criterion S007');
+        expect(html).toContain('contribution=pass');
+        expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
+      } finally {
+        await fs.remove(localRepo);
+      }
     });
   });
 });
