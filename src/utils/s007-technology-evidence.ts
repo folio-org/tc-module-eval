@@ -802,12 +802,12 @@ function findGradleJavaVersion(content: string): { value: string; sourceDetail: 
   }
 
   for (const setting of ['sourceCompatibility', 'targetCompatibility']) {
-    const assignment = new RegExp(
-      `${setting}\\s*=\\s*(?:JavaVersion\\.VERSION_([0-9_]+)|["']?(\\d+)["']?)`
+    const declaration = new RegExp(
+      `\\b${setting}\\b\\s*(?:=\\s*)?(?:JavaVersion\\.VERSION_([0-9_]+)|["']?(\\d+)["']?)`
     ).exec(content);
-    if (assignment) {
+    if (declaration) {
       return {
-        value: assignment[2] ?? normalizeGradleJavaVersion(assignment[1]),
+        value: declaration[2] ?? normalizeGradleJavaVersion(declaration[1]),
         sourceDetail: `Gradle ${setting}`
       };
     }

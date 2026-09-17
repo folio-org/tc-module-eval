@@ -276,6 +276,36 @@ describe('S007 static technology evidence', () => {
     });
   });
 
+  it('reads assignment-free Groovy source compatibility declarations', async () => {
+    await write('build.gradle', `
+      sourceCompatibility JavaVersion.VERSION_11
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '11',
+      sourceDetail: 'Gradle sourceCompatibility',
+      confidence: 'confident'
+    });
+  });
+
+  it('normalizes legacy Gradle Java version constants', async () => {
+    await write('build.gradle', `
+      targetCompatibility JavaVersion.VERSION_1_8
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '8',
+      sourceDetail: 'Gradle targetCompatibility',
+      confidence: 'confident'
+    });
+  });
+
   it('resolves relevant JavaScript declarations from Yarn Classic and ignores ordinary libraries', async () => {
     await writeJson('package.json', {
       dependencies: {
