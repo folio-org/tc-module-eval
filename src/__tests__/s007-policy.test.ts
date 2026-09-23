@@ -64,6 +64,10 @@ describe('S007 OST policy', () => {
     expect(javascript.constraint).toBeUndefined();
     expect(typescript.constraint).toBeUndefined();
 
+    const react = findEntry(result.policy, 'react');
+    expect(react.sourceStatement).toBe('React ^18.2.0');
+    expect(react.constraint).toEqual({ kind: 'range', expression: '^18.2.0' });
+
     const rmb = findEntry(result.policy, 'raml-module-builder');
     expect(rmb.applicability).toContain('existing-modules');
     expect(rmb.deprecation?.deprecated).toBe(true);

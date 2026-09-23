@@ -62,7 +62,7 @@
       "consumer": "s007",
       "versionPolicy": "one-of-specified-versions",
       "entries": [
-        { "id": "react", "displayName": "React", "aliases": ["react-dom"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "React 18.2", "strength": "normative", "constraint": { "kind": "minor-line", "expression": "18.2" } }
+        { "id": "react", "displayName": "React", "aliases": ["react-dom"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "React ^18.2.0", "strength": "normative", "constraint": { "kind": "range", "expression": "^18.2.0" } }
       ]
     },
     {

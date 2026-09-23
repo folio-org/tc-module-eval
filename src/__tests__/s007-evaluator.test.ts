@@ -144,7 +144,7 @@ describe('S007 deterministic evaluator', () => {
 
   it('returns manual for a partially overlapping declared range without an exact resolution', () => {
     const result = evaluateS007(policy, evidence([
-      observation('react', '>=18.2.5 <19.0.0')
+      observation('react', '>=18.0.0 <18.3.0')
     ]), 'javascript');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
@@ -196,8 +196,9 @@ describe('S007 deterministic evaluator', () => {
     ['range wholly inside policy', '~18.2.1', undefined, EvaluationStatus.PASS],
     ['range disjoint from policy', '^17.0.0', undefined, EvaluationStatus.FAIL],
     ['overlap resolved inside policy', '>=18.0.0 <19', '18.2.7', EvaluationStatus.PASS],
-    ['declared policy line with newer lock', '^18.2.0', '18.3.1', EvaluationStatus.FAIL],
-    ['partial overlap resolved outside policy', '>=18.2.5 <19', '18.3.0', EvaluationStatus.FAIL]
+    ['declared policy line with newer React 18 lock', '^18.2.0', '18.3.1', EvaluationStatus.PASS],
+    ['resolved version below the supported baseline', '^18.0.0', '18.1.0', EvaluationStatus.FAIL],
+    ['resolved React 19 version', '>=18.2.0 <20', '19.0.0', EvaluationStatus.FAIL]
   ])('%s', (_name, declaredVersion, resolvedVersion, expected) => {
     const result = evaluateS007(policy, evidence([
       observation('react', declaredVersion, resolvedVersion)
