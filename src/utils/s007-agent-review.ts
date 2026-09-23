@@ -31,15 +31,19 @@ export async function reviewS007WithAgent(
   } catch (error) {
     return unavailable(`Unable to prepare S007 agent review material: ${errorMessage(error)}`);
   }
-  return runCriterionAgentReview(request, config, commandRunner);
+  if (request.files.every(file => file.repoRelativePath === SUMMARY_PATH)) {
+    return unavailable('No valid repository-backed declarations were available for S007 agent review.');
+  }
+  const review = await runCriterionAgentReview(request, config, commandRunner);
+  if (review.available && !review.evidenceReferences.some(reference => reference !== SUMMARY_PATH)) {
+    return unavailable('S007 agent review returned no validated repository evidence references.');
+  }
+  return review;
 }
 
-export function hasS007AgentReviewMaterial(analysis: S007AnalysisResult): boolean {
+export function hasS007AgentReviewMaterial(repoPath: string, analysis: S007AnalysisResult): boolean {
   return analysis.status === EvaluationStatus.MANUAL
-    && analysis.findings.some(finding =>
-      finding.contribution === 'manual'
-      && finding.evidence.some(evidence => Boolean(evidence.path))
-    );
+    && collectManifestFiles(repoPath, analysis).files.length > 0;
 }
 
 export function buildS007AgentReviewRequest(
@@ -47,24 +51,30 @@ export function buildS007AgentReviewRequest(
   analysis: S007AnalysisResult
 ): CriterionAgentReviewRequest {
   const selected = collectManifestFiles(repoPath, analysis);
+  const selectedPaths = new Set(selected.files.map(file => file.repoRelativePath));
   const summary = {
     criterionId: analysis.criterionId,
     deterministicStatus: analysis.status,
     summary: analysis.summary,
-    findings: analysis.findings
-      .filter(finding => finding.contribution === 'manual')
-      .map(finding => ({
+    findings: reviewableFindings(analysis)
+      .map(finding => ({ finding, evidence: finding.evidence.filter(item => selectedPaths.has(item.path)) }))
+      .filter(item => item.evidence.length > 0)
+      .map(({ finding, evidence }) => ({
         technologyId: finding.technologyId,
         displayName: finding.displayName,
         classification: finding.classification,
         contribution: finding.contribution,
         rationale: finding.rationale,
-        evidence: finding.evidence.map(item => ({
-          path: item.path,
-          detail: item.detail,
-          ...(item.declaredVersion ? { declaredVersion: item.declaredVersion } : {}),
-          ...(item.resolvedVersion ? { resolvedVersion: item.resolvedVersion } : {})
-        })),
+        evidence: evidence.map(item => {
+          const versionSourcePath = validReviewPath(repoPath, item.versionSourcePath);
+          return {
+            path: item.path,
+            detail: item.detail,
+            ...(item.declaredVersion ? { declaredVersion: item.declaredVersion } : {}),
+            ...(item.resolvedVersion ? { resolvedVersion: item.resolvedVersion } : {}),
+            ...(versionSourcePath ? { versionSourcePath } : {})
+          };
+        }),
         matchedPolicy: finding.matchedPolicy,
         advisories: finding.advisories
       })),
@@ -104,7 +114,7 @@ function collectManifestFiles(
   const omitted: Array<{ path: string; reason: string }> = [];
   const evidenceByPath = new Map<string, S007FindingEvidence[]>();
 
-  for (const finding of analysis.findings.filter(item => item.contribution === 'manual')) {
+  for (const finding of reviewableFindings(analysis)) {
     for (const item of finding.evidence) {
       if (item.path) {
         evidenceByPath.set(item.path, [...(evidenceByPath.get(item.path) ?? []), item]);
@@ -113,34 +123,59 @@ function collectManifestFiles(
   }
 
   for (const [repoRelativePath, evidence] of evidenceByPath) {
+    try {
+      resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S007');
+    } catch {
+      continue;
+    }
+
     if (files.length >= MAX_MANIFEST_FILES) {
       omitted.push({ path: repoRelativePath, reason: `manifest file limit (${MAX_MANIFEST_FILES})` });
       continue;
     }
 
-    try {
-      resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S007');
-    } catch (error) {
-      omitted.push({ path: repoRelativePath, reason: errorMessage(error) });
-      continue;
-    }
-
     files.push({
       repoRelativePath,
-      content: serializeEvidenceDeclarations(evidence)
+      content: serializeEvidenceDeclarations(repoPath, evidence)
     });
   }
 
   return { files, omitted };
 }
 
-function serializeEvidenceDeclarations(evidence: S007FindingEvidence[]): string {
-  const declarations = evidence.map(item => ({
-    detail: item.detail,
-    ...(item.declaredVersion ? { declaredVersion: item.declaredVersion } : {}),
-    ...(item.resolvedVersion ? { resolvedVersion: item.resolvedVersion } : {})
-  }));
+function reviewableFindings(analysis: S007AnalysisResult): S007AnalysisResult['findings'] {
+  const usefulClassifications = new Set([
+    'unlisted-framework',
+    'unresolved',
+    'conflicting',
+    'coverage-incomplete'
+  ]);
+  return analysis.findings.filter(finding =>
+    finding.contribution === 'manual' && usefulClassifications.has(finding.classification)
+  );
+}
+
+function serializeEvidenceDeclarations(repoPath: string, evidence: S007FindingEvidence[]): string {
+  const declarations = evidence.map(item => {
+    const versionSourcePath = validReviewPath(repoPath, item.versionSourcePath);
+    return {
+      detail: item.detail,
+      ...(item.declaredVersion ? { declaredVersion: item.declaredVersion } : {}),
+      ...(item.resolvedVersion ? { resolvedVersion: item.resolvedVersion } : {}),
+      ...(versionSourcePath ? { versionSourcePath } : {})
+    };
+  });
   return sanitizeReviewMaterial(JSON.stringify({ declarations }, null, 2), MAX_MANIFEST_BYTES);
+}
+
+function validReviewPath(repoPath: string, candidate: string | undefined): string | undefined {
+  if (!candidate) return undefined;
+  try {
+    resolveReviewPathWithinRepo(repoPath, candidate, 'S007');
+    return candidate;
+  } catch {
+    return undefined;
+  }
 }
 
 function sanitizeReviewMaterial(content: string, maxBytes: number): string {

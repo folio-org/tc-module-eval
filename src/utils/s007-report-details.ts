@@ -17,7 +17,15 @@ export function renderS007HumanDetails(
     lines.push('Technology findings:');
     for (const finding of analysis.findings) {
       const evidence = finding.evidence.length > 0
-        ? finding.evidence.map(item => `${item.path} (${item.detail})`).join(', ')
+        ? finding.evidence.map(item => {
+          const details = [
+            item.detail,
+            item.declaredVersion ? `declared=${item.declaredVersion}` : undefined,
+            item.resolvedVersion ? `resolved=${item.resolvedVersion}` : undefined,
+            item.versionSourcePath ? `version source=${item.versionSourcePath}` : undefined
+          ].filter((detail): detail is string => Boolean(detail));
+          return `${item.path} (${details.join('; ')})`;
+        }).join(', ')
         : 'none';
       const policy = finding.matchedPolicy
         ? `${finding.matchedPolicy.sectionId}/${finding.matchedPolicy.entryId}; strength=${finding.matchedPolicy.strength}`

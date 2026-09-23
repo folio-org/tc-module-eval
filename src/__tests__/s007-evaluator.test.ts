@@ -62,6 +62,24 @@ describe('S007 deterministic evaluator', () => {
     ]));
   });
 
+  it('does not apply a sibling Grails module exception to another module', () => {
+    const result = evaluateS007(policy, evidence([
+      observation('java', '17', '17', 'grails/pom.xml'),
+      observation('grails', '7', '7', 'grails/pom.xml'),
+      observation('java', '17', '17', 'vertx/pom.xml'),
+      observation('vertx', '5.0.1', '5.0.1', 'vertx/pom.xml')
+    ]), 'java');
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'java',
+        classification: 'normative-violation',
+        evidence: [expect.objectContaining({ path: 'vertx/pom.xml' })]
+      })
+    ]));
+  });
+
   it('keeps Java exception applicability manual when evidence coverage is incomplete', () => {
     const result = evaluateS007(policy, {
       ...evidence([observation('java', '17', '17')]),
@@ -151,13 +169,16 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
   });
 
-  it('accepts a declared npm range that fully supports the required policy line', () => {
+  it('keeps a declared npm range manual when it also permits unsupported versions', () => {
     const result = evaluateS007(policy, evidence([
+      observation('javascript', undefined, undefined, 'package.json'),
       observation('react', '18', undefined, 'package.json')
     ]), 'javascript');
 
-    expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.findings[0]).toMatchObject({ classification: 'compliant', contribution: 'pass' });
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'react', classification: 'unresolved', contribution: 'manual' })
+    ]));
   });
 
   it.each([
@@ -172,20 +193,34 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'normative-violation', contribution: 'fail' });
   });
 
-  it('covers a listed versionless language without version comparison', () => {
+  it('keeps language-only evidence manual because framework coverage is missing', () => {
     const result = evaluateS007(policy, evidence([observation('typescript')]), 'javascript');
 
-    expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.findings[0]).toMatchObject({ classification: 'compliant', contribution: 'pass' });
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ classification: 'coverage-incomplete', contribution: 'manual', statusDetermining: true })
+    ]));
+  });
+
+  it('keeps framework-only evidence manual because language coverage is missing', () => {
+    const result = evaluateS007(policy, evidence([
+      observation('react', '^18.2.0', '18.3.1', 'package.json')
+    ]), 'javascript');
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ classification: 'coverage-incomplete', contribution: 'manual' })
+    ]));
   });
 
   it('passes the existing-module raml-module-builder exception and retains deprecation advice', () => {
     const result = evaluateS007(policy, evidence([
+      observation('java', '21', '21'),
       observation('raml-module-builder', '35.1.0', '35.1.0')
     ]), 'java');
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.findings[0]).toMatchObject({
+    expect(result.findings.find(finding => finding.technologyId === 'raml-module-builder')).toMatchObject({
       classification: 'compliant',
       contribution: 'pass',
       advisories: [expect.stringContaining('Deprecated')]
@@ -201,24 +236,32 @@ describe('S007 deterministic evaluator', () => {
     ['resolved React 19 version', '>=18.2.0 <20', '19.0.0', EvaluationStatus.FAIL]
   ])('%s', (_name, declaredVersion, resolvedVersion, expected) => {
     const result = evaluateS007(policy, evidence([
+      observation('javascript', undefined, undefined, 'package.json'),
       observation('react', declaredVersion, resolvedVersion)
     ]), 'javascript');
 
     expect(result.status).toBe(expected);
   });
 
-  it('keeps non-SemVer qualifiers manual', () => {
+  it.each(['3.27.0.Final', '3.27.1'])('keeps Quarkus LTS qualification manual for %s', declaredVersion => {
     const result = evaluateS007(policy, evidence([
-      observation('quarkus', '3.27.0.Final')
+      observation('java', '21', '21'),
+      observation('quarkus', declaredVersion)
     ]), 'java');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.findings[0]).toMatchObject({ classification: 'unresolved' });
+    expect(result.findings.find(finding => finding.technologyId === 'quarkus')).toMatchObject({
+      classification: 'unresolved',
+      contribution: 'manual'
+    });
   });
 
   it('renders human details from the same structured findings', () => {
+    const react = observation('react', '17.0.2', '17.0.2', 'package.json');
+    react.versionSourcePath = 'yarn.lock';
     const analysis = evaluateS007(policy, evidence([
-      observation('react', '17.0.2', '17.0.2', 'package.json')
+      observation('javascript', undefined, undefined, 'package.json'),
+      react
     ]), 'javascript');
     const details = renderS007HumanDetails(analysis);
     const finding = analysis.findings[0];
@@ -227,6 +270,9 @@ describe('S007 deterministic evaluator', () => {
     expect(details).toContain(finding.classification);
     expect(details).toContain(finding.contribution);
     expect(details).toContain(finding.evidence[0].path);
+    expect(details).toContain('declared=17.0.2');
+    expect(details).toContain('resolved=17.0.2');
+    expect(details).toContain('version source=yarn.lock');
     expect(details).toContain(finding.matchedPolicy!.entryId);
     expect(details).toContain(finding.matchedPolicy!.strength);
   });

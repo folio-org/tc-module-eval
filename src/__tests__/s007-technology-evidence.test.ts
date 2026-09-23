@@ -110,6 +110,48 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('re-resolves inherited Maven dependency management with child property overrides', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version><vertx.version>4.5.0</vertx.version></properties>
+        <dependencyManagement><dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>\${vertx.version}</version>
+        </dependency></dependencies></dependencyManagement>
+        <modules><module>child</module></modules>
+      </project>
+    `);
+    await write('child/pom.xml', `
+      <project>
+        <parent><groupId>example</groupId><artifactId>parent</artifactId><version>1</version></parent>
+        <properties><vertx.version>5.0.1</vertx.version></properties>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId></dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const childVertx = result.observations.find(observation =>
+      observation.identityCandidates.includes('vertx') && observation.sourcePath === 'child/pom.xml'
+    );
+
+    expect(childVertx).toMatchObject({ declaredVersion: '5.0.1', confidence: 'confident' });
+  });
+
+  it('resolves local Maven properties in dependency coordinates', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version><folio.group>org.folio</folio.group></properties>
+        <dependencies>
+          <dependency><groupId>\${folio.group}</groupId><artifactId>raml-module-builder</artifactId><version>34.0.0</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'raml-module-builder')).toMatchObject({ declaredVersion: '34.0.0' });
+    expect(result.complete).toBe(true);
+  });
+
   it('reads the Java version from Maven compiler-plugin configuration', async () => {
     await write('pom.xml', `
       <project>
@@ -130,6 +172,59 @@ describe('S007 static technology evidence', () => {
       sourceDetail: 'maven-compiler-plugin.configuration.release',
       versionSourcePath: 'pom.xml'
     });
+  });
+
+  it('does not claim complete coverage for Maven compiler pluginManagement', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <build>
+          <pluginManagement><plugins><plugin>
+            <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
+            <configuration><release>17</release></configuration>
+          </plugin></plugins></pluginManagement>
+          <plugins><plugin><artifactId>maven-compiler-plugin</artifactId></plugin></plugins>
+        </build>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.1</version></dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '17' });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        message: expect.stringContaining('pluginManagement')
+      })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('marks conflicting Maven compiler execution settings incomplete', async () => {
+    await write('pom.xml', `
+      <project>
+        <build><plugins><plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration><release>21</release></configuration>
+          <executions><execution><id>default-compile</id><configuration><release>17</release></configuration></execution></executions>
+        </plugin></plugins></build>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.1</version></dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '17' });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        message: expect.stringContaining('Conflicting Maven compiler settings')
+      })
+    ]));
+    expect(result.complete).toBe(false);
   });
 
   it('resolves chained Maven properties transitively', async () => {
@@ -178,6 +273,52 @@ describe('S007 static technology evidence', () => {
     expect(find(result, 'vertx')).toMatchObject({ declaredVersion: undefined, confidence: 'partial' });
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'version_unresolved', material: true, path: 'pom.xml' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('does not replace an explicit unresolved Maven version with dependency management', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencyManagement><dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version>
+        </dependency></dependencies></dependencyManagement>
+        <dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>\${missing.version}</version>
+        </dependency></dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: undefined, confidence: 'partial' });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', material: true, path: 'pom.xml' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('marks Maven profiles as incomplete static coverage', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version></dependency></dependencies>
+        <profiles><profile><id>legacy</id><dependencies><dependency>
+          <groupId>io.vertx</groupId><artifactId>vertx-web</artifactId><version>4.5.0</version>
+        </dependency></dependencies></profile></profiles>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        path: 'pom.xml',
+        message: expect.stringContaining('Maven profiles')
+      })
     ]));
     expect(result.complete).toBe(false);
   });
@@ -240,6 +381,50 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('resolves local Gradle properties interpolated in dependency coordinates', async () => {
+    await write('build.gradle', `
+      def folioGroup = "org.folio"
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation "\${folioGroup}:raml-module-builder:34.0.0" }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'raml-module-builder')).toMatchObject({ declaredVersion: '34.0.0' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('marks unresolved Gradle coordinate interpolation as incomplete', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation "\${folioGroup}:raml-module-builder:34.0.0" }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'raml-module-builder')).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression', material: true, path: 'build.gradle' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('does not interpolate Groovy single-quoted dependency coordinates', async () => {
+    await write('build.gradle', `
+      def folioGroup = "org.folio"
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation '\${folioGroup}:raml-module-builder:34.0.0' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'raml-module-builder')).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression', material: true, path: 'build.gradle' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
   it('ignores composite builds and commented-out Gradle includes', async () => {
     await write('settings.gradle', `
       includeBuild('../shared-lib')
@@ -292,6 +477,233 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('resolves Gradle plugin versions from local properties', async () => {
+    await write('gradle.properties', 'grailsVersion=7.0.0\n');
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      plugins { id 'org.grails.grails-web' version grailsVersion }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({
+      declaredVersion: '7.0.0',
+      sourceDetail: 'plugin org.grails.grails-web',
+      confidence: 'confident'
+    });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression' })
+    ]));
+    expect(result.complete).toBe(true);
+  });
+
+  it('retains unresolved Gradle plugin declarations as incomplete evidence', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      plugins { id 'org.grails.grails-web' version grailsVersion }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ confidence: 'partial' });
+    expect(find(result, 'grails').declaredVersion).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression', material: true, path: 'build.gradle' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('resolves versionless Gradle plugins from local plugin management', async () => {
+    await write('settings.gradle', `
+      pluginManagement { plugins { id 'org.grails.grails-web' version '7.0.0' } }
+    `);
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      plugins { id 'org.grails.grails-web' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ declaredVersion: '7.0.0', confidence: 'confident' });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression' })
+    ]));
+    expect(result.complete).toBe(true);
+  });
+
+  it('marks versionless Gradle plugins and applied scripts unresolved when no local version is available', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      plugins { id 'org.grails.grails-web' }
+      apply from: 'gradle/framework.gradle'
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ declaredVersion: undefined, confidence: 'partial' });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression', material: true }),
+      expect.objectContaining({ code: 'gradle_build_logic', material: true })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('resolves bare Gradle dependency coordinate variables', async () => {
+    await write('gradle.properties', 'vertxCoordinates=io.vertx:vertx-core:5.0.2\n');
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation vertxCoordinates }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '5.0.2', confidence: 'confident' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('marks unresolved bare Gradle dependency expressions incomplete', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation vertxCoordinates }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'gradle_dynamic_expression',
+        material: true,
+        message: expect.stringContaining('vertxCoordinates')
+      })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('ignores local Gradle project dependencies in the external technology scan', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies { implementation project(':core') }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'gradle_dynamic_expression' })
+    ]));
+    expect(result.complete).toBe(true);
+  });
+
+  it('reads legacy Gradle buildscript classpath framework versions', async () => {
+    await write('build.gradle', `
+      buildscript { dependencies { classpath 'org.grails:grails-gradle-plugin:7.0.0' } }
+      java { sourceCompatibility = JavaVersion.VERSION_17 }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ declaredVersion: '7.0.0', confidence: 'confident' });
+  });
+
+  it('reads Groovy map-style dependency declarations in any key order', async () => {
+    await write('gradle.properties', 'vertxVersion=5.0.2\n');
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies {
+        implementation version: vertxVersion, name: 'vertx-core', group: 'io.vertx'
+      }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '5.0.2', confidence: 'confident' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('reads Kotlin DSL named-argument dependency declarations', async () => {
+    await write('build.gradle.kts', `
+      java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
+      plugins { id("org.grails.grails-web") version "7.0.0" }
+      dependencies {
+        implementation(group = "io.vertx", name = "vertx-core", version = "4.5.0")
+      }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '4.5.0', confidence: 'confident' });
+  });
+
+  it('does not parse dependency-like text inside Gradle string literals', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      plugins { id 'org.grails.grails-web' version '7.0.0' }
+      def migrationNote = "replace implementation 'io.vertx:vertx-core:4.5.0' next quarter"
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toBeUndefined();
+    expect(find(result, 'grails')).toMatchObject({ declaredVersion: '7.0.0' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('resumes Gradle parsing after a string ending in an escaped backslash', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      plugins { id 'org.grails.grails-web' version '7.0.0' }
+      def outputDir = "C:\\\\temp\\\\"
+      dependencies { implementation 'io.vertx:vertx-core:4.5.0' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '4.5.0' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('does not use a Grails plugin artifact version as the framework version', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      plugins { id 'org.grails.grails-web' version '7.0.0' }
+      dependencies { implementation group: 'org.grails.plugins', name: 'database-migration', version: '5.0.0' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const grails = result.observations.filter(observation => observation.identityCandidates.includes('grails'));
+
+    expect(grails).toHaveLength(1);
+    expect(grails[0]).toMatchObject({
+      declaredVersion: '7.0.0',
+      sourceDetail: 'plugin org.grails.grails-web'
+    });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        message: expect.stringContaining('org.grails.plugins:database-migration')
+      })
+    ]));
+  });
+
+  it('keeps Grails plugin artifacts as versionless presence evidence when no framework version is available', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      dependencies { implementation 'org.grails.plugins:database-migration:5.0.0' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ confidence: 'partial' });
+    expect(find(result, 'grails').declaredVersion).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        message: expect.stringContaining('proves Grails presence but not the Grails framework version')
+      })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
   it('prefers a Gradle Java toolchain over compatibility declarations regardless of order', async () => {
     await write('build.gradle', `
       java {
@@ -308,6 +720,54 @@ describe('S007 static technology evidence', () => {
       declaredVersion: '21',
       sourceDetail: 'Gradle Java toolchain',
       confidence: 'confident'
+    });
+  });
+
+  it('does not mistake task-specific Java launchers for the project toolchain', async () => {
+    await write('build.gradle', `
+      java { sourceCompatibility = JavaVersion.VERSION_17 }
+      tasks.register('runOnNewerJava', JavaExec) {
+        javaLauncher = javaToolchains.launcherFor {
+          languageVersion = JavaLanguageVersion.of(21)
+        }
+      }
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '17',
+      sourceDetail: 'Gradle sourceCompatibility'
+    });
+  });
+
+  it('does not treat an unrelated custom toolchain block as the Java project toolchain', async () => {
+    await write('build.gradle', `
+      customRuntime { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      java { sourceCompatibility = JavaVersion.VERSION_17 }
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '17',
+      sourceDetail: 'Gradle sourceCompatibility'
+    });
+  });
+
+  it('reads a qualified Java toolchain block', async () => {
+    await write('build.gradle', `
+      java.toolchain { languageVersion = JavaLanguageVersion.of(21) }
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '21',
+      sourceDetail: 'Gradle Java toolchain'
     });
   });
 
@@ -433,10 +893,10 @@ describe('S007 static technology evidence', () => {
     expect(result.complete).toBe(true);
   });
 
-  it('keeps peer ranges as compatibility declarations without creating conflicts', async () => {
+  it('does not treat a peer compatibility range as a second installed version', async () => {
     await writeJson('package.json', {
       devDependencies: { react: '^18.3.0' },
-      peerDependencies: { react: '^18.2.0' }
+      peerDependencies: { react: '>=16' }
     });
     await write('yarn.lock', `
       # yarn lockfile v1
@@ -444,20 +904,144 @@ describe('S007 static technology evidence', () => {
       "react@^18.3.0":
         version "18.3.1"
 
-      "react@^18.2.0":
-        version "18.3.1"
     `);
 
     const result = await collectS007TechnologyEvidence(repoPath, 'javascript');
     const react = result.observations.filter(observation => observation.identityCandidates.includes('react'));
 
-    expect(react).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceDetail: 'devDependencies.react', declaredVersion: '^18.3.0', resolvedVersion: '18.3.1' }),
-      expect.objectContaining({ sourceDetail: 'peerDependencies.react', declaredVersion: '^18.2.0', resolvedVersion: undefined })
-    ]));
-    expect(react).toHaveLength(2);
+    expect(react).toEqual([
+      expect.objectContaining({ sourceDetail: 'devDependencies.react', declaredVersion: '^18.3.0', resolvedVersion: '18.3.1' })
+    ]);
     expect(result.diagnostics).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'conflicting_versions' })
+    ]));
+  });
+
+  it('marks a declared dependency unresolved when a valid lockfile lacks its selector', async () => {
+    await writeJson('package.json', { dependencies: { react: '>=16' } });
+    await write('yarn.lock', `
+      # yarn lockfile v1
+
+      "left-pad@^1.3.0":
+        version "1.3.0"
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'javascript');
+
+    expect(find(result, 'react')).toMatchObject({ declaredVersion: '>=16', resolvedVersion: undefined });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        path: 'yarn.lock',
+        message: expect.stringContaining('react@>=16')
+      })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('does not require a lockfile selector for peer-only compatibility ranges', async () => {
+    await writeJson('package.json', { peerDependencies: { react: '^18.2.0' } });
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'javascript');
+
+    expect(find(result, 'react')).toMatchObject({ declaredVersion: '^18.2.0', resolvedVersion: undefined });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'yarn_lock_missing' }),
+      expect.objectContaining({ code: 'version_unresolved', path: 'yarn.lock' })
+    ]));
+    expect(result.complete).toBe(true);
+  });
+
+  it('bounds and deduplicates Gradle manifest traversal', async () => {
+    const modules = Array.from({ length: 70 }, (_, index) => `module-${index}`);
+    await write('settings.gradle', `include ${modules.map(module => `'${module}'`).join(', ')}\n`);
+    await write('build.gradle', 'java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }\n');
+    for (const [index, module] of modules.entries()) {
+      await write(`${module}/build.gradle`, `dependencies { implementation 'io.vertx:vertx-core:5.0.${index}' }\n`);
+    }
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.manifestPaths.length).toBeLessThanOrEqual(64);
+    expect(result.manifestPaths).not.toContain('module-69/build.gradle');
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'traversal_limit', material: true })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
+  it('bounds missing Maven module candidates before resolving every declared path', async () => {
+    const modules = Array.from({ length: 1000 }, (_, index) => `missing-${index}`);
+    await write('pom.xml', `<project><modules>${modules.map(module => `<module>${module}</module>`).join('')}</modules></project>`);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.diagnostics.filter(item => item.code === 'local_module_missing')).toHaveLength(64);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'traversal_limit', material: true })
+    ]));
+  });
+
+  it('bounds missing Gradle module candidates before resolving every declared path', async () => {
+    const modules = Array.from({ length: 1000 }, (_, index) => `missing-${index}`);
+    await write('settings.gradle', `include ${modules.map(module => `'${module}'`).join(', ')}`);
+    await write('build.gradle', 'java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }\n');
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.diagnostics.filter(item => item.code === 'local_module_missing')).toHaveLength(64);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'traversal_limit', material: true, path: 'settings.gradle' })
+    ]));
+  });
+
+  it('bounds relevant observations collected from one manifest', async () => {
+    const dependencies = Array.from({ length: 1100 }, (_, index) => [
+      '<dependency><groupId>io.vertx</groupId>',
+      `<artifactId>vertx-component-${index}</artifactId>`,
+      '<version>5.0.2</version></dependency>'
+    ].join(''));
+    await write('pom.xml', `<project><properties><java.version>21</java.version></properties><dependencies>${dependencies.join('')}</dependencies></project>`);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(result.observations.length).toBeLessThanOrEqual(1024);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'traversal_limit', material: true })
+    ]));
+  });
+
+  it('rejects direct symlinked and oversized manifests', async () => {
+    await write('target-package.json', '{"dependencies":{"react":"^18.2.0"}}');
+    try {
+      await fs.symlink(path.join(repoPath, 'target-package.json'), path.join(repoPath, 'package.json'));
+      const symlinkResult = await collectS007TechnologyEvidence(repoPath, 'javascript');
+      expect(symlinkResult.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'local_module_symlink', material: true, path: 'package.json' })
+      ]));
+    } finally {
+      await fs.remove(path.join(repoPath, 'package.json'));
+    }
+
+    await fs.writeFile(path.join(repoPath, 'package.json'), `{${' '.repeat(1024 * 1024)}}`);
+    const oversizedResult = await collectS007TechnologyEvidence(repoPath, 'javascript');
+    expect(oversizedResult.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'manifest_too_large', material: true, path: 'package.json' })
+    ]));
+  });
+
+  it('does not spend the Gradle manifest budget twice on repeated includes', async () => {
+    await write('settings.gradle', `include ${Array.from({ length: 70 }, () => "'shared'").join(', ')}, 'final'\n`);
+    await write('build.gradle', 'java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }\n');
+    await write('shared/build.gradle', "dependencies { implementation 'io.vertx:vertx-core:5.0.1' }\n");
+    await write('final/build.gradle', "dependencies { implementation 'org.projectlombok:lombok:1.18.32' }\n");
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'lombok')).toMatchObject({ sourcePath: 'final/build.gradle' });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'traversal_limit' })
     ]));
   });
 

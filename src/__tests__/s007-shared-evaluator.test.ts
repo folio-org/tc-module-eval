@@ -5,6 +5,7 @@ import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-s
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import {
   CommandRunner,
+  CriterionAgentReviewConfig,
   EvaluationRun,
   EvaluationStatus,
   S007AnalysisResult,
@@ -99,6 +100,42 @@ describe('S007 shared evaluator', () => {
     expect(result.details!.indexOf('Technology findings:')).toBeLessThan(result.details!.indexOf('Agent review:'));
   });
 
+  it('attaches an available advisory end to end without changing manual status', async () => {
+    await writeJson('package.json', { dependencies: { vue: '^3.0.0' } });
+    await write('yarn.lock', '"vue@^3.0.0":\n  version "3.4.0"\n');
+    const agentReview: CriterionAgentReviewConfig = {
+      enabled: true,
+      enabledCriteria: ['S007'],
+      adapter: 'fake',
+      modelLabel: 'fake-model',
+      fakeResult: {
+        available: true,
+        criterionId: 'S007',
+        recommendation: 'needs_reviewer_judgment',
+        confidence: 'medium',
+        summary: 'Vue is explicitly declared.',
+        rationale: 'The manifest establishes an unlisted framework candidate.',
+        evidenceReferences: ['package.json'],
+        warnings: [],
+        errors: []
+      }
+    };
+
+    const result = await new JavaScriptSharedEvaluator().evaluateCriterion(
+      'S007',
+      repoPath,
+      createRun('javascript', undefined, agentReview)
+    );
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview).toMatchObject({
+      available: true,
+      recommendation: 'needs_reviewer_judgment',
+      evidenceReferences: ['package.json']
+    });
+    expect(result.details).toContain('Vue is explicitly declared.');
+  });
+
   it('preserves fail precedence and both contributions', async () => {
     await writeJson('package.json', { dependencies: { react: '17.0.2', vue: '^3.0.0' } });
     await write('yarn.lock', '"react@17.0.2":\n  version "17.0.2"\n"vue@^3.0.0":\n  version "3.4.0"\n');
@@ -108,6 +145,72 @@ describe('S007 shared evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(details.findings.map(finding => finding.contribution)).toEqual(expect.arrayContaining(['fail', 'manual']));
+  });
+
+  it('returns manual when a declared dependency has no matching lockfile selector', async () => {
+    await writeJson('package.json', { dependencies: { react: '>=16' } });
+    await write('yarn.lock', '"left-pad@^1.3.0":\n  version "1.3.0"\n');
+
+    const result = await new JavaScriptSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('javascript'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(details.evidenceDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'version_unresolved',
+        material: true,
+        message: expect.stringContaining('react@>=16')
+      })
+    ]));
+  });
+
+  it('uses the installed dependency despite a broader peer compatibility range', async () => {
+    await writeJson('package.json', {
+      devDependencies: { react: '^18.3.0' },
+      peerDependencies: { react: '>=16' }
+    });
+    await write('yarn.lock', '"react@^18.3.0":\n  version "18.3.1"\n');
+
+    const result = await new JavaScriptSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('javascript'));
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect((result.criterionDetails as S007AnalysisResult).findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'react', classification: 'compliant' })
+    ]));
+  });
+
+  it('keeps Maven profile-dependent evidence manual', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version></dependency></dependencies>
+        <profiles><profile><id>legacy</id><properties><vertx.version>4.5.0</vertx.version></properties></profile></profiles>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect((result.criterionDetails as S007AnalysisResult).evidenceDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', message: expect.stringContaining('Maven profiles') })
+    ]));
+  });
+
+  it('resolves property-backed Gradle plugin versions before classification', async () => {
+    await write('gradle.properties', 'grailsVersion=7.0.0\n');
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      plugins { id 'org.grails.grails-web' version grailsVersion }
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'grails', classification: 'compliant' }),
+      expect.objectContaining({ technologyId: 'java', classification: 'compliant' })
+    ]));
   });
 
   it('reuses shared static evidence without commands and keeps remote-derived evidence manual', async () => {
@@ -143,12 +246,17 @@ describe('S007 shared evaluator', () => {
     expect(run.artifacts.s007TechnologyEvidence).toBe(sharedEvidence);
   });
 
-  function createRun(language: 'java' | 'javascript', commandRunner?: CommandRunner): EvaluationRun {
+  function createRun(
+    language: 'java' | 'javascript',
+    commandRunner?: CommandRunner,
+    agentReview?: CriterionAgentReviewConfig
+  ): EvaluationRun {
     return EvaluationRunUtils.createEvaluationRun({
       repositoryPath: repoPath,
       language,
       criteriaFilter: ['S007'],
-      commandRunner
+      commandRunner,
+      agentReview
     });
   }
 

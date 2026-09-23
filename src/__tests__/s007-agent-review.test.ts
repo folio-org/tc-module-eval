@@ -66,6 +66,20 @@ describe('S007 agent review', () => {
     expect(summary).not.toContain('resolvedVersion');
   });
 
+  it('includes only validated local version-source provenance', async () => {
+    await write('package.json', '{"dependencies":{"react":"^18.2.0"}}');
+    await write('yarn.lock', '"react@^18.2.0":\n  version "18.3.1"\n');
+    const finding = manualFinding('react', 'package.json', 'unresolved');
+    finding.evidence[0].declaredVersion = '^18.2.0';
+    finding.evidence[0].resolvedVersion = '18.3.1';
+    finding.evidence[0].versionSourcePath = 'yarn.lock';
+
+    const request = buildS007AgentReviewRequest(repoPath, manualAnalysis(finding));
+    const material = request.files.map(file => file.content).join('\n');
+
+    expect(material).toContain('"versionSourcePath": "yarn.lock"');
+  });
+
   it.each([
     ['disabled', { enabled: false, adapter: 'fake' } as CriterionAgentReviewConfig, 'Agent review is disabled'],
     ['excluded', { enabled: true, enabledCriteria: ['S006'], adapter: 'fake' } as CriterionAgentReviewConfig, 'not enabled for S007'],
@@ -82,7 +96,8 @@ describe('S007 agent review', () => {
     expect(review.errors.join('\n')).toContain(expectedError);
   });
 
-  it('gates review to useful repository-backed manual findings', () => {
+  it('gates review to validated repository-backed manual findings', async () => {
+    await write('package.json', '{"dependencies":{"react":"^18"}}');
     const manual = manualAnalysis(manualFinding('react', 'package.json', 'unresolved'));
     const policyOnly = { ...manual, findings: [], policyDiagnostics: [{ code: 'policy_schema_error' as const, message: 'invalid' }] };
     const coverageOnly = manualAnalysis({
@@ -91,12 +106,18 @@ describe('S007 agent review', () => {
     });
     const pass = { ...manual, status: EvaluationStatus.PASS };
     const fail = { ...manual, status: EvaluationStatus.FAIL };
+    const traversalOnly = manualAnalysis(manualFinding('react', '../outside.json', 'unresolved'));
+    const absoluteOnly = manualAnalysis(manualFinding('react', path.join(repoPath, 'package.json'), 'unresolved'));
+    const missingOnly = manualAnalysis(manualFinding('react', 'missing.json', 'unresolved'));
 
-    expect(hasS007AgentReviewMaterial(manual)).toBe(true);
-    expect(hasS007AgentReviewMaterial(policyOnly)).toBe(false);
-    expect(hasS007AgentReviewMaterial(coverageOnly)).toBe(false);
-    expect(hasS007AgentReviewMaterial(pass)).toBe(false);
-    expect(hasS007AgentReviewMaterial(fail)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, manual)).toBe(true);
+    expect(hasS007AgentReviewMaterial(repoPath, policyOnly)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, coverageOnly)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, pass)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, fail)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, traversalOnly)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, absoluteOnly)).toBe(false);
+    expect(hasS007AgentReviewMaterial(repoPath, missingOnly)).toBe(false);
   });
 
   it('marks repository text untrusted, prohibits side effects, and excludes unrelated manifest content', async () => {
@@ -142,7 +163,7 @@ describe('S007 agent review', () => {
       repositoryPassword: 'json-password-value'
     }));
 
-    const mavenFinding = manualFinding('spring-boot', 'pom.xml', 'contested');
+    const mavenFinding = manualFinding('spring-boot', 'pom.xml', 'unresolved');
     mavenFinding.evidence[0].detail = 'org.springframework.boot:spring-boot-starter';
     mavenFinding.evidence[0].declaredVersion = '4.0.1';
     mavenFinding.evidence.push({
@@ -179,6 +200,7 @@ describe('S007 agent review', () => {
       // Symlinks can be disabled by the test filesystem.
     }
     const finding = manualFinding('react', 'package.json', 'unresolved');
+    finding.evidence[0].versionSourcePath = '../outside/yarn.lock';
     finding.evidence.push(
       { path: 'package.json', detail: 'duplicate' },
       { path: '../outside.json', detail: 'traversal' },
@@ -196,6 +218,66 @@ describe('S007 agent review', () => {
     expect(paths.every(candidate => !path.isAbsolute(candidate))).toBe(true);
     expect(request.files.find(file => file.repoRelativePath === 'large.json')?.content).toContain('oversized');
     expect(request.files.find(file => file.repoRelativePath === 'large.json')?.content).not.toContain('xxxxxxxx');
+    const summary = request.files.find(file => file.repoRelativePath.includes('deterministic-summary'))?.content ?? '';
+    expect(summary).not.toContain('../outside.json');
+    expect(summary).not.toContain(path.join(repoPath, 'package.json'));
+    expect(summary).not.toContain('linked.json');
+    expect(summary).not.toContain('../outside/yarn.lock');
+    expect(summary).not.toContain('traversal');
+    expect(summary).not.toContain('absolute');
+    expect(summary).not.toContain('symlink');
+  });
+
+  it('does not invoke agent review when every evidence path is invalid', async () => {
+    const analysis = manualAnalysis(manualFinding('react', '../outside.json', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium',
+      summary: 'should not run',
+      rationale: 'should not run',
+      evidenceReferences: [],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('No valid repository-backed declarations');
+  });
+
+  it('does not invoke agent review for policy-only manual classifications', async () => {
+    await write('pom.xml', '<project />');
+    for (const classification of ['advisory-only', 'advisory-mismatch', 'provisional', 'contested'] as const) {
+      expect(hasS007AgentReviewMaterial(
+        repoPath,
+        manualAnalysis(manualFinding('spring-boot', 'pom.xml', classification))
+      )).toBe(false);
+    }
+  });
+
+  it.each([
+    ['no citations', []],
+    ['only the generated summary', ['.criterion-agent/S007/deterministic-summary.json']]
+  ])('rejects advisory output with %s', async (_name, evidenceReferences) => {
+    await write('package.json', '{"dependencies":{"react":"^18"}}');
+    const analysis = manualAnalysis(manualFinding('react', 'package.json', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium',
+      summary: 'Unsupported advice.',
+      rationale: 'No manifest citation was returned.',
+      evidenceReferences,
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('no validated repository evidence references');
   });
 
   it('drops unknown evidence references and ignores pass-like advisory wording', async () => {

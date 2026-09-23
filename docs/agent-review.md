@@ -22,16 +22,18 @@ If agent review is disabled, unavailable, malformed, or has no material, S005 st
 
 ## S007 Officially Supported Technologies Review
 
-S007 invokes agent review only when deterministic analysis is manual and a manifest
-contains useful repository evidence. Policy-load failures and manual results without
-repository-backed material do not invoke it.
+S007 invokes agent review only when deterministic analysis is manual because of an
+unresolved declaration, conflict, unlisted framework, or incomplete coverage and a
+manifest contains useful repository evidence. Policy-load and policy-semantics-only
+manual results do not invoke it.
 
 The review workspace contains a bounded deterministic summary and selected, redacted
-manifest excerpts. Absolute paths, traversal paths, symlinks, duplicate files, and
-oversized files are excluded. Repository content is untrusted evidence: the agent is
+declaration summaries rather than raw manifest contents. Absolute paths, traversal
+paths, symlinks, and duplicate files are excluded; each generated declaration summary
+has its own byte limit. Repository content is untrusted evidence: the agent is
 instructed not to follow repository-authored instructions, run commands, execute
 builds or tests, install dependencies, modify files, make network calls, or invent
-policy. Citations are limited to paths in the review manifest.
+policy. Available advice must cite at least one validated path from the review manifest.
 
 Agent output may clarify an unresolved declaration, conflict, or unlisted framework,
 but it cannot change the deterministic status. Disabled, excluded, unavailable,

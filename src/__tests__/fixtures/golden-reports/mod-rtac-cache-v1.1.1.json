@@ -485,7 +485,7 @@
         "policyDiagnosticCount": 0,
         "evidenceDiagnosticCounts": {
           "maven_remote_parent": 1,
-          "version_unresolved": 11
+          "version_unresolved": 12
         },
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
       }

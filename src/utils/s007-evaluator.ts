@@ -40,13 +40,24 @@ export function evaluateS007(
 
   if (evidence.observations.length === 0) {
     findings.push(coverageFinding('No S007-relevant technology evidence was found.'));
-  } else if (!evidence.complete) {
+  } else {
     const material = evidence.diagnostics.filter(diagnostic => diagnostic.material);
-    findings.push(coverageFinding(
-      material.length > 0
-        ? `Static evidence coverage is incomplete: ${material.map(item => item.message).join(' ')}`
-        : 'Static evidence coverage is incomplete.'
-    ));
+    const missingKinds = [
+      evidence.observations.some(observation => observation.technologyType === 'language')
+        ? undefined
+        : 'no implementation language evidence was found',
+      evidence.observations.some(observation => observation.technologyType === 'framework')
+        ? undefined
+        : 'no framework evidence was found'
+    ].filter((message): message is string => Boolean(message));
+    if (!evidence.complete || missingKinds.length > 0) {
+      const reasons = [...missingKinds, ...material.map(item => item.message)];
+      findings.push(coverageFinding(
+        reasons.length > 0
+          ? `Static evidence coverage is incomplete: ${reasons.join(' ')}`
+          : 'Static evidence coverage is incomplete.'
+      ));
+    }
   }
 
   const status = classifyStatus(findings);
@@ -81,7 +92,8 @@ function evaluateObservation(
       path: observation.sourcePath,
       detail: observation.sourceDetail,
       declaredVersion: observation.declaredVersion,
-      resolvedVersion: observation.resolvedVersion
+      resolvedVersion: observation.resolvedVersion,
+      versionSourcePath: observation.versionSourcePath
     }],
     advisories: [] as string[],
     statusDetermining: false
@@ -99,7 +111,7 @@ function evaluateObservation(
   }
 
   const { entry, section } = match;
-  const applicableRule = resolveApplicableRule(entry, sections, evidence);
+  const applicableRule = resolveApplicableRule(entry, sections, evidence, observation);
   const matchedPolicy = toMatchedPolicy(entry, section, applicableRule);
   const advisories = [
     ...(entry.deprecation ? [entry.deprecation.note] : []),
@@ -189,10 +201,7 @@ function compareObservationToConstraint(
   if (declaredComparison === 'unresolved' && declared) {
     const translated = translateMavenRange(declared) ?? semver.validRange(declared, { includePrerelease: true });
     if (translated) {
-      if (
-        semver.subset(translated, allowed, { includePrerelease: true })
-        || semver.subset(allowed, translated, { includePrerelease: true })
-      ) {
+      if (semver.subset(translated, allowed, { includePrerelease: true })) {
         declaredComparison = 'compliant';
       } else if (!semver.intersects(translated, allowed, { includePrerelease: true })) {
         declaredComparison = 'noncompliant';
@@ -280,7 +289,8 @@ interface ApplicableRule {
 function resolveApplicableRule(
   entry: S007TechnologyPolicyEntry,
   sections: S007PolicySection[],
-  evidence: S007TechnologyEvidenceResult
+  evidence: S007TechnologyEvidenceResult,
+  observation: S007TechnologyObservation
 ): ApplicableRule {
   const base = {
     constraint: entry.constraint,
@@ -295,11 +305,12 @@ function resolveApplicableRule(
       return { ...base, unresolved: true };
     }
 
-    const grailsEvidence = evidence.observations.some(observation =>
-      observation.provenance === 'repository-static'
-      && findPolicyEntry(observation, sections)?.entry.id === 'grails'
-    );
-    if (grailsEvidence) {
+    const observationOwner = sourceOwner(observation.sourcePath);
+    const grailsOwners = evidence.observations.filter(candidate =>
+      candidate.provenance === 'repository-static'
+      && findPolicyEntry(candidate, sections)?.entry.id === 'grails'
+    ).map(candidate => sourceOwner(candidate.sourcePath));
+    if (grailsOwners.includes(observationOwner)) {
       return {
         constraint: exception.constraint,
         strength: exception.strength,
@@ -307,9 +318,21 @@ function resolveApplicableRule(
         unresolved: false
       };
     }
+    const inheritedScopeIsAmbiguous = grailsOwners.some(owner =>
+      owner === '' || observationOwner.startsWith(`${owner}/`)
+    );
+    if (inheritedScopeIsAmbiguous) {
+      return { ...base, unresolved: true };
+    }
   }
 
   return evidence.complete ? base : { ...base, unresolved: true };
+}
+
+function sourceOwner(sourcePath: string): string {
+  const normalized = sourcePath.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return lastSlash === -1 ? '' : normalized.slice(0, lastSlash);
 }
 
 function toMatchedPolicy(

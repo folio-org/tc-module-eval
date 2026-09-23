@@ -214,7 +214,13 @@ describe('EvaluationReportRenderer', () => {
           classification: 'normative-violation',
           contribution: 'fail',
           rationale: 'React 17 violates the current rule.',
-          evidence: [{ path: 'package<script>.json', detail: 'dependencies.react', declaredVersion: '17.0.2', resolvedVersion: '17.0.2' }],
+          evidence: [{
+            path: 'package<script>.json',
+            detail: 'dependencies.react',
+            declaredVersion: '17.0.2',
+            resolvedVersion: '17.0.2',
+            versionSourcePath: 'yarn.lock'
+          }],
           matchedPolicy: {
             sectionId: 'frontend-third-party-frameworks',
             entryId: 'react',
@@ -256,9 +262,13 @@ describe('EvaluationReportRenderer', () => {
 
     expect(json.criteria[0].criterionDetails.findings.map((finding: any) => finding.contribution)).toEqual(['fail', 'manual']);
     expect(json.criteria[0].criterionDetails.findings[0].matchedPolicy.entryId).toBe('react');
+    expect(json.criteria[0].criterionDetails.findings[0].evidence[0].versionSourcePath).toBe('yarn.lock');
     expect(html).toContain('frontend-third-party-frameworks/react');
     expect(html).toContain('contribution=fail');
     expect(html).toContain('contribution=manual');
+    expect(html).toContain('declared=17.0.2');
+    expect(html).toContain('resolved=17.0.2');
+    expect(html).toContain('version source=yarn.lock');
     expect(html).toContain('package&lt;script&gt;.json');
     expect(html).not.toContain('<script>alert("x")</script>');
   });

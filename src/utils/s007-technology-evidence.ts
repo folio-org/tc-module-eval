@@ -12,6 +12,7 @@ import { isWithinRepo, relativePosixPath } from './repo-files';
 
 const MAX_MANIFEST_BYTES = 1024 * 1024;
 const MAX_MANIFESTS = 64;
+const MAX_OBSERVATIONS = 1024;
 const MAX_MAVEN_PROPERTY_DEPTH = 16;
 
 interface EvidenceContext {
@@ -19,8 +20,13 @@ interface EvidenceContext {
   observations: S007TechnologyObservation[];
   diagnostics: S007EvidenceDiagnostic[];
   manifestPaths: Set<string>;
+  manifestContents: Map<string, string>;
   visited: Set<string>;
+  mavenModuleCandidates: number;
+  gradleModuleCandidates: number;
   mavenContexts: Map<string, MavenContext>;
+  observationKeys: Set<string>;
+  presenceOnlyObservations: Set<S007TechnologyObservation>;
 }
 
 interface Identity {
@@ -33,7 +39,7 @@ interface Identity {
 
 interface MavenContext {
   properties: Map<string, { value: string; sourcePath: string }>;
-  dependencyManagement: Map<string, { value: string; sourcePath: string }>;
+  dependencyManagement: Map<string, { rawValue: string; value: string; sourcePath: string }>;
 }
 
 interface JavaScriptDeclaration {
@@ -75,8 +81,13 @@ export async function collectS007TechnologyEvidence(
     observations: [],
     diagnostics: [],
     manifestPaths: new Set<string>(),
+    manifestContents: new Map<string, string>(),
     visited: new Set<string>(),
-    mavenContexts: new Map<string, MavenContext>()
+    mavenModuleCandidates: 0,
+    gradleModuleCandidates: 0,
+    mavenContexts: new Map<string, MavenContext>(),
+    observationKeys: new Set<string>(),
+    presenceOnlyObservations: new Set<S007TechnologyObservation>()
   };
 
   if (language === 'javascript') {
@@ -86,6 +97,7 @@ export async function collectS007TechnologyEvidence(
     collectGradleEvidence(context);
   }
 
+  finalizePresenceOnlyObservations(context);
   markConflicts(context);
   if (context.observations.length === 0) {
     diagnostic(context, 'insufficient_evidence', 'No S007-relevant repository evidence was found.', true);
@@ -156,9 +168,17 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
   });
 
   const lockVersions = collectYarnClassicVersions(context, declarations);
+  const installedIdentities = new Set(
+    declarations
+      .filter(declaration => declaration.field !== 'peerDependencies')
+      .map(declaration => declaration.identity.id)
+  );
   for (const declaration of declarations) {
+    if (declaration.field === 'peerDependencies' && installedIdentities.has(declaration.identity.id)) {
+      continue;
+    }
     const selector = yarnSelector(declaration);
-    const resolvedVersion = lockVersions.get(selector);
+    const resolvedVersion = declaration.field === 'peerDependencies' ? undefined : lockVersions.get(selector);
     addObservation(context, {
       identityCandidates: [declaration.identity.id, declaration.packageName],
       displayName: declaration.identity.displayName,
@@ -182,7 +202,8 @@ function collectYarnClassicVersions(
   declarations: JavaScriptDeclaration[]
 ): Map<string, string> {
   const versions = new Map<string, string>();
-  if (declarations.length === 0) {
+  const installedDeclarations = declarations.filter(declaration => declaration.field !== 'peerDependencies');
+  if (installedDeclarations.length === 0) {
     return versions;
   }
 
@@ -208,17 +229,25 @@ function collectYarnClassicVersions(
       return versions;
     }
 
-    for (const declaration of declarations) {
-      if (declaration.field === 'peerDependencies') {
-        continue;
-      }
+    for (const declaration of installedDeclarations) {
       const selector = yarnSelector(declaration);
+      let resolved = false;
       for (const [combinedSelectors, resolution] of Object.entries(parsed.object)) {
         const selectors = combinedSelectors.split(/,\s*/).map(value => value.replace(/^"|"$/g, ''));
         if (selectors.includes(selector) && typeof resolution.version === 'string') {
           versions.set(selector, resolution.version);
+          resolved = true;
           break;
         }
+      }
+      if (!resolved) {
+        diagnostic(
+          context,
+          'version_unresolved',
+          `No Yarn Classic resolution was found for ${selector}.`,
+          true,
+          'yarn.lock'
+        );
       }
     }
   } catch (error) {
@@ -263,10 +292,6 @@ async function visitMavenPom(
     const cached = context.mavenContexts.get(realPomPath);
     return cached ? mergeMavenContexts(inherited, cached) : inherited;
   }
-  if (context.visited.size >= MAX_MANIFESTS) {
-    diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} local manifests.`, true);
-    return inherited;
-  }
   context.visited.add(realPomPath);
 
   const content = readManifest(context, realPomPath);
@@ -285,6 +310,16 @@ async function visitMavenPom(
   if (!project || typeof project !== 'object') {
     diagnostic(context, 'manifest_malformed', `Maven manifest ${sourcePath} has no project element.`, true, sourcePath);
     return inherited;
+  }
+
+  if (asArray(project.profiles?.profile).length > 0) {
+    diagnostic(
+      context,
+      'version_unresolved',
+      `Maven profiles in ${sourcePath} are outside the bounded static model and may change S007-relevant evidence.`,
+      true,
+      sourcePath
+    );
   }
 
   let effective = cloneMavenContext(inherited);
@@ -307,7 +342,7 @@ async function visitMavenPom(
     }
   }
 
-  const javaVersion = findMavenCompilerVersion(project, effective, sourcePath)
+  const javaVersion = findMavenCompilerVersion(context, project, effective, sourcePath)
     ?? firstResolvedValue(
       effective,
       ['maven.compiler.release', 'java.version', 'maven.compiler.source', 'maven.compiler.target']
@@ -336,7 +371,7 @@ async function visitMavenPom(
     const rawVersion = xmlText(dependency.version);
     const resolvedVersion = resolveMavenValue(rawVersion, effective.properties, sourcePath);
     if (resolvedVersion) {
-      effective.dependencyManagement.set(coordinates, resolvedVersion);
+      effective.dependencyManagement.set(coordinates, { rawValue: rawVersion, ...resolvedVersion });
     }
     if (xmlText(dependency.type) === 'pom' && xmlText(dependency.scope) === 'import') {
       diagnostic(context, 'maven_imported_bom', `Imported BOM ${coordinates} requires remote model resolution.`, true, sourcePath);
@@ -348,6 +383,11 @@ async function visitMavenPom(
   context.mavenContexts.set(realPomPath, subtractMavenContext(effective, inherited));
 
   for (const moduleName of asArray(project.modules?.module).map(xmlText).filter(Boolean)) {
+    if (context.mavenModuleCandidates >= MAX_MANIFESTS) {
+      diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} declared Maven module candidates.`, true, sourcePath);
+      break;
+    }
+    context.mavenModuleCandidates += 1;
     const modulePath = path.resolve(path.dirname(realPomPath), moduleName, 'pom.xml');
     await visitMavenPom(context, modulePath, effective);
   }
@@ -362,19 +402,51 @@ function collectMavenDependencies(
   effective: MavenContext
 ): void {
   for (const dependency of asArray(rawDependencies)) {
-    const groupId = xmlText(dependency?.groupId);
-    const artifactId = xmlText(dependency?.artifactId);
-    if (!groupId || !artifactId) {
+    const rawGroupId = xmlText(dependency?.groupId);
+    const rawArtifactId = xmlText(dependency?.artifactId);
+    if (!rawGroupId || !rawArtifactId) {
       continue;
     }
+    const resolvedGroupId = resolveMavenValue(rawGroupId, effective.properties, sourcePath);
+    const resolvedArtifactId = resolveMavenValue(rawArtifactId, effective.properties, sourcePath);
+    if (!resolvedGroupId || !resolvedArtifactId) {
+      diagnostic(
+        context,
+        'version_unresolved',
+        `Maven dependency coordinates ${rawGroupId}:${rawArtifactId} could not be resolved from local properties.`,
+        true,
+        sourcePath
+      );
+      continue;
+    }
+    const groupId = resolvedGroupId.value;
+    const artifactId = resolvedArtifactId.value;
     const matched = matchJavaIdentity(groupId, artifactId);
     if (!matched) {
       continue;
     }
     const coordinates = `${groupId}:${artifactId}`;
-    const direct = resolveMavenValue(xmlText(dependency.version), effective.properties, sourcePath);
-    const managed = effective.dependencyManagement.get(coordinates);
-    const resolved = direct ?? managed;
+    if (isGrailsPluginArtifact(groupId)) {
+      addPresenceOnlyObservation(context, {
+        identityCandidates: [matched.id, coordinates, groupId],
+        displayName: matched.displayName,
+        ecosystem: matched.ecosystem,
+        technologyType: matched.technologyType,
+        evidenceKind: 'dependency-declaration',
+        sourcePath,
+        sourceDetail: coordinates,
+        confidence: 'partial',
+        provenance: 'repository-static'
+      });
+      continue;
+    }
+    const rawVersion = xmlText(dependency.version);
+    const direct = rawVersion ? resolveMavenValue(rawVersion, effective.properties, sourcePath) : undefined;
+    const managed = rawVersion ? undefined : effective.dependencyManagement.get(coordinates);
+    const managedResolved = managed
+      ? resolveMavenValue(managed.rawValue, effective.properties, managed.sourcePath)
+      : undefined;
+    const resolved = direct ?? managedResolved;
     addObservation(context, {
       identityCandidates: [matched.id, coordinates, groupId],
       displayName: matched.displayName,
@@ -405,9 +477,7 @@ function collectGradleEvidence(context: EvidenceContext): void {
   }
 
   const properties = readGradleProperties(context, path.join(context.repoPath, 'gradle.properties'));
-  for (const buildFile of rootFiles) {
-    collectGradleBuildFile(context, buildFile, properties);
-  }
+  const pluginVersions = new Map<string, string>();
 
   if (fs.existsSync(path.join(context.repoPath, 'gradle', 'libs.versions.toml'))) {
     diagnostic(context, 'gradle_version_catalog', 'Gradle version catalogs are not statically resolved for S007.', true, 'gradle/libs.versions.toml');
@@ -421,10 +491,23 @@ function collectGradleEvidence(context: EvidenceContext): void {
   const settingsPath = ['settings.gradle', 'settings.gradle.kts']
     .map(name => path.join(context.repoPath, name))
     .find(file => fs.existsSync(file));
+  const settings = settingsPath ? readManifest(context, settingsPath) : undefined;
+  if (settings !== undefined) {
+    collectGradlePluginVersions(settings, properties, pluginVersions);
+  }
+
+  for (const buildFile of rootFiles) {
+    collectGradleBuildFile(context, buildFile, properties, pluginVersions);
+  }
+
   if (settingsPath) {
-    const settings = readManifest(context, settingsPath);
     if (settings !== undefined) {
       for (const moduleName of parseGradleIncludes(settings)) {
+        if (context.gradleModuleCandidates >= MAX_MANIFESTS) {
+          diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} declared Gradle module candidates.`, true, relativePosixPath(context.repoPath, settingsPath));
+          break;
+        }
+        context.gradleModuleCandidates += 1;
         const normalized = moduleName.replace(/^:/, '').replace(/:/g, path.sep);
         const declaredModuleDir = path.resolve(context.repoPath, normalized);
         if (!isPathLexicallyInside(context.repoPath, declaredModuleDir)) {
@@ -448,7 +531,7 @@ function collectGradleEvidence(context: EvidenceContext): void {
         for (const name of ['build.gradle', 'build.gradle.kts']) {
           const buildFile = path.join(moduleDir, name);
           if (fs.existsSync(buildFile)) {
-            collectGradleBuildFile(context, buildFile, moduleProperties);
+            collectGradleBuildFile(context, buildFile, moduleProperties, pluginVersions);
           }
         }
       }
@@ -473,19 +556,29 @@ function collectGradleEvidence(context: EvidenceContext): void {
   }
 }
 
-function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inheritedProperties: Map<string, string>): void {
+function collectGradleBuildFile(
+  context: EvidenceContext,
+  buildFile: string,
+  inheritedProperties: Map<string, string>,
+  pluginVersions: Map<string, string>
+): void {
   const content = readManifest(context, buildFile);
   if (content === undefined) {
     return;
   }
   const sourcePath = relativePosixPath(context.repoPath, buildFile);
   const staticContent = stripGradleComments(content);
+  const codePositions = gradleCodePositions(staticContent);
   const properties = new Map(inheritedProperties);
-  for (const match of staticContent.matchAll(/(?:def|val|var)?\s*([A-Za-z][\w.]*)\s*=\s*["']([^"']+)["']/g)) {
+  for (const match of gradleCodeMatches(
+    staticContent,
+    /(?:def|val|var)?\s*([A-Za-z][\w.]*)\s*=\s*["']([^"']+)["']/g,
+    codePositions
+  )) {
     properties.set(match[1], match[2]);
   }
 
-  const javaVersion = findGradleJavaVersion(staticContent, properties);
+  const javaVersion = findGradleJavaVersion(staticContent, properties, codePositions);
   if (javaVersion?.value) {
     addObservation(context, {
       identityCandidates: ['java'],
@@ -509,12 +602,28 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
     );
   }
 
-  const dependencyPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s*(?:\(\s*)?["']([^"']+)["'](?!\s*\+)/g;
-  for (const match of staticContent.matchAll(dependencyPattern)) {
-    collectGradleCoordinate(context, sourcePath, match[1], properties);
+  const configuration = '(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor|classpath)';
+  const mapDependencyPattern = new RegExp(
+    `${configuration}\\s*(?:\\(\\s*)?((?:(?:group|name|version)\\s*[:=]\\s*(?:["'][^"']+["']|[A-Za-z][\\w.]*)\\s*,?\\s*){2,3})\\)?`,
+    'g'
+  );
+  for (const match of gradleCodeMatches(staticContent, mapDependencyPattern, codePositions)) {
+    collectGradleMapDependency(context, sourcePath, match[1], properties);
   }
-  const concatenatedPattern = /(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor)\s+["']([^"']+:)["']\s*\+\s*([A-Za-z][\w.]*)/g;
-  for (const match of staticContent.matchAll(concatenatedPattern)) {
+
+  const dependencyPattern = new RegExp(`${configuration}\\s*(?:\\(\\s*)?(["'])([^"']+)\\1(?!\\s*\\+)`, 'g');
+  for (const match of gradleCodeMatches(staticContent, dependencyPattern, codePositions)) {
+    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
+  }
+  const wrappedDependencyPattern = new RegExp(
+    `${configuration}\\s*(?:\\(\\s*)?(?:platform|enforcedPlatform)\\s*\\(\\s*(["'])([^"']+)\\1`,
+    'g'
+  );
+  for (const match of gradleCodeMatches(staticContent, wrappedDependencyPattern, codePositions)) {
+    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
+  }
+  const concatenatedPattern = new RegExp(`${configuration}\\s+["']([^"']+:)["']\\s*\\+\\s*([A-Za-z][\\w.]*)`, 'g');
+  for (const match of gradleCodeMatches(staticContent, concatenatedPattern, codePositions)) {
     const value = properties.get(match[2]);
     collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties);
     if (!value) {
@@ -522,10 +631,32 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
     }
   }
 
-  const pluginPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*["']([^"']+)["']/g;
-  for (const match of staticContent.matchAll(pluginPattern)) {
+  const variableDependencyPattern = new RegExp(
+    `${configuration}\\s*(?:\\(\\s*)?(?!(?:group|name|version)\\s*[:=])(?!(?:project|files|fileTree|platform|enforcedPlatform)\\s*\\()([A-Za-z][\\w.]*)`,
+    'g'
+  );
+  for (const match of gradleCodeMatches(staticContent, variableDependencyPattern, codePositions)) {
+    const coordinate = properties.get(match[1]);
+    if (coordinate) {
+      collectGradleCoordinate(context, sourcePath, coordinate, properties);
+    } else {
+      diagnostic(
+        context,
+        'gradle_dynamic_expression',
+        `Gradle dependency expression ${match[1]} could not be resolved locally.`,
+        true,
+        sourcePath
+      );
+    }
+  }
+
+  const pluginPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*((?:["'][^"']+["'])|(?:[A-Za-z][\w.]*))/g;
+  const versionedPluginIndexes = new Set<number>();
+  for (const match of gradleCodeMatches(staticContent, pluginPattern, codePositions)) {
+    versionedPluginIndexes.add(match.index ?? -1);
     const matched = matchGradlePlugin(match[1]);
     if (matched) {
+      const version = resolveGradleVersionExpression(match[2], properties);
       addObservation(context, {
         identityCandidates: [matched.id, match[1]],
         displayName: matched.displayName,
@@ -534,16 +665,85 @@ function collectGradleBuildFile(context: EvidenceContext, buildFile: string, inh
         evidenceKind: 'plugin-declaration',
         sourcePath,
         sourceDetail: `plugin ${match[1]}`,
-        declaredVersion: match[2],
-        confidence: 'confident',
+        declaredVersion: version,
+        confidence: version ? 'confident' : 'partial',
         provenance: 'repository-static',
         unlistedFrameworkCandidate: matched.unlisted
       });
+      if (!version) {
+        diagnostic(
+          context,
+          'gradle_dynamic_expression',
+          `Gradle plugin ${match[1]} version expression ${match[2]} could not be resolved locally.`,
+          true,
+          sourcePath
+        );
+      }
     }
   }
 
-  if (/\blibs\.[A-Za-z]/.test(staticContent)) {
+  const pluginIdPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?/g;
+  for (const match of gradleCodeMatches(staticContent, pluginIdPattern, codePositions)) {
+    if (versionedPluginIndexes.has(match.index ?? -1)) {
+      continue;
+    }
+    const matched = matchGradlePlugin(match[1]);
+    if (!matched) {
+      continue;
+    }
+    const version = pluginVersions.get(match[1]);
+    addObservation(context, {
+      identityCandidates: [matched.id, match[1]],
+      displayName: matched.displayName,
+      ecosystem: matched.ecosystem,
+      technologyType: matched.technologyType,
+      evidenceKind: 'plugin-declaration',
+      sourcePath,
+      sourceDetail: `plugin ${match[1]}`,
+      declaredVersion: version,
+      confidence: version ? 'confident' : 'partial',
+      provenance: 'repository-static',
+      unlistedFrameworkCandidate: matched.unlisted
+    });
+    if (!version) {
+      diagnostic(
+        context,
+        'gradle_dynamic_expression',
+        `Gradle plugin ${match[1]} has no locally resolved version.`,
+        true,
+        sourcePath
+      );
+    }
+  }
+
+  if (gradleCodeMatches(staticContent, /\bapply\s*(?:\(\s*)?from\s*[:=]/g, codePositions).length > 0) {
+    diagnostic(
+      context,
+      'gradle_build_logic',
+      'Applied Gradle scripts are outside the bounded S007 static model.',
+      true,
+      sourcePath
+    );
+  }
+
+  if (gradleCodeMatches(staticContent, /\blibs\.[A-Za-z]/g, codePositions).length > 0) {
     diagnostic(context, 'gradle_dynamic_expression', 'Gradle version-catalog references require resolution outside the bounded static reader.', true, sourcePath);
+  }
+}
+
+function collectGradlePluginVersions(
+  content: string,
+  properties: Map<string, string>,
+  versions: Map<string, string>
+): void {
+  const staticContent = stripGradleComments(content);
+  const codePositions = gradleCodePositions(staticContent);
+  const pattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*((?:["'][^"']+["'])|(?:[A-Za-z][\w.]*))/g;
+  for (const match of gradleCodeMatches(staticContent, pattern, codePositions)) {
+    const version = resolveGradleVersionExpression(match[2], properties);
+    if (version) {
+      versions.set(match[1], version);
+    }
   }
 }
 
@@ -551,9 +751,23 @@ function collectGradleCoordinate(
   context: EvidenceContext,
   sourcePath: string,
   coordinate: string,
-  properties: Map<string, string>
+  properties: Map<string, string>,
+  allowInterpolation = false
 ): void {
-  const parts = coordinate.split(':');
+  const resolvedCoordinate = coordinate.includes('$')
+    ? (allowInterpolation ? resolveGradleInterpolatedText(coordinate, properties) : undefined)
+    : coordinate;
+  if (!resolvedCoordinate) {
+    diagnostic(
+      context,
+      'gradle_dynamic_expression',
+      `Gradle dependency coordinate ${coordinate} could not be resolved locally.`,
+      true,
+      sourcePath
+    );
+    return;
+  }
+  const parts = resolvedCoordinate.split(':');
   if (parts.length < 2) {
     return;
   }
@@ -563,6 +777,20 @@ function collectGradleCoordinate(
     return;
   }
   const rawVersion = parts.slice(2).join(':');
+  if (isGrailsPluginArtifact(groupId)) {
+    addPresenceOnlyObservation(context, {
+      identityCandidates: [matched.id, `${groupId}:${artifactId}`, groupId],
+      displayName: matched.displayName,
+      ecosystem: matched.ecosystem,
+      technologyType: matched.technologyType,
+      evidenceKind: 'dependency-declaration',
+      sourcePath,
+      sourceDetail: `${groupId}:${artifactId}`,
+      confidence: 'partial',
+      provenance: 'repository-static'
+    });
+    return;
+  }
   const propertyMatch = /^\$\{?([A-Za-z][\w.]*)\}?$/.exec(rawVersion);
   const version = propertyMatch ? properties.get(propertyMatch[1]) : rawVersion || undefined;
   addObservation(context, {
@@ -581,6 +809,92 @@ function collectGradleCoordinate(
   if (!version) {
     diagnostic(context, 'version_unresolved', `Version for ${groupId}:${artifactId} could not be resolved from local Gradle metadata.`, true, sourcePath);
   }
+}
+
+function collectGradleMapDependency(
+  context: EvidenceContext,
+  sourcePath: string,
+  argumentsText: string,
+  properties: Map<string, string>
+): void {
+  const groupToken = gradleNamedArgument(argumentsText, 'group');
+  const nameToken = gradleNamedArgument(argumentsText, 'name');
+  const groupId = groupToken ? quotedGradleLiteral(groupToken) : undefined;
+  const artifactId = nameToken ? quotedGradleLiteral(nameToken) : undefined;
+  if (!groupId || !artifactId) {
+    diagnostic(
+      context,
+      'gradle_dynamic_expression',
+      'Gradle map-style dependency coordinates could not be resolved locally.',
+      true,
+      sourcePath
+    );
+    return;
+  }
+
+  const versionToken = gradleNamedArgument(argumentsText, 'version');
+  const version = versionToken ? resolveGradleVersionExpression(versionToken, properties) : undefined;
+  collectGradleCoordinate(
+    context,
+    sourcePath,
+    `${groupId}:${artifactId}${version ? `:${version}` : ''}`,
+    properties
+  );
+}
+
+function gradleNamedArgument(argumentsText: string, name: string): string | undefined {
+  const match = new RegExp(`\\b${name}\\s*[:=]\\s*((?:["'][^"']+["'])|(?:[A-Za-z][\\w.]*))`).exec(argumentsText);
+  return match?.[1];
+}
+
+function quotedGradleLiteral(value: string): string | undefined {
+  const match = /^(["'])([^"']+)\1$/.exec(value.trim());
+  return match?.[2];
+}
+
+function resolveGradleVersionExpression(expression: string, properties: Map<string, string>): string | undefined {
+  const value = expression.trim();
+  const quoted = quotedGradleLiteral(value);
+  if (quoted !== undefined) {
+    const propertyReference = /^\$\{?([A-Za-z][\w.]*)\}?$/.exec(quoted);
+    if (propertyReference) {
+      return properties.get(propertyReference[1]);
+    }
+    return quoted.includes('$') ? undefined : quoted;
+  }
+  return /^[A-Za-z][\w.]*$/.test(value) ? properties.get(value) : undefined;
+}
+
+function resolveGradleInterpolatedText(
+  rawValue: string,
+  properties: Map<string, string>,
+  resolving: Set<string> = new Set(),
+  depth = 0
+): string | undefined {
+  if (depth > MAX_MAVEN_PROPERTY_DEPTH) return undefined;
+  const references = [...rawValue.matchAll(/\$\{([A-Za-z][\w.]*)\}|\$([A-Za-z][\w.]*)/g)]
+    .map(match => match[1] ?? match[2]);
+  if (references.length === 0) return rawValue.includes('$') ? undefined : rawValue;
+
+  let value = rawValue;
+  for (const name of new Set(references)) {
+    if (resolving.has(name)) return undefined;
+    const property = properties.get(name);
+    if (property === undefined) return undefined;
+    const resolved = resolveGradleInterpolatedText(
+      property,
+      properties,
+      new Set(resolving).add(name),
+      depth + 1
+    );
+    if (resolved === undefined) return undefined;
+    value = value.replace(new RegExp(`\\$\\{${escapeRegExp(name)}\\}|\\$${escapeRegExp(name)}\\b`, 'g'), resolved);
+  }
+  return value.includes('$') ? undefined : value;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function readGradleProperties(context: EvidenceContext, propertiesPath: string): Map<string, string> {
@@ -610,7 +924,7 @@ function parseGradleIncludes(content: string): string[] {
       modules.push(quoted[1]);
     }
   }
-  return modules;
+  return [...new Set(modules)];
 }
 
 function matchJavaIdentity(groupId: string, artifactId: string): Identity | undefined {
@@ -638,6 +952,38 @@ function matchGradlePlugin(pluginId: string): Identity | undefined {
   return undefined;
 }
 
+function isGrailsPluginArtifact(groupId: string): boolean {
+  return groupId === 'org.grails.plugins' || groupId.startsWith('org.grails.plugins.');
+}
+
+function addPresenceOnlyObservation(context: EvidenceContext, observation: S007TechnologyObservation): void {
+  addObservation(context, observation);
+  if (context.observations.includes(observation)) {
+    context.presenceOnlyObservations.add(observation);
+  }
+}
+
+function finalizePresenceOnlyObservations(context: EvidenceContext): void {
+  for (const observation of context.presenceOnlyObservations) {
+    const authoritative = context.observations.some(candidate =>
+      candidate !== observation
+      && candidate.identityCandidates[0] === observation.identityCandidates[0]
+      && Boolean(candidate.resolvedVersion ?? candidate.declaredVersion)
+    );
+    if (authoritative) {
+      context.observations = context.observations.filter(candidate => candidate !== observation);
+      continue;
+    }
+    diagnostic(
+      context,
+      'version_unresolved',
+      `The ${observation.sourceDetail} artifact proves Grails presence but not the Grails framework version.`,
+      true,
+      observation.sourcePath
+    );
+  }
+}
+
 function markConflicts(context: EvidenceContext): void {
   const groups = new Map<string, S007TechnologyObservation[]>();
   for (const observation of context.observations) {
@@ -661,21 +1007,33 @@ function markConflicts(context: EvidenceContext): void {
 }
 
 function readManifest(context: EvidenceContext, filePath: string): string | undefined {
-  const sourcePath = relativePosixPath(context.repoPath, filePath);
+  const requestedSourcePath = relativePosixPath(context.repoPath, filePath);
   try {
     const stats = fs.lstatSync(filePath);
     if (stats.isSymbolicLink()) {
-      diagnostic(context, 'local_module_symlink', `Symlinked manifest was not read: ${sourcePath}.`, true, sourcePath);
+      diagnostic(context, 'local_module_symlink', `Symlinked manifest was not read: ${requestedSourcePath}.`, true, requestedSourcePath);
       return undefined;
     }
     if (stats.size > MAX_MANIFEST_BYTES) {
-      diagnostic(context, 'manifest_too_large', `Manifest exceeds ${MAX_MANIFEST_BYTES} bytes.`, true, sourcePath);
+      diagnostic(context, 'manifest_too_large', `Manifest exceeds ${MAX_MANIFEST_BYTES} bytes.`, true, requestedSourcePath);
       return undefined;
     }
+    const realPath = fs.realpathSync(filePath);
+    const cached = context.manifestContents.get(realPath);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (context.manifestContents.size >= MAX_MANIFESTS) {
+      diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} unique local manifests.`, true);
+      return undefined;
+    }
+    const sourcePath = relativePosixPath(context.repoPath, realPath);
+    const content = fs.readFileSync(realPath, 'utf8');
     context.manifestPaths.add(sourcePath);
-    return fs.readFileSync(filePath, 'utf8');
+    context.manifestContents.set(realPath, content);
+    return content;
   } catch (error) {
-    diagnostic(context, 'manifest_malformed', `Unable to read ${sourcePath}: ${errorMessage(error)}`, true, sourcePath);
+    diagnostic(context, 'manifest_malformed', `Unable to read ${requestedSourcePath}: ${errorMessage(error)}`, true, requestedSourcePath);
     return undefined;
   }
 }
@@ -702,15 +1060,22 @@ function safeManifestPath(context: EvidenceContext, candidatePath: string, label
 }
 
 function addObservation(context: EvidenceContext, observation: S007TechnologyObservation): void {
-  const duplicate = context.observations.some(existing =>
-    existing.identityCandidates[0] === observation.identityCandidates[0]
-    && existing.sourcePath === observation.sourcePath
-    && existing.sourceDetail === observation.sourceDetail
-    && existing.declaredVersion === observation.declaredVersion
-  );
-  if (!duplicate) {
-    context.observations.push(observation);
+  const key = [
+    observation.identityCandidates[0],
+    observation.sourcePath,
+    observation.sourceDetail,
+    observation.declaredVersion ?? '',
+    observation.resolvedVersion ?? ''
+  ].join('\u0000');
+  if (context.observationKeys.has(key)) {
+    return;
   }
+  if (context.observations.length >= MAX_OBSERVATIONS) {
+    diagnostic(context, 'traversal_limit', `Stopped after ${MAX_OBSERVATIONS} S007 technology observations.`, true);
+    return;
+  }
+  context.observationKeys.add(key);
+  context.observations.push(observation);
 }
 
 function diagnostic(
@@ -759,37 +1124,73 @@ function subtractMavenContext(effective: MavenContext, inherited: MavenContext):
     })),
     dependencyManagement: new Map([...effective.dependencyManagement].filter(([name, value]) => {
       const previous = inherited.dependencyManagement.get(name);
-      return !previous || previous.value !== value.value || previous.sourcePath !== value.sourcePath;
+      return !previous
+        || previous.rawValue !== value.rawValue
+        || previous.value !== value.value
+        || previous.sourcePath !== value.sourcePath;
     }))
   };
 }
 
 function findMavenCompilerVersion(
+  evidenceContext: EvidenceContext,
   project: any,
   context: MavenContext,
   sourcePath: string
 ): { name: string; value: string; sourcePath: string } | undefined {
-  for (const plugin of asArray(project.build?.plugins?.plugin)) {
-    const groupId = xmlText(plugin?.groupId);
-    if (
-      xmlText(plugin?.artifactId) !== 'maven-compiler-plugin'
-      || (groupId && groupId !== 'org.apache.maven.plugins')
-    ) {
-      continue;
-    }
-    const configurations = [plugin.configuration]
-      .concat(asArray(plugin.executions?.execution).map(execution => execution?.configuration))
-      .filter(Boolean);
-    for (const configuration of configurations) {
+  const appliedPlugins = asArray(project.build?.plugins?.plugin).filter(isMavenCompilerPlugin);
+  const managedPlugins = asArray(project.build?.pluginManagement?.plugins?.plugin).filter(isMavenCompilerPlugin);
+  if (managedPlugins.some(plugin => mavenCompilerConfigurations(plugin).length > 0)) {
+    diagnostic(
+      evidenceContext,
+      'version_unresolved',
+      `Maven compiler pluginManagement in ${sourcePath} requires effective-model resolution.`,
+      true,
+      sourcePath
+    );
+  }
+
+  const candidates: Array<{ name: string; value: string; sourcePath: string }> = [];
+  for (const plugin of [...appliedPlugins, ...managedPlugins]) {
+    for (const configuration of mavenCompilerConfigurations(plugin)) {
       for (const name of ['release', 'source', 'target']) {
         const resolved = resolveMavenValue(xmlText(configuration[name]), context.properties, sourcePath);
         if (resolved) {
-          return { name: `maven-compiler-plugin.configuration.${name}`, ...resolved };
+          candidates.push({ name: `maven-compiler-plugin.configuration.${name}`, ...resolved });
         }
       }
     }
   }
-  return undefined;
+  if (new Set(candidates.map(candidate => candidate.value)).size > 1) {
+    diagnostic(
+      evidenceContext,
+      'version_unresolved',
+      `Conflicting Maven compiler settings in ${sourcePath} require effective-model resolution.`,
+      true,
+      sourcePath
+    );
+  }
+  return candidates[0];
+}
+
+function isMavenCompilerPlugin(plugin: any): boolean {
+  const groupId = xmlText(plugin?.groupId);
+  return xmlText(plugin?.artifactId) === 'maven-compiler-plugin'
+    && (!groupId || groupId === 'org.apache.maven.plugins');
+}
+
+function mavenCompilerConfigurations(plugin: any): any[] {
+  const executions = asArray(plugin.executions?.execution);
+  return executions
+    .filter(execution => xmlText(execution?.id) === 'default-compile')
+    .map(execution => execution?.configuration)
+    .concat(
+      executions
+        .filter(execution => xmlText(execution?.id) !== 'default-compile')
+        .map(execution => execution?.configuration),
+      plugin.configuration
+    )
+    .filter(Boolean);
 }
 
 function yarnSelector(declaration: Pick<JavaScriptDeclaration, 'packageName' | 'range'>): string {
@@ -855,21 +1256,35 @@ function resolveMavenText(
 
 function findGradleJavaVersion(
   content: string,
-  properties: Map<string, string>
+  properties: Map<string, string>,
+  codePositions: Uint8Array
 ): { value?: string; sourceDetail: string; expression: string } | undefined {
-  const toolchain = /JavaLanguageVersion\.of\(\s*([^)\r\n]+)\s*\)/.exec(content);
-  if (toolchain) {
+  const toolchains = gradleCodeMatches(
+    content,
+    /\blanguageVersion\b\s*(?:=\s*|\.\s*set\s*\(\s*)JavaLanguageVersion\.of\(\s*([^)\r\n]+)\s*\)/g,
+    codePositions
+  );
+  const toolchainPositions = gradleJavaToolchainPositions(content, codePositions);
+  const projectToolchains = toolchains.filter(match => toolchainPositions[match.index ?? 0] === 1);
+  if (projectToolchains.length > 0) {
+    const values = projectToolchains.map(match => resolveGradleJavaVersionExpression(match[1], properties));
+    const resolvedValues = new Set(values.filter((value): value is string => Boolean(value)));
     return {
-      value: resolveGradleJavaVersionExpression(toolchain[1], properties),
+      value: values.every(Boolean) && resolvedValues.size === 1 ? values[0] : undefined,
       sourceDetail: 'Gradle Java toolchain',
-      expression: toolchain[1].trim()
+      expression: projectToolchains.map(match => match[1].trim()).join(', ')
     };
   }
 
   for (const setting of ['sourceCompatibility', 'targetCompatibility']) {
-    const declaration = new RegExp(
-      `\\b${setting}\\b\\s*(?:=\\s*)?(JavaVersion\\.VERSION_[0-9_]+|JavaVersion\\.toVersion\\([^\\r\\n)]*\\)|["']?\\d+["']?|[A-Za-z][\\w.]*)`
-    ).exec(content);
+    const declaration = firstGradleCodeMatch(
+      content,
+      new RegExp(
+        `\\b${setting}\\b\\s*(?:=\\s*)?(JavaVersion\\.VERSION_[0-9_]+|JavaVersion\\.toVersion\\([^\\r\\n)]*\\)|["']?\\d+["']?|[A-Za-z][\\w.]*)`,
+        'g'
+      ),
+      codePositions
+    );
     if (declaration) {
       return {
         value: resolveGradleJavaVersionExpression(declaration[1], properties),
@@ -879,6 +1294,38 @@ function findGradleJavaVersion(
     }
   }
   return undefined;
+}
+
+function gradleJavaToolchainPositions(
+  content: string,
+  codePositions: Uint8Array
+): Uint8Array {
+  const blocks: Array<{ name: string; isJavaToolchain: boolean }> = [];
+  const positions = new Uint8Array(content.length);
+  let targetDepth = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (targetDepth > 0) {
+      positions[index] = 1;
+    }
+    if (codePositions[index] !== 1) {
+      continue;
+    }
+    if (content[index] === '{') {
+      const prefix = content.slice(Math.max(0, index - 80), index);
+      const name = /([A-Za-z][\w.]*)\s*(?:\([^{}]*\))?\s*$/.exec(prefix)?.[1] ?? '';
+      const parentName = blocks[blocks.length - 1]?.name;
+      const isJavaToolchain = name === 'java.toolchain' || (name === 'toolchain' && parentName === 'java');
+      blocks.push({ name, isJavaToolchain });
+      if (isJavaToolchain) {
+        targetDepth += 1;
+      }
+    } else if (content[index] === '}') {
+      if (blocks.pop()?.isJavaToolchain) {
+        targetDepth -= 1;
+      }
+    }
+  }
+  return positions;
 }
 
 function resolveGradleJavaVersionExpression(
@@ -903,6 +1350,48 @@ function resolveGradleJavaVersionExpression(
 
 function normalizeGradleJavaVersion(value: string): string {
   return value.startsWith('1_') ? value.slice(2) : value.replace(/_/g, '.');
+}
+
+function gradleCodeMatches(content: string, pattern: RegExp, codePositions: Uint8Array): RegExpMatchArray[] {
+  return [...content.matchAll(pattern)].filter(match => codePositions[match.index ?? 0] === 1);
+}
+
+function firstGradleCodeMatch(
+  content: string,
+  pattern: RegExp,
+  codePositions: Uint8Array
+): RegExpMatchArray | undefined {
+  return gradleCodeMatches(content, pattern, codePositions)[0];
+}
+
+function gradleCodePositions(content: string): Uint8Array {
+  const positions = new Uint8Array(content.length);
+  let quote: "'" | '"' | "'''" | '\"\"\"' | undefined;
+
+  for (let index = 0; index < content.length;) {
+    if (quote) {
+      if (content.startsWith(quote, index) && !isEscapedCharacter(content, index)) {
+        index += quote.length;
+        quote = undefined;
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+
+    positions[index] = 1;
+    const triple = content.slice(index, index + 3);
+    if (triple === "'''" || triple === '\"\"\"') {
+      quote = triple;
+      index += 3;
+      continue;
+    }
+    if (content[index] === "'" || content[index] === '"') {
+      quote = content[index] as "'" | '"';
+    }
+    index += 1;
+  }
+  return positions;
 }
 
 function stripGradleComments(content: string): string {
@@ -938,7 +1427,7 @@ function stripGradleComments(content: string): string {
       continue;
     }
     if (quote) {
-      if (content.startsWith(quote, index) && content[index - 1] !== '\\') {
+      if (content.startsWith(quote, index) && !isEscapedCharacter(content, index)) {
         result += quote;
         index += quote.length;
         quote = undefined;
@@ -973,6 +1462,14 @@ function stripGradleComments(content: string): string {
     index += 1;
   }
   return result;
+}
+
+function isEscapedCharacter(content: string, index: number): boolean {
+  let backslashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && content[cursor] === '\\'; cursor -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }
 
 function mavenCoordinates(dependency: any): string | undefined {

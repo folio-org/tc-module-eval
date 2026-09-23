@@ -258,7 +258,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S007',
       status: analysis.status as EvaluationStatus,
-      hasReviewMaterial: hasS007AgentReviewMaterial(analysis),
+      hasReviewMaterial: hasS007AgentReviewMaterial(repoPath, analysis),
       evaluationRun: run,
       review: (config, commandRunner) => reviewS007WithAgent(repoPath, analysis, config, commandRunner)
     });

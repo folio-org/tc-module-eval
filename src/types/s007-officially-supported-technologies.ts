@@ -209,6 +209,7 @@ export interface S007FindingEvidence {
   detail: string;
   declaredVersion?: string;
   resolvedVersion?: string;
+  versionSourcePath?: string;
 }
 
 export interface S007TechnologyFinding {
