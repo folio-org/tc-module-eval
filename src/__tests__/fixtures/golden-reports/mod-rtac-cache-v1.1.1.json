@@ -352,8 +352,143 @@
     {
       "criterionId": "S007",
       "status": "manual",
-      "evidence": "Testing requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S007 manual: current repository evidence or policy semantics require reviewer judgment.",
+      "details": "S007 manual: current repository evidence or policy semantics require reviewer judgment.",
+      "criterionDetails": {
+        "policyFormatVersion": "1.0",
+        "findingCount": 14,
+        "findings": [
+          {
+            "technologyId": "evidence-coverage",
+            "classification": "coverage-incomplete",
+            "contribution": "manual",
+            "statusDetermining": true
+          },
+          {
+            "technologyId": "folio-spring-base",
+            "classification": "compliant",
+            "contribution": "pass",
+            "statusDetermining": false,
+            "matchedPolicy": {
+              "entryId": "folio-spring-base"
+            }
+          },
+          {
+            "technologyId": "java",
+            "classification": "unresolved",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "java"
+            }
+          },
+          {
+            "technologyId": "lombok",
+            "classification": "unresolved",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "lombok"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          },
+          {
+            "technologyId": "spring-boot",
+            "classification": "contested",
+            "contribution": "manual",
+            "statusDetermining": true,
+            "matchedPolicy": {
+              "entryId": "spring-boot"
+            }
+          }
+        ],
+        "policyDiagnosticCount": 0,
+        "evidenceDiagnosticCounts": {
+          "maven_remote_parent": 1,
+          "version_unresolved": 12
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "S008",

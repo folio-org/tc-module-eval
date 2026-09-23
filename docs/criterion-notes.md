@@ -1,25 +1,39 @@
 # Criterion Notes
 
-This document collects criterion-specific evaluator behavior that is too detailed for the README.
+This file records criterion behavior not covered in the README.
 
 ## S002 Descriptor Generation
 
-Descriptor validation may run descriptor-producing build commands when a static descriptor is not present. Treat this like other build execution: only enable local command execution for trusted repositories and trusted runner environments.
+When no static descriptor exists, descriptor validation may run its build command. Enable local commands only for trusted repositories and runners.
 
 ## Source Inspection Boundaries
 
-Source-inspection evidence gathering is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
+Source inspection never modifies evaluated repositories or runs their code, tests, builds, services, databases, or Okapi calls.
 
 ## S005 Personal Data Disclosure Review
 
-Personal data disclosure evaluation checks `PERSONAL_DATA_DISCLOSURE.md` mechanics, completion, and bounded source-inspection evidence. Completed forms remain subject to manual review; the tool does not certify legal or privacy compliance.
+S005 checks `PERSONAL_DATA_DISCLOSURE.md` mechanics and completion, plus bounded source-inspection evidence. Completed forms still require manual review; S005 does not certify legal or privacy compliance.
 
 ## S006 Sensitive Information Review
 
-Sensitive-information evaluation uses Gitleaks against the checked-out working tree, plus bounded local checks for credential URLs, concrete secret assignments, FOLIO/environment-specific endpoints, and local paths. Reports use redaction and never expose raw sensitive values; high-confidence production, CI, or deployment evidence can fail deterministically, while documentation, fixtures, local defaults, private endpoints, and scan-coverage uncertainty stay subject to manual review.
+S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. Reports redact raw values. High-confidence production, CI, or deployment evidence can fail; documentation, fixtures, local defaults, private endpoints, and incomplete scans require manual review.
 
-The devcontainer and GitHub Actions workflows install Gitleaks automatically. For other local runs, install the `gitleaks` binary on `PATH`, or set `GITLEAKS_PATH` to use a specific binary. If Gitleaks is unavailable or fails, sensitive-information review reports a material scanner warning and returns manual review rather than silently passing.
+The devcontainer and GitHub Actions install Gitleaks. Elsewhere, install `gitleaks` on `PATH` or set `GITLEAKS_PATH`. An unavailable or failed scanner produces a material warning and manual status.
+
+## S007 Officially Supported Technologies
+
+S007 evaluates the current committed `config/officially-supported-technologies.json`. It has no policy selector or Confluence lookup. Maintainers update this file in place; optional source metadata is for reviewer context only.
+
+S007 reads static, repository-local Maven, Gradle, and package metadata. A top-level Yarn Classic lockfile may supply exact JavaScript versions. It does not run builds or repository code, and remote evidence cannot determine status. Unsupported, dynamic, remote, conflicting, or incomplete evidence prevents a pass.
+
+- `pass`: every relevant technology has a definitive rule, all available version checks comply, and evidence is complete. Rules without version constraints require no comparison.
+- `fail`: conclusive version evidence violates an explicit normative rule. A failure takes precedence over concurrent manual findings.
+- `manual`: the evidence or policy requires judgment, including unlisted frameworks and advisory, provisional, or contested rules.
+
+Recommendations and deprecation notes remain visible but cannot cause failure on their own.
+
+S012 build tools, S013 testing, infrastructure compatibility, live policy synchronization, and new-module applicability remain outside S007.
 
 ## Advisory Agent Review
 
-Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion. See [Agent Review Configuration](agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
+Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.
