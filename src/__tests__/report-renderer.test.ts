@@ -2,6 +2,12 @@ import { EvaluationReportRenderer } from '../utils/report-renderer';
 import { EvaluationResult, EvaluationStatus } from '../types';
 
 describe('EvaluationReportRenderer', () => {
+  function reportData(html: string): any {
+    const match = html.match(/<script id="report-data" type="application\/json">([\s\S]+?)<\/script>/);
+    expect(match).not.toBeNull();
+    return JSON.parse(match![1]);
+  }
+
   const result: EvaluationResult = {
     repositoryUrl: 'https://github.com/folio-org/test-module',
     moduleName: 'test-module',
@@ -138,16 +144,25 @@ describe('EvaluationReportRenderer', () => {
     expect(JSON.parse(json).criteria).toHaveLength(6);
   });
 
-  it('should escape HTML and preserve multiline details', () => {
+  it('renders a self-contained interactive report with structured criterion data', () => {
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml(result);
+    const data = reportData(html);
 
     expect(html).toContain('FOLIO Module Evaluation Report');
-    expect(html).toContain('test-module');
-    expect(html).toContain('Criterion S001');
-    expect(html).toContain('Apache &lt;2.0&gt; &amp; compatible');
-    expect(html).toContain('Line one<br>Line two');
-    expect(html).toContain('overflow-wrap: anywhere;');
+    expect(html).toContain('Search criteria and evidence');
+    expect(html).toContain('Expand all');
+    expect(html).toContain('No automated check');
+    expect(html).toContain('window.addEventListener(\'keydown\'');
+    expect(html).not.toContain('fetch(');
+    expect(html).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/);
+    expect(data.meta.module).toBe('test-module');
+    expect(data.items[0]).toMatchObject({
+      id: 'S001',
+      title: 'Open-source license',
+      evidence: 'Apache <2.0> & compatible',
+      details: ['Line one', 'Line two']
+    });
   });
 
   it('escapes untrusted module names in the HTML title', () => {
@@ -165,6 +180,8 @@ describe('EvaluationReportRenderer', () => {
     const renderer = new EvaluationReportRenderer();
     const json = renderer.renderJson(result);
     const html = renderer.renderHtml(result);
+    const data = reportData(html);
+    const embedded = JSON.stringify(data);
 
     expect(json).toContain('token=[REDACTED]');
     expect(json).toContain('password=[REDACTED]');
@@ -182,11 +199,12 @@ describe('EvaluationReportRenderer', () => {
     expect(json).not.toContain('sk-proj-renderersecret1234567890');
     expect(json).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
     expect(json).not.toContain('renderersecret');
-    expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
-    expect(html).toContain('**email** &lt;script&gt;bad()&lt;/script&gt;');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).toContain('OPENAI_API_KEY=[REDACTED]');
-    expect(html).toContain('Bearer [REDACTED]');
+    expect(embedded).toContain('<script>alert(\\"x\\")</script>');
+    expect(embedded).toContain('**email** <script>bad()</script>');
+    expect(embedded).toContain('<img src=x onerror=alert(1)>');
+    expect(embedded).toContain('OPENAI_API_KEY=[REDACTED]');
+    expect(embedded).toContain('Bearer [REDACTED]');
+    expect(html).not.toContain('</script> password=');
     expect(html).not.toContain('<script>bad()</script>');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
     expect(html).not.toContain('token=abc123');
