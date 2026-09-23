@@ -160,6 +160,18 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'compliant', contribution: 'pass' });
   });
 
+  it.each([
+    ['React', 'react', '>=16', '17.0.2'],
+    ['Stripes', 'stripes', '>=9', '9.9.0']
+  ])('lets the locked %s version decide when the declared range is broader', (_name, id, declaredVersion, resolvedVersion) => {
+    const result = evaluateS007(policy, evidence([
+      observation(id, declaredVersion, resolvedVersion, 'package.json')
+    ]), 'javascript');
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings[0]).toMatchObject({ classification: 'normative-violation', contribution: 'fail' });
+  });
+
   it('covers a listed versionless language without version comparison', () => {
     const result = evaluateS007(policy, evidence([observation('typescript')]), 'javascript');
 
@@ -184,8 +196,8 @@ describe('S007 deterministic evaluator', () => {
     ['range wholly inside policy', '~18.2.1', undefined, EvaluationStatus.PASS],
     ['range disjoint from policy', '^17.0.0', undefined, EvaluationStatus.FAIL],
     ['overlap resolved inside policy', '>=18.0.0 <19', '18.2.7', EvaluationStatus.PASS],
-    ['policy line supported despite a newer lock', '^18.2.0', '18.3.1', EvaluationStatus.PASS],
-    ['partial overlap resolved outside policy', '>=18.2.5 <19', '18.3.0', EvaluationStatus.MANUAL]
+    ['declared policy line with newer lock', '^18.2.0', '18.3.1', EvaluationStatus.FAIL],
+    ['partial overlap resolved outside policy', '>=18.2.5 <19', '18.3.0', EvaluationStatus.FAIL]
   ])('%s', (_name, declaredVersion, resolvedVersion, expected) => {
     const result = evaluateS007(policy, evidence([
       observation('react', declaredVersion, resolvedVersion)

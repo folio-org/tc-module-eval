@@ -171,6 +171,13 @@ function compareObservationToConstraint(
     return 'unresolved';
   }
 
+  if (observation.resolvedVersion) {
+    const exact = normalizeExactVersion(observation.resolvedVersion);
+    return exact
+      ? (semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant')
+      : 'unresolved';
+  }
+
   const declared = observation.declaredVersion?.trim();
   let declaredComparison: VersionComparison = 'unresolved';
   if (declared && observation.ecosystem === 'java') {
@@ -195,20 +202,7 @@ function compareObservationToConstraint(
     }
   }
 
-  if (declaredComparison === 'compliant') {
-    return 'compliant';
-  }
-  if (!observation.resolvedVersion) {
-    return declaredComparison;
-  }
-  const exact = normalizeExactVersion(observation.resolvedVersion);
-  if (!exact) {
-    return declaredComparison === 'noncompliant' ? 'noncompliant' : 'unresolved';
-  }
-  if (semver.satisfies(exact, allowed, { includePrerelease: true })) {
-    return 'compliant';
-  }
-  return declaredComparison === 'noncompliant' || !declared ? 'noncompliant' : declaredComparison;
+  return declaredComparison;
 }
 
 function constraintToRange(constraint: S007VersionConstraint): string | undefined {
