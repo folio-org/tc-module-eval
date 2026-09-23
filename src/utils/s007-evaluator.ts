@@ -171,32 +171,44 @@ function compareObservationToConstraint(
     return 'unresolved';
   }
 
-  if (observation.resolvedVersion) {
-    const exact = normalizeExactVersion(observation.resolvedVersion);
-    return exact ? (semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant') : 'unresolved';
-  }
-
   const declared = observation.declaredVersion?.trim();
-  if (!declared) {
-    return 'unresolved';
-  }
-  if (observation.ecosystem === 'java') {
+  let declaredComparison: VersionComparison = 'unresolved';
+  if (declared && observation.ecosystem === 'java') {
     const exact = normalizeExactVersion(declared);
     if (exact) {
-      return semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant';
+      declaredComparison = semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant';
     }
   }
-  const translated = translateMavenRange(declared) ?? semver.validRange(declared, { includePrerelease: true });
-  if (!translated) {
-    return 'unresolved';
+  if (declaredComparison === 'unresolved' && declared) {
+    const translated = translateMavenRange(declared) ?? semver.validRange(declared, { includePrerelease: true });
+    if (translated) {
+      if (
+        semver.subset(translated, allowed, { includePrerelease: true })
+        || semver.subset(allowed, translated, { includePrerelease: true })
+      ) {
+        declaredComparison = 'compliant';
+      } else if (!semver.intersects(translated, allowed, { includePrerelease: true })) {
+        declaredComparison = 'noncompliant';
+      } else {
+        declaredComparison = 'overlap';
+      }
+    }
   }
-  if (semver.subset(translated, allowed, { includePrerelease: true })) {
+
+  if (declaredComparison === 'compliant') {
     return 'compliant';
   }
-  if (!semver.intersects(translated, allowed, { includePrerelease: true })) {
-    return 'noncompliant';
+  if (!observation.resolvedVersion) {
+    return declaredComparison;
   }
-  return 'overlap';
+  const exact = normalizeExactVersion(observation.resolvedVersion);
+  if (!exact) {
+    return declaredComparison === 'noncompliant' ? 'noncompliant' : 'unresolved';
+  }
+  if (semver.satisfies(exact, allowed, { includePrerelease: true })) {
+    return 'compliant';
+  }
+  return declaredComparison === 'noncompliant' || !declared ? 'noncompliant' : declaredComparison;
 }
 
 function constraintToRange(constraint: S007VersionConstraint): string | undefined {

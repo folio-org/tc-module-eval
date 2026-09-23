@@ -75,6 +75,41 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('reuses resolved Maven parent properties across sibling modules', async () => {
+    await write('pom.xml', `
+      <project><modules><module>first</module><module>second</module></modules></project>
+    `);
+    await write('shared-parent/pom.xml', `
+      <project><properties>
+        <java.version>21</java.version>
+        <lombok.version>1.18.32</lombok.version>
+      </properties></project>
+    `);
+    for (const moduleName of ['first', 'second']) {
+      await write(`${moduleName}/pom.xml`, `
+        <project>
+          <parent>
+            <groupId>org.example</groupId><artifactId>shared-parent</artifactId><version>1</version>
+            <relativePath>../shared-parent/pom.xml</relativePath>
+          </parent>
+          <dependencies><dependency>
+            <groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>\${lombok.version}</version>
+          </dependency></dependencies>
+        </project>
+      `);
+    }
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const secondLombok = result.observations.find(observation =>
+      observation.identityCandidates.includes('lombok') && observation.sourcePath === 'second/pom.xml'
+    );
+
+    expect(secondLombok).toMatchObject({ declaredVersion: '1.18.32', confidence: 'confident' });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', path: 'second/pom.xml' })
+    ]));
+  });
+
   it('reads the Java version from Maven compiler-plugin configuration', async () => {
     await write('pom.xml', `
       <project>
@@ -306,10 +341,45 @@ describe('S007 static technology evidence', () => {
     });
   });
 
+  it('resolves Gradle Java compatibility from gradle.properties', async () => {
+    await write('gradle.properties', 'javaVersion=17\n');
+    await write('build.gradle', `
+      sourceCompatibility = javaVersion
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({
+      declaredVersion: '17',
+      sourceDetail: 'Gradle sourceCompatibility',
+      confidence: 'confident'
+    });
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved' })
+    ]));
+  });
+
+  it('marks unresolved Gradle Java expressions as incomplete evidence', async () => {
+    await write('build.gradle', `
+      sourceCompatibility = javaVersion
+      dependencies { implementation 'io.vertx:vertx-core:5.0.2' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toBeUndefined();
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'version_unresolved', material: true, path: 'build.gradle' })
+    ]));
+    expect(result.complete).toBe(false);
+  });
+
   it('resolves relevant JavaScript declarations from Yarn Classic and ignores ordinary libraries', async () => {
     await writeJson('package.json', {
       dependencies: {
-        '@folio/stripes-core': '^10.1.0',
+        '@folio/stripes': '^10.1.0',
+        '@folio/stripes-core': '^11.0.0',
         react: '^18.2.0',
         lodash: '^4.17.21',
         express: '^4.18.0',
@@ -325,8 +395,11 @@ describe('S007 static technology evidence', () => {
     await write('yarn.lock', `
       # yarn lockfile v1
 
-      "@folio/stripes-core@^10.1.0":
+      "@folio/stripes@^10.1.0":
         version "10.1.2"
+
+      "@folio/stripes-core@^11.0.0":
+        version "11.0.1"
 
       "react@^18.2.0", "react@>=18":
         version "18.2.0"
@@ -351,6 +424,7 @@ describe('S007 static technology evidence', () => {
 
     expect(find(result, 'typescript')).toBeDefined();
     expect(find(result, 'stripes')).toMatchObject({ declaredVersion: '^10.1.0', resolvedVersion: '10.1.2' });
+    expect(result.observations.some(observation => observation.identityCandidates.includes('@folio/stripes-core'))).toBe(false);
     expect(find(result, 'react')).toMatchObject({ declaredVersion: '^18.2.0', resolvedVersion: '18.2.0' });
     for (const id of ['express', 'vue', 'angular', 'svelte', 'nestjs']) {
       expect(find(result, id)).toMatchObject({ unlistedFrameworkCandidate: true });
@@ -359,32 +433,31 @@ describe('S007 static technology evidence', () => {
     expect(result.complete).toBe(true);
   });
 
-  it('preserves duplicate JavaScript declarations and resolves each Yarn selector', async () => {
+  it('keeps peer ranges as compatibility declarations without creating conflicts', async () => {
     await writeJson('package.json', {
-      dependencies: { react: '^17.0.0' },
+      devDependencies: { react: '^18.3.0' },
       peerDependencies: { react: '^18.2.0' }
     });
     await write('yarn.lock', `
       # yarn lockfile v1
 
-      "react@^17.0.0":
-        version "17.0.2"
+      "react@^18.3.0":
+        version "18.3.1"
 
       "react@^18.2.0":
-        version "18.2.0"
+        version "18.3.1"
     `);
 
     const result = await collectS007TechnologyEvidence(repoPath, 'javascript');
     const react = result.observations.filter(observation => observation.identityCandidates.includes('react'));
 
     expect(react).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceDetail: 'dependencies.react', declaredVersion: '^17.0.0', resolvedVersion: '17.0.2' }),
-      expect.objectContaining({ sourceDetail: 'peerDependencies.react', declaredVersion: '^18.2.0', resolvedVersion: '18.2.0' })
+      expect.objectContaining({ sourceDetail: 'devDependencies.react', declaredVersion: '^18.3.0', resolvedVersion: '18.3.1' }),
+      expect.objectContaining({ sourceDetail: 'peerDependencies.react', declaredVersion: '^18.2.0', resolvedVersion: undefined })
     ]));
     expect(react).toHaveLength(2);
-    expect(react.every(observation => observation.confidence === 'partial')).toBe(true);
-    expect(result.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'conflicting_versions', material: true })
+    expect(result.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'conflicting_versions' })
     ]));
   });
 

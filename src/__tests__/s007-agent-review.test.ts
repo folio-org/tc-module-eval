@@ -169,7 +169,7 @@ describe('S007 agent review', () => {
     expect(material).toContain('[REDACTED]');
   });
 
-  it('drops absolute, traversal, symlink, duplicate, and oversized manifest paths', async () => {
+  it('keeps bounded declarations from large manifests while rejecting unsafe paths', async () => {
     await write('package.json', '{"dependencies":{"react":"^18"}}');
     await write('large.json', 'x'.repeat(40 * 1024));
     await write('target.json', '{}');
@@ -191,8 +191,11 @@ describe('S007 agent review', () => {
     const paths = request.files.map(file => file.repoRelativePath);
 
     expect(paths.filter(candidate => candidate === 'package.json')).toHaveLength(1);
-    expect(paths).not.toEqual(expect.arrayContaining(['../outside.json', 'large.json', 'linked.json']));
+    expect(paths).toEqual(expect.arrayContaining(['large.json']));
+    expect(paths).not.toEqual(expect.arrayContaining(['../outside.json', 'linked.json']));
     expect(paths.every(candidate => !path.isAbsolute(candidate))).toBe(true);
+    expect(request.files.find(file => file.repoRelativePath === 'large.json')?.content).toContain('oversized');
+    expect(request.files.find(file => file.repoRelativePath === 'large.json')?.content).not.toContain('xxxxxxxx');
   });
 
   it('drops unknown evidence references and ignores pass-like advisory wording', async () => {

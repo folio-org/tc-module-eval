@@ -144,20 +144,20 @@ describe('S007 deterministic evaluator', () => {
 
   it('returns manual for a partially overlapping declared range without an exact resolution', () => {
     const result = evaluateS007(policy, evidence([
-      observation('react', '>=18.0.0 <19.0.0')
+      observation('react', '>=18.2.5 <19.0.0')
     ]), 'javascript');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
   });
 
-  it('treats a bare npm major as a range rather than an exact version', () => {
+  it('accepts a declared npm range that fully supports the required policy line', () => {
     const result = evaluateS007(policy, evidence([
       observation('react', '18', undefined, 'package.json')
     ]), 'javascript');
 
-    expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.findings[0]).toMatchObject({ classification: 'compliant', contribution: 'pass' });
   });
 
   it('covers a listed versionless language without version comparison', () => {
@@ -184,7 +184,8 @@ describe('S007 deterministic evaluator', () => {
     ['range wholly inside policy', '~18.2.1', undefined, EvaluationStatus.PASS],
     ['range disjoint from policy', '^17.0.0', undefined, EvaluationStatus.FAIL],
     ['overlap resolved inside policy', '>=18.0.0 <19', '18.2.7', EvaluationStatus.PASS],
-    ['overlap resolved outside policy', '>=18.0.0 <19', '18.3.0', EvaluationStatus.FAIL]
+    ['policy line supported despite a newer lock', '^18.2.0', '18.3.1', EvaluationStatus.PASS],
+    ['partial overlap resolved outside policy', '>=18.2.5 <19', '18.3.0', EvaluationStatus.MANUAL]
   ])('%s', (_name, declaredVersion, resolvedVersion, expected) => {
     const result = evaluateS007(policy, evidence([
       observation('react', declaredVersion, resolvedVersion)

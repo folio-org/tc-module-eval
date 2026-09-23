@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import {
   CommandRunner,
   CriterionAgentReviewConfig,
@@ -119,17 +118,10 @@ function collectManifestFiles(
       continue;
     }
 
-    let absolutePath: string;
     try {
-      absolutePath = resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S007');
+      resolveReviewPathWithinRepo(repoPath, repoRelativePath, 'S007');
     } catch (error) {
       omitted.push({ path: repoRelativePath, reason: errorMessage(error) });
-      continue;
-    }
-
-    const stats = fs.statSync(absolutePath);
-    if (stats.size > MAX_MANIFEST_BYTES) {
-      omitted.push({ path: repoRelativePath, reason: `file exceeds ${MAX_MANIFEST_BYTES} bytes` });
       continue;
     }
 

@@ -52,7 +52,7 @@
       "consumer": "s007",
       "versionPolicy": "one-of-specified-versions",
       "entries": [
-        { "id": "stripes", "displayName": "Stripes", "aliases": ["@folio/stripes-core"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "Stripes 10.1 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "10.1.0" } }
+        { "id": "stripes", "displayName": "Stripes", "aliases": ["@folio/stripes"], "ecosystem": "javascript", "technologyType": "framework", "sourceStatement": "Stripes 10.1 or greater", "strength": "normative", "constraint": { "kind": "minimum", "expression": "10.1.0" } }
       ]
     },
     {
