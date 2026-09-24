@@ -27,6 +27,11 @@ describe('S008 catalog snapshot importer', () => {
       expect(first.eurekaComponents[0].moduleIdentities).toEqual(['a', 'z']);
       expect(first.eurekaComponents[0]).toMatchObject({ version: '2.0.0', descriptorSource: { status: 'intentionally-descriptorless' } });
       expect(first.baseline.descriptorHash).toMatch(/^sha256:/);
+      const { componentSources: _componentSources, ...withoutComponentSources } = manifest;
+      await fs.writeJson(manifestPath, withoutComponentSources);
+      await expect(importS008Catalog(manifestPath)).rejects.toThrow('componentSources must be an array');
+      await fs.writeJson(manifestPath, { ...manifest, componentSources: [] });
+      await expect(importS008Catalog(manifestPath)).rejects.toThrow('exactly one componentSources entry for every Eureka component family');
       await fs.writeJson(manifestPath, { ...manifest, platform: { ...manifest.platform, commit: '0'.repeat(40) } });
       await expect(importS008Catalog(manifestPath)).rejects.toThrow('explicit immutable');
     } finally { await fs.remove(dir); }

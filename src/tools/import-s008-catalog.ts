@@ -15,7 +15,7 @@ interface ImportManifest {
   };
   applications: Array<{ name: string; version: string; optional: boolean; farSource: string; descriptorPath: string }>;
   eurekaComponents: Array<{ familyId: string; moduleIdentities: string[] }>;
-  componentSources?: Array<{
+  componentSources: Array<{
     name: string;
     version: string;
     status: 'intentionally-descriptorless' | 'unresolved' | 'acquired';
@@ -34,6 +34,14 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
   if (!['official', 'development'].includes(manifest.channel)) throw new Error('channel must be official or development');
   if (!/^[0-9a-f]{40}$/.test(manifest.platform.commit) || /^0+$/.test(manifest.platform.commit)) {
     throw new Error('platform.commit must be an explicit immutable 40-character commit SHA');
+  }
+  if (!Array.isArray(manifest.componentSources)) throw new Error('componentSources must be an array');
+  const componentFamilies = manifest.eurekaComponents.map(component => component.familyId);
+  const componentSourceNames = manifest.componentSources.map(source => source?.name);
+  if (componentSourceNames.length !== componentFamilies.length
+    || componentFamilies.some(family => componentSourceNames.filter(name => name === family).length !== 1)
+    || componentSourceNames.some(name => !componentFamilies.includes(name))) {
+    throw new Error('snapshot manifest must contain exactly one componentSources entry for every Eureka component family');
   }
   const base = path.dirname(path.resolve(manifestPath));
   const read = async (relativePath: string): Promise<{ content: string; parsed: any; hash: string }> => {
@@ -74,7 +82,7 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
     },
     applications: applications.sort((a, b) => `${a.optional}\0${a.name}\0${a.version}`.localeCompare(`${b.optional}\0${b.name}\0${b.version}`)),
     eurekaComponents: manifest.eurekaComponents.map(item => {
-      const provenance = manifest.componentSources?.find(source => source.name === item.familyId);
+      const provenance = manifest.componentSources.find(source => source.name === item.familyId)!;
       const descriptorSource = provenance?.status === 'acquired' && provenance.kind === 'repository-tag'
         && provenance.repository && provenance.tag && provenance.commit && provenance.source && provenance.descriptorHash
         ? { status: 'acquired' as const, kind: 'repository-tag' as const, repository: provenance.repository, tag: provenance.tag, commit: provenance.commit, source: provenance.source, descriptorHash: provenance.descriptorHash }

@@ -215,6 +215,44 @@ describe('S008 catalog network acquisition', () => {
     }
   });
 
+  it('preserves configured FAR and registry base URL paths', async () => {
+    const requested: string[] = [];
+    const server = await fixtureServer((request, response) => {
+      requested.push(request.url!);
+      if (request.url === `/platform/${COMMIT}/platform-descriptor.json`) return json(response, {
+        version: 'dev',
+        applications: { required: [{ name: 'app-required', version: '1.0.0' }] },
+        'eureka-components': []
+      });
+      if (request.url?.startsWith('/far/applications?')) return json(response, {
+        applicationDescriptors: [{
+          id: 'app-required-1.0.0', name: 'app-required', version: '1.0.0',
+          modules: [{ id: 'mod-a-1.0.0', name: 'mod-a', version: '1.0.0' }]
+        }],
+        totalRecords: 1
+      });
+      if (request.url === '/registry/_/proxy/modules/mod-a-1.0.0') return json(response, {
+        id: 'mod-a-1.0.0', provides: [{ id: 'alpha', version: '1.0' }]
+      });
+      response.writeHead(404).end();
+    });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 's008-acquire-prefix-'));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const output = path.join(root, 'output');
+      await acquireS008Catalog({
+        platformCommit: COMMIT, channel: 'development', outputDir: output,
+        farUrl: `${base}/far`, registryUrl: `${base}/registry/`, platformRawBaseUrl: `${base}/platform/`
+      });
+      expect(requested.some(url => url.startsWith('/far/applications?'))).toBe(true);
+      expect(requested).toContain('/registry/_/proxy/modules/mod-a-1.0.0');
+      expect(await fs.readJson(path.join(output, 'acquisition-diagnostics.json'))).toMatchObject({ complete: true });
+    } finally {
+      await close(server);
+      await fs.remove(root);
+    }
+  });
+
   it('rejects mutable pins, unsafe hosts, credentials, and existing output directories before acquisition', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 's008-acquire-validation-'));
     try {

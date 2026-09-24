@@ -45,7 +45,8 @@ Before running the offline importer, a maintainer must:
 2. Save the Platform descriptor at that commit and enumerate required and optional application pins, excluding experimental applications.
 3. Acquire each exact application version and module descriptor through FAR / `mgr-applications`; retain the immutable FAR source references.
 4. Record Platform `eureka-components` as family IDs plus exact normalized module identities.
-5. Create a snapshot manifest containing the Platform descriptor path, every application descriptor path and provenance, and every provider descriptor path, normalized module identity, and source.
-6. Run the importer twice and confirm byte-identical output. It deliberately writes `authoritative: false`; change that to `true` only after reviewing complete inputs, then commit through normal repository review.
+5. Add the required `componentSources` list with exactly one entry for every Eureka component family. Each entry records the component name, version, and status; acquired descriptors also record their registry or repository-tag provenance and descriptor hash.
+6. Create a snapshot manifest containing the Platform descriptor path, every application descriptor path and provenance, every provider descriptor path, normalized module identity and source, and the component provenance above.
+7. Run the importer twice and confirm byte-identical output. It deliberately writes `authoritative: false`; change that to `true` only after reviewing complete inputs, then commit through normal repository review.
 
 The importer requires a non-zero 40-character Platform commit, hashes every descriptor, copies raw `provides` facts, and sorts output deterministically. Catalog review must confirm that all required and optional applications and all provider facts are present.

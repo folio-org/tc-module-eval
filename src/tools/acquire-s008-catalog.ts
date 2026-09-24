@@ -201,7 +201,7 @@ async function acquireApplication(
   diagnostics: Diagnostic[]
 ): Promise<AcquiredApplication | undefined> {
   const exactId = `${pin.name}-${pin.version}`;
-  const url = new URL('/applications', farBase);
+  const url = new URL('applications', ensureTrailingSlash(farBase));
   url.searchParams.set('query', `id==${exactId}`);
   url.searchParams.set('full', 'true');
   url.searchParams.set('limit', '2');
@@ -327,7 +327,7 @@ async function acquireDescriptor(
       return { moduleId: reference.id, moduleIdentity: reference.identity, descriptor, source: `FAR:${reference.sourceApplication}`, sources };
     }
   }
-  const url = new URL(`/_/proxy/modules/${encodeURIComponent(reference.id)}`, registryBase);
+  const url = new URL(`_/proxy/modules/${encodeURIComponent(reference.id)}`, ensureTrailingSlash(registryBase));
   try {
     const response = await fetchJson(url, fetchOptions);
     const descriptor = asRecord(response.parsed, `Registry descriptor ${reference.id}`);
