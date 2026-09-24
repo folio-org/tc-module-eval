@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { EvaluationStatus } from '../types';
+import { CriterionAgentReviewResult, EvaluationStatus } from '../types';
 import {
   analyzeS005PersonalDataDisclosure,
   buildS005CriterionDetails,
@@ -1059,4 +1059,108 @@ Last Reviewed: reviewer@example.org
     expect(combinedReportText).not.toContain('rawLabel');
     expect(combinedReportText).not.toContain('sectionHeading');
   });
+
+  it('budgets overflowing details without losing contradictions or useful agent review fields', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: 2026-09-24
+Last Reviewed: 2026-09-24
+- [x] This module does not store or process personal data.
+`);
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.supportingEvidence = Array.from({ length: 8 }, (_, index) => ({
+      kind: 'context_only' as const,
+      category: 'email' as const,
+      message: `${'多'.repeat(400)} supporting detail ${index}`,
+      evidenceReferences: [`support-${index}.json`],
+      sourceClasses: ['documentation' as const],
+      signalStrengths: ['context' as const]
+    }));
+    analysis.contradictions = [{
+      kind: 'no-personal-data-with-personal-fields',
+      message: 'Concrete contradiction: no personal data and email are both selected.',
+      lineNumbers: [5, 6],
+      conflictingCategories: ['email']
+    }];
+    analysis.possibleMismatches = [{
+      kind: 'likely_omission',
+      category: 'email',
+      message: 'Schema mismatch evidence is present.',
+      evidenceReferences: ['schemas/user-email.json']
+    }];
+
+    const details = formatS005Evidence(analysis, {
+      kind: 'backend-module', evidence: [], warnings: []
+    }, successfulReview({
+      summary: `${'概'.repeat(250)} SUMMARY_END synthetic-person@example.org`,
+      rationale: `${'理'.repeat(500)} RATIONALE_END`,
+      metadata: { adapter: 'fake', modelLabel: `${'型'.repeat(50)} MODEL_END`, reviewMode: 'read-only', promptInputSanitized: true, reviewWorkspaceSanitized: true }
+    })).details;
+
+    expect(Buffer.byteLength(details, 'utf8')).toBeLessThanOrEqual(12_000);
+    expect(details).toContain('Concrete contradiction: no personal data and email are both selected.');
+    expect(details).toContain('PERSONAL_DATA_DISCLOSURE.md:5');
+    expect(details).toContain('Mismatch signals:');
+    expect(details).toContain('schemas/user-email.json');
+    expect(details).toContain('Advisory recommendation: likely_insufficient');
+    expect(details).toContain('SUMMARY_END');
+    expect(details).toContain('RATIONALE_END');
+    expect(details).toContain('MODEL_END');
+    expect(details.indexOf('Contradictions:')).toBeLessThan(details.indexOf('Agent review:'));
+    expect(details).not.toContain('synthetic-person@example.org');
+    expect(details).not.toContain('\uFFFD');
+  });
+
+  it('keeps rationale and metadata useful when oversized agent fields overflow', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] This module does not store or process personal data.');
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.supportingEvidence = [{
+      kind: 'context_only', category: 'email', message: '支'.repeat(4_000), evidenceReferences: ['README.md'],
+      sourceClasses: ['documentation'], signalStrengths: ['context']
+    }];
+    const rationalePrefix = 'Important rationale prefix: inspect the manifest. ';
+    const details = formatS005Evidence(analysis, { kind: 'backend-module', evidence: [], warnings: [] }, successfulReview({
+      summary: 'S'.repeat(6_000),
+      rationale: rationalePrefix + 'R'.repeat(6_000),
+      metadata: { adapter: 'fake', modelLabel: 'bounded-model', reviewMode: 'read-only', promptInputSanitized: true, reviewWorkspaceSanitized: true }
+    })).details;
+
+    expect(Buffer.byteLength(details, 'utf8')).toBeLessThanOrEqual(12_000);
+    expect(details).toContain(rationalePrefix);
+    expect(details).toContain('Adapter: fake');
+    expect(details).toContain('Model label: bounded-model');
+  });
+
+  it('does not truncate a fitting redacted report to overflow field budgets', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] This module does not store or process personal data.');
+    const rationale = `Complete rationale ${'é'.repeat(1_100)} RATIONALE_END`;
+    const details = formatS005Evidence(
+      analyzeS005PersonalDataDisclosure(repoPath),
+      { kind: 'backend-module', evidence: [], warnings: [] },
+      successfulReview({ rationale })
+    ).details;
+
+    expect(Buffer.byteLength(details, 'utf8')).toBeLessThanOrEqual(12_000);
+    expect(details).toContain(rationale);
+    expect(details).toContain('RATIONALE_END');
+  });
 });
+
+function successfulReview(overrides: Partial<CriterionAgentReviewResult> = {}): CriterionAgentReviewResult {
+  return {
+    available: true,
+    criterionId: 'S005',
+    recommendation: 'likely_insufficient',
+    confidence: 'medium',
+    summary: 'Review summary.',
+    rationale: 'Review rationale.',
+    evidenceReferences: ['README.md'],
+    warnings: [],
+    errors: [],
+    ...overrides
+  };
+}

@@ -26,6 +26,7 @@ import {
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_CRITERION_DETAIL_REFERENCES = 16;
 const MAX_CRITERION_DETAIL_FILES = 40;
+const MAX_REPORT_DETAILS_BYTES = 12_000;
 
 export function formatS005Evidence(
   analysis: S005PersonalDataDisclosureAnalysisResult,
@@ -35,7 +36,7 @@ export function formatS005Evidence(
   const evidence = `S005 ${analysis.classification.status}: ${analysis.classification.reason}`;
   const parseResult = analysis.parseResult;
   const evidenceScan = analysis.evidenceScan;
-  const lines: Array<string | undefined> = [
+  const supportingLines: Array<string | undefined> = [
     'Artifact mechanics:',
     `  - Repository kind: ${moduleKind.kind}`,
     ...moduleKind.evidence.map(evidenceItem => `  - Module-kind evidence: ${evidenceItem}`),
@@ -62,21 +63,115 @@ export function formatS005Evidence(
     evidenceScan ? `  - Evidence signals found: ${evidenceScan.signals.length}` : undefined,
     ...formatAssessmentLines('Matching disclosure/source evidence:', analysis.matchingEvidence),
     ...formatAssessmentLines('Supporting deterministic evidence:', analysis.supportingEvidence),
-    ...formatSignalLines(evidenceScan?.signals ?? []),
+    ...formatSignalLines(evidenceScan?.signals ?? [])
+  ];
+  const findingsLines: string[] = [
     '',
     'Possible mismatches:',
     ...formatContradictionLines(analysis.contradictions),
     ...formatMismatchLines(analysis.possibleMismatches),
-    ...(analysis.contradictions.length || analysis.possibleMismatches.length ? [] : ['  - none']),
-    ...formatWarningLines(analysis.warnings)
+    ...(analysis.contradictions.length || analysis.possibleMismatches.length ? [] : ['  - none'])
   ];
+  const warningLines = formatWarningLines(analysis.warnings);
+  const agentLines: Array<string | undefined> = [];
+  appendAgentReviewLines(agentLines, analysis, agentReview);
 
-  appendAgentReviewLines(lines, analysis, agentReview);
+  const allLines = [...supportingLines, ...findingsLines, ...warningLines, ...agentLines]
+    .filter((line): line is string => line !== undefined);
+  const unredactedDetails = allLines.join('\n');
+  const fullyRedactedDetails = redactS005PersonalDataText(
+    unredactedDetails,
+    Buffer.byteLength(unredactedDetails, 'utf8') * 4 + MAX_REPORT_DETAILS_BYTES
+  );
+
+  if (Buffer.byteLength(fullyRedactedDetails, 'utf8') <= MAX_REPORT_DETAILS_BYTES) {
+    return {
+      evidence: redactS005PersonalDataText(evidence, 700),
+      details: fullyRedactedDetails
+    };
+  }
+
+  const findingsText = redactS005PersonalDataText(formatBoundedFindings(analysis).join('\n'), 2_000);
+  const warningsText = redactS005PersonalDataText(warningLines.join('\n'), 500);
+  const agentText = redactS005PersonalDataText(formatBoundedAgentReview(analysis, agentReview).join('\n'), 4_000);
+  const tail = [findingsText, warningsText, agentText].filter(Boolean).join('\n');
+  const separator = tail ? '\n' : '';
+  const supportBudget = MAX_REPORT_DETAILS_BYTES - Buffer.byteLength(separator + tail, 'utf8');
+  const details = redactS005PersonalDataText(
+    supportingLines.filter((line): line is string => line !== undefined).join('\n'),
+    supportBudget
+  ) + separator + tail;
 
   return {
     evidence: redactS005PersonalDataText(evidence, 700),
-    details: redactS005PersonalDataText(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
+    details
   };
+}
+
+function formatBoundedFindings(analysis: S005PersonalDataDisclosureAnalysisResult): string[] {
+  return [
+    '',
+    'Possible mismatches:',
+    ...(analysis.contradictions.length ? [
+      '  - Contradictions:',
+      ...analysis.contradictions.slice(0, MAX_REPORT_LIST_ITEMS).map(contradiction =>
+        `    - ${redactS005PersonalDataText(contradiction.message, 500)}${formatBoundedReferences(contradiction.lineNumbers.map(line => `${REQUIRED_DISCLOSURE_FILENAME}:${line}`))}`
+      ),
+      ...overflowLine(analysis.contradictions.length, MAX_REPORT_LIST_ITEMS)
+    ] : []),
+    ...(analysis.possibleMismatches.length ? [
+      '  - Mismatch signals:',
+      ...analysis.possibleMismatches.slice(0, MAX_REPORT_LIST_ITEMS).map(mismatch =>
+        `    - ${mismatch.kind}${mismatch.category ? `/${mismatch.category}` : ''}: ${redactS005PersonalDataText(mismatch.message, 500)}${formatBoundedReferences(mismatch.evidenceReferences)}`
+      ),
+      ...overflowLine(analysis.possibleMismatches.length, MAX_REPORT_LIST_ITEMS)
+    ] : []),
+    ...(analysis.contradictions.length || analysis.possibleMismatches.length ? [] : ['  - none'])
+  ];
+}
+
+function formatBoundedReferences(references: string[]): string {
+  if (!references.length) {
+    return '';
+  }
+  const visible = references.slice(0, MAX_REPORT_LIST_ITEMS)
+    .map(reference => redactS005PersonalDataPath(reference, 160));
+  return ` (evidence: ${visible.join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
+}
+
+function formatBoundedAgentReview(
+  analysis: S005PersonalDataDisclosureAnalysisResult,
+  agentReview?: CriterionAgentReviewResult
+): string[] {
+  if (agentReview?.available) {
+    return [
+      '',
+      'Agent review:',
+      ...(agentReview.recommendation ? [`  - Advisory recommendation: ${agentReview.recommendation}`] : []),
+      ...(agentReview.confidence ? [`  - Confidence: ${agentReview.confidence}`] : []),
+      ...(agentReview.summary ? [`  - Summary: ${redactS005PersonalDataText(agentReview.summary, 900)}`] : []),
+      ...(agentReview.rationale ? [`  - Rationale: ${redactS005PersonalDataText(agentReview.rationale, 1_800)}`] : []),
+      ...(agentReview.warnings.length ? [`  - Warnings: ${redactS005PersonalDataText(agentReview.warnings.join('; '), 200)}`] : []),
+      ...(agentReview.errors.length ? [`  - Errors: ${redactS005PersonalDataText(agentReview.errors.join('; '), 200)}`] : []),
+      ...(agentReview.metadata ? [`  - Adapter: ${redactS005PersonalDataText(agentReview.metadata.adapter, 100)}`] : []),
+      ...(agentReview.metadata?.modelLabel ? [`  - Model label: ${redactS005PersonalDataText(agentReview.metadata.modelLabel, 200)}`] : [])
+    ];
+  }
+
+  if (analysis.classification.status !== EvaluationStatus.MANUAL) {
+    return [];
+  }
+
+  const reason = analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured';
+  return [
+    '',
+    'Agent review:',
+    `  - Not applied: ${redactS005PersonalDataText(reason, 1_000)}`,
+    ...(agentReview?.errors.length ? [`  - Errors: ${redactS005PersonalDataText(agentReview.errors.join('; '), 200)}`] : []),
+    ...(agentReview?.warnings.length ? [`  - Warnings: ${redactS005PersonalDataText(agentReview.warnings.join('; '), 200)}`] : []),
+    ...(agentReview?.metadata ? [`  - Adapter: ${redactS005PersonalDataText(agentReview.metadata.adapter, 100)}`] : []),
+    ...(agentReview?.metadata?.modelLabel ? [`  - Model label: ${redactS005PersonalDataText(agentReview.metadata.modelLabel, 200)}`] : [])
+  ];
 }
 
 export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAnalysisResult): unknown {
