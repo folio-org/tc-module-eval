@@ -15,6 +15,7 @@ describe('S008 catalog snapshot importer', () => {
         platform: { repository: 'folio-org/platform-lsp', commit: 'a'.repeat(40), descriptorVersion: 'dev', descriptorPath: 'platform.json' },
         applications: [{ name: 'app-a', version: '1.0.0', optional: false, farSource: 'far:app-a:1.0.0', descriptorPath: 'app.json' }],
         eurekaComponents: [{ familyId: 'component', moduleIdentities: ['z', 'a'] }],
+        componentSources: [{ name: 'component', version: '2.0.0', status: 'intentionally-descriptorless' }],
         providers: [{ moduleIdentity: 'mod-a', source: 'far:mod-a:2.0.0', descriptorPath: 'provider.json' }]
       };
       const manifestPath = path.join(dir, 'manifest.json');
@@ -24,6 +25,7 @@ describe('S008 catalog snapshot importer', () => {
       expect(JSON.stringify(first)).toBe(JSON.stringify(second));
       expect(first.providers[0].provides.map(item => item.id)).toEqual(['a', 'z']);
       expect(first.eurekaComponents[0].moduleIdentities).toEqual(['a', 'z']);
+      expect(first.eurekaComponents[0]).toMatchObject({ version: '2.0.0', descriptorSource: { status: 'intentionally-descriptorless' } });
       expect(first.baseline.descriptorHash).toMatch(/^sha256:/);
       await fs.writeJson(manifestPath, { ...manifest, platform: { ...manifest.platform, commit: '0'.repeat(40) } });
       await expect(importS008Catalog(manifestPath)).rejects.toThrow('explicit immutable');

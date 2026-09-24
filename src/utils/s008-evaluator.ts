@@ -101,7 +101,12 @@ export function renderS008HumanDetails(analysis: S008AnalysisResult): string {
       lines.push(`Platform application: ${app.optional ? 'optional ' : ''}${app.name}@${app.version} from ${app.farSource} (${app.descriptorHash})`);
     }
     for (const component of analysis.catalog.eurekaComponents) {
-      lines.push(`Eureka component family: ${component.familyId} [${component.moduleIdentities.join(', ')}]`);
+      const source = component.descriptorSource.status === 'acquired' && component.descriptorSource.kind === 'repository-tag'
+        ? `${component.descriptorSource.repository}@${component.descriptorSource.commit} (${component.descriptorSource.descriptorHash})`
+        : component.descriptorSource.status === 'acquired'
+          ? `${component.descriptorSource.source} (${component.descriptorSource.descriptorHash})`
+        : component.descriptorSource.status;
+      lines.push(`Eureka component family: ${component.familyId}@${component.version} [${component.moduleIdentities.join(', ')}]; descriptor=${source}`);
     }
   }
   for (const [sourcePath, digest] of Object.entries(analysis.declarations.fileHashes)) lines.push(`Declaration source: ${sourcePath} (${digest})`);

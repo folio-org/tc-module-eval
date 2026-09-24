@@ -32,9 +32,13 @@ describe('S008 trusted policy loaders', () => {
     if (!loaded.ok) expect(loaded.diagnostics.map(item => item.code)).toContain(code);
   });
 
-  it('rejects non-authoritative seeds and missing selected development catalog', async () => {
-    const seed = await loadAcceptanceLedger(path.resolve(__dirname, '../../config/acceptance-ledger.json'));
-    expect(seed).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: 'ledger_not_authoritative' })] });
+  it('loads the checked-in authoritative ledger and rejects a missing selected development catalog', async () => {
+    const checkedIn = await loadAcceptanceLedger(path.resolve(__dirname, '../../config/acceptance-ledger.json'));
+    expect(checkedIn).toMatchObject({ ok: true });
+    if (checkedIn.ok) {
+      expect(checkedIn.value.authoritative).toBe(true);
+      expect(checkedIn.value.source.reference).toBe('platform-lsp');
+    }
     const missing = await loadS008Catalog('development', { development: path.join(dir, 'missing.json') });
     expect(missing).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: 'policy_missing' })] });
   });

@@ -40,6 +40,17 @@ export interface S008Provider {
   provides: S008RawProvidedInterface[];
 }
 
+export interface S008EurekaComponent {
+  familyId: string;
+  moduleIdentities: string[];
+  version: string;
+  descriptorSource:
+    | { status: 'intentionally-descriptorless' }
+    | { status: 'unresolved' }
+    | { status: 'acquired'; kind: 'registry'; source: string; descriptorHash: string }
+    | { status: 'acquired'; kind: 'repository-tag'; repository: string; tag: string; commit: string; source: string; descriptorHash: string };
+}
+
 export interface S008Catalog {
   schemaVersion: '1.0';
   authoritative: boolean;
@@ -58,7 +69,7 @@ export interface S008Catalog {
     farSource: string;
     descriptorHash: string;
   }>;
-  eurekaComponents: Array<{ familyId: string; moduleIdentities: string[] }>;
+  eurekaComponents: S008EurekaComponent[];
   providers: S008Provider[];
 }
 

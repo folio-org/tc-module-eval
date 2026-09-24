@@ -12,14 +12,14 @@ describe('S008 shared evaluator integration', () => {
   beforeEach(async () => { repo = await fs.mkdtemp(path.join(os.tmpdir(), 's008-shared-')); });
   afterEach(async () => { await fs.remove(repo); });
 
-  it('uses official by default, reports honest policy blocker, and invokes no command runner', async () => {
+  it('uses the authoritative official catalog by default and invokes no command runner', async () => {
     await fs.ensureDir(path.join(repo, 'descriptors'));
-    await fs.writeJson(path.join(repo, 'descriptors/ModuleDescriptor-template.json'), { requires: [{ id: 'users', version: '1.0' }] });
+    await fs.writeJson(path.join(repo, 'descriptors/ModuleDescriptor-template.json'), { requires: [], optional: [] });
     const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
     const result = await new TestEvaluator().evaluateCriterion('S008', repo, createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S008'], commandRunner: runner }));
-    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.details).toContain('Catalog channel: official');
-    expect(result.details).toContain('ledger_not_authoritative');
+    expect(result.details).toContain('R1-2026.27');
     expect(runner.run).not.toHaveBeenCalled();
   });
 

@@ -2,11 +2,11 @@
 
 S008 checks declared required and optional interfaces against a checked-in, reviewed FOLIO/Eureka Platform catalog. Normal evaluation is offline: it reads only the evaluated checkout and evaluator-installed `config` files, and never runs descriptor generators or performs network requests.
 
-Use `--s008-catalog official` (the default) or explicitly select `--s008-catalog development`. A missing, malformed, or non-authoritative selected catalog or acceptance ledger produces `MANUAL`. The repository currently ships deliberately non-authoritative empty seeds because authoritative TC acceptance and reviewed Platform catalog data were not available when S008 was implemented.
+Use `--s008-catalog official` (the default) or explicitly select `--s008-catalog development`. A missing, malformed, or non-authoritative selected catalog or acceptance ledger produces `MANUAL`. The checked-in official catalog is the reviewed R1-2026 GA Platform baseline at its immutable Platform LSP commit. The acceptance ledger records the TC-authorized `platform-lsp` legacy baseline; Eureka component eligibility remains catalog-derived rather than permanent ledger acceptance.
 
 ## Acceptance ledger
 
-`config/acceptance-ledger.json` is shared with future S009. TC review is required for every change. Family acceptance does not automatically approve Maven or npm packages: each library coordinate is explicit. Module renames, forks, and splits likewise need explicit reviewed `moduleIdentities` mappings.
+`config/acceptance-ledger.json` is shared with future S009. TC review is required for every change. Family acceptance does not automatically approve Maven or npm packages: each library coordinate is explicit. Module renames, forks, and splits likewise need explicit reviewed `moduleIdentities` mappings. The current legacy baseline intentionally has no library coordinates.
 
 ## Catalog refresh
 

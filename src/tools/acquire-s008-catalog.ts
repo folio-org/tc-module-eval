@@ -54,15 +54,9 @@ interface ModuleReference {
   embedded?: unknown;
 }
 
-interface ComponentDescriptorProvenance {
-  name: string;
-  version: string;
-  status: 'acquired';
-  repository: string;
-  tag: string;
-  commit: string;
-  source: string;
-}
+type ComponentDescriptorProvenance =
+  { name: string; version: string; status: 'acquired'; kind: 'registry'; source: string }
+  | { name: string; version: string; status: 'acquired'; kind: 'repository-tag'; repository: string; tag: string; commit: string; source: string };
 
 interface AcquiredDescriptor {
   moduleId: string;
@@ -338,7 +332,10 @@ async function acquireDescriptor(
       return undefined;
     }
     diagnoseProvideVersions(descriptor, reference.id, url.toString(), diagnostics);
-    return { moduleId: reference.id, moduleIdentity: reference.identity, descriptor, source: url.toString(), sources };
+    return {
+      moduleId: reference.id, moduleIdentity: reference.identity, descriptor, source: url.toString(), sources,
+      ...(reference.component ? { componentProvenance: { name: reference.component, version: reference.version, status: 'acquired' as const, kind: 'registry' as const, source: url.toString() } } : {})
+    };
   } catch (error) {
     const code = reference.component ? 'unresolved_component_descriptor' : 'registry_request_failed';
     diagnostics.push(httpDiagnostic(code, error, reference.id));
@@ -388,7 +385,7 @@ async function acquireComponentDescriptor(
       descriptor,
       source: sourceUrl.toString(),
       sources: [{ kind: 'eureka-component', name }],
-      componentProvenance: { name, version: reference.version, status: 'acquired', repository: `folio-org/${repository}`, tag, commit, source: sourceUrl.toString() }
+      componentProvenance: { name, version: reference.version, status: 'acquired', kind: 'repository-tag', repository: `folio-org/${repository}`, tag, commit, source: sourceUrl.toString() }
     };
   } catch (error) {
     diagnostics.push(httpDiagnostic('component_tag_descriptor_failed', error, `${name}@${tag}`));

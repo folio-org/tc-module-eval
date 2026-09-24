@@ -14,7 +14,10 @@ describe('S008 analyzer', () => {
     expect(analyze('users', '1.2', 'exception', 'S008,S009').status).toBe(EvaluationStatus.PASS);
     expect(analyze('users', '1.2', 'exception', 'S009').findings[0].classification).toBe('unaccepted');
     const componentCatalog = catalog('component', 'users', '1.2');
-    componentCatalog.eurekaComponents = [{ familyId: 'mgr-tenant-entitlements', moduleIdentities: ['component'] }];
+    componentCatalog.eurekaComponents = [{
+      familyId: 'mgr-tenant-entitlements', moduleIdentities: ['component'], version: '1.0.0',
+      descriptorSource: { status: 'intentionally-descriptorless' }
+    }];
     expect(evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(componentCatalog), declarations('users', '1.0')).status).toBe(EvaluationStatus.PASS);
   });
 

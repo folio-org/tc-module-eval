@@ -15,6 +15,17 @@ interface ImportManifest {
   };
   applications: Array<{ name: string; version: string; optional: boolean; farSource: string; descriptorPath: string }>;
   eurekaComponents: Array<{ familyId: string; moduleIdentities: string[] }>;
+  componentSources?: Array<{
+    name: string;
+    version: string;
+    status: 'intentionally-descriptorless' | 'unresolved' | 'acquired';
+    kind?: 'registry' | 'repository-tag';
+    repository?: string;
+    tag?: string;
+    commit?: string;
+    source?: string;
+    descriptorHash?: string;
+  }>;
   providers: Array<{ moduleIdentity: string; source: string; descriptorPath: string }>;
 }
 
@@ -62,7 +73,18 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
       descriptorHash: platformDescriptor.hash
     },
     applications: applications.sort((a, b) => `${a.optional}\0${a.name}\0${a.version}`.localeCompare(`${b.optional}\0${b.name}\0${b.version}`)),
-    eurekaComponents: manifest.eurekaComponents.map(item => ({ familyId: item.familyId, moduleIdentities: [...item.moduleIdentities].sort() })).sort((a, b) => a.familyId.localeCompare(b.familyId)),
+    eurekaComponents: manifest.eurekaComponents.map(item => {
+      const provenance = manifest.componentSources?.find(source => source.name === item.familyId);
+      const descriptorSource = provenance?.status === 'acquired' && provenance.kind === 'repository-tag'
+        && provenance.repository && provenance.tag && provenance.commit && provenance.source && provenance.descriptorHash
+        ? { status: 'acquired' as const, kind: 'repository-tag' as const, repository: provenance.repository, tag: provenance.tag, commit: provenance.commit, source: provenance.source, descriptorHash: provenance.descriptorHash }
+        : provenance?.status === 'acquired' && provenance.kind === 'registry' && provenance.source && provenance.descriptorHash
+          ? { status: 'acquired' as const, kind: 'registry' as const, source: provenance.source, descriptorHash: provenance.descriptorHash }
+        : provenance?.status === 'intentionally-descriptorless'
+          ? { status: 'intentionally-descriptorless' as const }
+          : { status: 'unresolved' as const };
+      return { familyId: item.familyId, moduleIdentities: [...item.moduleIdentities].sort(), version: provenance?.version ?? 'UNRESOLVED', descriptorSource };
+    }).sort((a, b) => a.familyId.localeCompare(b.familyId)),
     providers: providers.sort((a, b) => `${a.moduleIdentity}\0${a.moduleId}`.localeCompare(`${b.moduleIdentity}\0${b.moduleId}`))
   };
 }

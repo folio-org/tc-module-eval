@@ -1,14 +1,3816 @@
 {
-  "schemaVersion": "1.0",
-  "authoritative": false,
-  "channel": "official",
+  "applications": [
+    {
+      "descriptorHash": "sha256:329ab53e246189a6feddd368a7d713c0d87272036ae9a972e4b355dd70226dce",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-platform-complete-3.3.6&full=true&limit=2",
+      "name": "app-platform-complete",
+      "optional": false,
+      "version": "3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:d4e04a34d44257c3a4693afc71e5382ef6ca480023728e9f2d182089018f4b69",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-platform-minimal-2.1.8&full=true&limit=2",
+      "name": "app-platform-minimal",
+      "optional": false,
+      "version": "2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:49408b197512350f79ed67df3fd2f580e54c1119f9e81830a9322cc383ab2cbb",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-acquisitions-2.0.14&full=true&limit=2",
+      "name": "app-acquisitions",
+      "optional": true,
+      "version": "2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:aa86a19fbcbca4a09b8e66c529de3790703b29bbed520db2ce2f40d649f504fa",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-agreements-1.0.4&full=true&limit=2",
+      "name": "app-agreements",
+      "optional": true,
+      "version": "1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:2cc01e47dec6a73383f89c85ff456eb0122d29a4408cd0c150a341a8cbe7755d",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-authority-records-1.0.4&full=true&limit=2",
+      "name": "app-authority-records",
+      "optional": true,
+      "version": "1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:649f70689845f6a74037b1f2b55f5bc076af12d1b4ecf7ffbec1f9499b7dee27",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-bulk-edit-2.0.4&full=true&limit=2",
+      "name": "app-bulk-edit",
+      "optional": true,
+      "version": "2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:460f922ac1a3e0d7a7130ef7011114ea80d28d22a385aae38a1356c2a9d1fcbf",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-consortia-manager-1.4.0&full=true&limit=2",
+      "name": "app-consortia-manager",
+      "optional": true,
+      "version": "1.4.0"
+    },
+    {
+      "descriptorHash": "sha256:54082d3c2ba458b4cc16e77de078efb6ea5c70e88e0362c72d4fd41daf0f0275",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-consortia-1.4.1&full=true&limit=2",
+      "name": "app-consortia",
+      "optional": true,
+      "version": "1.4.1"
+    },
+    {
+      "descriptorHash": "sha256:f0c30dd7917cfc993b9cd644111ee67edf49b87c7bc223fede58494746f9da24",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-dashboard-1.0.1&full=true&limit=2",
+      "name": "app-dashboard",
+      "optional": true,
+      "version": "1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:56df4b2cd4e5a590a39e117f38690b86a8a9a983ade5283fe28f438e468c994c",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-data-export-1.0.3&full=true&limit=2",
+      "name": "app-data-export",
+      "optional": true,
+      "version": "1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:97a4ff23c24b7b3331913d892a98872ca708f293aac943ec362fabfc5399011c",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-data-import-1.0.3&full=true&limit=2",
+      "name": "app-data-import",
+      "optional": true,
+      "version": "1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:9ae9b20458c25d99bf051ce5b1a02987b7ca6c91aa23fcd15a43e3acd2eac07b",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-dcb-2.0.0&full=true&limit=2",
+      "name": "app-dcb",
+      "optional": true,
+      "version": "2.0.0"
+    },
+    {
+      "descriptorHash": "sha256:b07d836db829148a21e23c322d352d37020e400316c911ec851f3c8a84f00165",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-ebsconet-1.1.0&full=true&limit=2",
+      "name": "app-ebsconet",
+      "optional": true,
+      "version": "1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:578479a747a2238037fcf8a57e55910c7b7d9fc3e75ef7cccc955fa14882723c",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-edge-complete-2.2.2&full=true&limit=2",
+      "name": "app-edge-complete",
+      "optional": true,
+      "version": "2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:ae2f3e5168b8a9309dd715eaf0c935a31c535cfc110711f36ef9cf52009afd8c",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-eholdings-1.0.1&full=true&limit=2",
+      "name": "app-eholdings",
+      "optional": true,
+      "version": "1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:fe6fd443942e397d77e288391dd9a96279b8a8822b2d746a8157326777741f2e",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-erm-usage-3.0.1&full=true&limit=2",
+      "name": "app-erm-usage",
+      "optional": true,
+      "version": "3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:dcbb697aa95af535c8c60dbf412e38549688e78397c0e3bca4ea15229f7d510b",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-fqm-2.0.3&full=true&limit=2",
+      "name": "app-fqm",
+      "optional": true,
+      "version": "2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:a3aeb878d557c3fb95e83ce89405127d753ba8bebb1e355d9b54c445246a2565",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-gobi-1.1.0&full=true&limit=2",
+      "name": "app-gobi",
+      "optional": true,
+      "version": "1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:39af990867b2e544d0210d578e6090564a571b7d71e16edd8ff5490b42844296",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-inn-reach-2.0.5&full=true&limit=2",
+      "name": "app-inn-reach",
+      "optional": true,
+      "version": "2.0.5"
+    },
+    {
+      "descriptorHash": "sha256:db245447b10ecd9571aac696266090bfb90adfa7268e9525e21e68f2e532869b",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-inventory-1.0.11&full=true&limit=2",
+      "name": "app-inventory",
+      "optional": true,
+      "version": "1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:8f6effeaf248e50d99047aa4348a4724fac7fef077e084da9d78922923ad2062",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-licenses-1.0.3&full=true&limit=2",
+      "name": "app-licenses",
+      "optional": true,
+      "version": "1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:8f9c0b068e01bfbbe73f4a47dca692fc238537eed573312c7d449ed8368fb514",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-linked-data-2.0.4&full=true&limit=2",
+      "name": "app-linked-data",
+      "optional": true,
+      "version": "2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:62766c7b7a9048cf4387464eb1774bbc60b3278c8b1146f2e451c40481b2a5c5",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-lists-1.1.1&full=true&limit=2",
+      "name": "app-lists",
+      "optional": true,
+      "version": "1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:8dc139b153dadb7599a209dc488835202a75304141aeef5134287d9cb6c821ca",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-marc-migrations-3.0.1&full=true&limit=2",
+      "name": "app-marc-migrations",
+      "optional": true,
+      "version": "3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:b7499b7b32db627c35050328f1e3ad9a13bf307caafb16a80ee0b91cf151c77c",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-marc-storage-1.0.0&full=true&limit=2",
+      "name": "app-marc-storage",
+      "optional": true,
+      "version": "1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:e8b9b2eef1707c9efd91c60f3bea90785f0f2bda3961dd4b10e51c1892b1bde1",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-mosaic-1.1.0&full=true&limit=2",
+      "name": "app-mosaic",
+      "optional": true,
+      "version": "1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:bb8596f1709416a173c0ea6d1b8bdbf076d934d3b9e5dd43fa3a3d7cd150a3d5",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-notification-1.0.0&full=true&limit=2",
+      "name": "app-notification",
+      "optional": true,
+      "version": "1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:fb4325fad4c1c8a5d1aae22fc60ea03d7cc02df747aeca510ab6db331be5e672",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-oai-pmh-2.0.3&full=true&limit=2",
+      "name": "app-oai-pmh",
+      "optional": true,
+      "version": "2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:9a6a60d6a41ae97100178ab86949cf75bfba7e7682a0fce5cf9d90ab51b44d6a",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-quick-marc-1.0.2&full=true&limit=2",
+      "name": "app-quick-marc",
+      "optional": true,
+      "version": "1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:f43ed2bba1bed96aaef6e22ef99f57ad369a4991a0b1e3979586eecfd2b1984e",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-reading-room-3.0.0&full=true&limit=2",
+      "name": "app-reading-room",
+      "optional": true,
+      "version": "3.0.0"
+    },
+    {
+      "descriptorHash": "sha256:bc1c2bac56cf308dae1b907b71da1e2d35337362309319871c39d72747b72ede",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-reporting-1.5.1&full=true&limit=2",
+      "name": "app-reporting",
+      "optional": true,
+      "version": "1.5.1"
+    },
+    {
+      "descriptorHash": "sha256:5f08dd254d226e7d1b8c96a46218847ad5ad5668639c3f74825a94b96f26aeac",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-rtac-1.1.1&full=true&limit=2",
+      "name": "app-rtac",
+      "optional": true,
+      "version": "1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:fc4898d1ac303927f2e7aff7142fd517de2871d293200e339bfdd8abee49e8ec",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-search-1.0.5&full=true&limit=2",
+      "name": "app-search",
+      "optional": true,
+      "version": "1.0.5"
+    },
+    {
+      "descriptorHash": "sha256:c2828f4a0200a7aead25cc442db6bf7e1b2f9f82c661211af7e4392446e9f346",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-serials-management-1.0.2&full=true&limit=2",
+      "name": "app-serials-management",
+      "optional": true,
+      "version": "1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:65ac51d505886942ccd0e0fe0ab0a09e01b7103e05d3cb320f2850dc709a82df",
+      "farSource": "https://far.ci.folio.org/applications?query=id%3D%3Dapp-service-interaction-1.0.2&full=true&limit=2",
+      "name": "app-service-interaction",
+      "optional": true,
+      "version": "1.0.2"
+    }
+  ],
+  "authoritative": true,
   "baseline": {
-    "platformRepository": "https://github.com/folio-org/platform-lsp",
-    "platformCommit": "0000000000000000000000000000000000000000",
-    "descriptorVersion": "UNPOPULATED",
-    "descriptorHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    "descriptorHash": "sha256:ac95191236d92167cc64d9924d8ee5aef84b0c9462a9d4c2f7eb906969173317",
+    "descriptorVersion": "R1-2026.27",
+    "platformCommit": "0a70fd26e87f5e8cfb3e6b2bbff07c9610865ec5",
+    "platformRepository": "https://github.com/folio-org/platform-lsp"
   },
-  "applications": [],
-  "eurekaComponents": [],
-  "providers": []
+  "channel": "official",
+  "eurekaComponents": [
+    {
+      "descriptorSource": {
+        "status": "intentionally-descriptorless"
+      },
+      "familyId": "folio-keycloak",
+      "moduleIdentities": [
+        "folio-keycloak"
+      ],
+      "version": "26.5.4"
+    },
+    {
+      "descriptorSource": {
+        "status": "intentionally-descriptorless"
+      },
+      "familyId": "folio-kong",
+      "moduleIdentities": [
+        "folio-kong"
+      ],
+      "version": "3.9.4"
+    },
+    {
+      "descriptorSource": {
+        "status": "intentionally-descriptorless"
+      },
+      "familyId": "folio-module-sidecar",
+      "moduleIdentities": [
+        "folio-module-sidecar"
+      ],
+      "version": "4.0.0"
+    },
+    {
+      "descriptorSource": {
+        "commit": "b22c0877a124317ed00c4b0d97ab11220d4f25a2",
+        "descriptorHash": "sha256:5964199f7d160575cc2a4b80fde141f63621f964745ec84ac4ae08b147bb1003",
+        "kind": "repository-tag",
+        "repository": "folio-org/mgr-applications",
+        "source": "https://raw.githubusercontent.com/folio-org/mgr-applications/b22c0877a124317ed00c4b0d97ab11220d4f25a2/src/main/resources/descriptors/ModuleDescriptor.json",
+        "status": "acquired",
+        "tag": "v4.0.1"
+      },
+      "familyId": "mgr-applications",
+      "moduleIdentities": [
+        "mgr-applications"
+      ],
+      "version": "4.0.1"
+    },
+    {
+      "descriptorSource": {
+        "commit": "500a54cf1c6ff3fb8232976b4554ad7b942d83a7",
+        "descriptorHash": "sha256:3db1c0bebf10e96f4b95b196cc01fd5abbc83542be02b5aad44a9e66b3d4da79",
+        "kind": "repository-tag",
+        "repository": "folio-org/mgr-tenant-entitlements",
+        "source": "https://raw.githubusercontent.com/folio-org/mgr-tenant-entitlements/500a54cf1c6ff3fb8232976b4554ad7b942d83a7/src/main/resources/descriptors/ModuleDescriptor.json",
+        "status": "acquired",
+        "tag": "v4.0.0"
+      },
+      "familyId": "mgr-tenant-entitlements",
+      "moduleIdentities": [
+        "mgr-tenant-entitlements"
+      ],
+      "version": "4.0.0"
+    },
+    {
+      "descriptorSource": {
+        "commit": "31904eb64ce17f04e7e0c42ba6d13f4965444673",
+        "descriptorHash": "sha256:79b65a656a8f500bccd0a0211387908a55f0a74ab9c94585017f3ac243c3a620",
+        "kind": "repository-tag",
+        "repository": "folio-org/mgr-tenants",
+        "source": "https://raw.githubusercontent.com/folio-org/mgr-tenants/31904eb64ce17f04e7e0c42ba6d13f4965444673/src/main/resources/descriptors/ModuleDescriptor.json",
+        "status": "acquired",
+        "tag": "v4.0.0"
+      },
+      "familyId": "mgr-tenants",
+      "moduleIdentities": [
+        "mgr-tenants"
+      ],
+      "version": "4.0.0"
+    }
+  ],
+  "providers": [
+    {
+      "descriptorHash": "sha256:ecf4b9087fd683b0f12c5d1ababcd6131636cdbfd94276cf64dd8a0c41c3b509",
+      "moduleId": "edge-caiasoft-3.0.0",
+      "moduleIdentity": "edge-caiasoft",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:1cfbda8d596fb09ebf8bda474e0d516d1b66fe757cc10c6ff71f852ac5a56e21",
+      "moduleId": "edge-connexion-1.5.0",
+      "moduleIdentity": "edge-connexion",
+      "provides": [
+        {
+          "id": "connexion",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:05bcc3f90aa7642a2dd4a2198b4292537c3702d74fc59195ba5c4e9236d2e7c3",
+      "moduleId": "edge-courses-1.7.0",
+      "moduleIdentity": "edge-courses",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:57ae1fe7ab3db2246dcbce2311421f5e3145892f319dcd55125fc8f86b964a93",
+      "moduleId": "edge-dcb-2.0.0",
+      "moduleIdentity": "edge-dcb",
+      "provides": [],
+      "source": "FAR:app-dcb-2.0.0"
+    },
+    {
+      "descriptorHash": "sha256:965d7c6f41c54ae39fe71473633a1de958bb44eb5041e70cb1204c6c4a6359db",
+      "moduleId": "edge-dematic-3.0.0",
+      "moduleIdentity": "edge-dematic",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:691f03b1074903c6b11baa49d6a4e3d3341c342922aed2eb37c02bf944782612",
+      "moduleId": "edge-erm-1.5.0",
+      "moduleIdentity": "edge-erm",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:2ffbb42fd0143a6cb4bfb51227301acc68c5e577ea8a5bad16a91157080f8968",
+      "moduleId": "edge-fqm-4.1.1",
+      "moduleIdentity": "edge-fqm",
+      "provides": [],
+      "source": "FAR:app-fqm-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:325a5cb6a71d967545e47740b89766d73fe33cce21e7e96ff51b9de5b67f7810",
+      "moduleId": "edge-inn-reach-4.0.2",
+      "moduleIdentity": "edge-inn-reach",
+      "provides": [],
+      "source": "FAR:app-inn-reach-2.0.5"
+    },
+    {
+      "descriptorHash": "sha256:88b05eb7b4890d689b1aaab7838edd522a6ce92da00ed5fe1920ae9d8151863e",
+      "moduleId": "edge-inventory-2.3.0",
+      "moduleIdentity": "edge-inventory",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:b383d7c6b03750891649bb70f79d832d7129397120828f8e92a9e5334ac48b39",
+      "moduleId": "edge-ncip-1.11.1",
+      "moduleIdentity": "edge-ncip",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:12f5d310dc5cdd58992dfea9a5b61755e924c75eafc888234e8e2cca7d8ce48a",
+      "moduleId": "edge-oai-pmh-2.12.0",
+      "moduleIdentity": "edge-oai-pmh",
+      "provides": [],
+      "source": "FAR:app-oai-pmh-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:28b0765609eb983669d3a0528056791db0bb02c6b1d40eeaf7dd863bea1ebd94",
+      "moduleId": "edge-orders-3.3.0",
+      "moduleIdentity": "edge-orders",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:926282a0e32af5173e85bc68063d1a58ff10359a00b16c3fb9e7df347b696d38",
+      "moduleId": "edge-patron-5.4.0",
+      "moduleIdentity": "edge-patron",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:e2162f771be2c502845b0171b02812149892ce1ce5a5e7511a7741076e328e02",
+      "moduleId": "edge-rtac-3.1.0",
+      "moduleIdentity": "edge-rtac",
+      "provides": [],
+      "source": "FAR:app-rtac-1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:6dcefd1174b9266d942db9b129fec56d9190dbf011e4584868fce65518646a29",
+      "moduleId": "edge-sip2-4.0.1",
+      "moduleIdentity": "edge-sip2",
+      "provides": [],
+      "source": "FAR:app-edge-complete-2.2.2"
+    },
+    {
+      "descriptorHash": "sha256:89fe0b0e29dc178e0d81f2a1a673d85dcd5f33b1196787bf0f49fe25ccdd0b64",
+      "moduleId": "edge-users-2.2.0",
+      "moduleIdentity": "edge-users",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:18661022651f08a811aba9e5ee3e5c264c601db8e9ac1a3c5e339ee31134cdd2",
+      "moduleId": "folio_acquisition-units-7.0.0",
+      "moduleIdentity": "folio_acquisition-units",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:f9eb5ed1c0c365a735c5194b3a78816b5cf3af7a00f625f10a1b666ae82e33b9",
+      "moduleId": "folio_agreements-12.1.3",
+      "moduleIdentity": "folio_agreements",
+      "provides": [],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:2523c3db6ac331359a52f78399f9341caba9286039df654440c1f5e9affdf7ba",
+      "moduleId": "folio_authorization-policies-3.0.0",
+      "moduleIdentity": "folio_authorization-policies",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:d9897fa4872772982bb21167f9b32c5a9fb6650fe8c12fdbe2c2353db565c2d7",
+      "moduleId": "folio_authorization-roles-3.0.0",
+      "moduleIdentity": "folio_authorization-roles",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:756fb86607f3732bf88043611cb5c67ce14f18b6637aec366bffaf8e27d24050",
+      "moduleId": "folio_bulk-edit-5.1.1",
+      "moduleIdentity": "folio_bulk-edit",
+      "provides": [],
+      "source": "FAR:app-bulk-edit-2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:e226c8e4732f5f8326b9b36456e99bb14ee0d4cf170874b8837732e5fcc2bf2d",
+      "moduleId": "folio_calendar-13.0.1",
+      "moduleIdentity": "folio_calendar",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:2e5829b5a964eb329ba08e0fbdaf47aa2db6e7247b0e0939928ac17846a7254c",
+      "moduleId": "folio_checkin-12.0.0",
+      "moduleIdentity": "folio_checkin",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:7a518a888b98e3ac0afd1f8365b434d42f39ac43a3820b68b8959e7590e33cf1",
+      "moduleId": "folio_checkout-13.0.2",
+      "moduleIdentity": "folio_checkout",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:9a29c7ec3dcc21c14e33dad68494551e514264ccd5168e10b76a6f1439c72b17",
+      "moduleId": "folio_circulation-log-6.1.0",
+      "moduleIdentity": "folio_circulation-log",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:f0c02aefecc0c28b121b4d58dd79ed073e34356982024fff471cebba9b2987f4",
+      "moduleId": "folio_circulation-12.0.2",
+      "moduleIdentity": "folio_circulation",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:91f3236847fc6bd319519b83dd701e48adc8aa4b26878f5c8ad06e3fdd170f63",
+      "moduleId": "folio_claims-2.0.2",
+      "moduleIdentity": "folio_claims",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:bfa3f0b4c8d4bd75ef19b75d59697cd3d54f14b0a8502ddd5bb0038b235328e1",
+      "moduleId": "folio_consortia-settings-3.1.0",
+      "moduleIdentity": "folio_consortia-settings",
+      "provides": [],
+      "source": "FAR:app-consortia-manager-1.4.0"
+    },
+    {
+      "descriptorHash": "sha256:f1be0497447d7d82a07e77d8d090b7caa4dee7861177e8af4ed76813a3abfbe4",
+      "moduleId": "folio_courses-7.1.1",
+      "moduleIdentity": "folio_courses",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:6f27bb1841f74d029745dceb2e2d37c6950cea80a29c86e0a0147acb172a9290",
+      "moduleId": "folio_dashboard-7.1.1",
+      "moduleIdentity": "folio_dashboard",
+      "provides": [],
+      "source": "FAR:app-dashboard-1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:448f5f8e0a8d544e740ac945e4d1192d4cb2369dc9f7605d6844d36493695bb9",
+      "moduleId": "folio_data-export-7.1.0",
+      "moduleIdentity": "folio_data-export",
+      "provides": [],
+      "source": "FAR:app-data-export-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:a67f417676e9f8be123f07ddc011c5beeabd91ba5fca5131636a7fc4499fa0d1",
+      "moduleId": "folio_data-import-10.0.0",
+      "moduleIdentity": "folio_data-import",
+      "provides": [],
+      "source": "FAR:app-data-import-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:ae9a9cbffc3f5c8ede9ae4a5147dbdfc1742d3fccdf5ae51a88a8391d8b90156",
+      "moduleId": "folio_developer-11.0.0",
+      "moduleIdentity": "folio_developer",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:965ab0558139819ea0894e8902109bf79e200d279a3f194ec6c15bfde07dece7",
+      "moduleId": "folio_eholdings-11.1.1",
+      "moduleIdentity": "folio_eholdings",
+      "provides": [],
+      "source": "FAR:app-eholdings-1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:f3dba39a341c847e152a7e0f17bacb61442b4abc6e6557fd472b0de84fef38b2",
+      "moduleId": "folio_erm-comparisons-8.1.1",
+      "moduleIdentity": "folio_erm-comparisons",
+      "provides": [],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:7c5b235ca29246ffbc8b3a01e0d0bac8bfccc4bf9280e5c0c77c4ca428141ee5",
+      "moduleId": "folio_erm-usage-12.0.1",
+      "moduleIdentity": "folio_erm-usage",
+      "provides": [],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:96e456b92abd4f21ff1e59dcbbb291e3472f1c45d31e6b4dfcbde7850199585f",
+      "moduleId": "folio_export-manager-5.0.0",
+      "moduleIdentity": "folio_export-manager",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:6da383c0a9e4265f919cb56b92be0cf9c95a65f4fb3bf634a2533d95d178b564",
+      "moduleId": "folio_finance-9.0.2",
+      "moduleIdentity": "folio_finance",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:3105d30d9b5f27210cab8da92c13bc5e9e8fa87ac6f7ef17761b559c587f6547",
+      "moduleId": "folio_gobi-settings-4.1.0",
+      "moduleIdentity": "folio_gobi-settings",
+      "provides": [],
+      "source": "FAR:app-gobi-1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:55beb8941f63428c9d3ca32c2b4a07e9fed129a3da40c4598a26487b0c945d2e",
+      "moduleId": "folio_handler-stripes-registry-3.1.1",
+      "moduleIdentity": "folio_handler-stripes-registry",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:5197caa5350e3a776697de4f1bdc10934dde4bf5e8a948332c965805f5e5bce7",
+      "moduleId": "folio_inn-reach-6.1.1",
+      "moduleIdentity": "folio_inn-reach",
+      "provides": [],
+      "source": "FAR:app-inn-reach-2.0.5"
+    },
+    {
+      "descriptorHash": "sha256:e147153a6c2c5a69a1f5c26c93d745c0bc19a38770184c8b6ba3f91cb2782b2a",
+      "moduleId": "folio_inventory-import-4.1.2",
+      "moduleIdentity": "folio_inventory-import",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:2476b0d17588452d6d3e3e50c2b5d6e4679f03969a9db03793b0ea40d4ac1c39",
+      "moduleId": "folio_inventory-14.0.4",
+      "moduleIdentity": "folio_inventory",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:d4ebfac2b3d1cfb4cc56d64f877d45c258c63aa2e23c2d545f96769c9c46a7bc",
+      "moduleId": "folio_invoice-8.0.1",
+      "moduleIdentity": "folio_invoice",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:53d0afb2fefd1147a7669f6027519098e0ec7e989461e77a6f2e1cf797fbdf51",
+      "moduleId": "folio_ld-folio-wrapper-2.0.5",
+      "moduleIdentity": "folio_ld-folio-wrapper",
+      "provides": [],
+      "source": "FAR:app-linked-data-2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:f65ef120967b5aa389ce3f4e815ccd2d93c837f6e410bb2d59183f0aa3822fe9",
+      "moduleId": "folio_ldp-3.3.0",
+      "moduleIdentity": "folio_ldp",
+      "provides": [],
+      "source": "FAR:app-reporting-1.5.1"
+    },
+    {
+      "descriptorHash": "sha256:09880ff984220e9c1e3392dbad30a74bfb7cab22efed4d611cd86b2faa5bdf18",
+      "moduleId": "folio_licenses-12.1.1",
+      "moduleIdentity": "folio_licenses",
+      "provides": [],
+      "source": "FAR:app-licenses-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:5904106d50f3b25fe9d2288a6565f2cf8970d9678b14e73438ef52b3a6c60d30",
+      "moduleId": "folio_lists-5.0.2",
+      "moduleIdentity": "folio_lists",
+      "provides": [],
+      "source": "FAR:app-lists-1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:60aba79ff828b78100e0f5f7bdb2d9c85ef7c507e51eb655640c71de3e04242d",
+      "moduleId": "folio_local-kb-admin-9.1.1",
+      "moduleIdentity": "folio_local-kb-admin",
+      "provides": [],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:1626ededa104097903cfa8176080cb3ef1fd97defd6f5ac32fd8212632e1cb73",
+      "moduleId": "folio_marc-authorities-8.0.2",
+      "moduleIdentity": "folio_marc-authorities",
+      "provides": [],
+      "source": "FAR:app-authority-records-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:a28a0b718d720cacb4d015cc398339179025e39d8aee3285f815644ea15bc13d",
+      "moduleId": "folio_mosaic-settings-1.1.0",
+      "moduleIdentity": "folio_mosaic-settings",
+      "provides": [],
+      "source": "FAR:app-mosaic-1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:ff5e5d9a236abd00d9ca9d7314cdd004c2e6cf4dd37fbb7d907194947ab455f2",
+      "moduleId": "folio_myprofile-11.0.0",
+      "moduleIdentity": "folio_myprofile",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:575194a25569e797d7297145c27e3b4278341ef1cf9496e7b6d852826757cca5",
+      "moduleId": "folio_notes-12.0.0",
+      "moduleIdentity": "folio_notes",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:b78aea80d44678803f21377a9709a68cdaf80c67a4cf37be9953a76f4a49741d",
+      "moduleId": "folio_oai-pmh-7.0.1",
+      "moduleIdentity": "folio_oai-pmh",
+      "provides": [],
+      "source": "FAR:app-oai-pmh-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:ae402269083ecc45f98d6f13c8bd8b6655b03a964225d5cb3a142ad0c1e1b72a",
+      "moduleId": "folio_orders-9.0.4",
+      "moduleIdentity": "folio_orders",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:2a64c6022c50c1e8555ffb011cb368592182f749c34ad0eb0c4600446b8e77f1",
+      "moduleId": "folio_organizations-7.0.0",
+      "moduleIdentity": "folio_organizations",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:20ae986e9e3cf10deb91af819aea5a6b99cf5537a9ea367fc41a22c01710f600",
+      "moduleId": "folio_plugin-bursar-export-6.0.0",
+      "moduleIdentity": "folio_plugin-bursar-export",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:9b7f20f6fdbedd1237c92b2efdeee665734c3bd121cac1685e709df0e02af691",
+      "moduleId": "folio_plugin-create-inventory-records-7.0.0",
+      "moduleIdentity": "folio_plugin-create-inventory-records",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:2ae15703316f8ebb40008e6bcfbc7e7b2f3c5127ba8028f549cc30b78e142880",
+      "moduleId": "folio_plugin-eusage-reports-4.1.0",
+      "moduleIdentity": "folio_plugin-eusage-reports",
+      "provides": [],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:55b9a7ae3b523c3205eac8e3f00ca47d967945efeb8f30f96af105d3f6cd7cf3",
+      "moduleId": "folio_plugin-find-agreement-12.1.1",
+      "moduleIdentity": "folio_plugin-find-agreement",
+      "provides": [],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:4561b7c203910ccf45c8a64de48b0e12bc6afed8a00b4ee4cc1b1fb6d19832a9",
+      "moduleId": "folio_plugin-find-authority-5.1.0",
+      "moduleIdentity": "folio_plugin-find-authority",
+      "provides": [],
+      "source": "FAR:app-authority-records-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:64d58a51e75f93985617ce7fca44888b0b5e09e1167d8594a603d5670de79523",
+      "moduleId": "folio_plugin-find-contact-6.1.0",
+      "moduleIdentity": "folio_plugin-find-contact",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:dc0fec04f818bb43fc533343f3a95c799c7cfd5e998b7ccd2c32aa49881f87fa",
+      "moduleId": "folio_plugin-find-eresource-8.1.1",
+      "moduleIdentity": "folio_plugin-find-eresource",
+      "provides": [],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:a52d343aab54ae63723756af0f70fc52cb59dc579290c4860cda4968c8a8132f",
+      "moduleId": "folio_plugin-find-erm-usage-data-provider-7.1.0",
+      "moduleIdentity": "folio_plugin-find-erm-usage-data-provider",
+      "provides": [],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:296d2da1972707ea76d3dc3a8c3f1fbffcae2892f68196cfa6e46d09524326eb",
+      "moduleId": "folio_plugin-find-fund-4.1.0",
+      "moduleIdentity": "folio_plugin-find-fund",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:94e188854264924cb8049a49e00e863dc8fdbeb7f438a8989798f17febe6f1be",
+      "moduleId": "folio_plugin-find-import-profile-10.0.0",
+      "moduleIdentity": "folio_plugin-find-import-profile",
+      "provides": [],
+      "source": "FAR:app-data-import-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:e501972f8458a6ec6d941c86a0f818d8d02993ad4aee372aa22ebd306fe8f9b1",
+      "moduleId": "folio_plugin-find-instance-10.0.0",
+      "moduleIdentity": "folio_plugin-find-instance",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:87918459fcb911e7f2238a2ade27564d566665307c32013f8d2ec183820f2c33",
+      "moduleId": "folio_plugin-find-interface-6.1.0",
+      "moduleIdentity": "folio_plugin-find-interface",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:52f10b83fe64f3189be43fb16a37424b6925e5236f55611a6fc6cfe3ba8df1ee",
+      "moduleId": "folio_plugin-find-license-12.1.1",
+      "moduleIdentity": "folio_plugin-find-license",
+      "provides": [],
+      "source": "FAR:app-licenses-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:86831d4f3df2522b01b3034f209eb55f314f66210e3773bc07f123398dff0c69",
+      "moduleId": "folio_plugin-find-organization-6.1.0",
+      "moduleIdentity": "folio_plugin-find-organization",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:9d685532fbc93c8e4c833130860cc40ef382c0bffdc55ad5f2f8d941a9aab44a",
+      "moduleId": "folio_plugin-find-package-title-7.1.0",
+      "moduleIdentity": "folio_plugin-find-package-title",
+      "provides": [],
+      "source": "FAR:app-eholdings-1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:106627b6a84954afff626a38c313348f4f56565006089d8715d6b27f5cc012a5",
+      "moduleId": "folio_plugin-find-po-line-6.1.1",
+      "moduleIdentity": "folio_plugin-find-po-line",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:03bc82d9a7416b5121e0165222d232f98c8ca7e64e068fadbd320232e9eb7750",
+      "moduleId": "folio_plugin-find-user-8.1.0",
+      "moduleIdentity": "folio_plugin-find-user",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:96b468af1bec5c8e3fb57b44c57121b61744d5ebf0994fade9f7eed1aa0873d2",
+      "moduleId": "folio_plugin-query-builder-3.0.2",
+      "moduleIdentity": "folio_plugin-query-builder",
+      "provides": [],
+      "source": "FAR:app-fqm-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:4563152598689fd9c748d76cb9397b7a962b211dc6a4abb0d02989116621e72d",
+      "moduleId": "folio_quick-marc-11.0.1",
+      "moduleIdentity": "folio_quick-marc",
+      "provides": [],
+      "source": "FAR:app-quick-marc-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:9ce787862541bd9f145a27ff5b6209d86f642a9d4e3c13254a1f15c1bda1f64f",
+      "moduleId": "folio_reading-room-3.0.0",
+      "moduleIdentity": "folio_reading-room",
+      "provides": [],
+      "source": "FAR:app-reading-room-3.0.0"
+    },
+    {
+      "descriptorHash": "sha256:a3d5bc880d2b499566d1dbefc38cee52dfab54c1f9a33f183b2a55cd3547eddb",
+      "moduleId": "folio_receiving-8.0.4",
+      "moduleIdentity": "folio_receiving",
+      "provides": [],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:a63473415f9c19ac2023eb787234d75d5a3880d354453b92286292b13de19b4f",
+      "moduleId": "folio_remote-storage-7.1.0",
+      "moduleIdentity": "folio_remote-storage",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:c03154992170d9e5332a80a02f52f7e69673a6b665f3236a79f0e34a1773eed5",
+      "moduleId": "folio_requests-13.0.2",
+      "moduleIdentity": "folio_requests",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:da172f11c5af9d3a86838d0aa5b6ed0d7cd8fef31001814593f0eec67ed097a7",
+      "moduleId": "folio_serials-management-2.1.1",
+      "moduleIdentity": "folio_serials-management",
+      "provides": [],
+      "source": "FAR:app-serials-management-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:f4767ff6d7db660e43f151c6e296beb958c5fef301e1dc179eeb558ebd06b507",
+      "moduleId": "folio_service-interaction-4.1.1",
+      "moduleIdentity": "folio_service-interaction",
+      "provides": [],
+      "source": "FAR:app-service-interaction-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:7fe9f16005067becae2244a36690d43d944198ead0efa98d0a6fd8e1ef2235ac",
+      "moduleId": "folio_servicepoints-9.0.0",
+      "moduleIdentity": "folio_servicepoints",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:4820c332441ee74bcf178d7178ee0a1e147f6647e95e8f812c0775a4171f5692",
+      "moduleId": "folio_stripes-authority-components-7.0.1",
+      "moduleIdentity": "folio_stripes-authority-components",
+      "provides": [],
+      "source": "FAR:app-authority-records-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:4d4a94ebed43c36676893659117774d2d7c7787923c4211d80b19ac9746dff33",
+      "moduleId": "folio_stripes-core-11.1.5",
+      "moduleIdentity": "folio_stripes-core",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:0e0b3844b9c9d1b4a46d16efe53b2ac594d55a2722a28fa1002819ef885eb64e",
+      "moduleId": "folio_stripes-inventory-components-2.1.0",
+      "moduleIdentity": "folio_stripes-inventory-components",
+      "provides": [],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:c34526cbc4b67890ffe83459fb5a932885a50624eb6ecc8b825aaa6b1c908728",
+      "moduleId": "folio_stripes-marc-components-2.1.0",
+      "moduleIdentity": "folio_stripes-marc-components",
+      "provides": [],
+      "source": "FAR:app-quick-marc-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:ffa5d103cd2f780b700117d934885069f936a0753f2f0c34f67aa2c851527ded",
+      "moduleId": "folio_stripes-smart-components-10.1.1",
+      "moduleIdentity": "folio_stripes-smart-components",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:a8fc902f2e005599f95c6b5ff48cd2d0f3bfc146673a095863a6e419e652301a",
+      "moduleId": "folio_tags-10.0.0",
+      "moduleIdentity": "folio_tags",
+      "provides": [],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:ebcb013ac3e035b9c30c100db3bb106577a84458690af201fa8d194eb0f0371b",
+      "moduleId": "folio_tenant-settings-11.0.1",
+      "moduleIdentity": "folio_tenant-settings",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:248adefaf80dd4099721b202f522a24dcff8e99d273898439c8bbfc4c77ad15e",
+      "moduleId": "folio_users-13.0.1",
+      "moduleIdentity": "folio_users",
+      "provides": [],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:5964199f7d160575cc2a4b80fde141f63621f964745ec84ac4ae08b147bb1003",
+      "moduleId": "mgr-applications-4.0.0",
+      "moduleIdentity": "mgr-applications",
+      "provides": [
+        {
+          "id": "applications",
+          "version": "1.3"
+        },
+        {
+          "id": "discoveries",
+          "version": "2.1"
+        },
+        {
+          "id": "module-bootstraps",
+          "version": "1.2"
+        }
+      ],
+      "source": "https://raw.githubusercontent.com/folio-org/mgr-applications/b22c0877a124317ed00c4b0d97ab11220d4f25a2/src/main/resources/descriptors/ModuleDescriptor.json"
+    },
+    {
+      "descriptorHash": "sha256:3db1c0bebf10e96f4b95b196cc01fd5abbc83542be02b5aad44a9e66b3d4da79",
+      "moduleId": "mgr-tenant-entitlements-4.0.0",
+      "moduleIdentity": "mgr-tenant-entitlements",
+      "provides": [
+        {
+          "id": "entitlement-flows",
+          "version": "1.0"
+        },
+        {
+          "id": "entitlements",
+          "version": "1.1"
+        },
+        {
+          "id": "reinstallations",
+          "version": "1.0"
+        }
+      ],
+      "source": "https://raw.githubusercontent.com/folio-org/mgr-tenant-entitlements/500a54cf1c6ff3fb8232976b4554ad7b942d83a7/src/main/resources/descriptors/ModuleDescriptor.json"
+    },
+    {
+      "descriptorHash": "sha256:79b65a656a8f500bccd0a0211387908a55f0a74ab9c94585017f3ac243c3a620",
+      "moduleId": "mgr-tenants-1.0.0",
+      "moduleIdentity": "mgr-tenants",
+      "provides": [
+        {
+          "id": "tenant-attributes",
+          "version": "1.0"
+        },
+        {
+          "id": "tenants",
+          "version": "1.0"
+        }
+      ],
+      "source": "https://raw.githubusercontent.com/folio-org/mgr-tenants/31904eb64ce17f04e7e0c42ba6d13f4965444673/src/main/resources/descriptors/ModuleDescriptor.json"
+    },
+    {
+      "descriptorHash": "sha256:954dd535192d63c5d6c120efdc0850f5f2d4af31ac1abe92fbcf8726168f2fc9",
+      "moduleId": "mod-agreements-7.3.2",
+      "moduleIdentity": "mod-agreements",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.2"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "dashboard",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "erm",
+          "version": "7.3"
+        }
+      ],
+      "source": "FAR:app-agreements-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:54733b203882012b12aa45c1cc9cd650c1732ebe5b415338635fa0a01e805113",
+      "moduleId": "mod-audit-3.0.1",
+      "moduleIdentity": "mod-audit",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-invoice-events",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-invoice-line-events",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-order-events",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-order-line-events",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-organization-events",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisition-piece-events",
+          "version": "1.0"
+        },
+        {
+          "id": "audit-config",
+          "version": "1.0"
+        },
+        {
+          "id": "audit-data-event-handlers",
+          "version": "1.1"
+        },
+        {
+          "id": "audit-inventory",
+          "version": "1.0"
+        },
+        {
+          "id": "audit-marc",
+          "version": "1.0"
+        },
+        {
+          "id": "audit-user",
+          "version": "1.0"
+        },
+        {
+          "id": "audit",
+          "version": "1.1"
+        },
+        {
+          "id": "circulation-logs",
+          "version": "1.3"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:28caaddc8a7f3aa4c95b481408d957bd5f2ebe1b2252cc8adfe1abd135164c83",
+      "moduleId": "mod-batch-print-1.4.0",
+      "moduleIdentity": "mod-batch-print",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "batch-print",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:1bcaef354fe7f80b055c12ac78ac8d8c595b6986aef7dad532e9d8435a12a13b",
+      "moduleId": "mod-bulk-operations-2.3.4",
+      "moduleIdentity": "mod-bulk-operations",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "bulk-operations",
+          "version": "1.8"
+        }
+      ],
+      "source": "FAR:app-bulk-edit-2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:48797017467653353c87ba73a6f67bc0106c9df24b5b0532e7aac0a0490f9245",
+      "moduleId": "mod-calendar-4.0.0",
+      "moduleIdentity": "mod-calendar",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "calendar",
+          "version": "5.0"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:b226c67a92781cde28e085235b3ddd31d92a540208106f2eb08d39c318402f23",
+      "moduleId": "mod-circulation-item-2.0.0",
+      "moduleIdentity": "mod-circulation-item",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "circulation-item",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-dcb-2.0.0"
+    },
+    {
+      "descriptorHash": "sha256:f66deb2cb0be2275d0b025dc4c186f161c78cfd19b4cf703a7f89fa5fb423a4e",
+      "moduleId": "mod-circulation-storage-17.5.0",
+      "moduleIdentity": "mod-circulation-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "actual-cost-record-storage",
+          "version": "0.9"
+        },
+        {
+          "id": "anonymize-storage-loans",
+          "version": "0.1"
+        },
+        {
+          "id": "cancellation-reason-storage",
+          "version": "1.2"
+        },
+        {
+          "id": "check-in-storage",
+          "version": "0.2"
+        },
+        {
+          "id": "checkout-lock-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "circulation-rules-storage",
+          "version": "1.0"
+        },
+        {
+          "id": "circulation-settings-storage",
+          "version": "1.0"
+        },
+        {
+          "id": "fixed-due-date-schedules-storage",
+          "version": "2.0"
+        },
+        {
+          "id": "loan-policy-storage",
+          "version": "2.4"
+        },
+        {
+          "id": "loan-storage",
+          "version": "7.4"
+        },
+        {
+          "id": "patron-action-session-storage",
+          "version": "0.3"
+        },
+        {
+          "id": "patron-notice-policy-storage",
+          "version": "0.13"
+        },
+        {
+          "id": "print-events-storage",
+          "version": "1.0"
+        },
+        {
+          "id": "request-policy-storage",
+          "version": "1.0"
+        },
+        {
+          "id": "request-preference-storage",
+          "version": "2.0"
+        },
+        {
+          "id": "request-storage-batch",
+          "version": "2.1"
+        },
+        {
+          "id": "request-storage",
+          "version": "6.2"
+        },
+        {
+          "id": "scheduled-notice-storage",
+          "version": "0.6"
+        },
+        {
+          "id": "staff-slips-storage",
+          "version": "1.1"
+        },
+        {
+          "id": "tlr-feature-toggle-job-storage",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:272a6561daf64ae60b0659a2d9a7e775864d63b04e3f8ea47d4c78f27beea2bd",
+      "moduleId": "mod-circulation-24.5.0",
+      "moduleIdentity": "mod-circulation",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "add-info",
+          "version": "0.1"
+        },
+        {
+          "id": "allowed-service-points",
+          "version": "1.2"
+        },
+        {
+          "id": "change-due-date",
+          "version": "0.1"
+        },
+        {
+          "id": "circulation-event-handlers",
+          "version": "0.2"
+        },
+        {
+          "id": "circulation-rules",
+          "version": "1.1"
+        },
+        {
+          "id": "circulation-settings",
+          "version": "1.0"
+        },
+        {
+          "id": "circulation",
+          "version": "14.7"
+        },
+        {
+          "id": "claim-item-returned",
+          "version": "0.2"
+        },
+        {
+          "id": "declare-item-lost",
+          "version": "0.3"
+        },
+        {
+          "id": "instance-items",
+          "version": "0.1"
+        },
+        {
+          "id": "inventory-reports",
+          "version": "0.4"
+        },
+        {
+          "id": "loan-anonymization",
+          "version": "0.1"
+        },
+        {
+          "id": "patron-action-session",
+          "version": "0.2"
+        },
+        {
+          "id": "pick-slips",
+          "version": "0.4"
+        },
+        {
+          "id": "print-events",
+          "version": "1.0"
+        },
+        {
+          "id": "request-anonymization",
+          "version": "0.1"
+        },
+        {
+          "id": "request-move",
+          "version": "0.7"
+        },
+        {
+          "id": "requests-reports",
+          "version": "0.8"
+        },
+        {
+          "id": "search-slips",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:dcd9c7213eac86813bf4146f5e48a8ea952e24be8f52a0ee6f63ec50b28bfa53",
+      "moduleId": "mod-configuration-5.13.0",
+      "moduleIdentity": "mod-configuration",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "configuration",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:65296a2e91121eb6aa7f6f0136c25721fce9d6465cafbd44a5fda4a9b36ad1b4",
+      "moduleId": "mod-consortia-keycloak-1.8.1",
+      "moduleIdentity": "mod-consortia-keycloak",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "consortia",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-consortia-1.4.1"
+    },
+    {
+      "descriptorHash": "sha256:f2679c95c4d8d29c4c9cc10fe94150130357ceb1b4c8f37548ebed02a661e71f",
+      "moduleId": "mod-copycat-1.9.0",
+      "moduleIdentity": "mod-copycat",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "copycat-imports",
+          "version": "1.1"
+        },
+        {
+          "id": "copycat-profiles",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:ead03002ee29c7dfc5c7f4ef4f80142fe77ba8338e6da135ae4b0779a0b06b57",
+      "moduleId": "mod-courses-1.6.0",
+      "moduleIdentity": "mod-courses",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "copyright-status-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "course-reserves-storage",
+          "version": "0.3"
+        },
+        {
+          "id": "course-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "course-type-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "department-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "processing-status-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "reserves-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "role-storage",
+          "version": "0.1"
+        },
+        {
+          "id": "term-storage",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:1fe108032956bdd2135ca41276493feb0d58896d6811ca189d1d0d4a1dc2d93a",
+      "moduleId": "mod-data-export-spring-3.6.1",
+      "moduleIdentity": "mod-data-export-spring",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "data-export-spring",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:5f001dac7610553ea8eb1d6e08398cfb691217794577611153c0c905dc35ee6d",
+      "moduleId": "mod-data-export-worker-3.5.1",
+      "moduleIdentity": "mod-data-export-worker",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "bulk-edit",
+          "version": "4.3"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:f4f6595a1e7833db61cab7617805f7d5b86c25ee20520ffb24c07a985c5dbf67",
+      "moduleId": "mod-data-export-5.4.4",
+      "moduleIdentity": "mod-data-export",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "data-export",
+          "version": "5.4"
+        }
+      ],
+      "source": "FAR:app-data-export-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:3999fef1d5bc38776a3c9cd47a5c31ae61cc94414ec4bb2c3b90c23f807fb4e0",
+      "moduleId": "mod-data-import-3.4.0",
+      "moduleIdentity": "mod-data-import",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "data-import",
+          "version": "3.2"
+        }
+      ],
+      "source": "FAR:app-data-import-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:0b4d6b0f9075512ebe2b9cfa9faaa9156e6b26fd2f59c3f3415b3a1fd6c8c205",
+      "moduleId": "mod-dcb-2.0.0",
+      "moduleIdentity": "mod-dcb",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "dcb_refresh_shadow_locations",
+          "version": "2.0"
+        },
+        {
+          "id": "dcb.settings",
+          "version": "1.0"
+        },
+        {
+          "id": "ecs-request-transactions",
+          "version": "1.2"
+        },
+        {
+          "id": "transactions",
+          "version": "1.6"
+        }
+      ],
+      "source": "FAR:app-dcb-2.0.0"
+    },
+    {
+      "descriptorHash": "sha256:d8e7de162923be5c6d8052c62912840e7f900652d6da1a163837b700c7b7245e",
+      "moduleId": "mod-di-converter-storage-2.5.0",
+      "moduleIdentity": "mod-di-converter-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "converter-storage-forms-configs",
+          "version": "1.2"
+        },
+        {
+          "id": "data-import-converter-storage",
+          "version": "1.5"
+        },
+        {
+          "id": "field-protection-settings",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-data-import-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:d50240047080ab1689353333c8fd31f9a4d8e91fd80bc0189cd04557886f445f",
+      "moduleId": "mod-ebsconet-2.5.0",
+      "moduleIdentity": "mod-ebsconet",
+      "provides": [
+        {
+          "id": "ebsconet",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-ebsconet-1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:56f9bc0a473e601d8a8742e8bf8f449ace8bebfdd05dff1a0332f4772c83cc33",
+      "moduleId": "mod-email-1.20.0",
+      "moduleIdentity": "mod-email",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "delayedTasks",
+          "version": "2.0"
+        },
+        {
+          "id": "email.settings",
+          "version": "1.0"
+        },
+        {
+          "id": "email",
+          "version": "1.1"
+        },
+        {
+          "id": "smtpConfiguration",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:465367bbeeaffb5801014db51a67e97168074331b62eceea8fa787a05b377160",
+      "moduleId": "mod-entities-links-5.0.2",
+      "moduleIdentity": "mod-entities-links",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "authorities-config",
+          "version": "1.0"
+        },
+        {
+          "id": "authority-heading-types",
+          "version": "1.0"
+        },
+        {
+          "id": "authority-identifier-types",
+          "version": "1.0"
+        },
+        {
+          "id": "authority-note-types",
+          "version": "1.0"
+        },
+        {
+          "id": "authority-reindex",
+          "version": "0.1"
+        },
+        {
+          "id": "authority-source-files",
+          "version": "2.2"
+        },
+        {
+          "id": "authority-storage",
+          "version": "2.2"
+        },
+        {
+          "id": "instance-authority-linking-rules",
+          "version": "1.1"
+        },
+        {
+          "id": "instance-authority-links-statistics",
+          "version": "3.0"
+        },
+        {
+          "id": "instance-authority-links-suggestions",
+          "version": "1.2"
+        },
+        {
+          "id": "instance-authority-links",
+          "version": "2.2"
+        }
+      ],
+      "source": "FAR:app-authority-records-1.0.4"
+    },
+    {
+      "descriptorHash": "sha256:f0abe4cbbc521691f2f630cc3d3de6f258a8e66b9bd53f0ef978da66013353f3",
+      "moduleId": "mod-erm-usage-harvester-5.2.0",
+      "moduleIdentity": "mod-erm-usage-harvester",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "erm-usage-harvester",
+          "version": "2.1"
+        }
+      ],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:4e556d167f6ccb11fee433f4094c1772a708787f25f318b36f6f684f9c4f3950",
+      "moduleId": "mod-erm-usage-5.2.0",
+      "moduleIdentity": "mod-erm-usage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "aggregator-settings",
+          "version": "2.0"
+        },
+        {
+          "id": "counter-reports",
+          "version": "5.0"
+        },
+        {
+          "id": "custom-reports",
+          "version": "2.0"
+        },
+        {
+          "id": "erm-usage-files",
+          "version": "1.0"
+        },
+        {
+          "id": "usage-data-providers",
+          "version": "3.2"
+        }
+      ],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:f3a97cfb19088218eff72e8cf516a8fedf747cff8d615b5560319b4b5258efc8",
+      "moduleId": "mod-eusage-reports-3.1.0",
+      "moduleIdentity": "mod-eusage-reports",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "eusage-reports",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-erm-usage-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:5d8a0ba266a3063aed4ca65213aa884aec7ae1fc969536ac37852d1d379d1192",
+      "moduleId": "mod-event-config-2.10.0",
+      "moduleIdentity": "mod-event-config",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "mod-event",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:748a2e6b6b0a3492a2a78d363d43356abb387c15a816fd2fe829eab5b60c4381",
+      "moduleId": "mod-feesfines-19.4.0",
+      "moduleIdentity": "mod-feesfines",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "actual-cost-fee-fine",
+          "version": "0.3"
+        },
+        {
+          "id": "feefine-reports",
+          "version": "2.3"
+        },
+        {
+          "id": "feesfines",
+          "version": "19.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:a83a3b722126765fcac7209d48f13826a8f7a815b6f7e505dfd00504c4173092",
+      "moduleId": "mod-finance-storage-8.9.1",
+      "moduleIdentity": "mod-finance-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "finance-storage.budget-expense-classes",
+          "version": "2.0"
+        },
+        {
+          "id": "finance-storage.budgets",
+          "version": "3.0"
+        },
+        {
+          "id": "finance-storage.exchange-rate-source",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.expense-classes",
+          "version": "3.0"
+        },
+        {
+          "id": "finance-storage.finance-data",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.fiscal-years",
+          "version": "3.0"
+        },
+        {
+          "id": "finance-storage.fund-types",
+          "version": "2.0"
+        },
+        {
+          "id": "finance-storage.fund-update-logs",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.funds",
+          "version": "5.0"
+        },
+        {
+          "id": "finance-storage.groups",
+          "version": "2.0"
+        },
+        {
+          "id": "finance-storage.job-number",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.ledger-rollovers-budgets",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.ledger-rollovers-errors",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.ledger-rollovers-logs",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.ledger-rollovers-progress",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.ledger-rollovers",
+          "version": "2.0"
+        },
+        {
+          "id": "finance-storage.ledgers",
+          "version": "4.0"
+        },
+        {
+          "id": "finance-storage.transaction-totals",
+          "version": "1.0"
+        },
+        {
+          "id": "finance-storage.transactions",
+          "version": "5.0"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:9580ba460d49ed0886f8eb4afd31f2ee3ca30fcccdcb1b1bbec4f811ec3cdef2",
+      "moduleId": "mod-finance-5.2.1",
+      "moduleIdentity": "mod-finance",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.budgets",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.exchange-rate",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.expense-classes",
+          "version": "3.0"
+        },
+        {
+          "id": "finance.finance-data",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.fiscal-years",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.fund-types",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.fund-update-logs",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.funds",
+          "version": "3.0"
+        },
+        {
+          "id": "finance.group-fiscal-year-summaries",
+          "version": "1.3"
+        },
+        {
+          "id": "finance.group-fund-fiscal-years",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.groups",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.ledger-rollovers-budgets",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.ledger-rollovers-errors",
+          "version": "1.1"
+        },
+        {
+          "id": "finance.ledger-rollovers-logs",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.ledger-rollovers-progress",
+          "version": "1.0"
+        },
+        {
+          "id": "finance.ledger-rollovers",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.ledgers",
+          "version": "2.0"
+        },
+        {
+          "id": "finance.transactions",
+          "version": "6.0"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:7cc4ebac40c69d4e819391608e4d51ba492c889d7505823f802762c582823e09",
+      "moduleId": "mod-fqm-manager-4.1.5",
+      "moduleIdentity": "mod-fqm-manager",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "entity-types",
+          "version": "2.1"
+        },
+        {
+          "id": "fqm-query",
+          "version": "2.1"
+        }
+      ],
+      "source": "FAR:app-fqm-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:902410c90a259a70b1845c0b599f7ea78739b8192f8b36ed3b65caa99793d502",
+      "moduleId": "mod-gobi-3.1.0",
+      "moduleIdentity": "mod-gobi",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "custom-mapping",
+          "version": "1.0"
+        },
+        {
+          "id": "gobi",
+          "version": "1.12"
+        }
+      ],
+      "source": "FAR:app-gobi-1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:83a5beb76b5709bbd42e300a7621f1463fd2391125d338886649cc65ef2db8c7",
+      "moduleId": "mod-graphql-1.15.1",
+      "moduleIdentity": "mod-graphql",
+      "provides": [
+        {
+          "id": "graphql",
+          "version": "1.5"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:85629898fcf5a31379c780b61ab465cbd97d41bf0222817ec33a3b6768cb6dc1",
+      "moduleId": "mod-inn-reach-4.0.2",
+      "moduleIdentity": "mod-inn-reach",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "inn-reach",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-inn-reach-2.0.5"
+    },
+    {
+      "descriptorHash": "sha256:678db64d878a1526596d74ee2f86aeca5e150a01b9cd99d3c03363a891a88eef",
+      "moduleId": "mod-inventory-storage-30.0.3",
+      "moduleIdentity": "mod-inventory-storage",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "alternative-title-types",
+          "version": "1.0"
+        },
+        {
+          "id": "async-migration",
+          "version": "1.0"
+        },
+        {
+          "id": "bound-with-parts-storage",
+          "version": "2.0"
+        },
+        {
+          "id": "call-number-types",
+          "version": "1.0"
+        },
+        {
+          "id": "classification-types",
+          "version": "1.2"
+        },
+        {
+          "id": "contributor-name-types",
+          "version": "1.3"
+        },
+        {
+          "id": "contributor-types",
+          "version": "2.0"
+        },
+        {
+          "id": "electronic-access-relationships",
+          "version": "1.1"
+        },
+        {
+          "id": "holdings-note-types",
+          "version": "1.0"
+        },
+        {
+          "id": "holdings-sources",
+          "version": "1.0"
+        },
+        {
+          "id": "holdings-storage-batch-sync-unsafe",
+          "version": "2.0"
+        },
+        {
+          "id": "holdings-storage-batch-sync",
+          "version": "2.0"
+        },
+        {
+          "id": "holdings-storage",
+          "version": "8.2"
+        },
+        {
+          "id": "holdings-types",
+          "version": "1.0"
+        },
+        {
+          "id": "hrid-settings-storage",
+          "version": "1.3"
+        },
+        {
+          "id": "identifier-types",
+          "version": "1.2"
+        },
+        {
+          "id": "ill-policies",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-date-types",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-formats",
+          "version": "2.0"
+        },
+        {
+          "id": "instance-iteration",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-note-types",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-preceding-succeeding-titles",
+          "version": "0.2"
+        },
+        {
+          "id": "instance-reindex",
+          "version": "0.1"
+        },
+        {
+          "id": "instance-relationship-types",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-statuses",
+          "version": "1.0"
+        },
+        {
+          "id": "instance-storage-batch-sync-unsafe",
+          "version": "3.1"
+        },
+        {
+          "id": "instance-storage-batch-sync",
+          "version": "3.1"
+        },
+        {
+          "id": "instance-storage-bulk",
+          "version": "1.1"
+        },
+        {
+          "id": "instance-storage",
+          "version": "11.3"
+        },
+        {
+          "id": "instance-types",
+          "version": "2.0"
+        },
+        {
+          "id": "inventory-hierarchy",
+          "version": "0.8"
+        },
+        {
+          "id": "inventory-record-bulk",
+          "version": "1.1"
+        },
+        {
+          "id": "inventory-reindex-records",
+          "version": "1.1"
+        },
+        {
+          "id": "inventory-view-instance-set",
+          "version": "3.2"
+        },
+        {
+          "id": "inventory-view",
+          "version": "3.2"
+        },
+        {
+          "id": "item-damaged-statuses",
+          "version": "1.0"
+        },
+        {
+          "id": "item-note-types",
+          "version": "1.0"
+        },
+        {
+          "id": "item-storage-batch-sync-unsafe",
+          "version": "2.0"
+        },
+        {
+          "id": "item-storage-batch-sync",
+          "version": "2.0"
+        },
+        {
+          "id": "item-storage-dereferenced",
+          "version": "1.2"
+        },
+        {
+          "id": "item-storage",
+          "version": "11.2"
+        },
+        {
+          "id": "loan-types",
+          "version": "2.4"
+        },
+        {
+          "id": "location-units",
+          "version": "2.1"
+        },
+        {
+          "id": "locations",
+          "version": "3.2"
+        },
+        {
+          "id": "material-types",
+          "version": "2.2"
+        },
+        {
+          "id": "modes-of-issuance",
+          "version": "1.1"
+        },
+        {
+          "id": "nature-of-content-terms",
+          "version": "1.0"
+        },
+        {
+          "id": "oaipmhview",
+          "version": "1.1"
+        },
+        {
+          "id": "service-points-users",
+          "version": "1.0"
+        },
+        {
+          "id": "service-points",
+          "version": "3.5"
+        },
+        {
+          "id": "statistical-code-types",
+          "version": "1.0"
+        },
+        {
+          "id": "statistical-codes",
+          "version": "1.0"
+        },
+        {
+          "id": "subject-sources",
+          "version": "1.0"
+        },
+        {
+          "id": "subject-types",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:79df3b2f059c826ab1aa1a68f4294814745d3e3dcbf9b32e28347c6717481341",
+      "moduleId": "mod-inventory-update-5.1.2",
+      "moduleIdentity": "mod-inventory-update",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "inventory-batch-upsert-hrid",
+          "version": "3.0"
+        },
+        {
+          "id": "inventory-import",
+          "version": "1.0"
+        },
+        {
+          "id": "inventory-upsert-hrid",
+          "version": "3.0"
+        },
+        {
+          "id": "shared-inventory-batch-upsert-matchkey",
+          "version": "3.0"
+        },
+        {
+          "id": "shared-inventory-upsert-matchkey",
+          "version": "3.0"
+        }
+      ],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:aef2713c0d86e438544ffc14e3d30900f2ec421e3db312b4347afd896a5b78a6",
+      "moduleId": "mod-inventory-22.0.1",
+      "moduleIdentity": "mod-inventory",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.2"
+        },
+        {
+          "id": "inventory-batch",
+          "version": "3.0"
+        },
+        {
+          "id": "inventory-config",
+          "version": "0.2"
+        },
+        {
+          "id": "inventory-move",
+          "version": "0.3"
+        },
+        {
+          "id": "inventory-update-ownership",
+          "version": "1.1"
+        },
+        {
+          "id": "inventory",
+          "version": "14.4"
+        },
+        {
+          "id": "isbn-utils",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-inventory-1.0.11"
+    },
+    {
+      "descriptorHash": "sha256:c67993518de5cd5efed034dae31afb4e0e0ebe68503d4cb38274f2245097d34c",
+      "moduleId": "mod-invoice-storage-6.1.1",
+      "moduleIdentity": "mod-invoice-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "batch-group-storage.batch-groups",
+          "version": "1.0"
+        },
+        {
+          "id": "batch-voucher-storage.batch-voucher-exports",
+          "version": "1.1"
+        },
+        {
+          "id": "batch-voucher-storage.batch-vouchers",
+          "version": "2.0"
+        },
+        {
+          "id": "batch-voucher-storage.export-configurations",
+          "version": "1.0"
+        },
+        {
+          "id": "invoice-storage.adjustment-presets",
+          "version": "1.0"
+        },
+        {
+          "id": "invoice-storage.invoice-line-number",
+          "version": "1.0"
+        },
+        {
+          "id": "invoice-storage.invoice-lines",
+          "version": "4.0"
+        },
+        {
+          "id": "invoice-storage.invoice-number",
+          "version": "1.0"
+        },
+        {
+          "id": "invoice-storage.invoices",
+          "version": "5.0"
+        },
+        {
+          "id": "invoice-storage.settings",
+          "version": "1.0"
+        },
+        {
+          "id": "voucher-storage.voucher-lines",
+          "version": "2.1"
+        },
+        {
+          "id": "voucher-storage.voucher-number",
+          "version": "1.1"
+        },
+        {
+          "id": "voucher-storage.vouchers",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:201fef0adff4c051bd7a493e19953326765a04fce5b2b9e92bb9e19d156406e3",
+      "moduleId": "mod-invoice-6.1.3",
+      "moduleIdentity": "mod-invoice",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "batch-group",
+          "version": "1.1"
+        },
+        {
+          "id": "batch-voucher.batch-voucher-exports",
+          "version": "1.2"
+        },
+        {
+          "id": "batch-voucher.batch-vouchers",
+          "version": "2.0"
+        },
+        {
+          "id": "batch-voucher.export-configurations",
+          "version": "1.1"
+        },
+        {
+          "id": "invoice",
+          "version": "7.2"
+        },
+        {
+          "id": "voucher-number",
+          "version": "1.0"
+        },
+        {
+          "id": "voucher",
+          "version": "2.3"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:df2159fdc55453cf62aba1a54d5e35d5c7330daab2138059e715a9ea5703d02b",
+      "moduleId": "mod-kb-ebsco-java-7.0.0",
+      "moduleIdentity": "mod-kb-ebsco-java",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_ramls",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "eholdings",
+          "version": "4.0"
+        }
+      ],
+      "source": "FAR:app-eholdings-1.0.1"
+    },
+    {
+      "descriptorHash": "sha256:e1c8ae216b663bd93045f2b5c685e1758d484c7bd2d9b833993e16e3681b00de",
+      "moduleId": "mod-licenses-6.3.2",
+      "moduleIdentity": "mod-licenses",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.2"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "dashboard",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "licenses",
+          "version": "6.3"
+        }
+      ],
+      "source": "FAR:app-licenses-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:13e63846491cfbae48136c080aa58b71cfb8340643351aa4f28d224bc1c687df",
+      "moduleId": "mod-linked-data-import-1.0.1",
+      "moduleIdentity": "mod-linked-data-import",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "linked-data-import",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-linked-data-2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:0c34e4fa6b78eb727b06a09867c32369862b8a6ddfe8f19091363fda288fa8c2",
+      "moduleId": "mod-linked-data-2.0.3",
+      "moduleIdentity": "mod-linked-data",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "linked-data-admin",
+          "version": "1.0"
+        },
+        {
+          "id": "linked-data-batch-job",
+          "version": "1.0"
+        },
+        {
+          "id": "linked-data-profile",
+          "version": "1.0"
+        },
+        {
+          "id": "linked-data-vocabularies",
+          "version": "1.0"
+        },
+        {
+          "id": "linked-data",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-linked-data-2.0.4"
+    },
+    {
+      "descriptorHash": "sha256:1830922610b7efe94c12af1143e213ef51b3dd57d403c915e9955c74ff39115c",
+      "moduleId": "mod-lists-4.0.1",
+      "moduleIdentity": "mod-lists",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "lists",
+          "version": "2.0"
+        }
+      ],
+      "source": "FAR:app-lists-1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:6c8f2c13a957b3bcf48b5f659e7a7a3912a8352ed8c684b61e733a4c1c293bb3",
+      "moduleId": "mod-login-keycloak-4.0.1",
+      "moduleIdentity": "mod-login-keycloak",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "authtoken",
+          "version": "2.1"
+        },
+        {
+          "id": "authtoken2",
+          "version": "1.1"
+        },
+        {
+          "id": "login",
+          "version": "7.3"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:ff2f929d1908140f851bc5fdf6cef4cc70929563ccb769551db3df69af7d43d7",
+      "moduleId": "mod-marc-migrations-3.0.1",
+      "moduleIdentity": "mod-marc-migrations",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "marc-migrations",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-marc-migrations-3.0.1"
+    },
+    {
+      "descriptorHash": "sha256:75461f1d446241ac3d6f7972a806265c4d41dccf50853057e12ebaf78d2ab48b",
+      "moduleId": "mod-mosaic-1.1.0",
+      "moduleIdentity": "mod-mosaic",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "mosaic",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-mosaic-1.1.0"
+    },
+    {
+      "descriptorHash": "sha256:28cd4e89a4f4bdc1c29c7da29617362499c664bf166c8f9b3f43ca86ed490560",
+      "moduleId": "mod-ncip-1.17.3",
+      "moduleIdentity": "mod-ncip",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "ncip",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:70472239c6aa8e17237635f9e28541e93924f7fd15ca95b5dfaf8e992e2fa5ed",
+      "moduleId": "mod-notes-8.0.0",
+      "moduleIdentity": "mod-notes",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "notes",
+          "version": "4.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:12a50baf5c1d6ce4a384d1288f3a32f01e2f54a7d2621aab065ddab97a6857ef",
+      "moduleId": "mod-notify-3.5.0",
+      "moduleIdentity": "mod-notify",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_ramls",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "notify",
+          "version": "2.2"
+        },
+        {
+          "id": "patron-notice",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:7f566eea9b84108994927d764f0afe7c5cf0fe28bc2daf9a1abbdc7273b1973e",
+      "moduleId": "mod-oai-pmh-3.16.2",
+      "moduleIdentity": "mod-oai-pmh",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "oai-pmh",
+          "version": "3.5"
+        }
+      ],
+      "source": "FAR:app-oai-pmh-2.0.3"
+    },
+    {
+      "descriptorHash": "sha256:4f945f8bbb4aa23e21a356ec80351aee8886a8b224a7e69bab003a746b970674",
+      "moduleId": "mod-okapi-facade-4.0.0",
+      "moduleIdentity": "mod-okapi-facade",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "okapi",
+          "version": "1.9"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:6d182890200b723742c3ba80a60c8f59aa787de643c3ba6db16990a302eab503",
+      "moduleId": "mod-orders-storage-14.0.2",
+      "moduleIdentity": "mod-orders-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisitions-units-storage.memberships",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisitions-units-storage.units",
+          "version": "1.1"
+        },
+        {
+          "id": "custom-fields",
+          "interfaceType": "multiple",
+          "version": "3.0"
+        },
+        {
+          "id": "orders-storage.acquisition-methods",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.audit-outbox",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.batch-tracking",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.claiming",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.configuration.prefixes",
+          "version": "1.1"
+        },
+        {
+          "id": "orders-storage.configuration.reasons-for-closure",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.configuration.suffixes",
+          "version": "1.1"
+        },
+        {
+          "id": "orders-storage.export-history",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.order-invoice-relationships",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.order-template-categories",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.order-templates",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.pieces",
+          "version": "5.0"
+        },
+        {
+          "id": "orders-storage.po-line-number",
+          "version": "2.0"
+        },
+        {
+          "id": "orders-storage.po-lines",
+          "version": "13.0"
+        },
+        {
+          "id": "orders-storage.po-number",
+          "version": "2.0"
+        },
+        {
+          "id": "orders-storage.purchase-orders",
+          "version": "8.1"
+        },
+        {
+          "id": "orders-storage.receiving-history",
+          "version": "4.0"
+        },
+        {
+          "id": "orders-storage.routing-lists",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.settings",
+          "version": "1.0"
+        },
+        {
+          "id": "orders-storage.titles",
+          "version": "1.1"
+        },
+        {
+          "id": "orders-storage.wrapper-pieces",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:4689f6fdbb4875e8bf1b513e0fb574577c88116b065bff81b501abe763d9cece",
+      "moduleId": "mod-orders-13.1.6",
+      "moduleIdentity": "mod-orders",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "acquisition-methods",
+          "version": "1.0"
+        },
+        {
+          "id": "acquisitions-units",
+          "version": "1.1"
+        },
+        {
+          "id": "configuration.prefixes",
+          "version": "1.2"
+        },
+        {
+          "id": "configuration.reasons-for-closure",
+          "version": "1.0"
+        },
+        {
+          "id": "configuration.suffixes",
+          "version": "1.2"
+        },
+        {
+          "id": "order-lines",
+          "version": "4.1"
+        },
+        {
+          "id": "order-templates",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.bind-pieces",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.export-history",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.holding-detail",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.holding-summary",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.rollover",
+          "version": "1.0"
+        },
+        {
+          "id": "orders.routing-lists",
+          "version": "1.0"
+        },
+        {
+          "id": "orders",
+          "version": "13.0"
+        },
+        {
+          "id": "pieces.send-claims",
+          "version": "1.0"
+        },
+        {
+          "id": "pieces",
+          "version": "3.1"
+        },
+        {
+          "id": "po-number",
+          "version": "1.0"
+        },
+        {
+          "id": "receiving",
+          "version": "2.0"
+        },
+        {
+          "id": "titles",
+          "version": "1.2"
+        },
+        {
+          "id": "wrapper-pieces",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:420ea94c3a0060271889d22ebe4b6f403c76b6b8b7eee4810fbf406b3f46a49e",
+      "moduleId": "mod-organizations-storage-5.0.0",
+      "moduleIdentity": "mod-organizations-storage",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations-storage.banking-account-types",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations-storage.banking-information",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations-storage.categories",
+          "version": "1.1"
+        },
+        {
+          "id": "organizations-storage.contacts",
+          "version": "2.0"
+        },
+        {
+          "id": "organizations-storage.interfaces",
+          "version": "2.1"
+        },
+        {
+          "id": "organizations-storage.organization-types",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations-storage.organizations",
+          "version": "3.3"
+        },
+        {
+          "id": "organizations-storage.privileged-contacts",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations-storage.settings",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:fcc5bfa54b935dc20c81846c8504859fb4fd623bf489671e42f8ac829611a991",
+      "moduleId": "mod-organizations-2.2.0",
+      "moduleIdentity": "mod-organizations",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "banking-information",
+          "version": "1.0"
+        },
+        {
+          "id": "organizations.organizations",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-acquisitions-2.0.14"
+    },
+    {
+      "descriptorHash": "sha256:25289a480b328db6bdc1d0442d68dd9c46ff9adfb3712c2d5ff8ad3bcc58fb1b",
+      "moduleId": "mod-password-validator-4.0.0",
+      "moduleIdentity": "mod-password-validator",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "password-validator",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:4ba45eb1a135257bbcfaf206a4405ed3a600f59d0d6900e6e5fc1dc81e9d3c42",
+      "moduleId": "mod-patron-blocks-1.13.0",
+      "moduleIdentity": "mod-patron-blocks",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "automated-patron-blocks",
+          "version": "0.1"
+        },
+        {
+          "id": "patron-block-conditions",
+          "version": "0.1"
+        },
+        {
+          "id": "patron-block-limits",
+          "version": "0.1"
+        },
+        {
+          "id": "patron-blocks-event-handlers",
+          "version": "1.1"
+        },
+        {
+          "id": "user-summary",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:1abb5423eec9df80429b9f4d851aed976d2cee754104d9922ee8e087ad55c7b4",
+      "moduleId": "mod-patron-6.4.0",
+      "moduleIdentity": "mod-patron",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "patron.settings",
+          "version": "1.0"
+        },
+        {
+          "id": "patron",
+          "version": "6.6"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:2ad98ba63e5f05d723e59a18d767676bd1cadcf69b035b7d010c30e27568883e",
+      "moduleId": "mod-permissions-6.8.0",
+      "moduleIdentity": "mod-permissions",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_tenantPermissions",
+          "interfaceType": "system",
+          "version": "2.1"
+        },
+        {
+          "id": "permissions",
+          "version": "5.8"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:26b7ef6a13aefc1fc04b70167e4d3b5ecab1ba9634563fedf593b4d044fc4f87",
+      "moduleId": "mod-pubsub-2.17.0",
+      "moduleIdentity": "mod-pubsub",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "pubsub-audit",
+          "version": "0.1"
+        },
+        {
+          "id": "pubsub-event-types",
+          "version": "0.1"
+        },
+        {
+          "id": "pubsub-messaging-modules",
+          "version": "0.1"
+        },
+        {
+          "id": "pubsub-publish",
+          "version": "0.1"
+        },
+        {
+          "id": "pubsub-publishers",
+          "version": "0.1"
+        },
+        {
+          "id": "pubsub-subscribers",
+          "version": "0.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:f85a543cbc0b035e1e4914cd4f332d5e908a67c99cdc5a17bc1aafa11eb66215",
+      "moduleId": "mod-quick-marc-8.0.1",
+      "moduleIdentity": "mod-quick-marc",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "marc-records-editor",
+          "version": "7.0"
+        },
+        {
+          "id": "marc-specifications",
+          "version": "1.2"
+        }
+      ],
+      "source": "FAR:app-quick-marc-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:bcb9afebeb847717451b60ccec5a2c18272dfd0dd704c0a0bf279b0b64c8c064",
+      "moduleId": "mod-reading-room-2.0.0",
+      "moduleIdentity": "mod-reading-room",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "reading-room-patron-permission",
+          "version": "1.0"
+        },
+        {
+          "id": "reading-room",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-reading-room-3.0.0"
+    },
+    {
+      "descriptorHash": "sha256:572b5f484cdd3e480b351214cf96ed30141cfc1dea5aa944e901d43c4f548631",
+      "moduleId": "mod-record-specifications-3.0.0",
+      "moduleIdentity": "mod-record-specifications",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "specification-storage",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-marc-storage-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:154d1b9db3172629234204a1c6c0fb1c003c9b59edc73f0a19afd26df3b68cda",
+      "moduleId": "mod-remote-storage-4.0.0",
+      "moduleIdentity": "mod-remote-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "remote-storage-accessions",
+          "version": "1.1"
+        },
+        {
+          "id": "remote-storage-check-in",
+          "version": "1.2"
+        },
+        {
+          "id": "remote-storage-configurations",
+          "version": "1.1"
+        },
+        {
+          "id": "remote-storage-event-handlers",
+          "version": "1.1"
+        },
+        {
+          "id": "remote-storage-extended-mappings",
+          "version": "1.0"
+        },
+        {
+          "id": "remote-storage-items",
+          "version": "1.0"
+        },
+        {
+          "id": "remote-storage-mappings",
+          "version": "1.0"
+        },
+        {
+          "id": "remote-storage-providers",
+          "version": "1.0"
+        },
+        {
+          "id": "remote-storage-retrievals",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:45efc52a41afbea230d50602c51c224975a0a1bfc30f84fee592430b64adeadc",
+      "moduleId": "mod-reporting-1.6.1",
+      "moduleIdentity": "mod-reporting",
+      "provides": [
+        {
+          "id": "ldp-query",
+          "version": "1.4"
+        }
+      ],
+      "source": "FAR:app-reporting-1.5.1"
+    },
+    {
+      "descriptorHash": "sha256:9b2b86830169e40dd2a0b2aa733762997f868cf2066a85174d00101c5f4373a1",
+      "moduleId": "mod-roles-keycloak-4.0.3",
+      "moduleIdentity": "mod-roles-keycloak",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "capabilities",
+          "version": "1.1"
+        },
+        {
+          "id": "capability-sets",
+          "version": "2.0"
+        },
+        {
+          "id": "loadable-roles",
+          "version": "1.1"
+        },
+        {
+          "id": "permissions-users",
+          "version": "1.0"
+        },
+        {
+          "id": "policies",
+          "version": "1.1"
+        },
+        {
+          "id": "role-capabilities",
+          "version": "1.1"
+        },
+        {
+          "id": "role-capability-sets",
+          "version": "1.1"
+        },
+        {
+          "id": "roles-permission-migration",
+          "version": "1.0"
+        },
+        {
+          "id": "roles-user",
+          "version": "1.0"
+        },
+        {
+          "id": "roles",
+          "version": "1.1"
+        },
+        {
+          "id": "user-capabilities",
+          "version": "1.1"
+        },
+        {
+          "id": "user-capability-sets",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:d45ec4b5da59fb7796e6d6bf021d7bcc60361a53f46b90e716c213a735589c6e",
+      "moduleId": "mod-rtac-3.9.1",
+      "moduleIdentity": "mod-rtac",
+      "provides": [
+        {
+          "id": "rtac-batch",
+          "version": "1.2"
+        },
+        {
+          "id": "rtac",
+          "version": "1.5"
+        }
+      ],
+      "source": "FAR:app-rtac-1.1.1"
+    },
+    {
+      "descriptorHash": "sha256:3feecf40bc3d7faae7db2aa0d38622495544ebf922743c0b7a57d90172b3acb3",
+      "moduleId": "mod-scheduler-4.0.2",
+      "moduleIdentity": "mod-scheduler",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "scheduler",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:2df39622c330842a136d0794e0a56bb22ab136b0b0257766acb480eb3a0b23e8",
+      "moduleId": "mod-search-6.0.5",
+      "moduleIdentity": "mod-search",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "browse-authorities",
+          "version": "1.0"
+        },
+        {
+          "id": "browse-config",
+          "version": "1.0"
+        },
+        {
+          "id": "browse-inventory",
+          "version": "1.0"
+        },
+        {
+          "id": "consortium-search",
+          "version": "2.1"
+        },
+        {
+          "id": "indices",
+          "version": "1.2"
+        },
+        {
+          "id": "resource-ids-streaming",
+          "version": "1.0"
+        },
+        {
+          "id": "search-authorities",
+          "version": "1.0"
+        },
+        {
+          "id": "search-config",
+          "version": "0.2"
+        },
+        {
+          "id": "search-facets",
+          "version": "1.0"
+        },
+        {
+          "id": "search-inventory",
+          "version": "1.0"
+        },
+        {
+          "id": "search-linked-data",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-search-1.0.5"
+    },
+    {
+      "descriptorHash": "sha256:36bf55f32d9f92ee8afb2c0cbd3caa3941025b9b1f0cebefa02cd418600670b9",
+      "moduleId": "mod-sender-1.15.0",
+      "moduleIdentity": "mod-sender",
+      "provides": [
+        {
+          "id": "message-delivery",
+          "version": "1.1"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:fe3053bf623501b53737b917753edeb3bc1b59d19942171447e25c7b77e73bea",
+      "moduleId": "mod-serials-management-2.1.1",
+      "moduleIdentity": "mod-serials-management",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.2"
+        },
+        {
+          "id": "serials-management",
+          "version": "2.1"
+        }
+      ],
+      "source": "FAR:app-serials-management-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:8365638438f3b4d6f5314dfae6fa63f446dafbcadce75c4d2cae39caa918ecf1",
+      "moduleId": "mod-service-interaction-4.3.1",
+      "moduleIdentity": "mod-service-interaction",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "1.2"
+        },
+        {
+          "id": "dashboard",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "servint",
+          "version": "4.3"
+        }
+      ],
+      "source": "FAR:app-service-interaction-1.0.2"
+    },
+    {
+      "descriptorHash": "sha256:7c271ef016ca736ca0ff2f39a15b37806f61547386f84031d0c7970d5dbf15f2",
+      "moduleId": "mod-settings-1.3.1",
+      "moduleIdentity": "mod-settings",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "base-url",
+          "version": "1.0"
+        },
+        {
+          "id": "locale",
+          "version": "1.0"
+        },
+        {
+          "id": "settings",
+          "version": "1.2"
+        },
+        {
+          "id": "tenant-addresses",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:bf056f282438383e4e8f7bfb6fe8979cdc93a557269f9a659f52eae2aa01a9e1",
+      "moduleId": "mod-source-record-manager-4.0.3",
+      "moduleIdentity": "mod-source-record-manager",
+      "provides": [
+        {
+          "id": "_jsonSchemas",
+          "interfaceType": "multiple",
+          "version": "1.0"
+        },
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "mapping-metadata-provider",
+          "version": "1.1"
+        },
+        {
+          "id": "mapping-rules-provider",
+          "version": "2.0"
+        },
+        {
+          "id": "metadata-provider-job-execution-logs",
+          "version": "1.1"
+        },
+        {
+          "id": "source-manager-job-executions",
+          "version": "3.4"
+        },
+        {
+          "id": "source-manager-records",
+          "version": "2.1"
+        }
+      ],
+      "source": "FAR:app-data-import-1.0.3"
+    },
+    {
+      "descriptorHash": "sha256:43bf351dc86f3112dbf0e368d67be88ba2ea132101ac0f59c29bc670b327b245",
+      "moduleId": "mod-source-record-storage-6.0.0",
+      "moduleIdentity": "mod-source-record-storage",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "source-storage-async-migrations",
+          "version": "1.1"
+        },
+        {
+          "id": "source-storage-batch",
+          "version": "1.3"
+        },
+        {
+          "id": "source-storage-records",
+          "version": "3.4"
+        },
+        {
+          "id": "source-storage-snapshots",
+          "version": "2.1"
+        },
+        {
+          "id": "source-storage-source-records",
+          "version": "3.3"
+        },
+        {
+          "id": "source-storage-stream",
+          "version": "1.2"
+        },
+        {
+          "id": "source-storage-test-records",
+          "version": "2.1"
+        }
+      ],
+      "source": "FAR:app-marc-storage-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:8fa7118fd1f6c2f733206cbef3f569b0cbacc224ccc6c27260a684404a19d210",
+      "moduleId": "mod-tags-3.0.0",
+      "moduleIdentity": "mod-tags",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "tags",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:d90ed3ab075e9a143a574494b06d0d368919fb9ee6d09dd0de8a87b34e09f8d7",
+      "moduleId": "mod-template-engine-1.23.0",
+      "moduleIdentity": "mod-template-engine",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "template-engine",
+          "version": "2.2"
+        }
+      ],
+      "source": "FAR:app-notification-1.0.0"
+    },
+    {
+      "descriptorHash": "sha256:383058f9ea6149e189da3d216be471e44d5f64984e251e02a30e4e3998952510",
+      "moduleId": "mod-user-import-3.11.0",
+      "moduleIdentity": "mod-user-import",
+      "provides": [
+        {
+          "id": "user-import",
+          "version": "2.2"
+        }
+      ],
+      "source": "FAR:app-platform-complete-3.3.6"
+    },
+    {
+      "descriptorHash": "sha256:baf965308c2b33b21763ddf8e7f520a977af8d1ae365c7b837525d84422235b3",
+      "moduleId": "mod-users-bl-8.0.0",
+      "moduleIdentity": "mod-users-bl",
+      "provides": [
+        {
+          "id": "users-bl",
+          "version": "6.1"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:5b0bfa58c482b8f240ef8d76d52f44fdcffa35ff2cfb84f154364fdb91fc726f",
+      "moduleId": "mod-users-keycloak-4.0.2",
+      "moduleIdentity": "mod-users-keycloak",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "users-keycloak",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    },
+    {
+      "descriptorHash": "sha256:5b5c00217ed0767af400380ca5ecc4a5204f38d3fe16fb631ff38bb5c81ceb3e",
+      "moduleId": "mod-users-19.6.0",
+      "moduleIdentity": "mod-users",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "_timer",
+          "interfaceType": "system",
+          "version": "1.0"
+        },
+        {
+          "id": "custom-fields",
+          "interfaceType": "multiple",
+          "version": "3.1"
+        },
+        {
+          "id": "patron-pin",
+          "version": "1.0"
+        },
+        {
+          "id": "staging-users",
+          "version": "1.2"
+        },
+        {
+          "id": "user-tenants",
+          "version": "1.0"
+        },
+        {
+          "id": "users.settings",
+          "version": "2.0"
+        },
+        {
+          "id": "users",
+          "version": "16.4"
+        }
+      ],
+      "source": "FAR:app-platform-minimal-2.1.8"
+    }
+  ],
+  "schemaVersion": "1.0"
 }

@@ -28,6 +28,13 @@ export async function loadS008Catalog(
   duplicates(catalog.eurekaComponents.map(item => item.familyId), 'Eureka component family ID', diagnostics);
   const componentIdentities = catalog.eurekaComponents.flatMap(item => item.moduleIdentities);
   duplicates(componentIdentities, 'Eureka component module identity', diagnostics);
+  for (const [index, component] of catalog.eurekaComponents.entries()) {
+    if (component.descriptorSource.status === 'unresolved') diagnostics.push({
+      code: 'catalog_unresolved_component',
+      message: `Eureka component ${component.familyId}@${component.version} has unresolved descriptor provenance.`,
+      path: `/eurekaComponents/${index}/descriptorSource`
+    });
+  }
   for (const [providerIndex, provider] of catalog.providers.entries()) {
     for (const [interfaceIndex, provided] of provider.provides.entries()) {
       if (!isSupportedEurekaVersionExpression(provided.version, true)) {

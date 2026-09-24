@@ -78,9 +78,12 @@ describe('S008 catalog network acquisition', () => {
         'edge-component-3.0.0', 'folio_ui-a-4.5.6', 'mgr-applications-4.0.0', 'mod-a-1.2.3', 'mod-b-2.1.0'
       ]);
       expect(catalog.eurekaComponents).toEqual([
-        { familyId: 'edge-component', moduleIdentities: ['edge-component'] },
-        { familyId: 'folio-keycloak', moduleIdentities: ['folio-keycloak'] },
-        { familyId: 'mgr-applications', moduleIdentities: ['mgr-applications'] }
+        expect.objectContaining({ familyId: 'edge-component', moduleIdentities: ['edge-component'], version: '3.0.0' }),
+        { familyId: 'folio-keycloak', moduleIdentities: ['folio-keycloak'], version: '26.5.4', descriptorSource: { status: 'intentionally-descriptorless' } },
+        expect.objectContaining({
+          familyId: 'mgr-applications', moduleIdentities: ['mgr-applications'], version: '4.0.1',
+          descriptorSource: expect.objectContaining({ status: 'acquired', commit: 'c'.repeat(40) })
+        })
       ]);
       expect((await fs.readJson(path.join(first, 'acquisition-diagnostics.json'))).complete).toBe(true);
       const loadedCatalog = await loadS008Catalog('official', { official: path.join(first, 's008-catalog.json') });
