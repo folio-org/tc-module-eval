@@ -492,15 +492,24 @@
     },
     {
       "criterionId": "S008",
-      "status": "manual",
-      "evidence": "S008 requires valid authoritative acceptance ledger and interface catalog data.",
-      "details": "S008 requires valid authoritative acceptance ledger and interface catalog data.",
+      "status": "pass",
+      "evidence": "All 16 declared interfaces have compatible eligible providers in the official catalog.",
+      "details": "All 16 declared interfaces have compatible eligible providers in the official catalog.",
       "criterionDetails": {
         "channel": "official",
-        "policyDiagnosticCodes": [
-          "catalog_not_authoritative",
-          "ledger_not_authoritative"
-        ]
+        "policyDiagnosticCodes": [],
+        "ledgerDigest": "sha256:a3a0c72f352de4d4ee4d6209676a5dbc5276d9fedfcdc5b82064c699a2658ac0",
+        "catalogDigest": "sha256:331710bb624cec31c2f883aa4c14edafcfa1fe90dc9fe575d1a9233b228753e6",
+        "baseline": {
+          "descriptorHash": "sha256:ac95191236d92167cc64d9924d8ee5aef84b0c9462a9d4c2f7eb906969173317",
+          "descriptorVersion": "R1-2026.27",
+          "platformCommit": "0a70fd26e87f5e8cfb3e6b2bbff07c9610865ec5",
+          "platformRepository": "https://github.com/folio-org/platform-lsp"
+        },
+        "declarationCount": 16,
+        "findingClassifications": {
+          "satisfied": 16
+        }
       }
     },
     {

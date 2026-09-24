@@ -61,6 +61,22 @@ describe('S008 trusted policy loaders', () => {
     expect(loaded).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: 'catalog_invalid_interface_version' })] });
   });
 
+  it.each(['missing', 'mismatched'])('rejects %s provider provenance for an acquired Eureka component', async mode => {
+    const file = path.join(dir, 'catalog.json');
+    const value = catalog();
+    value.eurekaComponents = [{
+      familyId: 'a', moduleIdentities: ['mod-a'], version: '1.0.0',
+      descriptorSource: { status: 'acquired', kind: 'registry', source: 'https://registry.example/mod-a-1.0.0', descriptorHash: `sha256:${'c'.repeat(64)}` }
+    }];
+    if (mode === 'missing') value.providers = [];
+    else value.providers[0].descriptorHash = `sha256:${'d'.repeat(64)}`;
+    await fs.writeJson(file, value);
+    const loaded = await loadS008Catalog('official', { official: file });
+    expect(loaded).toMatchObject({
+      ok: false, diagnostics: [expect.objectContaining({ code: 'catalog_component_provider_missing' })]
+    });
+  });
+
   function ledger(): any {
     return {
       schemaVersion: '1.0', authoritative: true, source: { reviewedBy: 'TC', reference: 'TCR-1' },

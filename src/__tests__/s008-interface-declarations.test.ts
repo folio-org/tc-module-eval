@@ -29,6 +29,15 @@ describe('S008 static declaration collector', () => {
     expect(collectS008Declarations(repo, 'backend-module')).toMatchObject({ complete: true, declarations: [{ id: 'users', version: '16.0' }] });
   });
 
+  it('reads the conventional Eureka manager descriptor location', async () => {
+    const descriptor = path.join(repo, 'src/main/resources/descriptors/ModuleDescriptor.json');
+    await fs.ensureDir(path.dirname(descriptor));
+    await fs.writeJson(descriptor, { requires: [], optional: [] });
+    expect(collectS008Declarations(repo, 'backend-module')).toMatchObject({
+      complete: true, declarations: [], sourcePaths: ['src/main/resources/descriptors/ModuleDescriptor.json']
+    });
+  });
+
   it('reuses an available S002 artifact and diagnoses placeholders/unsupported syntax', async () => {
     const artifact = path.join(repo, 'generated.json');
     await fs.writeJson(artifact, { requires: [{ id: 'users', version: '${version}' }, { id: 'bad', version: '^1.0' }] });
@@ -51,5 +60,53 @@ describe('S008 static declaration collector', () => {
   it('marks unsupported frontend shapes incomplete', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), { stripes: { okapiInterfaces: ['users'] } });
     expect(collectS008Declarations(repo, 'ui-module')).toMatchObject({ complete: false, diagnostics: [expect.objectContaining({ code: 'unsupported_declaration_shape' })] });
+  });
+
+  it.each([
+    ['backend-module', 'descriptors/ModuleDescriptor.json'],
+    ['ui-module', 'package.json']
+  ] as const)('rejects %s declaration sources that escape the checkout', async (kind, relative) => {
+    const external = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 's008-external-')), 'source.json');
+    try {
+      await fs.writeJson(external, {});
+      const selected = path.join(repo, relative);
+      await fs.ensureDir(path.dirname(selected));
+      await fs.symlink(external, selected);
+      expect(collectS008Declarations(repo, kind)).toMatchObject({
+        complete: false, diagnostics: [expect.objectContaining({ code: 'declaration_source_unsafe' })]
+      });
+    } finally {
+      await fs.remove(path.dirname(external));
+    }
+  });
+
+  it('rejects a declaration source symlinked to a special file', async () => {
+    const selected = path.join(repo, 'descriptors/ModuleDescriptor.json');
+    await fs.ensureDir(path.dirname(selected));
+    await fs.symlink('/dev/zero', selected);
+    expect(collectS008Declarations(repo, 'backend-module')).toMatchObject({
+      complete: false, diagnostics: [expect.objectContaining({ code: 'declaration_source_unsafe' })]
+    });
+  });
+
+  it('rejects declaration sources larger than the bounded read limit', async () => {
+    const selected = path.join(repo, 'descriptors/ModuleDescriptor.json');
+    await fs.ensureDir(path.dirname(selected));
+    await fs.writeFile(selected, Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    expect(collectS008Declarations(repo, 'backend-module')).toMatchObject({
+      complete: false, diagnostics: [expect.objectContaining({ code: 'declaration_source_unsafe' })]
+    });
+  });
+
+  it.each([
+    ['backend-module', 'descriptors/ModuleDescriptor.json'],
+    ['ui-module', 'package.json']
+  ] as const)('rejects non-object top-level %s documents', async (kind, relative) => {
+    const selected = path.join(repo, relative);
+    await fs.ensureDir(path.dirname(selected));
+    await fs.writeJson(selected, []);
+    expect(collectS008Declarations(repo, kind)).toMatchObject({
+      complete: false, diagnostics: [expect.objectContaining({ code: 'unsupported_declaration_shape' })]
+    });
   });
 });

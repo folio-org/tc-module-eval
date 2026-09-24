@@ -132,7 +132,7 @@ describe('S008 catalog network acquisition', () => {
         version: 'dev', applications: { required: [
           { name: 'app-zero', version: '1.0.0' }, { name: 'app-many', version: '1.0.0' },
           { name: 'app-auth', version: '1.0.0' }, { name: 'app-left', version: '1.0.0' },
-          { name: 'app-right', version: '1.0.0' }
+          { name: 'app-right', version: '1.0.0' }, { name: 'app-malformed', version: '1.0.0' }
         ] }, 'eureka-components': [
           { name: 'missing-component', version: '1.0.0' },
           { name: 'mgr-tenants', version: '4.0.0' }
@@ -143,6 +143,12 @@ describe('S008 catalog network acquisition', () => {
         if (query === 'id==app-zero-1.0.0') return json(response, { applicationDescriptors: [], totalRecords: 0 });
         if (query === 'id==app-many-1.0.0') return json(response, { applicationDescriptors: [{ id: 'one' }, { id: 'two' }], totalRecords: 2 });
         if (query === 'id==app-auth-1.0.0') return response.writeHead(403).end();
+        if (query === 'id==app-malformed-1.0.0') return json(response, {
+          applicationDescriptors: [{
+            id: 'app-malformed-1.0.0', name: 'app-malformed', version: '1.0.0',
+            modules: {}, moduleDescriptors: {}
+          }], totalRecords: 1
+        });
         const name = query === 'id==app-left-1.0.0' ? 'app-left' : 'app-right';
         return json(response, { applicationDescriptors: [{
           id: `${name}-1.0.0`, name, version: '1.0.0',
@@ -164,7 +170,7 @@ describe('S008 catalog network acquisition', () => {
       expect(report.complete).toBe(false);
       expect(report.diagnostics.map((item: any) => item.code)).toEqual(expect.arrayContaining([
         'far_cardinality', 'far_request_failed', 'conflicting_descriptor_bytes', 'unresolved_component_descriptor',
-        'component_tag_descriptor_failed', 'unsupported_provider_version'
+        'component_tag_descriptor_failed', 'unsupported_provider_version', 'invalid_module_references', 'invalid_embedded_descriptors'
       ]));
       expect(report.diagnostics.filter((item: any) => item.code === 'far_cardinality')).toHaveLength(2);
       expect(report.diagnostics.find((item: any) => item.code === 'far_request_failed').message).toContain('authentication is not supported');
@@ -177,6 +183,31 @@ describe('S008 catalog network acquisition', () => {
       });
       expect(discovery.identities.find((identity: any) => identity.moduleIdentity === 'mgr-tenants')).toMatchObject({
         observedModuleIds: ['mgr-tenants-4.0.0'], descriptors: [], descriptorStatus: 'unresolved', unreviewed: true
+      });
+    } finally {
+      await close(server);
+      await fs.remove(root);
+    }
+  });
+
+  it('marks a malformed Platform application container incomplete', async () => {
+    const server = await fixtureServer((request, response) => {
+      if (request.url === `/platform/${COMMIT}/platform-descriptor.json`) return json(response, {
+        version: 'dev', applications: [], 'eureka-components': []
+      });
+      response.writeHead(404).end();
+    });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 's008-acquire-malformed-'));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const output = path.join(root, 'output');
+      await acquireS008Catalog({
+        platformCommit: COMMIT, channel: 'development', outputDir: output,
+        farUrl: base, registryUrl: base, platformRawBaseUrl: `${base}/platform/`
+      });
+      expect(await fs.readJson(path.join(output, 'acquisition-diagnostics.json'))).toMatchObject({
+        complete: false,
+        diagnostics: [expect.objectContaining({ code: 'invalid_application_container', material: true })]
       });
     } finally {
       await close(server);

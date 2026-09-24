@@ -31,12 +31,21 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
 function normalizeS008GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
   const details = criterion.criterionDetails as Record<string, any> | undefined;
   if (!details) return criterion;
+  const findingClassifications = (details.findings ?? []).reduce((counts: Record<string, number>, finding: any) => {
+    counts[finding.classification] = (counts[finding.classification] ?? 0) + 1;
+    return counts;
+  }, {});
   return {
     ...criterion,
     details: details.summary,
     criterionDetails: {
       channel: details.channel,
-      policyDiagnosticCodes: (details.policyDiagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort()
+      policyDiagnosticCodes: (details.policyDiagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort(),
+      ledgerDigest: details.ledger?.digest,
+      catalogDigest: details.catalog?.digest,
+      baseline: details.catalog?.baseline,
+      declarationCount: details.declarations?.declarations?.length ?? 0,
+      findingClassifications
     }
   };
 }

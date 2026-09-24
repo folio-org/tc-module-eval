@@ -29,9 +29,18 @@ export async function loadS008Catalog(
   const componentIdentities = catalog.eurekaComponents.flatMap(item => item.moduleIdentities);
   duplicates(componentIdentities, 'Eureka component module identity', diagnostics);
   for (const [index, component] of catalog.eurekaComponents.entries()) {
-    if (component.descriptorSource.status === 'unresolved') diagnostics.push({
+    const descriptorSource = component.descriptorSource;
+    if (descriptorSource.status === 'unresolved') diagnostics.push({
       code: 'catalog_unresolved_component',
       message: `Eureka component ${component.familyId}@${component.version} has unresolved descriptor provenance.`,
+      path: `/eurekaComponents/${index}/descriptorSource`
+    });
+    if (descriptorSource.status === 'acquired' && !catalog.providers.some(provider =>
+      component.moduleIdentities.includes(provider.moduleIdentity)
+      && provider.descriptorHash === descriptorSource.descriptorHash
+    )) diagnostics.push({
+      code: 'catalog_component_provider_missing',
+      message: `Eureka component ${component.familyId}@${component.version} has no provider matching its acquired descriptor provenance.`,
       path: `/eurekaComponents/${index}/descriptorSource`
     });
   }

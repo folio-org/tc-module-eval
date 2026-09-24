@@ -30,4 +30,10 @@ describe('Eureka interface compatibility parity', () => {
     expect(compareEurekaInterfaces({ id: 'a', version: '2.0' }, { id: 'b', version: '2.0' })).toBe(EUREKA_INCOMPARABLE);
     expect(compatible('2147483648.0', '2147483648.0')).toBe(false);
   });
+
+  it('reproduces signed 32-bit overflow in Java int subtraction', () => {
+    expect(compareEurekaInterfaces({ id: 'users', version: '1.2147483647' }, { id: 'users', version: '1.-1' })).toBe(-2);
+    expect(compareEurekaInterfaces({ id: 'users', version: '1.-2147483648' }, { id: 'users', version: '1.1' })).toBe(2);
+    expect(compareEurekaInterfaces({ id: 'users', version: '1.0.2147483647' }, { id: 'users', version: '1.0.-1' })).toBe(-1);
+  });
 });

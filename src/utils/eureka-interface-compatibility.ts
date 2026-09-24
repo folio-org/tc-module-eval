@@ -14,15 +14,19 @@ export function compareEurekaInterfaces(
     const required = versionParts(requirement.version, index);
     if (!required) break;
     if (provided[0] !== required[0]) continue;
-    const minor = provided[1] - required[1];
+    const minor = subtractJavaInt(provided[1], required[1]);
     if (minor > 0) return 2;
     if (minor < 0) return -2;
-    const patch = provided[2] - required[2];
+    const patch = subtractJavaInt(provided[2], required[2]);
     if (patch > 0) return 1;
     if (patch < 0) return -1;
     return 0;
   }
   return EUREKA_INCOMPARABLE;
+}
+
+function subtractJavaInt(left: number, right: number): number {
+  return (left - right) | 0;
 }
 
 export function isEurekaInterfaceCompatible(

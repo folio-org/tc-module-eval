@@ -38,6 +38,18 @@ describe('S008 shared evaluator integration', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
   });
 
+  it('classifies and passes a Eureka manager with a complete zero-interface descriptor', async () => {
+    const descriptor = path.join(repo, 'src/main/resources/descriptors/ModuleDescriptor.json');
+    await fs.ensureDir(path.dirname(descriptor));
+    await fs.writeJson(descriptor, { requires: [], optional: [] });
+    const result = await new TestEvaluator().evaluateCriterion('S008', repo);
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.criterionDetails).toMatchObject({
+      moduleKind: { kind: 'backend-module' },
+      declarations: { sourcePaths: ['src/main/resources/descriptors/ModuleDescriptor.json'] }
+    });
+  });
+
   it('runs S008 both alone and as part of the full shared criterion set', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { okapiInterfaces: {} } });
     const evaluator = new TestEvaluator('javascript');

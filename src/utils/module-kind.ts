@@ -37,7 +37,11 @@ export function classifyModuleKind(repoPath: string): ModuleKindResult {
 }
 
 function hasBackendModuleMarker(repoPath: string, evidence: string[]): boolean {
-  const descriptorDirs = [path.join(repoPath, 'descriptors'), repoPath];
+  const descriptorDirs = [
+    path.join(repoPath, 'descriptors'),
+    repoPath,
+    path.join(repoPath, 'src/main/resources/descriptors')
+  ];
   for (const descriptorDir of descriptorDirs) {
     if (!isDirectory(descriptorDir)) {
       continue;

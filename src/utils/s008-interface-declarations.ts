@@ -3,13 +3,15 @@ import path from 'path';
 import crypto from 'crypto';
 import { ModuleDescriptorArtifact, ModuleKind, S008Declaration, S008DeclarationDiagnostic, S008DeclarationResult } from '../types';
 import { isSupportedEurekaVersionExpression } from './eureka-interface-compatibility';
-import { isWithinRepo, relativePosixPath } from './repo-files';
+import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 
 const BACKEND_CANDIDATES = [
   'descriptors/ModuleDescriptor.json',
   'descriptors/ModuleDescriptor-template.json',
-  'ModuleDescriptor.json'
+  'ModuleDescriptor.json',
+  'src/main/resources/descriptors/ModuleDescriptor.json'
 ];
+const MAX_DECLARATION_SOURCE_BYTES = 2 * 1024 * 1024;
 
 export function collectS008Declarations(
   repoPath: string,
@@ -34,20 +36,24 @@ function collectBackend(repoPath: string, artifact?: ModuleDescriptorArtifact): 
 function parseDescriptor(repoPath: string, selected: string): S008DeclarationResult {
   const sourcePath = relativePosixPath(repoPath, selected);
   const diagnostics: S008DeclarationDiagnostic[] = [];
-  let content: string;
-  let descriptor: Record<string, unknown>;
+  const source = readDeclarationSource(repoPath, selected, sourcePath);
+  if (!source.ok) return result([], [source.diagnostic]);
+  let parsed: unknown;
   try {
-    content = fs.readFileSync(selected, 'utf8');
-    descriptor = JSON.parse(content) as Record<string, unknown>;
+    parsed = JSON.parse(source.content);
   } catch (error) {
     return result([], [{ code: 'declaration_source_invalid', message: `Unable to read or parse ${sourcePath}: ${errorMessage(error)}`, path: sourcePath, material: true }]);
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return result([], [{ code: 'unsupported_declaration_shape', message: `${sourcePath} must contain a top-level object.`, path: sourcePath, material: true }]);
+  }
+  const descriptor = parsed as Record<string, unknown>;
 
   const declarations = [
     ...parseDescriptorList(descriptor.requires, false, 'requires', sourcePath, diagnostics),
     ...parseDescriptorList(descriptor.optional, true, 'optional', sourcePath, diagnostics)
   ];
-  return finalize(declarations, diagnostics, sourcePath, content);
+  return finalize(declarations, diagnostics, sourcePath, source.content);
 }
 
 function parseDescriptorList(
@@ -75,27 +81,54 @@ function parseDescriptorList(
 function collectFrontend(repoPath: string): S008DeclarationResult {
   const selected = path.join(repoPath, 'package.json');
   if (!fs.existsSync(selected)) return result([], [{ code: 'declaration_source_missing', message: 'package.json was not found.', path: 'package.json', material: true }]);
-  let content: string;
-  let manifest: Record<string, unknown>;
+  const source = readDeclarationSource(repoPath, selected, 'package.json');
+  if (!source.ok) return result([], [source.diagnostic]);
+  let parsed: unknown;
   try {
-    content = fs.readFileSync(selected, 'utf8');
-    manifest = JSON.parse(content) as Record<string, unknown>;
+    parsed = JSON.parse(source.content);
   } catch (error) {
     return result([], [{ code: 'declaration_source_invalid', message: `Unable to read or parse package.json: ${errorMessage(error)}`, path: 'package.json', material: true }]);
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return result([], [{ code: 'unsupported_declaration_shape', message: 'package.json must contain a top-level object.', path: 'package.json', material: true }]);
+  }
+  const manifest = parsed as Record<string, unknown>;
   const diagnostics: S008DeclarationDiagnostic[] = [];
   const stripes = manifest.stripes;
-  if (stripes === undefined) return finalize([], diagnostics, 'package.json', content);
+  if (stripes === undefined) return finalize([], diagnostics, 'package.json', source.content);
   if (!stripes || typeof stripes !== 'object' || Array.isArray(stripes)) {
     diagnostics.push({ code: 'unsupported_declaration_shape', message: 'package.json stripes must be an object.', path: 'package.json#/stripes', material: true });
-    return finalize([], diagnostics, 'package.json', content);
+    return finalize([], diagnostics, 'package.json', source.content);
   }
   const record = stripes as Record<string, unknown>;
   const declarations = [
     ...parseInterfaceMap(record.okapiInterfaces, false, 'stripes.okapiInterfaces', diagnostics),
     ...parseInterfaceMap(record.optionalOkapiInterfaces, true, 'stripes.optionalOkapiInterfaces', diagnostics)
   ];
-  return finalize(declarations, diagnostics, 'package.json', content);
+  return finalize(declarations, diagnostics, 'package.json', source.content);
+}
+
+function readDeclarationSource(
+  repoPath: string,
+  selected: string,
+  sourcePath: string
+): { ok: true; content: string } | { ok: false; diagnostic: S008DeclarationDiagnostic } {
+  try {
+    if (!isWithinRepo(repoPath, selected)) throw new Error('source resolves outside the repository');
+    const resolved = realPath(selected);
+    if (!resolved) throw new Error('source cannot be resolved');
+    const stats = fs.statSync(resolved);
+    if (!stats.isFile()) throw new Error('source is not a regular file');
+    if (stats.size > MAX_DECLARATION_SOURCE_BYTES) throw new Error(`source exceeds ${MAX_DECLARATION_SOURCE_BYTES} bytes`);
+    const bytes = readBoundedFileBytes(resolved, MAX_DECLARATION_SOURCE_BYTES + 1);
+    if (bytes.length > MAX_DECLARATION_SOURCE_BYTES) throw new Error(`source exceeds ${MAX_DECLARATION_SOURCE_BYTES} bytes`);
+    return { ok: true, content: bytes.toString('utf8') };
+  } catch (error) {
+    return {
+      ok: false,
+      diagnostic: { code: 'declaration_source_unsafe', message: `Cannot safely read ${sourcePath}: ${errorMessage(error)}`, path: sourcePath, material: true }
+    };
+  }
 }
 
 function parseInterfaceMap(value: unknown, optional: boolean, field: string, diagnostics: S008DeclarationDiagnostic[]): S008Declaration[] {

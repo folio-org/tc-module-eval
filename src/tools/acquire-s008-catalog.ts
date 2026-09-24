@@ -240,6 +240,14 @@ function moduleReferences(
   field: string,
   diagnostics: Diagnostic[]
 ): ModuleReference[] {
+  if (rawReferences !== undefined && !Array.isArray(rawReferences)) diagnostics.push({
+    code: 'invalid_module_references', material: true,
+    message: `${applicationId} module references paired with ${field} must be an array.`
+  });
+  if (rawEmbedded !== undefined && !Array.isArray(rawEmbedded)) diagnostics.push({
+    code: 'invalid_embedded_descriptors', material: true,
+    message: `${applicationId} ${field} must be an array.`
+  });
   const references = Array.isArray(rawReferences) ? rawReferences : [];
   const embedded = Array.isArray(rawEmbedded) ? rawEmbedded : [];
   const embeddedById = new Map<string, unknown>();
@@ -462,6 +470,9 @@ function componentSourceManifest(component: ComponentPin, descriptors: AcquiredD
 
 function collectApplicationPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ApplicationPin[] {
   const applications = asOptionalRecord(platform.applications);
+  if (platform.applications !== undefined && !applications) {
+    diagnostics.push({ code: 'invalid_application_container', material: true, message: 'Platform applications must be an object.' });
+  }
   const groups: Array<{ values: unknown; optional: boolean }> = [
     { values: applications?.required, optional: false },
     { values: applications?.optional, optional: true }
