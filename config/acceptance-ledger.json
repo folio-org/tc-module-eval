@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "authoritative": false,
+  "source": {
+    "reviewedBy": "UNPOPULATED",
+    "reference": "Requires a TC-reviewed acceptance ledger before automated S008 decisions"
+  },
+  "families": [],
+  "moduleIdentities": [],
+  "libraryCoordinates": []
+}

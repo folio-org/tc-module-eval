@@ -493,8 +493,15 @@
     {
       "criterionId": "S008",
       "status": "manual",
-      "evidence": "Documentation requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S008 requires valid authoritative acceptance ledger and interface catalog data.",
+      "details": "S008 requires valid authoritative acceptance ledger and interface catalog data.",
+      "criterionDetails": {
+        "channel": "official",
+        "policyDiagnosticCodes": [
+          "catalog_not_authoritative",
+          "ledger_not_authoritative"
+        ]
+      }
     },
     {
       "criterionId": "S009",

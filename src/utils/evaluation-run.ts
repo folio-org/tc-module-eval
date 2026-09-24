@@ -6,6 +6,7 @@ import {
   EvaluationRunArtifacts
 } from '../types';
 import { CriterionLanguage, getCriteriaForCatalogLanguage } from '../criteria-definitions';
+import { S008CatalogChannel } from '../types';
 
 export interface CreateEvaluationRunOptions {
   repositoryPath: string;
@@ -15,6 +16,7 @@ export interface CreateEvaluationRunOptions {
   repositoryName?: string;
   commandRunner?: CommandRunner;
   agentReview?: EvaluationRun['agentReview'];
+  s008CatalogChannel?: S008CatalogChannel;
 }
 
 export function createEvaluationRun(options: CreateEvaluationRunOptions): EvaluationRun {
@@ -35,6 +37,7 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     commandObservations,
     commandRunner: options.commandRunner,
     agentReview: options.agentReview,
+    s008CatalogChannel: options.s008CatalogChannel ?? 'official',
     async getOrCreateArtifact<K extends ArtifactKey>(
       key: K,
       producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>

@@ -12,6 +12,11 @@ export {
 export { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
 export { produceModuleDescriptorArtifact } from './utils/artifacts/module-descriptor-artifact';
 export { validateModuleDescriptorJson } from './utils/module-descriptor-validator';
+export { loadAcceptanceLedger } from './utils/acceptance-ledger';
+export { loadS008Catalog } from './utils/s008-catalog';
+export { collectS008Declarations } from './utils/s008-interface-declarations';
+export { compareEurekaInterfaces, isEurekaInterfaceCompatible } from './utils/eureka-interface-compatibility';
+export { evaluateS008, renderS008HumanDetails } from './utils/s008-evaluator';
 export { Logger, ConsoleLogger, NoopLogger, getLogger, setLogger, resetLogger } from './utils/logger';
 
 // Language-specific evaluators

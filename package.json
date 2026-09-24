@@ -13,6 +13,7 @@
     "test": "jest",
     "test:unit": "jest --testPathIgnorePatterns='integration'",
     "test:integration": "jest --testMatch='**/*.integration.test.ts' --runInBand",
+    "import:s008-catalog": "ts-node src/tools/import-s008-catalog.ts",
     "clean": "rm -rf dist"
   },
   "keywords": [

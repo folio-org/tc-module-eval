@@ -20,8 +20,24 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S007') {
         return normalizeS007GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S008') {
+        return normalizeS008GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS008GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      channel: details.channel,
+      policyDiagnosticCodes: (details.policyDiagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort()
+    }
   };
 }
 

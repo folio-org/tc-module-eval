@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "authoritative": false,
+  "channel": "official",
+  "baseline": {
+    "platformRepository": "https://github.com/folio-org/platform-lsp",
+    "platformCommit": "0000000000000000000000000000000000000000",
+    "descriptorVersion": "UNPOPULATED",
+    "descriptorHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "applications": [],
+  "eurekaComponents": [],
+  "providers": []
+}
