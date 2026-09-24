@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "authoritative", "channel", "baseline", "applications", "eurekaComponents", "providers"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" }, "authoritative": { "type": "boolean" }, "channel": { "enum": ["official", "development"] },
+    "baseline": { "type": "object", "additionalProperties": false, "required": ["platformRepository", "platformCommit", "descriptorVersion", "descriptorHash"], "properties": {
+      "platformRepository": { "type": "string", "minLength": 1 }, "platformCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "platformTag": { "type": "string", "minLength": 1 }, "descriptorVersion": { "type": "string", "minLength": 1 }, "descriptorHash": { "$ref": "#/definitions/hash" }
+    } },
+    "applications": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["name", "version", "optional", "farSource", "descriptorHash"], "properties": { "name": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 }, "optional": { "type": "boolean" }, "farSource": { "type": "string", "minLength": 1 }, "descriptorHash": { "$ref": "#/definitions/hash" } } } },
+    "eurekaComponents": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["familyId", "moduleIdentities", "version", "descriptorSource"], "properties": {
+      "familyId": { "type": "string", "minLength": 1 },
+      "moduleIdentities": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+      "version": { "type": "string", "minLength": 1 },
+      "descriptorSource": { "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["status"], "properties": { "status": { "const": "intentionally-descriptorless" } } },
+        { "type": "object", "additionalProperties": false, "required": ["status"], "properties": { "status": { "const": "unresolved" } } },
+        { "type": "object", "additionalProperties": false, "required": ["status", "kind", "source", "descriptorHash"], "properties": {
+          "status": { "const": "acquired" }, "kind": { "const": "registry" }, "source": { "type": "string", "minLength": 1 }, "descriptorHash": { "$ref": "#/definitions/hash" }
+        } },
+        { "type": "object", "additionalProperties": false, "required": ["status", "kind", "repository", "tag", "commit", "source", "descriptorHash"], "properties": {
+          "status": { "const": "acquired" }, "kind": { "const": "repository-tag" }, "repository": { "type": "string", "minLength": 1 }, "tag": { "type": "string", "minLength": 1 },
+          "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "source": { "type": "string", "minLength": 1 }, "descriptorHash": { "$ref": "#/definitions/hash" }
+        } }
+      ] }
+    } } },
+    "providers": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["moduleId", "moduleIdentity", "source", "descriptorHash", "provides"], "properties": { "moduleId": { "type": "string", "minLength": 1 }, "moduleIdentity": { "type": "string", "minLength": 1 }, "source": { "type": "string", "minLength": 1 }, "descriptorHash": { "$ref": "#/definitions/hash" }, "provides": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 }, "interfaceType": { "type": "string", "minLength": 1 } } } } } } }
+  },
+  "definitions": { "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" } }
+}

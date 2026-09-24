@@ -462,6 +462,7 @@ function run(commandRunner: CommandRunner): EvaluationRun {
     repositoryPath: '',
     language: 'java',
     selectedCriteria: ['S007'],
+    s008CatalogChannel: 'official',
     commandRunner,
     artifacts: {},
     commandObservations: new Map(),

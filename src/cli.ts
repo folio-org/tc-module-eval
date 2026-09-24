@@ -26,6 +26,7 @@ program
   .option('--no-cleanup', 'Do not delete the cloned repository after evaluation')
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
+  .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
@@ -154,6 +155,9 @@ function parseCriteriaFilter(options: any): string[] | undefined {
 }
 
 function buildEvaluationConfig(options: any, criteriaFilter?: string[]): EvaluationConfig {
+  if (!['official', 'development'].includes(options.s008Catalog)) {
+    throw new Error('Invalid S008 catalog. Use official or development.');
+  }
   return {
     tempDir: options.tempDir,
     outputDir: options.output,
@@ -162,7 +166,8 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     branch: options.branch,
     allowLocalCommands: options.allowLocalCommands === true,
     commandExecutionEnvironment: resolveCommandExecutionEnvironment(),
-    agentReview: buildCriterionAgentReviewConfig(options)
+    agentReview: buildCriterionAgentReviewConfig(options),
+    s008CatalogChannel: options.s008Catalog
   };
 }
 

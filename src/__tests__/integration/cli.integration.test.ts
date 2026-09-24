@@ -9,6 +9,12 @@ import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } f
 const GOLDEN_EVALUATED_AT = '<<normalized-evaluatedAt>>';
 type NormalizedEvaluationReport = Omit<EvaluationResult, 'evaluatedAt'> & { evaluatedAt: string };
 
+function embeddedReportData(html: string): any {
+  const match = html.match(/<script id="report-data" type="application\/json">([\s\S]+?)<\/script>/);
+  expect(match).not.toBeNull();
+  return JSON.parse(match![1]);
+}
+
 function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluationReport {
   return {
     ...report,
@@ -20,8 +26,33 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S007') {
         return normalizeS007GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S008') {
+        return normalizeS008GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS008GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  const findingClassifications = (details.findings ?? []).reduce((counts: Record<string, number>, finding: any) => {
+    counts[finding.classification] = (counts[finding.classification] ?? 0) + 1;
+    return counts;
+  }, {});
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      channel: details.channel,
+      policyDiagnosticCodes: (details.policyDiagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort(),
+      ledgerDigest: details.ledger?.digest,
+      catalogDigest: details.catalog?.digest,
+      baseline: details.catalog?.baseline,
+      declarationCount: details.declarations?.declarations?.length ?? 0,
+      findingClassifications
+    }
   };
 }
 
@@ -380,6 +411,8 @@ describe('CLI Integration Tests', () => {
 
   describe('Golden Report Regression', () => {
     test('should match normalized JSON report for mod-rtac-cache v1.1.1', async () => {
+      const previousGitleaksPath = process.env.GITLEAKS_PATH;
+      process.env.GITLEAKS_PATH = 'gitleaks-unavailable-for-test';
       const repoUrl = 'https://github.com/folio-org/mod-rtac-cache';
       const config: EvaluationConfig = {
         outputDir: testOutputDir,
@@ -388,31 +421,36 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      const evaluator = new ModuleEvaluator(config);
-      const result = await evaluator.evaluateModule(repoUrl);
+      try {
+        const evaluator = new ModuleEvaluator(config);
+        const result = await evaluator.evaluateModule(repoUrl);
 
-      const reportGenerator = new ReportGenerator(testOutputDir);
-      const reportPaths = await reportGenerator.generateReports(result, {
-        outputHtml: false,
-        outputJson: true,
-        outputDir: testOutputDir,
-      });
+        const reportGenerator = new ReportGenerator(testOutputDir);
+        const reportPaths = await reportGenerator.generateReports(result, {
+          outputHtml: false,
+          outputJson: true,
+          outputDir: testOutputDir,
+        });
 
-      expect(reportPaths.htmlPath).toBeUndefined();
-      expect(reportPaths.jsonPath).toBeDefined();
+        expect(reportPaths.htmlPath).toBeUndefined();
+        expect(reportPaths.jsonPath).toBeDefined();
 
-      const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
-      const actualReport = normalizeEvaluationReport(JSON.parse(jsonContent));
-      const goldenPath = path.join(
-        __dirname,
-        '..',
-        'fixtures',
-        'golden-reports',
-        'mod-rtac-cache-v1.1.1.json'
-      );
-      const expectedReport = JSON.parse(await fs.readFile(goldenPath, 'utf-8'));
+        const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
+        const actualReport = normalizeEvaluationReport(JSON.parse(jsonContent));
+        const goldenPath = path.join(
+          __dirname,
+          '..',
+          'fixtures',
+          'golden-reports',
+          'mod-rtac-cache-v1.1.1.json'
+        );
+        const expectedReport = JSON.parse(await fs.readFile(goldenPath, 'utf-8'));
 
-      expect(actualReport).toEqual(expectedReport);
+        expect(actualReport).toEqual(expectedReport);
+      } finally {
+        if (previousGitleaksPath === undefined) delete process.env.GITLEAKS_PATH;
+        else process.env.GITLEAKS_PATH = previousGitleaksPath;
+      }
     });
   });
 
@@ -538,8 +576,9 @@ describe('CLI Integration Tests', () => {
       expect(jsonContent).toContain('Okapi schema baseline');
 
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
-      expect(htmlContent).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+      expect(htmlContent).toContain('\\u003cscript\\u003ealert');
       expect(htmlContent).not.toContain('<script>alert("x")</script>');
+      expect(embeddedReportData(htmlContent).items[0].details.join('\n')).toContain('<script>alert("x")</script>');
     });
   });
 
@@ -620,8 +659,10 @@ describe('CLI Integration Tests', () => {
       expect(jsonContent).toContain('token=[REDACTED]');
 
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
-      expect(htmlContent).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+      expect(htmlContent).toContain('\\u003cscript\\u003ealert');
+      expect(htmlContent).not.toContain('<script>alert("x")</script>');
       expect(htmlContent).not.toContain('token=abc123');
+      expect(embeddedReportData(htmlContent).items[0].details.join('\n')).toContain('<script>alert("x")</script>');
     });
   });
 
@@ -668,8 +709,8 @@ describe('CLI Integration Tests', () => {
 
         expect(jsonS007.status).toBe('pass');
         expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
-        expect(html).toContain('Criterion S007');
-        expect(html).toContain('contribution=pass');
+        expect(embeddedReportData(html).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'S007' })]));
+        expect(html).toContain('Result contribution: pass');
         expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
       } finally {
         await fs.remove(localRepo);

@@ -35,6 +35,10 @@ import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effectiv
 import { evaluateS007 } from '../../utils/s007-evaluator';
 import { buildS007CriterionDetails, renderS007HumanDetails } from '../../utils/s007-report-details';
 import { hasS007AgentReviewMaterial, reviewS007WithAgent } from '../../utils/s007-agent-review';
+import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
+import { loadS008Catalog } from '../../utils/s008-catalog';
+import { collectS008Declarations } from '../../utils/s008-interface-declarations';
+import { evaluateS008, renderS008HumanDetails } from '../../utils/s008-evaluator';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -52,7 +56,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS004(repoPath, evaluationRun),
       S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun),
       S006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS006(repoPath, evaluationRun),
-      S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun)
+      S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun),
+      S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun)
     });
   }
 
@@ -283,6 +288,33 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       details: renderS007HumanDetails(analysis, agentReview),
       criterionDetails: buildS007CriterionDetails(analysis),
       agentReview
+    };
+  }
+
+  private async evaluateS008(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S008']
+    });
+    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    const applicabilityResolved = moduleKind.kind === 'library' || moduleKind.kind === 'ambiguous';
+    const declarations = applicabilityResolved
+      ? { declarations: [], diagnostics: [], sourcePaths: [], fileHashes: {}, complete: true }
+      : collectS008Declarations(repoPath, moduleKind.kind, run.artifacts.moduleDescriptor);
+    const channel = run.s008CatalogChannel;
+
+    const unavailable = { ok: false as const, sourcePath: '', diagnostics: [] };
+    const [ledgerLoad, catalogLoad] = applicabilityResolved
+      ? [unavailable, unavailable]
+      : await Promise.all([loadAcceptanceLedger(), loadS008Catalog(channel)]);
+    const analysis = evaluateS008(moduleKind, channel, ledgerLoad, catalogLoad, declarations);
+    return {
+      criterionId: 'S008',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS008HumanDetails(analysis),
+      criterionDetails: analysis
     };
   }
 

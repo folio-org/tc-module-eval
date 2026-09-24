@@ -54,25 +54,31 @@ describe('S006 shared evaluator', () => {
   it('direct S006 evaluation creates an EvaluationRun when one is not supplied', async () => {
     writeRepoFile('README.md', '# Clean module\n');
     const createRunSpy = jest.spyOn(EvaluationRunUtils, 'createEvaluationRun');
+    const previousGitleaksPath = process.env.GITLEAKS_PATH;
+    process.env.GITLEAKS_PATH = 'gitleaks-unavailable-for-test';
+    try {
+      const result = await evaluator.evaluateCriterion('S006', tempRoot);
 
-    const result = await evaluator.evaluateCriterion('S006', tempRoot);
-
-    expect(createRunSpy).toHaveBeenCalledWith({
-      repositoryPath: tempRoot,
-      language: 'java',
-      criteriaFilter: ['S006']
-    });
-    expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Secret scanner: Gitleaks unavailable');
-    expect(result.details).toContain('scanner-unavailable');
-    expect(result.criterionDetails).toMatchObject({
-      scanner: {
-        name: 'Gitleaks',
-        status: 'unavailable',
-        findingCount: 0,
-        warning: expect.objectContaining({ kind: 'scanner-unavailable' })
-      }
-    });
+      expect(createRunSpy).toHaveBeenCalledWith({
+        repositoryPath: tempRoot,
+        language: 'java',
+        criteriaFilter: ['S006']
+      });
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.details).toContain('Secret scanner: Gitleaks unavailable');
+      expect(result.details).toContain('scanner-unavailable');
+      expect(result.criterionDetails).toMatchObject({
+        scanner: {
+          name: 'Gitleaks',
+          status: 'unavailable',
+          findingCount: 0,
+          warning: expect.objectContaining({ kind: 'scanner-unavailable' })
+        }
+      });
+    } finally {
+      if (previousGitleaksPath === undefined) delete process.env.GITLEAKS_PATH;
+      else process.env.GITLEAKS_PATH = previousGitleaksPath;
+    }
   });
 
   it('returns pass through SharedEvaluator when no findings are present and scan coverage is complete', async () => {

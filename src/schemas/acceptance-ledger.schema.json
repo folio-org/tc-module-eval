@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "authoritative", "source", "families", "moduleIdentities", "libraryCoordinates"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "authoritative": { "type": "boolean" },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["reviewedBy", "reference"],
+      "properties": { "reviewedBy": { "type": "string", "minLength": 1 }, "reference": { "type": "string", "minLength": 1 } }
+    },
+    "families": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "displayName", "canonicalRepositories", "acceptance"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }, "displayName": { "type": "string", "minLength": 1 },
+          "canonicalRepositories": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "acceptance": {
+            "oneOf": [
+              { "$ref": "#/definitions/basicDecision" },
+              { "type": "object", "additionalProperties": false, "required": ["kind", "reference", "scope"], "properties": { "kind": { "const": "exception" }, "reference": { "type": "string", "minLength": 1 }, "scope": { "enum": ["S008", "S009", "S008,S009"] } } }
+            ]
+          }
+        }
+      }
+    },
+    "moduleIdentities": { "type": "array", "items": { "$ref": "#/definitions/moduleIdentity" } },
+    "libraryCoordinates": { "type": "array", "items": { "oneOf": [{ "$ref": "#/definitions/mavenCoordinate" }, { "$ref": "#/definitions/npmCoordinate" }] } }
+  },
+  "definitions": {
+    "basicDecision": { "type": "object", "additionalProperties": false, "required": ["kind", "reference"], "properties": { "kind": { "enum": ["approved-tcr", "provisional-tcr", "legacy-baseline"] }, "reference": { "type": "string", "minLength": 1 } } },
+    "moduleIdentity": { "type": "object", "additionalProperties": false, "required": ["identity", "familyId"], "properties": { "identity": { "type": "string", "minLength": 1 }, "familyId": { "type": "string", "minLength": 1 } } },
+    "mavenCoordinate": { "type": "object", "additionalProperties": false, "required": ["ecosystem", "groupId", "artifactId", "familyId"], "properties": { "ecosystem": { "const": "maven" }, "groupId": { "type": "string", "minLength": 1 }, "artifactId": { "type": "string", "minLength": 1 }, "familyId": { "type": "string", "minLength": 1 } } },
+    "npmCoordinate": { "type": "object", "additionalProperties": false, "required": ["ecosystem", "packageName", "familyId"], "properties": { "ecosystem": { "const": "npm" }, "packageName": { "type": "string", "minLength": 1 }, "familyId": { "type": "string", "minLength": 1 } } }
+  }
+}

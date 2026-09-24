@@ -122,6 +122,7 @@ export interface EvaluationRun {
   commandObservations: Map<string, CommandExecutionResult>;
   commandRunner?: CommandRunner;
   agentReview?: CriterionAgentReviewConfig;
+  s008CatalogChannel: import('./s008-interface-acceptance').S008CatalogChannel;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -141,12 +142,14 @@ export interface EvaluationConfig {
   allowLocalCommands?: boolean;
   commandExecutionEnvironment?: CommandExecutionEnvironment;
   agentReview?: CriterionAgentReviewConfig;
+  s008CatalogChannel?: import('./s008-interface-acceptance').S008CatalogChannel;
 }
 
 export * from './s004-installation-documentation';
 export * from './s005-personal-data-disclosure';
 export * from './s006-sensitive-information';
 export * from './s007-officially-supported-technologies';
+export * from './s008-interface-acceptance';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 

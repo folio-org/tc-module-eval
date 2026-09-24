@@ -8,7 +8,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S004: 'Installation documentation',
   S005: 'Personal data disclosure',
   S006: 'Sensitive information',
-  S007: 'Officially supported technologies'
+  S007: 'Officially supported technologies',
+  S008: 'FOLIO interface usage'
 };
 
 function escapeHtml(text: string): string {

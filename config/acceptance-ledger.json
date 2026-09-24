@@ -1,0 +1,2223 @@
+{
+  "schemaVersion": "1.0",
+  "authoritative": true,
+  "source": {
+    "reviewedBy": "FOLIO Technical Council",
+    "reference": "platform-lsp"
+  },
+  "families": [
+    {
+      "id": "edge-caiasoft",
+      "displayName": "Edge CaiaiSoft API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-connexion",
+      "displayName": "edge-connexion",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-courses",
+      "displayName": "Retrieve course-reserve information Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-dcb",
+      "displayName": "Edge DCB API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-dematic",
+      "displayName": "Edge Dematic API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-erm",
+      "displayName": "Retrieve license term information Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-fqm",
+      "displayName": "Edge FQM API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-inn-reach",
+      "displayName": "INN-REACH system Edge API module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-inventory",
+      "displayName": "Retrieve inventory information Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-ncip",
+      "displayName": "Edge NCIP",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-oai-pmh",
+      "displayName": "OAI-PMH Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-orders",
+      "displayName": "Acquisitions - Orders Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-patron",
+      "displayName": "Patron Services Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-rtac",
+      "displayName": "Real Time Availability Check Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-sip2",
+      "displayName": "SIP2 Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "edge-users",
+      "displayName": "Retrieve and create users information Edge API",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_acquisition-units",
+      "displayName": "Acquisition units",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_agreements",
+      "displayName": "ERM agreement functionality for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_authorization-policies",
+      "displayName": "FOLIO app for Authorization Policies",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_authorization-roles",
+      "displayName": "FOLIO app for Authorization Roles",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_bulk-edit",
+      "displayName": "Description for bulk edit",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_calendar",
+      "displayName": "Calendar settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_checkin",
+      "displayName": "Item Check-in",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_checkout",
+      "displayName": "Item Check-out",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_circulation",
+      "displayName": "Circulation manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_circulation-log",
+      "displayName": "Description for circulation logs",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_claims",
+      "displayName": "UI module for claiming",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_consortia-settings",
+      "displayName": "Consortia settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_courses",
+      "displayName": "Maintain courses and reserve items for them",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_dashboard",
+      "displayName": "Dashboard app for configurable FOLIO widgets",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_data-export",
+      "displayName": "Data export manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_data-import",
+      "displayName": "Data Import manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_developer",
+      "displayName": "Developer settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_eholdings",
+      "displayName": "FOLIO UI module for eHoldings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_erm-comparisons",
+      "displayName": "ERM app for comparison of Agreement and Package objects",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_erm-usage",
+      "displayName": "eUsage Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_export-manager",
+      "displayName": "Description for export manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_finance",
+      "displayName": "Description for ui-finance",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_gobi-settings",
+      "displayName": "GOBI integration settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_handler-stripes-registry",
+      "displayName": "frontend registry for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_inn-reach",
+      "displayName": "Description for inn-reach",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_inventory",
+      "displayName": "Inventory manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_inventory-import",
+      "displayName": "Admin console for FOLIO's Inventory Import facility",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_invoice",
+      "displayName": "Invoice",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_ld-folio-wrapper",
+      "displayName": "Linked Data Editor - Folio Wrapper",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_ldp",
+      "displayName": "Dashboard for the Library Data Platform",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_licenses",
+      "displayName": "ERM License functionality for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_lists",
+      "displayName": "FOLIO Reporting Machine Lists",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_local-kb-admin",
+      "displayName": "ERM KB Administration for FOLIO with Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_marc-authorities",
+      "displayName": "MARC Authorities module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_mosaic-settings",
+      "displayName": "UI to configure integration between FOLIO and Mosaic",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_myprofile",
+      "displayName": "My profile",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_notes",
+      "displayName": "Note types manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_oai-pmh",
+      "displayName": "OAI-PMH manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_orders",
+      "displayName": "Description for orders",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_organizations",
+      "displayName": "Organizations",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-bursar-export",
+      "displayName": "Bursar export",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-create-inventory-records",
+      "displayName": "Create inventory records for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-eusage-reports",
+      "displayName": "Stripes plugin module to View eUsage reports",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-agreement",
+      "displayName": "ERM-agreement-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-authority",
+      "displayName": "Stripes plugin to find authorities",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-contact",
+      "displayName": "Find and select contacts plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-eresource",
+      "displayName": "ERM-eresource-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-erm-usage-data-provider",
+      "displayName": "ERM-Usage-data-provider-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-fund",
+      "displayName": "Find and select funds plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-import-profile",
+      "displayName": "Find and select Data Import Profiles plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-instance",
+      "displayName": "Instance-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-interface",
+      "displayName": "Find and select interfaces plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-license",
+      "displayName": "License-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-organization",
+      "displayName": "Organization-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-package-title",
+      "displayName": "Stripes plugin to find packages and titles",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-po-line",
+      "displayName": "Find and select PO lines plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-find-user",
+      "displayName": "User-finder for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_plugin-query-builder",
+      "displayName": "Create FQL query plugin for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_quick-marc",
+      "displayName": "Quick MARC editor",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_reading-room",
+      "displayName": "Reading Room Access",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_receiving",
+      "displayName": "Description for receiving",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_remote-storage",
+      "displayName": "Description for remote storage",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_requests",
+      "displayName": "Requests manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_serials-management",
+      "displayName": "FOLIO app for serials-management",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_service-interaction",
+      "displayName": "FOLIO app for service-interaction",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_servicepoints",
+      "displayName": "Service Points handler for Stripes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_stripes-authority-components",
+      "displayName": "Component library for Stripes Authority modules",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_stripes-core",
+      "displayName": "The starting point for Stripes applications",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_stripes-inventory-components",
+      "displayName": "Shared components for inventory-related modules",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_stripes-marc-components",
+      "displayName": "Component library for Stripes Marc modules",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_stripes-smart-components",
+      "displayName": "Connected Stripes components",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_tags",
+      "displayName": "Tags manager",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_tenant-settings",
+      "displayName": "Tenant settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "folio_users",
+      "displayName": "User management",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-agreements",
+      "displayName": "mod-agreements",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-audit",
+      "displayName": "Audit Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-batch-print",
+      "displayName": "Batch printing",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-bulk-operations",
+      "displayName": "Bulk operations API.",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-calendar",
+      "displayName": "Calendar for Service Point Opening Hours",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-circulation",
+      "displayName": "Circulation Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-circulation-item",
+      "displayName": "Circulation Item API module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-circulation-storage",
+      "displayName": "Circulation Storage Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-configuration",
+      "displayName": "Configuration",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-consortia-keycloak",
+      "displayName": "Consortia integration business logic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-copycat",
+      "displayName": "copycat",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-courses",
+      "displayName": "Courses Storage Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-data-export",
+      "displayName": "Data Export Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-data-export-spring",
+      "displayName": "Data Export Spring Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-data-export-worker",
+      "displayName": "Data Export Worker Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-data-import",
+      "displayName": "Data Import Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-dcb",
+      "displayName": "Manage DCB related transactions in folio.",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-di-converter-storage",
+      "displayName": "Data Import Converter Storage",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-ebsconet",
+      "displayName": "Ebsconet integration business logic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-email",
+      "displayName": "email",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-entities-links",
+      "displayName": "Entities Links",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-erm-usage",
+      "displayName": "erm-usage",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-erm-usage-harvester",
+      "displayName": "erm-usage-harvester",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-eusage-reports",
+      "displayName": "eusage reports",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-event-config",
+      "displayName": "mod-event-config",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-feesfines",
+      "displayName": "feesfines",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-finance",
+      "displayName": "Finance business logic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-finance-storage",
+      "displayName": "Finance CRUD module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-fqm-manager",
+      "displayName": "FQM Manager Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-gobi",
+      "displayName": "GOBI® Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-graphql",
+      "displayName": "GraphQL API for FOLIO",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-inn-reach",
+      "displayName": "INN Reach API module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-inventory",
+      "displayName": "Inventory Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-inventory-storage",
+      "displayName": "Inventory Storage Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-inventory-update",
+      "displayName": "Inventory Update Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-invoice",
+      "displayName": "Invoice business logic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-invoice-storage",
+      "displayName": "Invoice CRUD module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-kb-ebsco-java",
+      "displayName": "kb-ebsco",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-licenses",
+      "displayName": "mod-licenses",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-linked-data",
+      "displayName": "Linked Data Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-linked-data-import",
+      "displayName": "Linked Data Import Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-lists",
+      "displayName": "Lists",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-login-keycloak",
+      "displayName": "keycloak-login",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-marc-migrations",
+      "displayName": "MARC Migrations",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-mosaic",
+      "displayName": "Folio mod-mosaic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-ncip",
+      "displayName": "NCIP",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-notes",
+      "displayName": "Notes",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-notify",
+      "displayName": "Notify",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-oai-pmh",
+      "displayName": "OAI-PMH Repository Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-okapi-facade",
+      "displayName": "Okapi facade",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-orders",
+      "displayName": "Orders Business Logic Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-orders-storage",
+      "displayName": "Orders CRUD module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-organizations",
+      "displayName": "Organizations business logic module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-organizations-storage",
+      "displayName": "Organizations CRUD module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-password-validator",
+      "displayName": "Password Validator Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-patron",
+      "displayName": "Patron Services Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-patron-blocks",
+      "displayName": "Patron Blocks Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-permissions",
+      "displayName": "permissions",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-pubsub",
+      "displayName": "Pubsub",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-quick-marc",
+      "displayName": "quickMARC",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-reading-room",
+      "displayName": "Manage reading room and its related access",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-record-specifications",
+      "displayName": "Record Specifications",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-remote-storage",
+      "displayName": "Remote storage API module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-reporting",
+      "displayName": "reporting module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-roles-keycloak",
+      "displayName": "roles-keycloak",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-rtac",
+      "displayName": "Real Time Availability Check Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-scheduler",
+      "displayName": "Scheduler",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-search",
+      "displayName": "Search Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-sender",
+      "displayName": "Mod sender",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-serials-management",
+      "displayName": "mod-serials-management",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-service-interaction",
+      "displayName": "mod-service-interaction",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-settings",
+      "displayName": "settings",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-source-record-manager",
+      "displayName": "Source Record Manager Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-source-record-storage",
+      "displayName": "Source Record Storage Module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-tags",
+      "displayName": "Tags",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-template-engine",
+      "displayName": "Template engine module",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-user-import",
+      "displayName": "User import",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-users",
+      "displayName": "users",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-users-bl",
+      "displayName": "users business logic",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    },
+    {
+      "id": "mod-users-keycloak",
+      "displayName": "Users business logic (with Keycloak)",
+      "canonicalRepositories": [],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "platform-lsp"
+      }
+    }
+  ],
+  "moduleIdentities": [
+    {
+      "identity": "edge-caiasoft",
+      "familyId": "edge-caiasoft"
+    },
+    {
+      "identity": "edge-connexion",
+      "familyId": "edge-connexion"
+    },
+    {
+      "identity": "edge-courses",
+      "familyId": "edge-courses"
+    },
+    {
+      "identity": "edge-dcb",
+      "familyId": "edge-dcb"
+    },
+    {
+      "identity": "edge-dematic",
+      "familyId": "edge-dematic"
+    },
+    {
+      "identity": "edge-erm",
+      "familyId": "edge-erm"
+    },
+    {
+      "identity": "edge-fqm",
+      "familyId": "edge-fqm"
+    },
+    {
+      "identity": "edge-inn-reach",
+      "familyId": "edge-inn-reach"
+    },
+    {
+      "identity": "edge-inventory",
+      "familyId": "edge-inventory"
+    },
+    {
+      "identity": "edge-ncip",
+      "familyId": "edge-ncip"
+    },
+    {
+      "identity": "edge-oai-pmh",
+      "familyId": "edge-oai-pmh"
+    },
+    {
+      "identity": "edge-orders",
+      "familyId": "edge-orders"
+    },
+    {
+      "identity": "edge-patron",
+      "familyId": "edge-patron"
+    },
+    {
+      "identity": "edge-rtac",
+      "familyId": "edge-rtac"
+    },
+    {
+      "identity": "edge-sip2",
+      "familyId": "edge-sip2"
+    },
+    {
+      "identity": "edge-users",
+      "familyId": "edge-users"
+    },
+    {
+      "identity": "folio_acquisition-units",
+      "familyId": "folio_acquisition-units"
+    },
+    {
+      "identity": "folio_agreements",
+      "familyId": "folio_agreements"
+    },
+    {
+      "identity": "folio_authorization-policies",
+      "familyId": "folio_authorization-policies"
+    },
+    {
+      "identity": "folio_authorization-roles",
+      "familyId": "folio_authorization-roles"
+    },
+    {
+      "identity": "folio_bulk-edit",
+      "familyId": "folio_bulk-edit"
+    },
+    {
+      "identity": "folio_calendar",
+      "familyId": "folio_calendar"
+    },
+    {
+      "identity": "folio_checkin",
+      "familyId": "folio_checkin"
+    },
+    {
+      "identity": "folio_checkout",
+      "familyId": "folio_checkout"
+    },
+    {
+      "identity": "folio_circulation",
+      "familyId": "folio_circulation"
+    },
+    {
+      "identity": "folio_circulation-log",
+      "familyId": "folio_circulation-log"
+    },
+    {
+      "identity": "folio_claims",
+      "familyId": "folio_claims"
+    },
+    {
+      "identity": "folio_consortia-settings",
+      "familyId": "folio_consortia-settings"
+    },
+    {
+      "identity": "folio_courses",
+      "familyId": "folio_courses"
+    },
+    {
+      "identity": "folio_dashboard",
+      "familyId": "folio_dashboard"
+    },
+    {
+      "identity": "folio_data-export",
+      "familyId": "folio_data-export"
+    },
+    {
+      "identity": "folio_data-import",
+      "familyId": "folio_data-import"
+    },
+    {
+      "identity": "folio_developer",
+      "familyId": "folio_developer"
+    },
+    {
+      "identity": "folio_eholdings",
+      "familyId": "folio_eholdings"
+    },
+    {
+      "identity": "folio_erm-comparisons",
+      "familyId": "folio_erm-comparisons"
+    },
+    {
+      "identity": "folio_erm-usage",
+      "familyId": "folio_erm-usage"
+    },
+    {
+      "identity": "folio_export-manager",
+      "familyId": "folio_export-manager"
+    },
+    {
+      "identity": "folio_finance",
+      "familyId": "folio_finance"
+    },
+    {
+      "identity": "folio_gobi-settings",
+      "familyId": "folio_gobi-settings"
+    },
+    {
+      "identity": "folio_handler-stripes-registry",
+      "familyId": "folio_handler-stripes-registry"
+    },
+    {
+      "identity": "folio_inn-reach",
+      "familyId": "folio_inn-reach"
+    },
+    {
+      "identity": "folio_inventory",
+      "familyId": "folio_inventory"
+    },
+    {
+      "identity": "folio_inventory-import",
+      "familyId": "folio_inventory-import"
+    },
+    {
+      "identity": "folio_invoice",
+      "familyId": "folio_invoice"
+    },
+    {
+      "identity": "folio_ld-folio-wrapper",
+      "familyId": "folio_ld-folio-wrapper"
+    },
+    {
+      "identity": "folio_ldp",
+      "familyId": "folio_ldp"
+    },
+    {
+      "identity": "folio_licenses",
+      "familyId": "folio_licenses"
+    },
+    {
+      "identity": "folio_lists",
+      "familyId": "folio_lists"
+    },
+    {
+      "identity": "folio_local-kb-admin",
+      "familyId": "folio_local-kb-admin"
+    },
+    {
+      "identity": "folio_marc-authorities",
+      "familyId": "folio_marc-authorities"
+    },
+    {
+      "identity": "folio_mosaic-settings",
+      "familyId": "folio_mosaic-settings"
+    },
+    {
+      "identity": "folio_myprofile",
+      "familyId": "folio_myprofile"
+    },
+    {
+      "identity": "folio_notes",
+      "familyId": "folio_notes"
+    },
+    {
+      "identity": "folio_oai-pmh",
+      "familyId": "folio_oai-pmh"
+    },
+    {
+      "identity": "folio_orders",
+      "familyId": "folio_orders"
+    },
+    {
+      "identity": "folio_organizations",
+      "familyId": "folio_organizations"
+    },
+    {
+      "identity": "folio_plugin-bursar-export",
+      "familyId": "folio_plugin-bursar-export"
+    },
+    {
+      "identity": "folio_plugin-create-inventory-records",
+      "familyId": "folio_plugin-create-inventory-records"
+    },
+    {
+      "identity": "folio_plugin-eusage-reports",
+      "familyId": "folio_plugin-eusage-reports"
+    },
+    {
+      "identity": "folio_plugin-find-agreement",
+      "familyId": "folio_plugin-find-agreement"
+    },
+    {
+      "identity": "folio_plugin-find-authority",
+      "familyId": "folio_plugin-find-authority"
+    },
+    {
+      "identity": "folio_plugin-find-contact",
+      "familyId": "folio_plugin-find-contact"
+    },
+    {
+      "identity": "folio_plugin-find-eresource",
+      "familyId": "folio_plugin-find-eresource"
+    },
+    {
+      "identity": "folio_plugin-find-erm-usage-data-provider",
+      "familyId": "folio_plugin-find-erm-usage-data-provider"
+    },
+    {
+      "identity": "folio_plugin-find-fund",
+      "familyId": "folio_plugin-find-fund"
+    },
+    {
+      "identity": "folio_plugin-find-import-profile",
+      "familyId": "folio_plugin-find-import-profile"
+    },
+    {
+      "identity": "folio_plugin-find-instance",
+      "familyId": "folio_plugin-find-instance"
+    },
+    {
+      "identity": "folio_plugin-find-interface",
+      "familyId": "folio_plugin-find-interface"
+    },
+    {
+      "identity": "folio_plugin-find-license",
+      "familyId": "folio_plugin-find-license"
+    },
+    {
+      "identity": "folio_plugin-find-organization",
+      "familyId": "folio_plugin-find-organization"
+    },
+    {
+      "identity": "folio_plugin-find-package-title",
+      "familyId": "folio_plugin-find-package-title"
+    },
+    {
+      "identity": "folio_plugin-find-po-line",
+      "familyId": "folio_plugin-find-po-line"
+    },
+    {
+      "identity": "folio_plugin-find-user",
+      "familyId": "folio_plugin-find-user"
+    },
+    {
+      "identity": "folio_plugin-query-builder",
+      "familyId": "folio_plugin-query-builder"
+    },
+    {
+      "identity": "folio_quick-marc",
+      "familyId": "folio_quick-marc"
+    },
+    {
+      "identity": "folio_reading-room",
+      "familyId": "folio_reading-room"
+    },
+    {
+      "identity": "folio_receiving",
+      "familyId": "folio_receiving"
+    },
+    {
+      "identity": "folio_remote-storage",
+      "familyId": "folio_remote-storage"
+    },
+    {
+      "identity": "folio_requests",
+      "familyId": "folio_requests"
+    },
+    {
+      "identity": "folio_serials-management",
+      "familyId": "folio_serials-management"
+    },
+    {
+      "identity": "folio_service-interaction",
+      "familyId": "folio_service-interaction"
+    },
+    {
+      "identity": "folio_servicepoints",
+      "familyId": "folio_servicepoints"
+    },
+    {
+      "identity": "folio_stripes-authority-components",
+      "familyId": "folio_stripes-authority-components"
+    },
+    {
+      "identity": "folio_stripes-core",
+      "familyId": "folio_stripes-core"
+    },
+    {
+      "identity": "folio_stripes-inventory-components",
+      "familyId": "folio_stripes-inventory-components"
+    },
+    {
+      "identity": "folio_stripes-marc-components",
+      "familyId": "folio_stripes-marc-components"
+    },
+    {
+      "identity": "folio_stripes-smart-components",
+      "familyId": "folio_stripes-smart-components"
+    },
+    {
+      "identity": "folio_tags",
+      "familyId": "folio_tags"
+    },
+    {
+      "identity": "folio_tenant-settings",
+      "familyId": "folio_tenant-settings"
+    },
+    {
+      "identity": "folio_users",
+      "familyId": "folio_users"
+    },
+    {
+      "identity": "mod-agreements",
+      "familyId": "mod-agreements"
+    },
+    {
+      "identity": "mod-audit",
+      "familyId": "mod-audit"
+    },
+    {
+      "identity": "mod-batch-print",
+      "familyId": "mod-batch-print"
+    },
+    {
+      "identity": "mod-bulk-operations",
+      "familyId": "mod-bulk-operations"
+    },
+    {
+      "identity": "mod-calendar",
+      "familyId": "mod-calendar"
+    },
+    {
+      "identity": "mod-circulation",
+      "familyId": "mod-circulation"
+    },
+    {
+      "identity": "mod-circulation-item",
+      "familyId": "mod-circulation-item"
+    },
+    {
+      "identity": "mod-circulation-storage",
+      "familyId": "mod-circulation-storage"
+    },
+    {
+      "identity": "mod-configuration",
+      "familyId": "mod-configuration"
+    },
+    {
+      "identity": "mod-consortia-keycloak",
+      "familyId": "mod-consortia-keycloak"
+    },
+    {
+      "identity": "mod-copycat",
+      "familyId": "mod-copycat"
+    },
+    {
+      "identity": "mod-courses",
+      "familyId": "mod-courses"
+    },
+    {
+      "identity": "mod-data-export",
+      "familyId": "mod-data-export"
+    },
+    {
+      "identity": "mod-data-export-spring",
+      "familyId": "mod-data-export-spring"
+    },
+    {
+      "identity": "mod-data-export-worker",
+      "familyId": "mod-data-export-worker"
+    },
+    {
+      "identity": "mod-data-import",
+      "familyId": "mod-data-import"
+    },
+    {
+      "identity": "mod-dcb",
+      "familyId": "mod-dcb"
+    },
+    {
+      "identity": "mod-di-converter-storage",
+      "familyId": "mod-di-converter-storage"
+    },
+    {
+      "identity": "mod-ebsconet",
+      "familyId": "mod-ebsconet"
+    },
+    {
+      "identity": "mod-email",
+      "familyId": "mod-email"
+    },
+    {
+      "identity": "mod-entities-links",
+      "familyId": "mod-entities-links"
+    },
+    {
+      "identity": "mod-erm-usage",
+      "familyId": "mod-erm-usage"
+    },
+    {
+      "identity": "mod-erm-usage-harvester",
+      "familyId": "mod-erm-usage-harvester"
+    },
+    {
+      "identity": "mod-eusage-reports",
+      "familyId": "mod-eusage-reports"
+    },
+    {
+      "identity": "mod-event-config",
+      "familyId": "mod-event-config"
+    },
+    {
+      "identity": "mod-feesfines",
+      "familyId": "mod-feesfines"
+    },
+    {
+      "identity": "mod-finance",
+      "familyId": "mod-finance"
+    },
+    {
+      "identity": "mod-finance-storage",
+      "familyId": "mod-finance-storage"
+    },
+    {
+      "identity": "mod-fqm-manager",
+      "familyId": "mod-fqm-manager"
+    },
+    {
+      "identity": "mod-gobi",
+      "familyId": "mod-gobi"
+    },
+    {
+      "identity": "mod-graphql",
+      "familyId": "mod-graphql"
+    },
+    {
+      "identity": "mod-inn-reach",
+      "familyId": "mod-inn-reach"
+    },
+    {
+      "identity": "mod-inventory",
+      "familyId": "mod-inventory"
+    },
+    {
+      "identity": "mod-inventory-storage",
+      "familyId": "mod-inventory-storage"
+    },
+    {
+      "identity": "mod-inventory-update",
+      "familyId": "mod-inventory-update"
+    },
+    {
+      "identity": "mod-invoice",
+      "familyId": "mod-invoice"
+    },
+    {
+      "identity": "mod-invoice-storage",
+      "familyId": "mod-invoice-storage"
+    },
+    {
+      "identity": "mod-kb-ebsco-java",
+      "familyId": "mod-kb-ebsco-java"
+    },
+    {
+      "identity": "mod-licenses",
+      "familyId": "mod-licenses"
+    },
+    {
+      "identity": "mod-linked-data",
+      "familyId": "mod-linked-data"
+    },
+    {
+      "identity": "mod-linked-data-import",
+      "familyId": "mod-linked-data-import"
+    },
+    {
+      "identity": "mod-lists",
+      "familyId": "mod-lists"
+    },
+    {
+      "identity": "mod-login-keycloak",
+      "familyId": "mod-login-keycloak"
+    },
+    {
+      "identity": "mod-marc-migrations",
+      "familyId": "mod-marc-migrations"
+    },
+    {
+      "identity": "mod-mosaic",
+      "familyId": "mod-mosaic"
+    },
+    {
+      "identity": "mod-ncip",
+      "familyId": "mod-ncip"
+    },
+    {
+      "identity": "mod-notes",
+      "familyId": "mod-notes"
+    },
+    {
+      "identity": "mod-notify",
+      "familyId": "mod-notify"
+    },
+    {
+      "identity": "mod-oai-pmh",
+      "familyId": "mod-oai-pmh"
+    },
+    {
+      "identity": "mod-okapi-facade",
+      "familyId": "mod-okapi-facade"
+    },
+    {
+      "identity": "mod-orders",
+      "familyId": "mod-orders"
+    },
+    {
+      "identity": "mod-orders-storage",
+      "familyId": "mod-orders-storage"
+    },
+    {
+      "identity": "mod-organizations",
+      "familyId": "mod-organizations"
+    },
+    {
+      "identity": "mod-organizations-storage",
+      "familyId": "mod-organizations-storage"
+    },
+    {
+      "identity": "mod-password-validator",
+      "familyId": "mod-password-validator"
+    },
+    {
+      "identity": "mod-patron",
+      "familyId": "mod-patron"
+    },
+    {
+      "identity": "mod-patron-blocks",
+      "familyId": "mod-patron-blocks"
+    },
+    {
+      "identity": "mod-permissions",
+      "familyId": "mod-permissions"
+    },
+    {
+      "identity": "mod-pubsub",
+      "familyId": "mod-pubsub"
+    },
+    {
+      "identity": "mod-quick-marc",
+      "familyId": "mod-quick-marc"
+    },
+    {
+      "identity": "mod-reading-room",
+      "familyId": "mod-reading-room"
+    },
+    {
+      "identity": "mod-record-specifications",
+      "familyId": "mod-record-specifications"
+    },
+    {
+      "identity": "mod-remote-storage",
+      "familyId": "mod-remote-storage"
+    },
+    {
+      "identity": "mod-reporting",
+      "familyId": "mod-reporting"
+    },
+    {
+      "identity": "mod-roles-keycloak",
+      "familyId": "mod-roles-keycloak"
+    },
+    {
+      "identity": "mod-rtac",
+      "familyId": "mod-rtac"
+    },
+    {
+      "identity": "mod-scheduler",
+      "familyId": "mod-scheduler"
+    },
+    {
+      "identity": "mod-search",
+      "familyId": "mod-search"
+    },
+    {
+      "identity": "mod-sender",
+      "familyId": "mod-sender"
+    },
+    {
+      "identity": "mod-serials-management",
+      "familyId": "mod-serials-management"
+    },
+    {
+      "identity": "mod-service-interaction",
+      "familyId": "mod-service-interaction"
+    },
+    {
+      "identity": "mod-settings",
+      "familyId": "mod-settings"
+    },
+    {
+      "identity": "mod-source-record-manager",
+      "familyId": "mod-source-record-manager"
+    },
+    {
+      "identity": "mod-source-record-storage",
+      "familyId": "mod-source-record-storage"
+    },
+    {
+      "identity": "mod-tags",
+      "familyId": "mod-tags"
+    },
+    {
+      "identity": "mod-template-engine",
+      "familyId": "mod-template-engine"
+    },
+    {
+      "identity": "mod-user-import",
+      "familyId": "mod-user-import"
+    },
+    {
+      "identity": "mod-users",
+      "familyId": "mod-users"
+    },
+    {
+      "identity": "mod-users-bl",
+      "familyId": "mod-users-bl"
+    },
+    {
+      "identity": "mod-users-keycloak",
+      "familyId": "mod-users-keycloak"
+    }
+  ],
+  "libraryCoordinates": []
+}

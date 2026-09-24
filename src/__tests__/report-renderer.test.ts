@@ -166,6 +166,24 @@ describe('EvaluationReportRenderer', () => {
     });
   });
 
+  it('uses a stable S008 title while retaining the evaluation summary as evidence', () => {
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml({
+      ...result,
+      criteria: [{
+        criterionId: 'S008',
+        status: EvaluationStatus.PASS,
+        evidence: 'All 14 declared interfaces have compatible eligible providers in the official catalog.'
+      }]
+    });
+
+    expect(reportData(html).items[0]).toMatchObject({
+      id: 'S008',
+      title: 'FOLIO interface usage',
+      evidence: 'All 14 declared interfaces have compatible eligible providers in the official catalog.'
+    });
+  });
+
   it('escapes untrusted module names in the HTML title', () => {
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml({
@@ -299,5 +317,6 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Version source: yarn.lock');
     expect(html).toContain('package\\u003cscript\\u003e.json');
     expect(html).not.toContain('<script>alert("x")</script>');
+    expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
   });
 });
