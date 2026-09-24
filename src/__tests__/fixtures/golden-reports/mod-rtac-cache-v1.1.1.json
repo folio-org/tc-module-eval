@@ -223,7 +223,7 @@
       "criterionId": "S006",
       "status": "manual",
       "evidence": "S006 manual: 1 retained finding; no deterministic failures; coverage incomplete with 3 material warnings and 2 material skipped files.",
-      "details": "Review summary:\n  - Status: manual\n  - Findings: 1 retained (0 deterministic failures, 1 manual review)\n  - Secret scanner: Gitleaks unavailable; 0 Gitleaks findings; scanner-unavailable: Gitleaks scanner was unavailable or failed (failed): spawn gitleaks ENOENT\n  - Coverage: incomplete; scanned 290 of 290 candidate files; 2 material skipped files; 3 material warnings\n  - Agent review: not applied (agent review is disabled or unconfigured)\n\nWhy:\n  - No deterministic failure was found.\n  - 1 redacted finding still needs reviewer judgment.\n  - Scan coverage is materially weakened by 3 warnings and 2 material skipped files.\n\nReviewer focus:\n  - Confirm documentation, sample, and test findings are examples rather than operational credentials.\n  - Review material coverage gaps before treating the scan as complete.\n  - Agent advisory review was unavailable; make the S006 call from the redacted findings and coverage notes.\n\nFinding groups:\n  - 1 password or secret assignment in documentation (confidence medium, severity high)\n\nTop redacted examples:\n  - README.md:51 | password or secret assignment | documentation | confidence medium, severity high | DB_PASSWORD=[REDACTED]\n\nCoverage:\n  - Candidate files discovered: 290\n  - Files scanned: 290\n  - Bytes scanned: 761359\n  - Skipped files: 4 (2 material, 2 non-material)\n  - Coverage complete: no\n  - Coverage warnings: 3 (3 material, 0 non-material)\n  - Material coverage warnings:\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/error.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/error.sample was not scanned.\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/errors.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/errors.sample was not scanned.\n    - scanner-unavailable: Gitleaks scanner was unavailable or failed (failed): spawn gitleaks ENOENT\n  - Non-material coverage warnings: none\n  - Material skipped files:\n    - src/main/resources/swagger.api/examples/error.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n    - src/main/resources/swagger.api/examples/errors.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n  - Non-material skipped files:\n    - .git (generated-artifact)\n    - target (generated-artifact)\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "details": "Review summary:\n  - Status: manual\n  - Findings: 1 retained (0 deterministic failures, 1 manual review)\n  - Secret scanner: Gitleaks unavailable; 0 Gitleaks findings; scanner-unavailable: Gitleaks scanner was unavailable or failed (failed): spawn gitleaks-unavailable-for-test ENOENT\n  - Coverage: incomplete; scanned 290 of 290 candidate files; 2 material skipped files; 3 material warnings\n  - Agent review: not applied (agent review is disabled or unconfigured)\n\nWhy:\n  - No deterministic failure was found.\n  - 1 redacted finding still needs reviewer judgment.\n  - Scan coverage is materially weakened by 3 warnings and 2 material skipped files.\n\nReviewer focus:\n  - Confirm documentation, sample, and test findings are examples rather than operational credentials.\n  - Review material coverage gaps before treating the scan as complete.\n  - Agent advisory review was unavailable; make the S006 call from the redacted findings and coverage notes.\n\nFinding groups:\n  - 1 password or secret assignment in documentation (confidence medium, severity high)\n\nTop redacted examples:\n  - README.md:51 | password or secret assignment | documentation | confidence medium, severity high | DB_PASSWORD=[REDACTED]\n\nCoverage:\n  - Candidate files discovered: 290\n  - Files scanned: 290\n  - Bytes scanned: 761359\n  - Skipped files: 4 (2 material, 2 non-material)\n  - Coverage complete: no\n  - Coverage warnings: 3 (3 material, 0 non-material)\n  - Material coverage warnings:\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/error.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/error.sample was not scanned.\n    - unsupported-high-signal-file src/main/resources/swagger.api/examples/errors.sample: Unsupported high-signal S006 candidate file src/main/resources/swagger.api/examples/errors.sample was not scanned.\n    - scanner-unavailable: Gitleaks scanner was unavailable or failed (failed): spawn gitleaks-unavailable-for-test ENOENT\n  - Non-material coverage warnings: none\n  - Material skipped files:\n    - src/main/resources/swagger.api/examples/error.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n    - src/main/resources/swagger.api/examples/errors.sample (unsupported-file: Unsupported high-signal S006 candidate path.)\n  - Non-material skipped files:\n    - .git (generated-artifact)\n    - target (generated-artifact)\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "criterionId": "S006",
         "findingCount": 1,
@@ -254,7 +254,7 @@
           "findingCount": 0,
           "warning": {
             "kind": "scanner-unavailable",
-            "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks ENOENT",
+            "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks-unavailable-for-test ENOENT",
             "materialToCoverage": true
           }
         },
@@ -301,7 +301,7 @@
             },
             {
               "kind": "scanner-unavailable",
-              "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks ENOENT",
+              "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks-unavailable-for-test ENOENT",
               "materialToCoverage": true
             }
           ],
@@ -342,7 +342,7 @@
           },
           {
             "kind": "scanner-unavailable",
-            "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks ENOENT",
+            "message": "Gitleaks scanner was unavailable or failed (failed): spawn gitleaks-unavailable-for-test ENOENT",
             "materialToCoverage": true
           }
         ],

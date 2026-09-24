@@ -305,7 +305,8 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('declared=17.0.2');
     expect(html).toContain('resolved=17.0.2');
     expect(html).toContain('version source=yarn.lock');
-    expect(html).toContain('package&lt;script&gt;.json');
+    expect(html).toContain('package\\u003cscript\\u003e.json');
     expect(html).not.toContain('<script>alert("x")</script>');
+    expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
   });
 });
