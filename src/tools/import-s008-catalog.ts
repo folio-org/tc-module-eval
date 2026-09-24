@@ -40,10 +40,10 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
   })));
   const providers: S008Provider[] = await Promise.all(manifest.providers.map(async provider => {
     const descriptor = await read(provider.descriptorPath);
-    if (typeof descriptor.parsed.id !== 'string' || !Array.isArray(descriptor.parsed.provides)) {
-      throw new Error(`${provider.descriptorPath} must contain string id and array provides`);
+    if (typeof descriptor.parsed.id !== 'string' || (descriptor.parsed.provides !== undefined && !Array.isArray(descriptor.parsed.provides))) {
+      throw new Error(`${provider.descriptorPath} must contain a string id and, when present, an array of provides`);
     }
-    const provides = descriptor.parsed.provides.map((item: any) => {
+    const provides = (descriptor.parsed.provides ?? []).map((item: any) => {
       if (!item || typeof item.id !== 'string' || typeof item.version !== 'string') {
         throw new Error(`${provider.descriptorPath} contains a provide without string id/version`);
       }

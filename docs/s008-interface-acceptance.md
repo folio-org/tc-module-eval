@@ -10,13 +10,36 @@ Use `--s008-catalog official` (the default) or explicitly select `--s008-catalog
 
 ## Catalog refresh
 
-The maintainer importer does not access the network and never changes the acceptance ledger:
+Normal evaluation never accesses the network. Catalog acquisition is a separate maintainer-only command and requires an explicit immutable Platform LSP commit:
+
+```sh
+yarn acquire:s008-catalog \
+  --platform-commit <40-character-commit> \
+  --channel official \
+  --output-dir /tmp/s008-acquisition
+```
+
+The command fetches `platform-descriptor.json` from exactly that commit, resolves only the required and optional (not experimental) application pins through FAR, and acquires exact backend, UI, and Eureka component descriptors. FAR-embedded descriptors are used when their identities match; otherwise the exact module ID is fetched from the configured registry. It never follows descriptor-supplied URLs, chooses “latest,” executes repository code, or reads credentials from the evaluated repository.
+
+Public defaults are `https://far.ci.folio.org` and `https://folio-registry.dev.folio.org`. Maintainers may use `--far-url` and `--registry-url` for trusted environments. Overrides must use HTTPS; HTTP is accepted only for loopback test fixtures. Authentication is not supported, and 401/403 responses are reported clearly.
+
+The output directory must not already exist. It is published atomically and contains:
+
+- normalized Platform, FAR application, and provider descriptor snapshots;
+- `snapshot-manifest.json` with exact provenance;
+- `s008-catalog.json`, always generated with `authoritative: false`;
+- `s008-discovered-identities.json`, whose family/display/repository hints are explicitly unreviewed; and
+- `acquisition-diagnostics.json`, where `complete: false` identifies material acquisition gaps.
+
+The command never creates or modifies `config/acceptance-ledger.json`. Platform or FAR presence is not evidence of TC acceptance. A human must use the discovery report to prepare reviewed family, identity, repository, and APPROVED / PROVISIONALLY APPROVED / legacy / scoped-exception evidence changes. Those changes require TC review. After confirming complete diagnostics and reviewing all snapshots, a maintainer may copy the reviewed catalog to the appropriate checked-in catalog and mark it authoritative through normal repository review.
+
+For already-acquired or manually supplied snapshots, the lower-level offline importer remains available:
 
 ```sh
 yarn import:s008-catalog snapshots/manifest.json config/s008-catalog-official.json
 ```
 
-Before running it, a maintainer must:
+Before running the offline importer, a maintainer must:
 
 1. Select an immutable `folio-org/platform-lsp` commit and record the channel (`official` or `development`).
 2. Save the Platform descriptor at that commit and enumerate required and optional application pins, excluding experimental applications.
