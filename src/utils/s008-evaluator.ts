@@ -32,7 +32,7 @@ export function evaluateS008(
   const failures = findings.filter(item => item.classification !== 'satisfied');
   const status = failures.length ? EvaluationStatus.FAIL : !declarations.complete ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
   const summary = failures.length
-    ? `${failures.length} declared interface${failures.length === 1 ? '' : 's'} lack a compatible eligible provider in the ${channel} catalog.`
+    ? `${failures.length} declared interface${failures.length === 1 ? ' lacks' : 's lack'} a compatible eligible provider in the ${channel} catalog.`
     : !declarations.complete
       ? 'No proven S008 violation was found, but declaration evidence is incomplete.'
       : `All ${findings.length} declared interface${findings.length === 1 ? '' : 's'} have compatible eligible providers in the ${channel} catalog.`;

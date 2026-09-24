@@ -25,6 +25,7 @@ describe('S008 analyzer', () => {
   ])('fails %s providers', (_name, identity, providedId, providedVersion, requiredId, requiredVersion, classification) => {
     const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog(identity, providedId, providedVersion)), declarations(requiredId, requiredVersion));
     expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.summary).toBe('1 declared interface lacks a compatible eligible provider in the official catalog.');
     expect(result.findings[0].classification).toBe(classification);
   });
 
