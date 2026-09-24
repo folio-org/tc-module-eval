@@ -31,6 +31,7 @@ import {
 import { hasS006AgentReviewMaterial, reviewS006WithAgent } from '../../utils/s006-agent-review';
 import { loadS007Policy } from '../../utils/s007-policy';
 import { collectS007TechnologyEvidence } from '../../utils/s007-technology-evidence';
+import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effective-evidence';
 import { evaluateS007 } from '../../utils/s007-evaluator';
 import { buildS007CriterionDetails, renderS007HumanDetails } from '../../utils/s007-report-details';
 import { hasS007AgentReviewMaterial, reviewS007WithAgent } from '../../utils/s007-agent-review';
@@ -250,9 +251,12 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     });
     const [policyLoad, evidence] = await Promise.all([
       loadS007Policy(),
-      run.getOrCreateArtifact('s007TechnologyEvidence', () =>
-        collectS007TechnologyEvidence(repoPath, this.language)
-      )
+      run.getOrCreateArtifact('s007TechnologyEvidence', async () => {
+        const staticEvidence = await collectS007TechnologyEvidence(repoPath, this.language);
+        return this.language === 'java' && run.commandRunner
+          ? enrichS007WithMavenEffectivePom(repoPath, staticEvidence, run, run.commandRunner)
+          : staticEvidence;
+      })
     ]);
     const analysis = evaluateS007(policyLoad, evidence, this.language);
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
@@ -260,7 +264,13 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: analysis.status as EvaluationStatus,
       hasReviewMaterial: hasS007AgentReviewMaterial(repoPath, analysis),
       evaluationRun: run,
-      review: (config, commandRunner) => reviewS007WithAgent(repoPath, analysis, config, commandRunner)
+      review: (config, commandRunner) => reviewS007WithAgent(
+        repoPath,
+        analysis,
+        config,
+        commandRunner,
+        policyLoad.ok ? policyLoad.policy : undefined
+      )
     });
     if (unavailableReason) {
       analysis.agentReviewUnavailableReason = unavailableReason;

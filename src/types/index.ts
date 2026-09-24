@@ -176,9 +176,23 @@ export interface CriterionAgentReviewResult {
   summary?: string;
   rationale?: string;
   evidenceReferences: string[];
+  assessments?: CriterionAgentAssessment[];
+  reviewerActions?: CriterionAgentReviewerAction[];
   metadata?: CriterionAgentReviewMetadata;
   warnings: string[];
   errors: string[];
+}
+
+export interface CriterionAgentAssessment {
+  technologyId: string;
+  type: 'aligned_fact' | 'substantive_concern' | 'analyzer_limitation' | 'evidence_gap' | 'policy_question';
+  summary: string;
+  evidenceReferences: string[];
+}
+
+export interface CriterionAgentReviewerAction {
+  action: string;
+  evidenceReferences: string[];
 }
 
 export interface CriterionAgentReviewConfig {
