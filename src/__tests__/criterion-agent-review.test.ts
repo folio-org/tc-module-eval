@@ -23,7 +23,8 @@ class FakeRunner implements CommandRunner {
   constructor(
     private readonly configDebug?: string,
     private readonly agentDebug?: string,
-    private readonly runStdout?: string
+    private readonly runStdout?: string,
+    private readonly resultOverrides: Record<number, Partial<CommandExecutionResult>> = {}
   ) {}
 
   normalize(request: CommandExecutionRequest): string {
@@ -78,7 +79,8 @@ class FakeRunner implements CommandRunner {
       durationMs: 1,
       stdout,
       stderr: '',
-      sanitized: true
+      sanitized: true,
+      ...this.resultOverrides[this.requests.length]
     };
   }
 }
@@ -350,7 +352,7 @@ describe('criterion agent review', () => {
           })
         }
       }),
-      JSON.stringify({ type: 'step_finish', part: { type: 'step-finish' } })
+      JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } })
     ].join('\n'));
 
     const result = await runCriterionAgentReview({
@@ -467,7 +469,8 @@ describe('criterion agent review', () => {
     }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json'));
 
     expect(result.available).toBe(false);
-    expect(result.errors).toEqual(['OpenCode returned malformed JSON']);
+    expect(result.errors).toContain('OpenCode returned malformed JSON');
+    expect(result.errors.join('\n')).toContain('OpenCode run:');
     expect(result.metadata).toMatchObject({
       adapter: 'opencode',
       modelLabel: 'test-model'
@@ -498,6 +501,47 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(true);
     expect(result.recommendation).toBe('likely_insufficient');
     expect(result.summary).toBe('Stray brace summary.');
+  });
+
+  it.each([1, 2, 3])('stops at timed-out stage %i without retrying', async stage => {
+    const runner = new FakeRunner(undefined, undefined, undefined, {
+      [stage]: { status: 'timed_out', durationMs: 180000 }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), timeoutMs: 180000 }, runner);
+    expect(result.available).toBe(false);
+    expect(runner.requests).toHaveLength(stage);
+    expect(result.errors.join('\n')).toContain('timed_out');
+    expect(result.errors.join('\n')).toContain('timeout 180000ms');
+    expect(result.errors.join('\n')).not.toContain('malformed');
+  });
+
+  it.each([1, 2, 3])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
+    const runner = new FakeRunner(undefined, undefined, undefined, {
+      [stage]: { stdoutTruncated: true, stdoutBytes: 1048577 }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(runner.requests).toHaveLength(stage);
+    expect(result.errors.join('\n')).toContain('capture truncated');
+  });
+
+  it('retains allowlisted provider diagnostics from stdout on nonzero exit', async () => {
+    const stdout = JSON.stringify({ type: 'error', error: { name: 'APIError', data: {
+      message: 'Rate limit: password=synthetic-credential', statusCode: 429,
+      responseBody: 'DO_NOT_PUBLISH', headers: { authorization: 'DO_NOT_PUBLISH' }
+    } } });
+    const runner = new FakeRunner(undefined, undefined, stdout, { 3: { status: 'failed', exitCode: 1 } });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('429');
+    expect(result.errors.join('\n')).toContain('APIError');
+    expect(JSON.stringify(result)).not.toMatch(/synthetic-credential|DO_NOT_PUBLISH/);
   });
 
   it('normalizes common off-schema OpenCode advisory fields', async () => {

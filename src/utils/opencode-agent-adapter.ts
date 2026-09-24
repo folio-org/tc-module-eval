@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult
@@ -12,7 +13,7 @@ import {
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
-import { parseJsonObject, parseOpenCodeReviewPayload } from './opencode-output';
+import { decodeOpenCodeOutput, OpenCodeOutput, parseJsonObject } from './opencode-output';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 const OPENCODE_RUN_MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -56,10 +57,11 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'config'],
     cwd: workspace.rootPath,
     env: invocation.env,
-    timeoutMs: config.timeoutMs
+    timeoutMs: config.timeoutMs,
+    stdoutFormat: 'json'
   });
-  if (configDebug.status !== 'success') {
-    return baseUnavailable(`Unable to verify OpenCode config: ${configDebug.errorMessage ?? configDebug.stderr}`);
+  if (configDebug.status !== 'success' || configDebug.stdoutTruncated) {
+    return baseUnavailable(commandFailure('debug config', configDebug, config));
   }
 
   const agentDebug = await commandRunner.run({
@@ -67,10 +69,11 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'agent', config.readOnlyAgentName],
     cwd: workspace.rootPath,
     env: invocation.env,
-    timeoutMs: config.timeoutMs
+    timeoutMs: config.timeoutMs,
+    stdoutFormat: 'json'
   });
-  if (agentDebug.status !== 'success') {
-    return baseUnavailable(`Unable to verify OpenCode agent: ${agentDebug.errorMessage ?? agentDebug.stderr}`);
+  if (agentDebug.status !== 'success' || agentDebug.stdoutTruncated) {
+    return baseUnavailable(commandFailure('debug agent', agentDebug, config));
   }
 
   const permissionError = validateDebugOutput(configDebug.stdout, agentDebug.stdout, invocation.provenancePaths);
@@ -95,14 +98,30 @@ export async function runOpenCodeAgentReview(
     cwd: workspace.rootPath,
     env: invocation.env,
     timeoutMs: config.timeoutMs,
+    stdoutFormat: 'opencode-json',
     maxOutputBytes: OPENCODE_RUN_MAX_OUTPUT_BYTES
   });
 
-  if (run.status !== 'success') {
-    return baseUnavailable(`OpenCode review failed: ${run.errorMessage ?? run.stderr}`);
+  const decoded = decodeOpenCodeOutput(run.stdout);
+  if (run.status !== 'success' || run.stdoutTruncated) {
+    return baseUnavailable(commandFailure('run', run, config, decoded));
   }
 
-  return normalizeOpenCodeResult(run.stdout, request, workspace, config);
+  const result = normalizeOpenCodeResult(decoded, request, workspace, config);
+  if (!result.available) result.errors.push(commandContext('run', run, config));
+  return result;
+}
+
+function commandContext(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig): string {
+  return redactSensitiveText(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
+}
+
+function commandFailure(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig, decoded?: OpenCodeOutput): string {
+  const reason = run.status === 'success' ? 'capture truncated' : run.status;
+  const provider = decoded?.providerError;
+  const detail = provider ? [provider.name, provider.statusCode, provider.message].filter(value => value !== undefined).join(': ')
+    : redactSensitiveText(run.errorMessage ?? '', 500);
+  return `${commandContext(stage, run, config)}; ${reason}${run.stdoutTruncated && run.status !== 'success' ? '; capture truncated' : ''}${detail ? `; ${detail}` : ''}`;
 }
 
 export function materializeOpenCodeInvocation(
@@ -370,20 +389,26 @@ function validateResolvedAgentTools(agent: Record<string, unknown> | undefined):
 }
 
 function normalizeOpenCodeResult(
-  output: string,
+  decoded: OpenCodeOutput,
   request: CriterionAgentReviewRequest,
   workspace: PreparedCriterionReviewWorkspace,
   config: CriterionAgentReviewConfig
 ): CriterionAgentReviewResult {
-  const parsed = parseOpenCodeReviewPayload(output);
+  const parsed = decoded.payload;
   if (!parsed) {
+    const reasons = {
+      malformed_json: 'OpenCode returned malformed JSON',
+      no_assistant_text: 'OpenCode returned no assistant text',
+      incomplete_response: `OpenCode returned incomplete response (finish: ${decoded.finishReason ?? 'missing'})`,
+      provider_error: `OpenCode provider error: ${Object.values(decoded.providerError ?? {}).join(': ')}`
+    };
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata: openCodeMetadata(config, workspace),
       warnings: [],
-      errors: ['OpenCode returned malformed JSON']
+      errors: [reasons[decoded.failure ?? 'malformed_json']]
     };
   }
 

@@ -57,6 +57,7 @@ export interface CommandExecutionRequest {
   cwd: string;
   timeoutMs?: number;
   maxOutputBytes?: number;
+  stdoutFormat?: 'text' | 'json' | 'opencode-json';
   env?: Record<string, string | undefined>;
   requiresIsolation?: boolean;
   networkPolicy?: CommandNetworkPolicy;
@@ -80,6 +81,10 @@ export interface CommandExecutionResult {
   durationMs: number;
   stdout: string;
   stderr: string;
+  stdoutBytes?: number;
+  stderrBytes?: number;
+  stdoutTruncated?: boolean;
+  stderrTruncated?: boolean;
   errorMessage?: string;
   sanitized: boolean;
 }
