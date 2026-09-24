@@ -51,17 +51,27 @@ describe('criterion-agent CLI option parsing', () => {
     })).toThrow('HTTPS');
   });
 
-  it('rejects timeout values that are not full positive integers', () => {
-    expect(() => buildCriterionAgentReviewConfig({
-      criterionAgentOpencode: true,
-      criterionAgentTimeoutMs: '90s'
-    })).toThrow('positive integer');
+  it.each(['1', '180000', '420000', '2147483647'])(
+    'accepts timeout value %s within the supported range',
+    value => {
+      const config = buildCriterionAgentReviewConfig({
+        criterionAgentOpencode: true,
+        criterionAgentTimeoutMs: value
+      });
 
-    expect(() => buildCriterionAgentReviewConfig({
-      criterionAgentOpencode: true,
-      criterionAgentTimeoutMs: '0'
-    })).toThrow('positive integer');
-  });
+      expect(config?.timeoutMs).toBe(Number(value));
+    }
+  );
+
+  it.each(['0', '-1', '1.5', '180000ms', '2147483648', '9007199254740993'])(
+    'rejects timeout value %s outside the supported integer range',
+    value => {
+      expect(() => buildCriterionAgentReviewConfig({
+        criterionAgentOpencode: true,
+        criterionAgentTimeoutMs: value
+      })).toThrow('Invalid criterion-agent-timeout-ms: expected an integer between 1 and 2147483647');
+    }
+  );
 
   it('does not require provider keys to be passed as CLI values', () => {
     const config = buildCriterionAgentReviewConfig({

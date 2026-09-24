@@ -83,8 +83,10 @@ Use `--criterion-agent-opencode` to enable OpenCode review. Use `--criterion-age
 folio-eval evaluate <repo-url> \
   --criterion-agent-opencode \
   --criterion-agent-criteria <criterion-id>[,<criterion-id>] \
-  --criterion-agent-timeout-ms 90000
+  --criterion-agent-timeout-ms 420000
 ```
+
+The default timeout is 120,000 ms. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
 
 Advanced options:
 
@@ -102,6 +104,19 @@ When `--criterion-agent-debug-retain-workspace` is used, the evaluator keeps the
 Explicit CLI model and auth-store values take precedence over environment-based generation.
 
 Only include environment variable names that the OpenCode subprocess actually needs. Values named in `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` are forwarded into the agent process.
+
+## Output Acceptance and Troubleshooting
+
+Available advice must cite at least one entry from the review manifest. Generated evidence files in the manifest are valid citations; S005 and S006 do not require a direct repository-file citation. Unknown citations are discarded, and a response with no valid manifest citation is unavailable. This validation affects only optional advice: deterministic status and findings remain unchanged.
+
+Agent-review failures are reported without exposing raw provider output or credentials:
+
+- **Timeout:** choose a faster model or explicitly increase `--criterion-agent-timeout-ms` within the supported range of 1–2147483647 ms.
+- **Provider error:** inspect provider credentials, quota, account status, and endpoint configuration. Do not print credentials while troubleshooting.
+- **Capture overflow:** the review is unavailable; the evaluator does not infer advice from a captured prefix.
+- **Malformed, invalid, or incomplete response:** inspect the evaluator's sanitized diagnosis and, if useful, rerun the OpenCode command manually in a trusted environment.
+
+These categories diagnose the observed command or response; they do not make claims about provider reliability. In every failure category, evaluation continues with the deterministic result and evidence.
 
 ## GitHub Actions
 
