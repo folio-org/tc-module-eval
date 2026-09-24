@@ -32,6 +32,19 @@ describe('S008 catalog snapshot importer', () => {
       await expect(importS008Catalog(manifestPath)).rejects.toThrow('componentSources must be an array');
       await fs.writeJson(manifestPath, { ...manifest, componentSources: [] });
       await expect(importS008Catalog(manifestPath)).rejects.toThrow('exactly one componentSources entry for every Eureka component family');
+      await fs.writeJson(manifestPath, {
+        ...manifest,
+        componentSources: [{ name: 'component', version: '2.0.0', status: 'acquired', kind: 'registry', source: 'registry:component' }]
+      });
+      await expect(importS008Catalog(manifestPath)).rejects.toThrow('componentSources[0] acquired provenance');
+      await fs.writeJson(manifestPath, {
+        ...manifest,
+        componentSources: [{
+          name: 'component', version: '2.0.0', status: 'acquired', kind: 'registrry',
+          source: 'registry:component', descriptorHash: `sha256:${'a'.repeat(64)}`
+        }]
+      });
+      await expect(importS008Catalog(manifestPath)).rejects.toThrow('componentSources[0] acquired provenance');
       await fs.writeJson(manifestPath, { ...manifest, platform: { ...manifest.platform, commit: '0'.repeat(40) } });
       await expect(importS008Catalog(manifestPath)).rejects.toThrow('explicit immutable');
     } finally { await fs.remove(dir); }

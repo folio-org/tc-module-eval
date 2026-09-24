@@ -35,8 +35,14 @@ describe('S008 catalog network acquisition', () => {
         if (query === 'id==app-required-1.0.0') return json(response, {
           applicationDescriptors: [{
             id: 'app-required-1.0.0', name: 'app-required', version: '1.0.0',
-            modules: [{ id: 'mod-a-1.2.3', name: 'mod-a', version: '1.2.3', url: 'https://untrusted.example.org/descriptors/mod-a.json' }],
-            moduleDescriptors: [{ id: 'mod-a-1.2.3', name: 'Module A', metadata: { repository: 'https://github.com/folio-org/mod-a' }, provides: [{ id: 'alpha', version: '1.1' }] }],
+            modules: [
+              { id: 'mod-a-1.2.3', name: 'mod-a', version: '1.2.3', url: 'https://untrusted.example.org/descriptors/mod-a.json' },
+              { id: 'mgr-applications-4.0.0', name: 'mgr-applications', version: '4.0.0' }
+            ],
+            moduleDescriptors: [
+              { id: 'mod-a-1.2.3', name: 'Module A', metadata: { repository: 'https://github.com/folio-org/mod-a' }, provides: [{ id: 'alpha', version: '1.1' }] },
+              { id: 'mgr-applications-4.0.0', provides: [{ id: 'applications', version: '1.3' }] }
+            ],
             uiModules: [{ id: 'folio_ui-a-4.5.6', name: 'folio_ui-a', version: '4.5.6' }]
           }], totalRecords: 1
         });
@@ -50,9 +56,9 @@ describe('S008 catalog network acquisition', () => {
       }
       if (request.url === '/_/proxy/modules/folio_ui-a-4.5.6') return json(response, { id: 'folio_ui-a-4.5.6', provides: [{ id: 'ui-alpha', version: '4.0' }] });
       if (request.url === '/_/proxy/modules/edge-component-3.0.0') return json(response, { id: 'edge-component-3.0.0', provides: [{ id: 'edge', version: '3.0' }] });
-      if (request.url === '/repos/folio-org/mgr-applications/git/ref/tags/v4.0.1') return json(response, { object: { type: 'tag', sha: 'b'.repeat(40) } });
-      if (request.url === `/repos/folio-org/mgr-applications/git/tags/${'b'.repeat(40)}`) return json(response, { object: { type: 'commit', sha: 'c'.repeat(40) } });
-      if (request.url === `/folio-org/mgr-applications/${'c'.repeat(40)}/src/main/resources/descriptors/ModuleDescriptor.json`) {
+      if (request.url === '/github-api/repos/folio-org/mgr-applications/git/ref/tags/v4.0.1') return json(response, { object: { type: 'tag', sha: 'b'.repeat(40) } });
+      if (request.url === `/github-api/repos/folio-org/mgr-applications/git/tags/${'b'.repeat(40)}`) return json(response, { object: { type: 'commit', sha: 'c'.repeat(40) } });
+      if (request.url === `/github-raw/folio-org/mgr-applications/${'c'.repeat(40)}/src/main/resources/descriptors/ModuleDescriptor.json`) {
         return json(response, { id: 'mgr-applications-4.0.0', provides: [{ id: 'applications', version: '1.3' }] });
       }
       response.writeHead(404).end();
@@ -65,7 +71,7 @@ describe('S008 catalog network acquisition', () => {
       for (const output of ['first', 'second']) await acquireS008Catalog({
         platformCommit: COMMIT, channel: 'official', outputDir: path.join(root, output),
         farUrl: base, registryUrl: base, platformRawBaseUrl: `${base}/platform/`,
-        githubApiBaseUrl: base, githubRawBaseUrl: base, concurrency: 2
+        githubApiBaseUrl: `${base}/github-api`, githubRawBaseUrl: `${base}/github-raw/`, concurrency: 2
       });
 
       const first = path.join(root, 'first');
@@ -101,7 +107,10 @@ describe('S008 catalog network acquisition', () => {
         descriptorStatus: 'intentionally-descriptorless'
       });
       expect(discovery.identities.find((identity: any) => identity.moduleIdentity === 'mgr-applications')).toMatchObject({
-        observedModules: [{ id: 'mgr-applications-4.0.1', version: '4.0.1' }],
+        observedModules: [
+          { id: 'mgr-applications-4.0.0', version: '4.0.0' },
+          { id: 'mgr-applications-4.0.1', version: '4.0.1' }
+        ],
         descriptors: [expect.objectContaining({ moduleId: 'mgr-applications-4.0.0' })], descriptorStatus: 'acquired'
       });
       const manifest = await fs.readJson(path.join(first, 'snapshot-manifest.json'));

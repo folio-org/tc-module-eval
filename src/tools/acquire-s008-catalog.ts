@@ -361,13 +361,13 @@ async function acquireComponentDescriptor(
   const name = reference.component!;
   const repository = COMPONENT_DESCRIPTOR_REPOSITORIES[name];
   const tag = `v${reference.version}`;
-  const tagUrl = new URL(`/repos/folio-org/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, githubApiBase);
+  const tagUrl = new URL(`repos/folio-org/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, ensureTrailingSlash(githubApiBase));
   try {
     const tagResponse = asRecord((await fetchJson(tagUrl, fetchOptions)).parsed, `${name} release tag`);
     const tagObject = asRecord(tagResponse.object, `${name} release tag object`);
     let commit = requiredCommit(tagObject.sha, `${name} release tag`);
     if (tagObject.type === 'tag') {
-      const annotatedTagUrl = new URL(`/repos/folio-org/${repository}/git/tags/${commit}`, githubApiBase);
+      const annotatedTagUrl = new URL(`repos/folio-org/${repository}/git/tags/${commit}`, ensureTrailingSlash(githubApiBase));
       const annotatedTag = asRecord((await fetchJson(annotatedTagUrl, fetchOptions)).parsed, `${name} annotated tag`);
       const target = asRecord(annotatedTag.object, `${name} annotated tag target`);
       if (target.type !== 'commit') throw new Error(`${name} ${tag} does not resolve directly to a commit`);
@@ -376,7 +376,7 @@ async function acquireComponentDescriptor(
       throw new Error(`${name} ${tag} has unsupported Git object type: ${String(tagObject.type)}`);
     }
 
-    const sourceUrl = new URL(`/folio-org/${repository}/${commit}/${COMPONENT_DESCRIPTOR_PATH}`, githubRawBase);
+    const sourceUrl = new URL(`folio-org/${repository}/${commit}/${COMPONENT_DESCRIPTOR_PATH}`, ensureTrailingSlash(githubRawBase));
     const descriptor = asRecord((await fetchJson(sourceUrl, fetchOptions)).parsed, `${name} component descriptor`);
     if (typeof descriptor.id !== 'string' || !descriptor.id.startsWith(`${name}-`)) {
       diagnostics.push({ code: 'component_descriptor_identity_mismatch', material: true, message: `${name} ${tag} descriptor ID does not belong to the component family.`, source: sourceUrl.toString() });
@@ -419,6 +419,7 @@ function deduplicateDescriptors(descriptors: AcquiredDescriptor[], diagnostics: 
     }
     existing.sources = uniqueByJson([...existing.sources, ...descriptor.sources]);
     existing.source = [...new Set([...existing.source.split('; '), descriptor.source])].sort().join('; ');
+    existing.componentProvenance ??= descriptor.componentProvenance;
   }
   return [...byId.values()].sort((a, b) => `${a.moduleIdentity}\0${a.moduleId}`.localeCompare(`${b.moduleIdentity}\0${b.moduleId}`));
 }

@@ -36,6 +36,7 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
     throw new Error('platform.commit must be an explicit immutable 40-character commit SHA');
   }
   if (!Array.isArray(manifest.componentSources)) throw new Error('componentSources must be an array');
+  manifest.componentSources.forEach(validateComponentSource);
   const componentFamilies = manifest.eurekaComponents.map(component => component.familyId);
   const componentSourceNames = manifest.componentSources.map(source => source?.name);
   if (componentSourceNames.length !== componentFamilies.length
@@ -95,6 +96,23 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
     }).sort((a, b) => a.familyId.localeCompare(b.familyId)),
     providers: providers.sort((a, b) => `${a.moduleIdentity}\0${a.moduleId}`.localeCompare(`${b.moduleIdentity}\0${b.moduleId}`))
   };
+}
+
+function validateComponentSource(source: ImportManifest['componentSources'][number], index: number): void {
+  if (!source || typeof source !== 'object' || typeof source.name !== 'string' || !source.name
+    || typeof source.version !== 'string' || !source.version
+    || !['intentionally-descriptorless', 'unresolved', 'acquired'].includes(source.status)) {
+    throw new Error(`componentSources[${index}] must contain non-empty name/version and a recognized status`);
+  }
+  if (source.status !== 'acquired') return;
+  const commonValid = typeof source.source === 'string' && Boolean(source.source)
+    && typeof source.descriptorHash === 'string' && /^sha256:[0-9a-f]{64}$/.test(source.descriptorHash);
+  const valid = (source.kind === 'registry' && commonValid)
+    || (source.kind === 'repository-tag' && commonValid
+      && typeof source.repository === 'string' && Boolean(source.repository)
+      && typeof source.tag === 'string' && Boolean(source.tag)
+      && typeof source.commit === 'string' && /^[0-9a-f]{40}$/.test(source.commit));
+  if (!valid) throw new Error(`componentSources[${index}] acquired provenance is incomplete or invalid for kind ${String(source.kind)}`);
 }
 
 function hash(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
