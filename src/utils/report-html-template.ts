@@ -169,7 +169,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         });
       }
       var agentIndex = tree.findIndex(function (node) { return /^Agent review:?$/.test(node.text); });
-      if (item.id !== 'S007' && agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
+      if (agentIndex > 0 && item.id !== 'S005' && item.id !== 'S007') tree.unshift(tree.splice(agentIndex,1)[0]);
       var licenses = evidence.match(/^(Found (\d+) dependencies\.)\s*Licenses:\s*(.+)$/s);
       if (licenses) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';

@@ -14,6 +14,7 @@ import {
   S006RedactedReportDetails
 } from '../types';
 import * as EvaluationRunUtils from '../utils/evaluation-run';
+import { LocalCommandRunner } from '../utils/command-runner';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 
 class TestSharedEvaluator extends SharedEvaluator {}
@@ -53,6 +54,7 @@ describe('S006 shared evaluator', () => {
 
   it('direct S006 evaluation creates an EvaluationRun when one is not supplied', async () => {
     writeRepoFile('README.md', '# Clean module\n');
+    jest.spyOn(LocalCommandRunner.prototype, 'run').mockRejectedValue(new Error('Gitleaks unavailable in this fixture'));
     const createRunSpy = jest.spyOn(EvaluationRunUtils, 'createEvaluationRun');
     const previousGitleaksPath = process.env.GITLEAKS_PATH;
     process.env.GITLEAKS_PATH = 'gitleaks-unavailable-for-test';
@@ -324,8 +326,32 @@ describe('S006 shared evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(false);
-    expect(details.agentReviewUnavailableReason).toContain('OpenCode review failed');
-    expect(result.details).toContain('OpenCode review failed');
+    expect(details.agentReviewUnavailableReason).toContain('OpenCode run:');
+    expect(result.details).toContain('failed');
+  });
+
+  it.each([
+    ['malformed JSON', { status: 'success', stdout: 'not json' }, 'malformed JSON'],
+    ['timeout', { status: 'timed_out', stdout: '', durationMs: 180000 }, 'timed_out'],
+    ['unknown citations', { status: 'success', stdout: JSON.stringify({
+      recommendation: 'likely_sufficient', confidence: 'high', summary: 'Advice', rationale: 'Unsupported advice',
+      evidenceReferences: ['unknown.md']
+    }) }, 'evidenceReferences must include a manifest entry']
+  ] as Array<[string, Partial<CommandExecutionResult>, string]>)('preserves deterministic findings after OpenCode %s', async (_name, response, error) => {
+    writeRepoFile('docs/secrets.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
+    const baseline = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRunWithAgent({
+      enabled: true, enabledCriteria: ['S006'], adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer'
+    }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner(response))));
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.status).toBe(baseline.status);
+    expect(result.evidence).toBe(baseline.evidence);
+    expect(result.agentReview?.available).toBe(false);
+    expect(result.agentReview?.errors.join('\n')).toContain(error);
+    const { agentReviewUnavailableReason: _baselineReason, ...baselineDetails } = baseline.criterionDetails as S006RedactedReportDetails;
+    const { agentReviewUnavailableReason: _reason, ...details } = result.criterionDetails as S006RedactedReportDetails;
+    expect(details).toEqual(baselineDetails);
+    expect(JSON.stringify(result)).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
   });
 
   it('still scans explicit FOLIO library repositories instead of returning not applicable', async () => {
@@ -407,6 +433,8 @@ describe('S006 shared evaluator', () => {
 });
 
 class FailingOpenCodeRunner implements CommandRunner {
+  constructor(private readonly response: Partial<CommandExecutionResult> = {}) {}
+
   normalize(request: CommandExecutionRequest): string {
     return JSON.stringify(request);
   }
@@ -426,7 +454,8 @@ class FailingOpenCodeRunner implements CommandRunner {
       durationMs: 1,
       stdout: isRun ? '' : this.debugStdout(request),
       stderr: isRun ? 'review crashed with token=abc123' : '',
-      sanitized: true
+      sanitized: true,
+      ...(isRun ? this.response : {})
     };
   }
 

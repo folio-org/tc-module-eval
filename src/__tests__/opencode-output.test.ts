@@ -74,6 +74,8 @@ describe('final OpenCode answer selection', () => {
     [start(), text(), finish(), start('msg_b'), finish('stop', 'msg_b')],
     [start(), text(), finish(), start('msg_b'), text('broken', 'msg_b'), finish('stop', 'msg_b')],
     [textEvent(JSON.stringify(advisory)), textEvent('broken')],
+    [textEvent(JSON.stringify(advisory)), { type: 'message', message: { parts: [] } }],
+    [textEvent(JSON.stringify(advisory) + '\n{')],
     [textEvent(JSON.stringify(advisory) + '\n{"recommendation":')],
     [textEvent(JSON.stringify(advisory)), { type: 'error', error: { name: 'APIError', data: { message: 'failure' } } }]
   ])('does not recover stale advice from incomplete final output %#', (...events) => {
@@ -90,5 +92,10 @@ describe('final OpenCode answer selection', () => {
     const value = JSON.stringify(advisory);
     const boundary = value.indexOf(',') + 1;
     expect(parseOpenCodeReviewPayload(wire(start(), text(value.slice(0, boundary)), text(value.slice(boundary)), finish()))).toEqual(advisory);
+  });
+
+  it('preserves multiple completed native text parts through real capture', async () => {
+    const result = await capture(wire(start(), text('Reviewing repository evidence.'), text(), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
   });
 });

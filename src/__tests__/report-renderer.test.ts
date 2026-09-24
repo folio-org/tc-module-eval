@@ -1,6 +1,8 @@
 import { EvaluationReportRenderer } from '../utils/report-renderer';
 import { EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types';
 import { renderS007HumanDetails } from '../utils/s007-report-details';
+import { agentReviewReport } from './helpers/agent-review-report';
+import { runInNewContext } from 'vm';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -135,6 +137,30 @@ describe('EvaluationReportRenderer', () => {
       notApplicable: 1,
       total: 6
     });
+  });
+
+  it('retains budgeted S005 rationale and S006 fallback in HTML report data', () => {
+    const report = agentReviewReport();
+    const html = new EvaluationReportRenderer().renderHtml(report);
+    const data = reportData(html);
+    const details = data.items[0].details.join('\n');
+    expect(Buffer.byteLength(report.criteria[0].details!, 'utf8')).toBeLessThanOrEqual(12000);
+    expect(details).toContain('Contradictions:');
+    expect(details).toContain('PERSONAL_DATA_DISCLOSURE.md:');
+    expect(details).toContain('RATIONALE_END');
+    expect(details).toContain('synthetic-review-model');
+    expect(details.indexOf('Contradictions:')).toBeLessThan(details.indexOf('Agent review:'));
+    expect(data.items[1].details.join('\n')).toContain('incomplete response (finish: missing)');
+    expect(data.items.map((item: { status: string }) => item.status)).toEqual(['manual', 'manual']);
+    // Execute the actual browser-side preparation, not only the serialized input.
+    const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
+    const setup = script.slice(0, script.indexOf('var items = data.items.map(prepare);'));
+    const items = runInNewContext(setup + 'return data.items.map(prepare); }());', {
+      document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
+    });
+    const sections = items[0].tree.map((node: { text: string }) => node.text);
+    expect(sections).toContain('Possible mismatches:');
+    expect(sections[sections.length - 1]).toBe('Agent review:');
   });
 
   it('should render JSON with stable indentation', () => {
@@ -316,6 +342,7 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Resolved version: 17.0.2');
     expect(html).toContain('Version source: yarn.lock');
     expect(html).toContain('package\\u003cscript\\u003e.json');
+    expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
     expect(html).not.toContain('<script>alert("x")</script>');
     expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
   });

@@ -60,7 +60,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.map(entry => sanitizeValue(entry, depth + 1));
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-      const safeKey = redactSensitiveText(key);
+      const safeKey = sanitizeValue(key, depth + 1) as string;
       return [safeKey, isSensitiveKey(key) || safeKey !== key ? '[REDACTED]' : sanitizeValue(entry, depth + 1)];
     }));
   }
@@ -71,7 +71,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
 // A malformed later span must remain observable; never search inside it for advice.
 function objectSpans(text: string): Array<{ start: number; end: number; value?: Record<string, unknown> }> {
   const spans: Array<{ start: number; end: number; value?: Record<string, unknown> }> = [];
-  const opening = /\{\s*(?=["}])/g;
+  const opening = /\{\s*(?=["}]|$)/g;
   let match: RegExpExecArray | null;
   while ((match = opening.exec(text))) {
     const end = findBalancedObjectEnd(text, match.index);
@@ -137,6 +137,7 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
       finishReason = typeof part.reason === 'string' ? part.reason : undefined;
     }
     if (event.type === 'tool_use' && lifecycle) finishReason = undefined;
+    if (!lifecycle && (event.message || event.parts || event.type === 'text')) textParts = [];
     const text = extractOpenCodeEventText(event);
     if (text !== undefined) {
       if (!lifecycle) textParts = [];
