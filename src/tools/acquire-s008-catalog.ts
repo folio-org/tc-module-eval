@@ -10,9 +10,18 @@ import { importS008Catalog } from './import-s008-catalog';
 const DEFAULT_PLATFORM_RAW_BASE = 'https://raw.githubusercontent.com/folio-org/platform-lsp';
 const DEFAULT_FAR_URL = 'https://far.ci.folio.org';
 const DEFAULT_REGISTRY_URL = 'https://folio-registry.dev.folio.org';
+const DEFAULT_GITHUB_API_BASE = 'https://api.github.com';
+const DEFAULT_GITHUB_RAW_BASE = 'https://raw.githubusercontent.com';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
 const DEFAULT_CONCURRENCY = 4;
+const DESCRIPTORLESS_COMPONENTS = new Set(['folio-keycloak', 'folio-kong', 'folio-module-sidecar']);
+const COMPONENT_DESCRIPTOR_REPOSITORIES: Readonly<Record<string, string>> = {
+  'mgr-applications': 'mgr-applications',
+  'mgr-tenants': 'mgr-tenants',
+  'mgr-tenant-entitlements': 'mgr-tenant-entitlements'
+};
+const COMPONENT_DESCRIPTOR_PATH = 'src/main/resources/descriptors/ModuleDescriptor.json';
 
 export interface AcquireS008Options {
   platformCommit: string;
@@ -24,6 +33,8 @@ export interface AcquireS008Options {
   maxResponseBytes?: number;
   concurrency?: number;
   platformRawBaseUrl?: string;
+  githubApiBaseUrl?: string;
+  githubRawBaseUrl?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -43,12 +54,23 @@ interface ModuleReference {
   embedded?: unknown;
 }
 
+interface ComponentDescriptorProvenance {
+  name: string;
+  version: string;
+  status: 'acquired';
+  repository: string;
+  tag: string;
+  commit: string;
+  source: string;
+}
+
 interface AcquiredDescriptor {
   moduleId: string;
   moduleIdentity: string;
   descriptor: Record<string, unknown>;
   source: string;
   sources: Array<{ kind: 'application' | 'eureka-component'; name: string }>;
+  componentProvenance?: ComponentDescriptorProvenance;
 }
 
 interface DiscoveryIdentity {
@@ -58,6 +80,7 @@ interface DiscoveryIdentity {
   sources: Array<{ kind: 'application' | 'eureka-component'; name: string }>;
   descriptors: Array<{ moduleId: string; source: string; digest: string }>;
   suggestions: { familyId?: string; displayName?: string; canonicalRepositories?: string[] };
+  descriptorStatus: 'acquired' | 'intentionally-descriptorless' | 'unresolved';
   unreviewed: true;
 }
 
@@ -67,6 +90,8 @@ export async function acquireS008Catalog(options: AcquireS008Options): Promise<v
   const farBase = validateBaseUrl(options.farUrl ?? DEFAULT_FAR_URL, 'FAR');
   const registryBase = validateBaseUrl(options.registryUrl ?? DEFAULT_REGISTRY_URL, 'registry');
   const platformBase = validateBaseUrl(options.platformRawBaseUrl ?? DEFAULT_PLATFORM_RAW_BASE, 'Platform source');
+  const githubApiBase = validateBaseUrl(options.githubApiBaseUrl ?? DEFAULT_GITHUB_API_BASE, 'GitHub API');
+  const githubRawBase = validateBaseUrl(options.githubRawBaseUrl ?? DEFAULT_GITHUB_RAW_BASE, 'GitHub raw source');
   const outputDir = path.resolve(options.outputDir);
   if (await fs.pathExists(outputDir)) throw new Error(`Output directory already exists: ${outputDir}`);
   const concurrency = positiveInteger(options.concurrency ?? DEFAULT_CONCURRENCY, 'concurrency');
@@ -103,7 +128,7 @@ export async function acquireS008Catalog(options: AcquireS008Options): Promise<v
     })));
 
     const acquired = (await mapLimit(references, concurrency, reference =>
-      acquireDescriptor(reference, registryBase, fetchOptions, diagnostics)
+      acquireDescriptor(reference, registryBase, githubApiBase, githubRawBase, fetchOptions, diagnostics)
     )).filter((value): value is AcquiredDescriptor => Boolean(value));
     const descriptors = deduplicateDescriptors(acquired, diagnostics);
 
@@ -139,6 +164,7 @@ export async function acquireS008Catalog(options: AcquireS008Options): Promise<v
         familyId: component.name,
         moduleIdentities: [component.name]
       })).sort(byJson),
+      componentSources: componentPins.map(component => componentSourceManifest(component, descriptors)).sort(byJson),
       providers: providerManifest.sort(byJson)
     };
     const manifestPath = path.join(temporaryDir, 'snapshot-manifest.json');
@@ -276,12 +302,18 @@ function moduleReferences(
 async function acquireDescriptor(
   reference: ModuleReference,
   registryBase: URL,
+  githubApiBase: URL,
+  githubRawBase: URL,
   fetchOptions: FetchOptions,
   diagnostics: Diagnostic[]
 ): Promise<AcquiredDescriptor | undefined> {
   const sources = reference.sourceApplication
     ? [{ kind: 'application' as const, name: reference.sourceApplication }]
     : [{ kind: 'eureka-component' as const, name: reference.component! }];
+  if (reference.component && DESCRIPTORLESS_COMPONENTS.has(reference.component)) return undefined;
+  if (reference.component && COMPONENT_DESCRIPTOR_REPOSITORIES[reference.component]) {
+    return acquireComponentDescriptor(reference, githubApiBase, githubRawBase, fetchOptions, diagnostics);
+  }
   if (reference.embedded) {
     const descriptor = asOptionalRecord(reference.embedded);
     if (descriptor?.id === reference.id) {
@@ -314,6 +346,56 @@ async function acquireDescriptor(
   }
 }
 
+async function acquireComponentDescriptor(
+  reference: ModuleReference,
+  githubApiBase: URL,
+  githubRawBase: URL,
+  fetchOptions: FetchOptions,
+  diagnostics: Diagnostic[]
+): Promise<AcquiredDescriptor | undefined> {
+  const name = reference.component!;
+  const repository = COMPONENT_DESCRIPTOR_REPOSITORIES[name];
+  const tag = `v${reference.version}`;
+  const tagUrl = new URL(`/repos/folio-org/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, githubApiBase);
+  try {
+    const tagResponse = asRecord((await fetchJson(tagUrl, fetchOptions)).parsed, `${name} release tag`);
+    const tagObject = asRecord(tagResponse.object, `${name} release tag object`);
+    let commit = requiredCommit(tagObject.sha, `${name} release tag`);
+    if (tagObject.type === 'tag') {
+      const annotatedTagUrl = new URL(`/repos/folio-org/${repository}/git/tags/${commit}`, githubApiBase);
+      const annotatedTag = asRecord((await fetchJson(annotatedTagUrl, fetchOptions)).parsed, `${name} annotated tag`);
+      const target = asRecord(annotatedTag.object, `${name} annotated tag target`);
+      if (target.type !== 'commit') throw new Error(`${name} ${tag} does not resolve directly to a commit`);
+      commit = requiredCommit(target.sha, `${name} annotated tag target`);
+    } else if (tagObject.type !== 'commit') {
+      throw new Error(`${name} ${tag} has unsupported Git object type: ${String(tagObject.type)}`);
+    }
+
+    const sourceUrl = new URL(`/folio-org/${repository}/${commit}/${COMPONENT_DESCRIPTOR_PATH}`, githubRawBase);
+    const descriptor = asRecord((await fetchJson(sourceUrl, fetchOptions)).parsed, `${name} component descriptor`);
+    if (typeof descriptor.id !== 'string' || !descriptor.id.startsWith(`${name}-`)) {
+      diagnostics.push({ code: 'component_descriptor_identity_mismatch', material: true, message: `${name} ${tag} descriptor ID does not belong to the component family.`, source: sourceUrl.toString() });
+      return undefined;
+    }
+    if (!validProvides(descriptor)) {
+      diagnostics.push({ code: 'invalid_provider_descriptor', material: true, message: `${name} ${tag} has non-concrete provides metadata.`, source: sourceUrl.toString() });
+      return undefined;
+    }
+    diagnoseProvideVersions(descriptor, descriptor.id, sourceUrl.toString(), diagnostics);
+    return {
+      moduleId: descriptor.id,
+      moduleIdentity: name,
+      descriptor,
+      source: sourceUrl.toString(),
+      sources: [{ kind: 'eureka-component', name }],
+      componentProvenance: { name, version: reference.version, status: 'acquired', repository: `folio-org/${repository}`, tag, commit, source: sourceUrl.toString() }
+    };
+  } catch (error) {
+    diagnostics.push(httpDiagnostic('component_tag_descriptor_failed', error, `${name}@${tag}`));
+    return undefined;
+  }
+}
+
 function deduplicateDescriptors(descriptors: AcquiredDescriptor[], diagnostics: Diagnostic[]): AcquiredDescriptor[] {
   const byId = new Map<string, AcquiredDescriptor>();
   const conflicted = new Set<string>();
@@ -342,7 +424,9 @@ function buildDiscovery(references: ModuleReference[], descriptors: AcquiredDesc
     const current = identities.get(reference.identity) ?? {
       moduleIdentity: reference.identity,
       observedModuleIds: [], observedModules: [], sources: [], descriptors: [],
-      suggestions: { familyId: reference.identity }, unreviewed: true as const
+      suggestions: { familyId: reference.identity },
+      descriptorStatus: DESCRIPTORLESS_COMPONENTS.has(reference.identity) ? 'intentionally-descriptorless' as const : 'unresolved' as const,
+      unreviewed: true as const
     };
     current.observedModuleIds.push(reference.id);
     current.observedModules.push({ id: reference.id, version: reference.version });
@@ -353,6 +437,7 @@ function buildDiscovery(references: ModuleReference[], descriptors: AcquiredDesc
   }
   for (const descriptor of descriptors) {
     const current = identities.get(descriptor.moduleIdentity)!;
+    current.descriptorStatus = 'acquired';
     current.descriptors.push({ moduleId: descriptor.moduleId, source: descriptor.source, digest: digest(stableStringify(descriptor.descriptor)) });
     if (!current.suggestions.displayName && typeof descriptor.descriptor.name === 'string') current.suggestions.displayName = descriptor.descriptor.name;
     const repository = repositoryHint(descriptor.descriptor);
@@ -366,6 +451,16 @@ function buildDiscovery(references: ModuleReference[], descriptors: AcquiredDesc
     sources: uniqueByJson(identity.sources),
     descriptors: uniqueByJson(identity.descriptors)
   })).sort((a, b) => a.moduleIdentity.localeCompare(b.moduleIdentity));
+}
+
+function componentSourceManifest(component: ComponentPin, descriptors: AcquiredDescriptor[]): object {
+  if (DESCRIPTORLESS_COMPONENTS.has(component.name)) return {
+    name: component.name, version: component.version, status: 'intentionally-descriptorless'
+  };
+  const acquired = descriptors.find(descriptor => descriptor.componentProvenance?.name === component.name);
+  return acquired?.componentProvenance
+    ? { ...acquired.componentProvenance, descriptorHash: digest(stableStringify(acquired.descriptor)) }
+    : { name: component.name, version: component.version, status: 'unresolved' };
 }
 
 function collectApplicationPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ApplicationPin[] {
@@ -481,6 +576,11 @@ function httpDiagnostic(code: string, error: unknown, source: string): Diagnosti
 
 function requiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || !value) throw new Error(`${label} must be a non-empty string`);
+  return value;
+}
+
+function requiredCommit(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value)) throw new Error(`${label} must resolve to a 40-character lowercase commit SHA`);
   return value;
 }
 

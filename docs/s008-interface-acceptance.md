@@ -19,7 +19,7 @@ yarn acquire:s008-catalog \
   --output-dir /tmp/s008-acquisition
 ```
 
-The command fetches `platform-descriptor.json` from exactly that commit, resolves only the required and optional (not experimental) application pins through FAR, and acquires exact backend, UI, and Eureka component descriptors. FAR-embedded descriptors are used when their identities match; otherwise the exact module ID is fetched from the configured registry. It never follows descriptor-supplied URLs, chooses “latest,” executes repository code, or reads credentials from the evaluated repository.
+The command fetches `platform-descriptor.json` from exactly that commit and resolves only the required and optional (not experimental) application pins through FAR. FAR-embedded backend and UI descriptors are used when their identities match; otherwise the exact module ID is fetched from the configured registry. For Eureka components, Keycloak, Kong, and Module Sidecar are recorded as intentionally descriptorless infrastructure. The three manager services use an allowlisted `folio-org` repository, exact `v<Platform version>` tag, peeled immutable commit, and fixed `src/main/resources/descriptors/ModuleDescriptor.json` path. Their raw descriptor IDs are preserved even when they differ from the Platform component version. The command never follows descriptor-supplied URLs, chooses “latest,” executes repository code, or reads credentials from the evaluated repository.
 
 Public defaults are `https://far.ci.folio.org` and `https://folio-registry.dev.folio.org`. Maintainers may use `--far-url` and `--registry-url` for trusted environments. Overrides must use HTTPS; HTTP is accepted only for loopback test fixtures. Authentication is not supported, and 401/403 responses are reported clearly.
 
