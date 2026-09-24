@@ -229,6 +229,22 @@ folio-eval evaluate <repo-url> --output ./my-reports --json-only
 folio-eval list-languages
 ```
 
+### Refresh the S008 Interface Catalog
+
+Maintainers can acquire a review bundle for an exact Platform LSP baseline with:
+
+```bash
+yarn acquire:s008-catalog --platform-commit <40-character-commit> --channel official --output-dir /tmp/s008-acquisition
+```
+
+This networked command requires an immutable Platform LSP commit and a new output
+directory. It produces a deterministic, non-authoritative catalog plus snapshots,
+provenance, discovery suggestions, and acquisition diagnostics for review. It never
+modifies the checked-in S008 catalog or acceptance ledger; maintainers must review and
+promote the generated data through the normal repository and TC review processes.
+See [S008 Interface Acceptance](docs/s008-interface-acceptance.md) for artifact details,
+development-channel usage, and the review procedure.
+
 For all CLI options and advanced usage, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Development
