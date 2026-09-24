@@ -324,6 +324,8 @@ function normalizeFakeCriterionReviewResult(
     summary: normalized.summary,
     rationale: normalized.rationale,
     evidenceReferences: normalized.evidenceReferences,
+    assessments: normalized.assessments,
+    reviewerActions: normalized.reviewerActions,
     metadata,
     warnings,
     errors
@@ -336,6 +338,8 @@ export interface NormalizedCriterionAgentAdvisoryPayload {
   summary?: string;
   rationale?: string;
   evidenceReferences: string[];
+  assessments?: CriterionAgentReviewResult['assessments'];
+  reviewerActions?: CriterionAgentReviewResult['reviewerActions'];
   warnings: string[];
 }
 
@@ -345,16 +349,80 @@ export function normalizeCriterionAgentAdvisoryPayload(
 ): NormalizedCriterionAgentAdvisoryPayload {
   const rawEvidenceReferences = Array.isArray(payload.evidenceReferences) ? payload.evidenceReferences : [];
   const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
+  const assessments = normalizeAssessments(payload.assessments, manifestEntries);
+  const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries);
   return {
     recommendation: parseAdvisoryRecommendation(payload.recommendation),
     confidence: parseAdvisoryConfidence(payload.confidence),
     summary: typeof payload.summary === 'string' ? redactSensitiveText(payload.summary) : undefined,
     rationale: typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale) : undefined,
     evidenceReferences,
-    warnings: rawEvidenceReferences.length !== evidenceReferences.length
-      ? ['Dropped uncited or unknown advisory evidence references']
-      : []
+    assessments,
+    reviewerActions,
+    warnings: [
+      ...(rawEvidenceReferences.length !== evidenceReferences.length
+        ? ['Dropped uncited or unknown advisory evidence references']
+        : []),
+      ...(Array.isArray(payload.assessments) && assessments?.length !== payload.assessments.length
+        ? ['Dropped incomplete or uncited advisory assessments']
+        : []),
+      ...(Array.isArray(payload.reviewerActions) && reviewerActions?.length !== payload.reviewerActions.length
+        ? ['Dropped incomplete or uncited reviewer actions']
+        : [])
+    ]
   };
+}
+
+function normalizeAssessments(
+  value: unknown,
+  manifestEntries: string[]
+): CriterionAgentReviewResult['assessments'] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const validTypes = new Set(['aligned_fact', 'substantive_concern', 'analyzer_limitation', 'evidence_gap', 'policy_question']);
+  return value.flatMap(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const candidate = entry as Record<string, unknown>;
+    const evidenceReferences = normalizeAdvisoryEvidenceReferences(
+      Array.isArray(candidate.evidenceReferences) ? candidate.evidenceReferences : [],
+      manifestEntries
+    );
+    const summary = typeof candidate.summary === 'string'
+      ? redactSensitiveText(candidate.summary).trim()
+      : '';
+    if (
+      typeof candidate.technologyId !== 'string' ||
+      typeof candidate.type !== 'string' ||
+      !validTypes.has(candidate.type) ||
+      !summary ||
+      evidenceReferences.length === 0
+    ) return [];
+    return [{
+      technologyId: candidate.technologyId,
+      type: candidate.type as NonNullable<CriterionAgentReviewResult['assessments']>[number]['type'],
+      summary,
+      evidenceReferences
+    }];
+  });
+}
+
+function normalizeReviewerActions(
+  value: unknown,
+  manifestEntries: string[]
+): CriterionAgentReviewResult['reviewerActions'] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const candidate = entry as Record<string, unknown>;
+    const evidenceReferences = normalizeAdvisoryEvidenceReferences(
+      Array.isArray(candidate.evidenceReferences) ? candidate.evidenceReferences : [],
+      manifestEntries
+    );
+    const action = typeof candidate.action === 'string'
+      ? redactSensitiveText(candidate.action).trim()
+      : '';
+    if (!action || evidenceReferences.length === 0) return [];
+    return [{ action, evidenceReferences }];
+  });
 }
 
 function parseAdvisoryRecommendation(value: unknown): CriterionAgentReviewResult['recommendation'] | undefined {

@@ -12,6 +12,7 @@ import {
   hasS007AgentReviewMaterial,
   reviewS007WithAgent
 } from '../utils/s007-agent-review';
+import { loadS007Policy } from '../utils/s007-policy';
 
 describe('S007 agent review', () => {
   let repoPath: string;
@@ -36,6 +37,16 @@ describe('S007 agent review', () => {
       summary: 'Angular is explicitly declared.',
       rationale: 'The manifest identifies an unlisted framework candidate.',
       evidenceReferences: ['package.json'],
+      assessments: [{
+        technologyId: 'angular',
+        type: 'policy_question',
+        summary: 'Angular is declared but has no matched policy entry.',
+        evidenceReferences: ['package.json']
+      }],
+      reviewerActions: [{
+        action: 'Confirm whether Angular is acceptable under the current policy.',
+        evidenceReferences: ['package.json']
+      }],
       warnings: [],
       errors: []
     }));
@@ -64,6 +75,40 @@ describe('S007 agent review', () => {
     expect(summary).toContain('backend-third-party-frameworks');
     expect(summary).toContain('unresolved');
     expect(summary).not.toContain('resolvedVersion');
+  });
+
+  it('supplies compliant findings and applicable trusted policy alongside unresolved findings', async () => {
+    await write('pom.xml', '<project />');
+    const springBoot = manualFinding('spring-boot', 'pom.xml', 'contested');
+    springBoot.matchedPolicy = {
+      sectionId: 'backend-third-party-frameworks',
+      entryId: 'spring-boot',
+      displayName: 'Spring Boot',
+      strength: 'contested',
+      sourceStatement: 'Spring Boot 4.0 required at Trillium GA',
+      constraint: { kind: 'major-line', expression: '4' }
+    };
+    const folio = {
+      ...manualFinding('folio-spring-base', 'pom.xml', 'compliant'),
+      contribution: 'pass' as const,
+      rationale: 'Version meets the policy minimum.'
+    };
+    const analysis = manualAnalysis(springBoot);
+    analysis.findings.push(folio);
+    const policyLoad = await loadS007Policy();
+    expect(policyLoad.ok).toBe(true);
+    if (!policyLoad.ok) return;
+
+    const request = buildS007AgentReviewRequest(repoPath, analysis, policyLoad.policy);
+    const summary = JSON.parse(request.files.find(file => file.repoRelativePath === '.criterion-agent/S007/deterministic-summary.json')!.content);
+
+    expect(summary.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'spring-boot' }),
+      expect.objectContaining({ technologyId: 'folio-spring-base', classification: 'compliant' })
+    ]));
+    expect(summary.policyContext.applicableSections[0].entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'spring-boot', strength: 'contested' })
+    ]));
   });
 
   it('includes only validated local version-source provenance', async () => {
@@ -247,13 +292,13 @@ describe('S007 agent review', () => {
     expect(review.errors.join('\n')).toContain('No valid repository-backed declarations');
   });
 
-  it('does not invoke agent review for policy-only manual classifications', async () => {
+  it('makes policy-driven manual classifications available to the human-like review', async () => {
     await write('pom.xml', '<project />');
     for (const classification of ['advisory-only', 'advisory-mismatch', 'provisional', 'contested'] as const) {
       expect(hasS007AgentReviewMaterial(
         repoPath,
         manualAnalysis(manualFinding('spring-boot', 'pom.xml', classification))
-      )).toBe(false);
+      )).toBe(true);
     }
   });
 
@@ -292,6 +337,12 @@ describe('S007 agent review', () => {
       summary: 'This should pass.',
       rationale: 'Agent wording has no status authority.',
       evidenceReferences: ['package.json', '../unknown'],
+      assessments: [{
+        technologyId: 'react',
+        type: 'aligned_fact',
+        summary: 'React is explicitly declared.',
+        evidenceReferences: ['package.json']
+      }],
       warnings: [],
       errors: []
     }));
@@ -300,6 +351,115 @@ describe('S007 agent review', () => {
     expect(review.recommendation).toBe('likely_sufficient');
     expect(review.evidenceReferences).toEqual(['package.json']);
     expect(review.warnings.join('\n')).toContain('Dropped');
+  });
+
+  it('rejects a likely-insufficient recommendation that only reports an evidence gap', async () => {
+    await write('pom.xml', '<project />');
+    const analysis = manualAnalysis(manualFinding('spring-boot', 'pom.xml', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'likely_insufficient',
+      confidence: 'medium',
+      summary: 'The effective version is unknown.',
+      rationale: 'No version was resolved.',
+      evidenceReferences: ['pom.xml'],
+      assessments: [{
+        technologyId: 'spring-boot',
+        type: 'evidence_gap',
+        summary: 'The effective Spring Boot version cannot be established.',
+        evidenceReferences: ['pom.xml']
+      }],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('did not identify a cited substantive concern');
+  });
+
+  it('rejects a likely-insufficient recommendation with a blank substantive concern', async () => {
+    await write('pom.xml', '<project />');
+    const analysis = manualAnalysis(manualFinding('spring-boot', 'pom.xml', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'likely_insufficient',
+      confidence: 'medium',
+      summary: 'A concern was claimed.',
+      rationale: 'The claimed concern has no content.',
+      evidenceReferences: ['pom.xml'],
+      assessments: [{
+        technologyId: 'spring-boot',
+        type: 'substantive_concern',
+        summary: '   ',
+        evidenceReferences: ['pom.xml']
+      }],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('no cited practical assessments');
+  });
+
+  it('rejects reviewer judgment with a blank reviewer action', async () => {
+    await write('pom.xml', '<project />');
+    const analysis = manualAnalysis(manualFinding('spring-boot', 'pom.xml', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium',
+      summary: 'Reviewer judgment is needed.',
+      rationale: 'The action has no content.',
+      evidenceReferences: ['pom.xml'],
+      assessments: [{
+        technologyId: 'spring-boot',
+        type: 'policy_question',
+        summary: 'The policy applicability remains unclear.',
+        evidenceReferences: ['pom.xml']
+      }],
+      reviewerActions: [{ action: '\n\t ', evidenceReferences: ['pom.xml'] }],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('did not provide a cited reviewer action');
+  });
+
+  it('rejects assessments and actions cited only to the generated summary', async () => {
+    await write('pom.xml', '<project />');
+    const analysis = manualAnalysis(manualFinding('spring-boot', 'pom.xml', 'unresolved'));
+
+    const review = await reviewS007WithAgent(repoPath, analysis, fakeConfig({
+      available: true,
+      criterionId: 'S007',
+      recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium',
+      summary: 'Reviewer judgment is needed.',
+      rationale: 'The generated summary describes a gap.',
+      evidenceReferences: ['pom.xml'],
+      assessments: [{
+        technologyId: 'spring-boot',
+        type: 'evidence_gap',
+        summary: 'The version is unresolved.',
+        evidenceReferences: ['.criterion-agent/S007/deterministic-summary.json']
+      }],
+      reviewerActions: [{
+        action: 'Obtain the effective version.',
+        evidenceReferences: ['.criterion-agent/S007/deterministic-summary.json']
+      }],
+      warnings: [],
+      errors: []
+    }));
+
+    expect(review.available).toBe(false);
+    expect(review.errors.join('\n')).toContain('assessment without repository evidence');
   });
 
   async function write(relativePath: string, content: string): Promise<void> {

@@ -143,6 +143,15 @@ export interface S007TechnologyObservation {
   declaredVersion?: string;
   resolvedVersion?: string;
   versionSourcePath?: string;
+  resolutionSource?: 'maven-effective-pom';
+  mavenDependency?: {
+    groupId: string;
+    artifactId: string;
+    type: string;
+    classifier: string;
+  };
+  repositoryDeclared?: true;
+  versionResolutionEligible?: false;
   confidence: 'confident' | 'partial';
   provenance: 'repository-static' | 'shared-remote-resolution';
   unlistedFrameworkCandidate?: true;
@@ -156,6 +165,7 @@ export interface S007EvidenceDiagnostic {
     | 'manifest_too_large'
     | 'insufficient_evidence'
     | 'version_unresolved'
+    | 'effective_model_unrepresented'
     | 'maven_remote_parent'
     | 'maven_imported_bom'
     | 'gradle_dynamic_expression'
@@ -178,6 +188,10 @@ export interface S007TechnologyEvidenceResult {
   observations: S007TechnologyObservation[];
   diagnostics: S007EvidenceDiagnostic[];
   manifestPaths: string[];
+  suppressedMavenDependencies?: Array<{
+    sourcePath: string;
+    dependency: NonNullable<S007TechnologyObservation['mavenDependency']>;
+  }>;
   complete: boolean;
 }
 
@@ -210,6 +224,7 @@ export interface S007FindingEvidence {
   declaredVersion?: string;
   resolvedVersion?: string;
   versionSourcePath?: string;
+  resolutionSource?: 'maven-effective-pom';
 }
 
 export interface S007TechnologyFinding {

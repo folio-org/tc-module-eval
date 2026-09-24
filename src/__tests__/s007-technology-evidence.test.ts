@@ -68,7 +68,17 @@ describe('S007 static technology evidence', () => {
 
     const result = await collectS007TechnologyEvidence(repoPath, 'java');
 
-    expect(find(result, 'spring-boot')).toMatchObject({ declaredVersion: undefined, sourcePath: 'pom.xml' });
+    expect(find(result, 'spring-boot')).toMatchObject({
+      declaredVersion: undefined,
+      sourcePath: 'pom.xml',
+      repositoryDeclared: true,
+      mavenDependency: {
+        groupId: 'org.springframework.boot',
+        artifactId: 'spring-boot-starter-web',
+        type: 'jar',
+        classifier: ''
+      }
+    });
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'maven_remote_parent', material: true }),
       expect.objectContaining({ code: 'version_unresolved', material: true })

@@ -710,7 +710,7 @@ describe('CLI Integration Tests', () => {
         expect(jsonS007.status).toBe('pass');
         expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
         expect(embeddedReportData(html).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'S007' })]));
-        expect(html).toContain('contribution=pass');
+        expect(html).toContain('Result contribution: pass');
         expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
       } finally {
         await fs.remove(localRepo);

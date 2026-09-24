@@ -416,6 +416,8 @@ function normalizeOpenCodeResult(
     summary: normalized.summary,
     rationale: normalized.rationale,
     evidenceReferences: normalized.evidenceReferences,
+    assessments: normalized.assessments,
+    reviewerActions: normalized.reviewerActions,
     metadata: openCodeMetadata(config, workspace),
     warnings: normalized.warnings,
     errors: []

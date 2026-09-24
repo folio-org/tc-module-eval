@@ -295,16 +295,26 @@ describe('EvaluationReportRenderer', () => {
     const renderer = new EvaluationReportRenderer();
     const json = JSON.parse(renderer.renderJson(s007Result));
     const html = renderer.renderHtml(s007Result);
+    const data = reportData(html);
 
     expect(json.criteria[0].criterionDetails.findings.map((finding: any) => finding.contribution)).toEqual(['fail', 'manual']);
     expect(json.criteria[0].criterionDetails.findings[0].matchedPolicy.entryId).toBe('react');
     expect(json.criteria[0].criterionDetails.findings[0].evidence[0].versionSourcePath).toBe('yarn.lock');
+    expect(data.items[0].title).toBe('Officially supported technologies');
+    expect(data.items[0].details).toEqual(expect.arrayContaining([
+      expect.stringContaining('React <script>alert("x")</script> (react): Violates a mandatory rule.'),
+      '    - Policy entry: frontend-third-party-frameworks/react',
+      '    - Rule strength: normative',
+      '        - Declared version: 17.0.2',
+      '        - Resolved version: 17.0.2',
+      '        - Version source: yarn.lock'
+    ]));
     expect(html).toContain('frontend-third-party-frameworks/react');
-    expect(html).toContain('contribution=fail');
-    expect(html).toContain('contribution=manual');
-    expect(html).toContain('declared=17.0.2');
-    expect(html).toContain('resolved=17.0.2');
-    expect(html).toContain('version source=yarn.lock');
+    expect(html).toContain('Result contribution: fail');
+    expect(html).toContain('Result contribution: manual');
+    expect(html).toContain('Declared version: 17.0.2');
+    expect(html).toContain('Resolved version: 17.0.2');
+    expect(html).toContain('Version source: yarn.lock');
     expect(html).toContain('package\\u003cscript\\u003e.json');
     expect(html).not.toContain('<script>alert("x")</script>');
     expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');

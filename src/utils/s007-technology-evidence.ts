@@ -15,10 +15,15 @@ const MAX_MANIFESTS = 64;
 const MAX_OBSERVATIONS = 1024;
 const MAX_MAVEN_PROPERTY_DEPTH = 16;
 
-interface EvidenceContext {
-  repoPath: string;
+interface EvidenceFinalizationContext {
   observations: S007TechnologyObservation[];
   diagnostics: S007EvidenceDiagnostic[];
+  presenceOnlyObservations: Set<S007TechnologyObservation>;
+  suppressedMavenDependencies: NonNullable<S007TechnologyEvidenceResult['suppressedMavenDependencies']>;
+}
+
+interface EvidenceContext extends EvidenceFinalizationContext {
+  repoPath: string;
   manifestPaths: Set<string>;
   manifestContents: Map<string, string>;
   visited: Set<string>;
@@ -26,16 +31,17 @@ interface EvidenceContext {
   gradleModuleCandidates: number;
   mavenContexts: Map<string, MavenContext>;
   observationKeys: Set<string>;
-  presenceOnlyObservations: Set<S007TechnologyObservation>;
 }
 
-interface Identity {
+export interface S007JavaIdentity {
   id: string;
   displayName: string;
   ecosystem: S007Ecosystem;
   technologyType: 'language' | 'framework' | 'library';
   unlisted?: true;
 }
+
+type Identity = S007JavaIdentity;
 
 interface MavenContext {
   properties: Map<string, { value: string; sourcePath: string }>;
@@ -87,7 +93,8 @@ export async function collectS007TechnologyEvidence(
     gradleModuleCandidates: 0,
     mavenContexts: new Map<string, MavenContext>(),
     observationKeys: new Set<string>(),
-    presenceOnlyObservations: new Set<S007TechnologyObservation>()
+    presenceOnlyObservations: new Set<S007TechnologyObservation>(),
+    suppressedMavenDependencies: []
   };
 
   if (language === 'javascript') {
@@ -107,6 +114,33 @@ export async function collectS007TechnologyEvidence(
     observations: context.observations,
     diagnostics: context.diagnostics,
     manifestPaths: [...context.manifestPaths].sort(),
+    suppressedMavenDependencies: context.suppressedMavenDependencies,
+    complete: !context.diagnostics.some(item => item.material)
+  };
+}
+
+export function finalizeS007TechnologyEvidence(
+  evidence: S007TechnologyEvidenceResult
+): S007TechnologyEvidenceResult {
+  const context: EvidenceFinalizationContext = {
+    observations: evidence.observations.map(observation => ({
+      ...observation,
+      conflictPaths: observation.conflictPaths ? [...observation.conflictPaths] : undefined
+    })),
+    diagnostics: [...evidence.diagnostics],
+    presenceOnlyObservations: new Set(),
+    suppressedMavenDependencies: [...(evidence.suppressedMavenDependencies ?? [])]
+  };
+  context.presenceOnlyObservations = new Set(
+    context.observations.filter(observation => observation.versionResolutionEligible === false)
+  );
+  finalizePresenceOnlyObservations(context);
+  markConflicts(context);
+  return {
+    ...evidence,
+    observations: context.observations,
+    diagnostics: context.diagnostics,
+    suppressedMavenDependencies: context.suppressedMavenDependencies,
     complete: !context.diagnostics.some(item => item.material)
   };
 }
@@ -426,6 +460,7 @@ function collectMavenDependencies(
       continue;
     }
     const coordinates = `${groupId}:${artifactId}`;
+    const mavenDependency = resolveMavenDependencyKey(dependency, groupId, artifactId, effective, sourcePath);
     if (isGrailsPluginArtifact(groupId)) {
       addPresenceOnlyObservation(context, {
         identityCandidates: [matched.id, coordinates, groupId],
@@ -436,7 +471,10 @@ function collectMavenDependencies(
         sourcePath,
         sourceDetail: coordinates,
         confidence: 'partial',
-        provenance: 'repository-static'
+        provenance: 'repository-static',
+        mavenDependency,
+        repositoryDeclared: true,
+        versionResolutionEligible: false
       });
       continue;
     }
@@ -459,12 +497,30 @@ function collectMavenDependencies(
       versionSourcePath: resolved?.sourcePath,
       confidence: resolved ? 'confident' : 'partial',
       provenance: 'repository-static',
+      mavenDependency,
+      repositoryDeclared: true,
       unlistedFrameworkCandidate: matched.unlisted
     });
     if (!resolved) {
       diagnostic(context, 'version_unresolved', `Version for ${coordinates} could not be resolved from local Maven metadata.`, true, sourcePath);
     }
   }
+}
+
+function resolveMavenDependencyKey(
+  dependency: any,
+  groupId: string,
+  artifactId: string,
+  effective: MavenContext,
+  sourcePath: string
+): S007TechnologyObservation['mavenDependency'] | undefined {
+  const rawType = xmlText(dependency.type) || 'jar';
+  const rawClassifier = xmlText(dependency.classifier);
+  const type = resolveMavenValue(rawType, effective.properties, sourcePath)?.value;
+  const classifier = rawClassifier
+    ? resolveMavenValue(rawClassifier, effective.properties, sourcePath)?.value
+    : '';
+  return type && classifier !== undefined ? { groupId, artifactId, type, classifier } : undefined;
 }
 
 function collectGradleEvidence(context: EvidenceContext): void {
@@ -927,7 +983,7 @@ function parseGradleIncludes(content: string): string[] {
   return [...new Set(modules)];
 }
 
-function matchJavaIdentity(groupId: string, artifactId: string): Identity | undefined {
+export function matchJavaIdentity(groupId: string, artifactId: string): S007JavaIdentity | undefined {
   const coordinate = `${groupId}:${artifactId}`;
   if (JAVA_EXACT_IDENTITIES[coordinate]) {
     return JAVA_EXACT_IDENTITIES[coordinate];
@@ -963,7 +1019,7 @@ function addPresenceOnlyObservation(context: EvidenceContext, observation: S007T
   }
 }
 
-function finalizePresenceOnlyObservations(context: EvidenceContext): void {
+function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext): void {
   for (const observation of context.presenceOnlyObservations) {
     const authoritative = context.observations.some(candidate =>
       candidate !== observation
@@ -971,7 +1027,27 @@ function finalizePresenceOnlyObservations(context: EvidenceContext): void {
       && Boolean(candidate.resolvedVersion ?? candidate.declaredVersion)
     );
     if (authoritative) {
+      if (observation.mavenDependency) {
+        if (!context.suppressedMavenDependencies.some(suppressed =>
+          suppressed.sourcePath === observation.sourcePath
+          && suppressed.dependency.groupId === observation.mavenDependency!.groupId
+          && suppressed.dependency.artifactId === observation.mavenDependency!.artifactId
+          && suppressed.dependency.type === observation.mavenDependency!.type
+          && suppressed.dependency.classifier === observation.mavenDependency!.classifier
+        )) {
+          context.suppressedMavenDependencies.push({
+            sourcePath: observation.sourcePath,
+            dependency: observation.mavenDependency
+          });
+        }
+      }
       context.observations = context.observations.filter(candidate => candidate !== observation);
+      const message = `The ${observation.sourceDetail} artifact proves Grails presence but not the Grails framework version.`;
+      context.diagnostics = context.diagnostics.filter(diagnostic =>
+        diagnostic.code !== 'version_unresolved'
+        || diagnostic.path !== observation.sourcePath
+        || diagnostic.message !== message
+      );
       continue;
     }
     diagnostic(
@@ -984,7 +1060,7 @@ function finalizePresenceOnlyObservations(context: EvidenceContext): void {
   }
 }
 
-function markConflicts(context: EvidenceContext): void {
+function markConflicts(context: EvidenceFinalizationContext): void {
   const groups = new Map<string, S007TechnologyObservation[]>();
   for (const observation of context.observations) {
     const id = observation.identityCandidates[0];
@@ -1079,7 +1155,7 @@ function addObservation(context: EvidenceContext, observation: S007TechnologyObs
 }
 
 function diagnostic(
-  context: EvidenceContext,
+  context: Pick<EvidenceContext, 'diagnostics'>,
   code: S007EvidenceDiagnostic['code'],
   message: string,
   material: boolean,
