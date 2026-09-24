@@ -93,7 +93,8 @@ function evaluateObservation(
       detail: observation.sourceDetail,
       declaredVersion: observation.declaredVersion,
       resolvedVersion: observation.resolvedVersion,
-      versionSourcePath: observation.versionSourcePath
+      versionSourcePath: observation.versionSourcePath,
+      resolutionSource: observation.resolutionSource
     }],
     advisories: [] as string[],
     statusDetermining: false
@@ -119,10 +120,6 @@ function evaluateObservation(
     ...(entry.notes ?? [])
   ];
 
-  if (observation.provenance !== 'repository-static') {
-    return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
-      'The available version came from remote resolution and is diagnostic only; local repository evidence is required for deterministic status.');
-  }
   if (observation.conflictPaths?.length) {
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
       `Conflicting declarations were found in ${observation.conflictPaths.join(', ')}.`);
@@ -138,6 +135,13 @@ function evaluateObservation(
   if (applicableRule.strength === 'provisional' || entry.provisional) {
     return finding(base, matchedPolicy, advisories, 'provisional', 'manual',
       'The matched OST entry is provisional and cannot determine compliance automatically.');
+  }
+  if (
+    observation.provenance !== 'repository-static' &&
+    observation.resolutionSource !== 'maven-effective-pom'
+  ) {
+    return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
+      'The available version came from remote resolution and is diagnostic only; local repository evidence is required for deterministic status.');
   }
 
   const comparison = compareObservationToConstraint(observation, applicableRule.constraint);
@@ -307,7 +311,7 @@ function resolveApplicableRule(
 
     const observationOwner = sourceOwner(observation.sourcePath);
     const grailsOwners = evidence.observations.filter(candidate =>
-      candidate.provenance === 'repository-static'
+      (candidate.provenance === 'repository-static' || candidate.repositoryDeclared === true)
       && findPolicyEntry(candidate, sections)?.entry.id === 'grails'
     ).map(candidate => sourceOwner(candidate.sourcePath));
     if (grailsOwners.includes(observationOwner)) {

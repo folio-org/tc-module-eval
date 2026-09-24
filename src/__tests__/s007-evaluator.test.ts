@@ -119,6 +119,54 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'advisory-mismatch', contribution: 'manual' });
   });
 
+  it('uses an approved Maven effective-POM version for normative comparison', () => {
+    const lombok = observation('lombok', undefined, '1.18.48');
+    lombok.provenance = 'shared-remote-resolution';
+    lombok.resolutionSource = 'maven-effective-pom';
+
+    const result = evaluateS007(policy, evidence([lombok]), 'java');
+
+    expect(result.findings[0]).toMatchObject({
+      technologyId: 'lombok',
+      classification: 'compliant',
+      contribution: 'pass',
+      evidence: [expect.objectContaining({
+        resolvedVersion: '1.18.48',
+        resolutionSource: 'maven-effective-pom'
+      })]
+    });
+  });
+
+  it('can fail a normative rule from a validated Maven effective-POM version', () => {
+    const lombok = observation('lombok', undefined, '1.18.20');
+    lombok.provenance = 'shared-remote-resolution';
+    lombok.resolutionSource = 'maven-effective-pom';
+
+    const result = evaluateS007(policy, evidence([lombok]), 'java');
+
+    expect(result.findings[0]).toMatchObject({
+      technologyId: 'lombok',
+      classification: 'normative-violation',
+      contribution: 'fail'
+    });
+  });
+
+  it('retains the Java 17 exception for repository-declared Grails enriched by an effective POM', () => {
+    const grails = observation('grails', undefined, '7', 'pom.xml');
+    grails.provenance = 'shared-remote-resolution';
+    grails.resolutionSource = 'maven-effective-pom';
+    grails.repositoryDeclared = true;
+    const result = evaluateS007(policy, evidence([
+      observation('java', '17', '17', 'pom.xml'),
+      grails
+    ]), 'java');
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'java', classification: 'compliant' }),
+      expect.objectContaining({ technologyId: 'grails', classification: 'compliant' })
+    ]));
+  });
+
   it('returns manual without comparing partial data when policy loading failed', () => {
     const invalidPolicy: S007PolicyLoadResult = {
       ok: false,
@@ -152,12 +200,16 @@ describe('S007 deterministic evaluator', () => {
     const angular = observation('angular', '^18.0.0');
     angular.unlistedFrameworkCandidate = true;
     const result = evaluateS007(policy, evidence([
-      observation('react', '17.0.2', '17.0.2'),
-      angular
+      angular,
+      observation('react', '17.0.2', '17.0.2')
     ]), 'javascript');
+    const details = renderS007HumanDetails(result);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings.map(finding => finding.contribution)).toEqual(expect.arrayContaining(['fail', 'manual']));
+    expect(details).toContain('react (react): Violates a mandatory rule. Determines overall result: Fail.');
+    expect(details).toContain('angular (angular): Needs review: technology is not listed in policy.');
+    expect(details.indexOf('react (react)')).toBeLessThan(details.indexOf('angular (angular)'));
   });
 
   it('returns manual for a partially overlapping declared range without an exact resolution', () => {
@@ -266,15 +318,54 @@ describe('S007 deterministic evaluator', () => {
     const details = renderS007HumanDetails(analysis);
     const finding = analysis.findings[0];
 
+    expect(analysis.policyFormatVersion).toBe('1.0');
+    expect(details).not.toContain('Policy format:');
+    expect(details).not.toContain(analysis.summary);
     expect(details).toContain(finding.displayName);
     expect(details).toContain(finding.classification);
     expect(details).toContain(finding.contribution);
     expect(details).toContain(finding.evidence[0].path);
-    expect(details).toContain('declared=17.0.2');
-    expect(details).toContain('resolved=17.0.2');
-    expect(details).toContain('version source=yarn.lock');
+    expect(details).toContain('Declared version: 17.0.2');
+    expect(details).toContain('Resolved version: 17.0.2');
+    expect(details).toContain('Version source: yarn.lock');
     expect(details).toContain(finding.matchedPolicy!.entryId);
     expect(details).toContain(finding.matchedPolicy!.strength);
+  });
+
+  it('groups repeated technology observations while retaining each declaration', () => {
+    const web = observation('spring-boot', undefined, undefined, 'first/pom.xml');
+    web.sourceDetail = 'org.springframework.boot:spring-boot-starter-web';
+    const validation = observation('spring-boot', undefined, undefined, 'second/pom.xml');
+    validation.sourceDetail = 'org.springframework.boot:spring-boot-starter-validation';
+    const analysis = evaluateS007(policy, evidence([web, validation]), 'java');
+    const details = renderS007HumanDetails(analysis);
+
+    expect(details.match(/^- spring-boot \(spring-boot\):/gm)).toHaveLength(1);
+    expect(details).toContain('Needs review: policy wording is contested or time-bound.');
+    expect(details).toContain('org.springframework.boot:spring-boot-starter-web — Needs review: policy wording is contested or time-bound');
+    expect(details).toContain('org.springframework.boot:spring-boot-starter-validation — Needs review: policy wording is contested or time-bound');
+    expect(details).toContain('Classification: contested');
+    expect(details).toContain('Result contribution: manual');
+    expect(details).toContain('first/pom.xml — org.springframework.boot:spring-boot-starter-web');
+    expect(details).toContain('second/pom.xml — org.springframework.boot:spring-boot-starter-validation');
+  });
+
+  it('summarizes mixed findings without hiding fail precedence', () => {
+    const analysis = evaluateS007(policy, evidence([
+      observation('react', '17.0.2', '17.0.2', 'unsupported/package.json'),
+      observation('react', '>=18.0.0 <18.3.0', undefined, 'unresolved/package.json'),
+      observation('react', '18.2.3', '18.2.3', 'supported/package.json')
+    ]), 'javascript');
+    const details = renderS007HumanDetails(analysis);
+
+    expect(analysis.status).toBe(EvaluationStatus.FAIL);
+    expect(details.match(/^- react \(react\):/gm)).toHaveLength(1);
+    expect(details).toContain(
+      'Mixed results: 1 violates a mandatory rule, 1 needs review, 1 complies. Determines overall result: Fail.'
+    );
+    expect(details).toContain('unsupported/package.json');
+    expect(details).toContain('unresolved/package.json');
+    expect(details).toContain('supported/package.json');
   });
 });
 

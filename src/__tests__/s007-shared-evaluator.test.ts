@@ -4,6 +4,8 @@ import path from 'path';
 import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import {
+  CommandExecutionRequest,
+  CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
   EvaluationRun,
@@ -14,6 +16,44 @@ import {
 import * as EvaluationRunUtils from '../utils/evaluation-run';
 
 class TestJavaSharedEvaluator extends SharedEvaluator {}
+
+class EffectivePomRunner implements CommandRunner {
+  requests: CommandExecutionRequest[] = [];
+
+  normalize(request: CommandExecutionRequest): string {
+    return JSON.stringify(request);
+  }
+
+  async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+    this.requests.push(request);
+    const output = request.args?.find(argument => argument.startsWith('-Doutput='))?.slice('-Doutput='.length);
+    if (output) {
+      await fs.writeFile(output, `
+        <project>
+          <groupId>org.folio</groupId><artifactId>mod-example</artifactId><version>1</version>
+          <dependencies>
+            <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId><version>4.1.1</version></dependency>
+            <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.42</version></dependency>
+          </dependencies>
+        </project>
+      `);
+    }
+    return {
+      identity: this.normalize(request),
+      command: request.command,
+      args: request.args ?? [],
+      cwd: request.cwd,
+      commandExecutionEnvironment: 'local',
+      localCommandsAllowed: true,
+      status: 'success',
+      exitCode: 0,
+      durationMs: 1,
+      stdout: '',
+      stderr: '',
+      sanitized: true
+    };
+  }
+}
 
 describe('S007 shared evaluator', () => {
   let repoPath: string;
@@ -98,6 +138,49 @@ describe('S007 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(details.agentReviewUnavailableReason).toContain('disabled or unconfigured');
     expect(result.details!.indexOf('Technology findings:')).toBeLessThan(result.details!.indexOf('Agent review:'));
+    expect(result.details).toContain('Agent review:\n  - Not applied: agent review is disabled or unconfigured');
+  });
+
+  it('enriches unresolved Maven versions through the approved command runner', async () => {
+    await write('pom.xml', `
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>4.1.1</version><relativePath /></parent>
+        <groupId>org.folio</groupId><artifactId>mod-example</artifactId><version>1</version>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+          <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+        </dependencies>
+      </project>
+    `);
+    const runner = new EffectivePomRunner();
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java', runner));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(runner.requests).toHaveLength(1);
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'spring-boot',
+        classification: 'contested',
+        evidence: [expect.objectContaining({
+          resolvedVersion: '4.1.1',
+          resolutionSource: 'maven-effective-pom'
+        })]
+      }),
+      expect.objectContaining({
+        technologyId: 'lombok',
+        classification: 'compliant',
+        evidence: [expect.objectContaining({ resolvedVersion: '1.18.42' })]
+      })
+    ]));
+    expect(details.evidenceDiagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'maven_remote_parent' }),
+      expect.objectContaining({ code: 'version_unresolved' })
+    ]));
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('Resolution method: Maven effective POM');
   });
 
   it('attaches an available advisory end to end without changing manual status', async () => {
@@ -116,6 +199,16 @@ describe('S007 shared evaluator', () => {
         summary: 'Vue is explicitly declared.',
         rationale: 'The manifest establishes an unlisted framework candidate.',
         evidenceReferences: ['package.json'],
+        assessments: [{
+          technologyId: 'vue',
+          type: 'policy_question',
+          summary: 'Vue is declared but has no matched policy entry.',
+          evidenceReferences: ['package.json']
+        }],
+        reviewerActions: [{
+          action: 'Confirm whether Vue is acceptable under the current policy.',
+          evidenceReferences: ['package.json']
+        }],
         warnings: [],
         errors: []
       }
@@ -134,6 +227,9 @@ describe('S007 shared evaluator', () => {
       evidenceReferences: ['package.json']
     });
     expect(result.details).toContain('Vue is explicitly declared.');
+    expect(result.details).toContain('Practical assessments:');
+    expect(result.details).toContain('Reviewer actions:');
+    expect(result.details).toContain('Deterministic result remains Manual.');
   });
 
   it('preserves fail precedence and both contributions', async () => {

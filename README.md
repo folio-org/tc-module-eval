@@ -39,13 +39,20 @@ S007 evaluates a module against the current policy committed at
 `config/officially-supported-technologies.json`. There is no policy selector and no
 separate policy per delivery train. Git history preserves prior policy states.
 
-The evaluation is static and read-only. It inspects local Maven and Gradle metadata,
-`package.json`, and a top-level Yarn Classic lockfile. It does not run a build, install
-dependencies, call Confluence, or modify the evaluated repository. A definitive,
-locally proven violation of a normative rule fails. Unresolved, conflicting,
-advisory, provisional, contested, unlisted-framework, or incomplete evidence remains
-manual. Pass requires complete relevant evidence and compliance with every applicable
-definitive rule.
+By default, evaluation is static and read-only. It inspects local Maven and Gradle
+metadata, `package.json`, and a top-level Yarn Classic lockfile. With
+`--allow-local-commands`, Java evaluation may run the pinned Maven Help Plugin
+`effective-pom` goal to process remote parents and BOMs for otherwise unresolved
+dependency versions. Versions from a successfully validated, explicitly approved
+effective POM participate in normative policy comparisons; other remote-derived
+evidence remains diagnostic only. Default static S007 evaluation does not run a build,
+call Confluence, or modify the evaluated repository. The opt-in Maven command does not
+request a build lifecycle, but Maven model construction is not filesystem- or
+network-isolated and may modify a trusted repository; see
+[`docs/criterion-notes.md`](docs/criterion-notes.md). A definitive violation of a normative rule fails.
+Unresolved, conflicting, advisory, provisional, contested, unlisted-framework, or
+incomplete evidence remains manual. Pass requires complete relevant evidence and
+compliance with every applicable definitive rule.
 
 To update the policy:
 

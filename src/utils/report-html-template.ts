@@ -7,7 +7,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S003: 'Third-party licenses',
   S004: 'Installation documentation',
   S005: 'Personal data disclosure',
-  S006: 'Sensitive information'
+  S006: 'Sensitive information',
+  S007: 'Officially supported technologies'
 };
 
 function escapeHtml(text: string): string {
@@ -157,8 +158,17 @@ export function createHtmlReport(result: EvaluationResult): string {
       var human = placeholder || (item.details[0] || '').indexOf('This criterion requires manual evaluation') === 0;
       var evidence = item.evidence.replace(/^S\d+ manual:\s*/,'');
       var tree = human ? [] : buildTree(item.details);
+      if (item.id === 'S007') {
+        var technologyFindings = tree.find(function (node) { return /^Technology findings:?$/.test(node.text); });
+        if (technologyFindings) technologyFindings.children.forEach(function (node) {
+          node.unit = /^Repository evidence coverage:/.test(node.text)
+            ? (node.children.length === 1 ? 'limitation' : 'limitations')
+            : (node.children.length === 1 ? 'observation' : 'observations');
+          node.children.forEach(function (observation) { observation.hideCount = true; });
+        });
+      }
       var agentIndex = tree.findIndex(function (node) { return /^Agent review:?$/.test(node.text); });
-      if (agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
+      if (item.id !== 'S007' && agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
       var licenses = evidence.match(/^(Found (\d+) dependencies\.)\s*Licenses:\s*(.+)$/s);
       if (licenses) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';
@@ -278,7 +288,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         var key=prefix+'/'+index,kids=node.children.length,isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection;
         if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')),h('span','count-chip',String(node.countText||kids)),h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
-        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead)copy.appendChild(h('span','lead',parts.lead));if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span',/^\.\.\. \d+ more$/.test(node.text)?'more-text':'');clampedText(body,parts.text,key);copy.appendChild(body);if(kids)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
+        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead)copy.appendChild(h('span','lead',parts.lead));if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span',/^\.\.\. \d+ more$/.test(node.text)?'more-text':'');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
         if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key);
       });
       if(list.length<nodes.length){var show=h('button','list-more','Show '+(nodes.length-list.length)+' more');show.type='button';focusKey(show,'more-'+moreKey);show.addEventListener('click',function(){state.nodes[moreKey]=true;render();});parent.appendChild(show);}else if(showAll){var fewer=h('button','list-more','Show fewer');fewer.type='button';focusKey(fewer,'more-'+moreKey);fewer.addEventListener('click',function(){state.nodes[moreKey]=false;render();});parent.appendChild(fewer);}
