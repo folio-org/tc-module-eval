@@ -490,10 +490,14 @@ describe('criterion agent review', () => {
       instructions: 'review',
       files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
       schemaDescription: 'schema'
-    }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json'));
+    }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json', {
+      3: { stdoutDiagnostics: ['record 1: other; Invalid framing'] }
+    }));
 
     expect(result.available).toBe(false);
     expect(result.errors).toContain('OpenCode returned malformed JSON');
+    expect(result.errors).toContain('OpenCode decode: invalid transport record');
+    expect(result.errors).toContain('OpenCode capture: record 1: other; Invalid framing');
     expect(result.errors.join('\n')).toContain('OpenCode run:');
     expect(result.metadata).toMatchObject({
       adapter: 'opencode',

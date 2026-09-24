@@ -108,7 +108,11 @@ export async function runOpenCodeAgentReview(
   }
 
   const result = normalizeOpenCodeResult(decoded, request, workspace, config);
-  if (!result.available) result.errors.push(commandContext('run', run, config));
+  if (!result.available) {
+    result.errors.push(commandContext('run', run, config));
+    if (decoded.diagnostic) result.errors.push(`OpenCode decode: ${decoded.diagnostic}`);
+    result.errors.push(...(run.stdoutDiagnostics ?? []).map(diagnostic => `OpenCode capture: ${diagnostic}`));
+  }
   return result;
 }
 

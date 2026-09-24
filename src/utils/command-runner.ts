@@ -196,6 +196,7 @@ export class LocalCommandRunner implements CommandRunner {
           stderr,
           stdoutBytes,
           stderrBytes,
+          stdoutDiagnostics: structured?.diagnostics,
           stdoutTruncated: stdoutBytes > maxOutputBytes || (structured?.truncated ?? Buffer.byteLength(stdout) > maxOutputBytes),
           stderrTruncated: stderrBytes > maxOutputBytes || Buffer.byteLength(stderr) > maxOutputBytes,
           errorMessage: status === 'timed_out'
@@ -262,6 +263,7 @@ export class LocalCommandRunner implements CommandRunner {
       stderr: values.stderr ?? '',
       stdoutBytes: values.stdoutBytes,
       stderrBytes: values.stderrBytes,
+      stdoutDiagnostics: values.stdoutDiagnostics,
       stdoutTruncated: values.stdoutTruncated,
       stderrTruncated: values.stderrTruncated,
       errorMessage: values.errorMessage,

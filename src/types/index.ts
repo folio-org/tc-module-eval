@@ -83,6 +83,7 @@ export interface CommandExecutionResult {
   stderr: string;
   stdoutBytes?: number;
   stderrBytes?: number;
+  stdoutDiagnostics?: string[];
   stdoutTruncated?: boolean;
   stderrTruncated?: boolean;
   errorMessage?: string;

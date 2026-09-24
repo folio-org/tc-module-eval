@@ -1,5 +1,5 @@
 import { LocalCommandRunner } from '../utils/command-runner';
-import { parseOpenCodeReviewPayload } from '../utils/opencode-output';
+import { decodeOpenCodeOutput, parseOpenCodeReviewPayload } from '../utils/opencode-output';
 
 const advisory = {
   recommendation: 'needs_reviewer_judgment', confidence: 'medium',
@@ -53,8 +53,7 @@ describe('structured OpenCode capture', () => {
 
   it.each([
     '{"password":"synthetic-credential',
-    wire(textEvent('{"password":"synthetic-credential')),
-    wire({ type: 'tool_use', part: { output: '{"password":"synthetic-credential' } })
+    wire(textEvent('{"password":"synthetic-credential'))
   ])('discards unsafe malformed fragments: %s', async output => {
     const result = await capture(wire(textEvent(JSON.stringify(advisory))) + '\n' + output);
     expect(JSON.stringify(result)).not.toContain('synthetic-credential');
@@ -74,6 +73,56 @@ const finish = (reason = 'stop', messageID = 'msg_a') => ({
 });
 
 describe('final OpenCode answer selection', () => {
+  it('omits incomplete read previews without rejecting valid final advice', async () => {
+    const file = JSON.stringify({ entries: Array.from({ length: 25 }, (_, index) => `entry ${index}`) }, null, 2);
+    const tool = { type: 'tool_use', part: { messageID: 'msg_a', type: 'tool', tool: 'read', state: {
+      status: 'completed', output: file.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n'),
+      metadata: { preview: file.split('\n').slice(0, 20).join('\n'), secret: 'SYNTHETIC_SECRET' }
+    } } };
+    const result = await capture(wire(start(), text('Examples use ${foo:bar}.'), tool, finish('tool-calls'),
+      start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b')));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
+    expect(result.stdout).not.toContain('entry 0');
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it.each(['prose', 'fenced'])('redacts decoded values in %s JSON without corrupting escapes', async wrapper => {
+    const payload = { ...advisory, summary: 'Use password="SYNTHETIC_SECRET" in docs.' };
+    const value = JSON.stringify(payload);
+    const answer = wrapper === 'prose' ? 'Result:\n' + value : '```json\n' + value + '\n```';
+    const result = await capture(wire(start(), text(answer), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual({ ...payload, summary: 'Use password="[REDACTED]" in docs.' });
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it('preserves literal JSON-like prose and inline backticks in advisory values', async () => {
+    const payload = { ...advisory, summary: 'Examples use ${foo:bar} and ```json code blocks.' };
+    const result = await capture(wire(start(), text('```json\n' + JSON.stringify(payload) + '\n```'), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(payload);
+  });
+
+  it('retains tool lifecycle boundaries while dropping tool contents', async () => {
+    const result = await capture(wire(start(), text(), finish(), { type: 'tool_use', part: { messageID: 'msg_a', output: 'private' } }));
+    expect(decodeOpenCodeOutput(result.stdout).failure).toBe('incomplete_response');
+    expect(result.stdout).not.toContain('private');
+  });
+
+  it('reports content-free diagnostics and rejects a malformed replacement after a tool boundary', async () => {
+    const result = await capture(wire(start(), text(), { type: 'tool_use', part: { messageID: 'msg_a' } },
+      text('{"password":"SYNTHETIC_SECRET'), finish()));
+    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({ failure: 'malformed_json', diagnostic: 'final assistant JSON invalid' });
+    expect(result.stdoutDiagnostics).toContain('record 4: assistant JSON invalid; sanitized JSON invalid');
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it('bounds diagnostics and never includes malformed transport contents', async () => {
+    const result = await capture(Array(30).fill('SYNTHETIC_SECRET').join('\n'));
+    expect(result.stdoutDiagnostics).toHaveLength(16);
+    expect(result.stdoutDiagnostics?.[15]).toBe('record 30: other; Invalid framing');
+    expect(decodeOpenCodeOutput(result.stdout).diagnostic).toBe('sanitization rejected a record');
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
   it.each([
     [start(), text(), finish('length')],
     [start(), text(), finish('unknown')],
