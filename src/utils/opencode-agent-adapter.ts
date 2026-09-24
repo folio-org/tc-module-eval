@@ -414,14 +414,14 @@ function normalizeOpenCodeResult(
 
   const normalized = normalizeCriterionAgentAdvisoryPayload(parsed, workspace.manifestEntries);
 
-  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
+  if (normalized.errors.length) {
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata: openCodeMetadata(config, workspace),
       warnings: normalized.warnings,
-      errors: ['OpenCode returned incomplete advisory JSON']
+      errors: ['OpenCode returned incomplete advisory JSON', ...normalized.errors]
     };
   }
 

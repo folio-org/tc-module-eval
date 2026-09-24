@@ -10,6 +10,7 @@ import {
   EvaluationStatus
 } from '../types';
 import {
+  normalizeCriterionAgentAdvisoryPayload,
   prepareCriterionReviewWorkspace,
   reviewCriterionWithAgent,
   runCriterionAgentReview,
@@ -115,6 +116,28 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('disabled');
   });
+
+  it.each([
+    ['summary', '  '], ['rationale', '\n'], ['recommendation', 'maybe'],
+    ['confidence', -0.01], ['confidence', 1.01], ['confidence', NaN], ['confidence', Infinity],
+    ['evidenceReferences', undefined], ['evidenceReferences', 'README.md'],
+    ['evidenceReferences', []], ['evidenceReferences', ['unknown.md']]
+  ])('rejects invalid %s (%p) in shared normalization', (field, value) => {
+    const normalized = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'pass', confidence: 0.75, summary: 'Evidence checked.',
+      rationale: 'README supports the advice.', evidenceReferences: ['README.md'], [field]: value
+    }, ['README.md']);
+    expect(normalized).toMatchObject({ errors: expect.arrayContaining([expect.stringContaining(field)]) });
+  });
+
+  it.each([[0, 'low'], [0.4, 'medium'], [0.75, 'high'], [1, 'high']])(
+    'accepts bounded numeric confidence %p as %s', (confidence, expected) => {
+      expect(normalizeCriterionAgentAdvisoryPayload({ recommendation: 'pass', confidence,
+        summary: ' Summary ', rationale: ' Rationale ', evidenceReferences: [{ path: 'README.md' }, 'unknown.md']
+      }, ['README.md'])).toMatchObject({ confidence: expected, summary: 'Summary', rationale: 'Rationale',
+        evidenceReferences: ['README.md'], errors: [], warnings: [expect.stringContaining('Dropped')] });
+    }
+  );
 
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await reviewCriterionWithAgent({

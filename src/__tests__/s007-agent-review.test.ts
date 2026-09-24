@@ -303,9 +303,9 @@ describe('S007 agent review', () => {
   });
 
   it.each([
-    ['no citations', []],
-    ['only the generated summary', ['.criterion-agent/S007/deterministic-summary.json']]
-  ])('rejects advisory output with %s', async (_name, evidenceReferences) => {
+    ['no citations', [], 'evidenceReferences must include a manifest entry'],
+    ['only the generated summary', ['.criterion-agent/S007/deterministic-summary.json'], 'no validated repository evidence references']
+  ])('rejects advisory output with %s', async (_name, evidenceReferences, expectedError) => {
     await write('package.json', '{"dependencies":{"react":"^18"}}');
     const analysis = manualAnalysis(manualFinding('react', 'package.json', 'unresolved'));
 
@@ -316,13 +316,13 @@ describe('S007 agent review', () => {
       confidence: 'medium',
       summary: 'Unsupported advice.',
       rationale: 'No manifest citation was returned.',
-      evidenceReferences,
+      evidenceReferences: evidenceReferences as string[],
       warnings: [],
       errors: []
     }));
 
     expect(review.available).toBe(false);
-    expect(review.errors.join('\n')).toContain('no validated repository evidence references');
+    expect(review.errors.join('\n')).toContain(expectedError);
   });
 
   it('drops unknown evidence references and ignores pass-like advisory wording', async () => {
