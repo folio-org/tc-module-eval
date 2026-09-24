@@ -21,6 +21,15 @@ async function capture(output: string, maxOutputBytes = 1024 * 1024) {
 
 describe('structured OpenCode capture', () => {
   it.each([
+    `password='{"value":"SYNTHETIC_SECRET"}'`,
+    `password='{"value":"SYNTHETIC_SECRET"}`,
+    '-----BEGIN PRIVATE KEY-----\n{"value":"SYNTHETIC_SECRET"}\n-----END PRIVATE KEY-----'
+  ])('redacts secret context enclosing inline JSON', async output => {
+    const result = await capture(wire({ type: 'tool_use', part: { output } }));
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it.each([
     ['direct', JSON.stringify(advisory)],
     ['nested', wire(textEvent(JSON.stringify(advisory)))],
     ['fenced', wire(textEvent('```json\n' + JSON.stringify(advisory) + '\n```'))],
@@ -97,5 +106,32 @@ describe('final OpenCode answer selection', () => {
   it('preserves multiple completed native text parts through real capture', async () => {
     const result = await capture(wire(start(), text('Reviewing repository evidence.'), text(), finish()));
     expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
+  });
+
+  it.each([',', 'Inspect'])('captures JSON split at %s without changing its value', async marker => {
+    const value = JSON.stringify(advisory);
+    const boundary = value.indexOf(marker) + 1;
+    const result = await capture(wire(start(), text(value.slice(0, boundary)), text(value.slice(boundary)), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
+  });
+
+  it('redacts an enclosing secret split across native text parts', async () => {
+    const result = await capture(wire(start(), text("password='"), text('{"value":"SYNTHETIC_SECRET"}'), text("'"), finish()));
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it.each(['step', 'message'])('does not assemble JSON across a %s boundary', async boundary => {
+    const value = JSON.stringify(advisory);
+    const split = value.indexOf(',') + 1;
+    const events = boundary === 'step'
+      ? [start(), text(value.slice(0, split)), finish('tool-calls'), start(), text(value.slice(split)), finish()]
+      : [start(), text(value.slice(0, split)), text(value.slice(split), 'msg_b'), finish('stop', 'msg_b')];
+    const result = await capture(wire(...events));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toBeUndefined();
+  });
+
+  it.each(["{'recommendation': 'likely_insufficient'", '{recommendation: "likely_insufficient"', 'not JSON'])('rejects malformed final JSON fences: %s', async replacement => {
+    const result = await capture(wire(start(), text(JSON.stringify(advisory) + '\n```json\n' + replacement + '\n```'), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toBeUndefined();
   });
 });

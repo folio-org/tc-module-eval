@@ -282,6 +282,9 @@ function validateDebugOutput(configDebug: string, agentDebug: string, trustedPat
   if (!agent) {
     return 'OpenCode agent debug output was not parseable JSON';
   }
+  if (config.type === 'unsafe_output' || agent.type === 'unsafe_output') {
+    return 'OpenCode debug output was unsafe to sanitize';
+  }
 
   const configEntryError = validateConfigHasNoExtensionEntries(config);
   if (configEntryError) {

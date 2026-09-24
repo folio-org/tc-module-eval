@@ -17,6 +17,7 @@ import {
   validateEndpointUrl
 } from '../utils/criterion-agent-review';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
+import { sanitizeStructuredOutput } from '../utils/opencode-output';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -961,6 +962,18 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('Unable to materialize OpenCode invocation');
+  });
+
+  it.each(['config', 'agent'])('rejects unsafe sanitized %s debug output before running a review', async stage => {
+    const unsafe = sanitizeStructuredOutput(JSON.stringify({ plugin: ['untrusted'], prompt: '{"unfinished":' }), 'json', 10000).text;
+    const runner = new FakeRunner(stage === 'config' ? unsafe : undefined, stage === 'agent' ? unsafe : undefined);
+    const result = await runCriterionAgentReview({
+      criterionId: 'S004', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('unsafe');
+    expect(runner.requests.some(request => request.args?.[0] === 'run')).toBe(false);
   });
 
   it('fails closed when OpenCode debug output is not parseable JSON', async () => {

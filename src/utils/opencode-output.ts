@@ -11,10 +11,11 @@ export function sanitizeStructuredOutput(
   let bytes = 0;
   const whole = parseJsonObject(output);
   const inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
-  for (const input of inputs) {
+  const parsedInputs = inputs.map(parseJsonObject);
+  if (format === 'opencode-json') combineNativeTextParts(parsedInputs);
+  for (const parsed of parsedInputs) {
     let record: string;
     try {
-      const parsed = parseJsonObject(input);
       if (!parsed) throw new Error('Invalid framing');
       record = JSON.stringify(sanitizeValue(parsed));
     } catch {
@@ -29,6 +30,31 @@ export function sanitizeStructuredOutput(
   return { text: records.join('\n'), truncated: false };
 }
 
+// Capture is already byte-bounded by the runner. Assemble decoded text before
+// redaction so neither JSON strings nor secret assignments lose their context.
+function combineNativeTextParts(events: Array<Record<string, unknown> | undefined>): void {
+  let pending: Record<string, unknown> | undefined;
+  let messageID: unknown;
+  let native = false;
+  for (const event of events) {
+    const part = asObject(event?.part);
+    const currentID = part.messageID;
+    if (!event || event.type === 'step_start' || event.type === 'step_finish' ||
+        event.type === 'tool_use' || event.type === 'error' || (currentID && currentID !== messageID)) {
+      pending = undefined;
+      messageID = currentID;
+      native = event?.type === 'step_start' || Boolean(currentID);
+    }
+    if (native && event?.type === 'text' && part.type === 'text' && typeof part.text === 'string') {
+      if (pending) {
+        part.text = String(pending.text) + part.text;
+        pending.text = '';
+      }
+      pending = part;
+    }
+  }
+}
+
 function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 64) throw new Error('Structured output nesting limit');
   if (typeof value === 'string') {
@@ -41,21 +67,28 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
         if (!(error instanceof SyntaxError)) throw error;
       }
     }
-    const spans = objectSpans(value);
+    // This is decoded prose, not serialized JSON. Preserve enclosing assignment
+    // and private-key context before separating any inline JSON objects.
+    const prose = redactSensitiveText(value);
+    const assignments = prose.matchAll(/\b[\w-]*(?:password|passwd|secret|token|api[_-]?key)[\w-]*["']?\s*[:=]\s*(["'])/gi);
+    for (const assignment of assignments) {
+      let closed = false;
+      for (let index = assignment.index! + assignment[0].length; index < prose.length; index += 1) {
+        if (prose[index] === '\\') index += 1;
+        else if (prose[index] === assignment[1]) { closed = true; break; }
+      }
+      if (!closed) throw new Error('Incomplete secret assignment');
+    }
+    const spans = objectSpans(prose);
     let result = '';
     let offset = 0;
     for (const span of spans) {
       if (!span.value) throw new Error('Malformed embedded JSON');
-      result += redactSensitiveText(value.slice(offset, span.start));
+      result += prose.slice(offset, span.start);
       result += JSON.stringify(sanitizeValue(span.value, depth + 1));
       offset = span.end;
     }
-    const tail = value.slice(offset);
-    // An incomplete quoted assignment cannot be safely handled by text regexes.
-    if (/\b[\w-]*(?:password|passwd|secret|token|api[_-]?key)[\w-]*["']?\s*[:=]\s*["'][^"']*$/i.test(tail)) {
-      throw new Error('Incomplete secret assignment');
-    }
-    return result + redactSensitiveText(tail);
+    return result + prose.slice(offset);
   }
   if (Array.isArray(value)) return value.map(entry => sanitizeValue(entry, depth + 1));
   if (value && typeof value === 'object') {
@@ -71,7 +104,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
 // A malformed later span must remain observable; never search inside it for advice.
 function objectSpans(text: string): Array<{ start: number; end: number; value?: Record<string, unknown> }> {
   const spans: Array<{ start: number; end: number; value?: Record<string, unknown> }> = [];
-  const opening = /\{\s*(?=["}]|$)/g;
+  const opening = /\{\s*(?=["'}]|[A-Za-z_$][\w$]*\s*:|$)/g;
   let match: RegExpExecArray | null;
   while ((match = opening.exec(text))) {
     const end = findBalancedObjectEnd(text, match.index);
@@ -147,7 +180,7 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
   }
   if (lifecycle && finishReason !== 'stop') return { failure: 'incomplete_response', finishReason };
   if (!textParts.join('').trim()) return { failure: 'no_assistant_text', finishReason };
-  const payload = parseJsonObjectFromText(textParts.join('\n').trim());
+  const payload = parseJsonObjectFromText(textParts.join('').trim());
   return payload ? { payload, finishReason } : { failure: 'malformed_json', finishReason };
 }
 
@@ -193,6 +226,9 @@ function firstString(...values: unknown[]): string | undefined {
 function parseJsonObjectFromText(text: string): Record<string, unknown> | undefined {
   const whole = parseJsonObject(text);
   if (whole) return whole;
+  const fences = [...text.matchAll(/```json\s*\n([\s\S]*?)(?:```|$)/gi)];
+  const finalFence = fences[fences.length - 1];
+  if (finalFence && !parseJsonObject(finalFence[1].trim())) return undefined;
   const spans = objectSpans(text);
   return spans[spans.length - 1]?.value;
 }
