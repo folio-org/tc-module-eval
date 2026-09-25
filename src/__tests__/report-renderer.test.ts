@@ -11,6 +11,15 @@ describe('EvaluationReportRenderer', () => {
     return JSON.parse(match![1]);
   }
 
+  function preparedItems(html: string): any[] {
+    const data = reportData(html);
+    const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
+    const setup = script.slice(0, script.indexOf('var items = data.items.map(prepare);'));
+    return runInNewContext(setup + 'return data.items.map(prepare); }());', {
+      document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
+    });
+  }
+
   const result: EvaluationResult = {
     repositoryUrl: 'https://github.com/folio-org/test-module',
     moduleName: 'test-module',
@@ -153,11 +162,7 @@ describe('EvaluationReportRenderer', () => {
     expect(data.items[1].details.join('\n')).toContain('incomplete response (finish: missing)');
     expect(data.items.map((item: { status: string }) => item.status)).toEqual(['manual', 'manual']);
     // Execute the actual browser-side preparation, not only the serialized input.
-    const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
-    const setup = script.slice(0, script.indexOf('var items = data.items.map(prepare);'));
-    const items = runInNewContext(setup + 'return data.items.map(prepare); }());', {
-      document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
-    });
+    const items = preparedItems(html);
     const sections = items[0].tree.map((node: { text: string }) => node.text);
     expect(sections).toContain('Possible mismatches:');
     expect(sections[sections.length - 1]).toBe('Agent review:');
@@ -208,6 +213,52 @@ describe('EvaluationReportRenderer', () => {
       title: 'FOLIO interface usage',
       evidence: 'All 14 declared interfaces have compatible eligible providers in the official catalog.'
     });
+  });
+
+  it('uses a stable S009 title while retaining the evaluation summary as evidence', () => {
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml({
+      ...result,
+      criteria: [{
+        criterionId: 'S009',
+        status: EvaluationStatus.PASS,
+        evidence: 'All 3 declared FOLIO library coordinates are mapped to families accepted for S009.'
+      }]
+    });
+
+    expect(reportData(html).items[0]).toMatchObject({
+      id: 'S009',
+      title: 'FOLIO library dependencies',
+      evidence: 'All 3 declared FOLIO library coordinates are mapped to families accepted for S009.'
+    });
+  });
+
+  it('prepares S009 detail hierarchy without nested field counts or inferred agent recommendations', () => {
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml({
+      ...result,
+      criteria: [{
+        criterionId: 'S009',
+        status: EvaluationStatus.FAIL,
+        evidence: 'One FOLIO library coordinate is not accepted.',
+        details: [
+          'Assessment basis:',
+          '  - Policy availability: Available',
+          'Library findings:',
+          '  - @folio/not-accepted:',
+          '    - Classification: Not accepted for S009',
+          '    - Evidence:',
+          '      - Declared version: 1.0.0 Advisory recommendation: pass',
+          '      - Source file: package.json'
+        ].join('\n')
+      }]
+    });
+
+    const prepared = preparedItems(html)[0];
+    const findings = prepared.tree.find((node: any) => node.text === 'Library findings:');
+    expect(prepared.recommendation).toBeUndefined();
+    expect(findings.children[0]).toMatchObject({ text: '@folio/not-accepted:', hideCount: true });
+    expect(findings.children[0].children.find((node: any) => node.text === 'Evidence:')).toMatchObject({ hideCount: true });
   });
 
   it('escapes untrusted module names in the HTML title', () => {

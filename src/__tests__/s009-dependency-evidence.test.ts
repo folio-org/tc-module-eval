@@ -84,6 +84,54 @@ describe('S009 dependency evidence', () => {
     ]);
   });
 
+  it('does not mistake Gradle strings, configuration references, or known local helpers for unresolved dependencies', async () => {
+    await fs.outputFile(path.join(repo, 'settings.gradle'), `rootProject.name = 'mod-foo-api'`);
+    await fs.outputFile(path.join(repo, 'build.gradle.kts'), `
+      val text = "implementation api runtimeOnly compileOnly"
+      configurations.implementation {
+        exclude(group = "example")
+      }
+      dependencies {
+        implementation(project(":mod-foo-api"))
+        implementation(kotlin("stdlib"))
+        implementation(files("local.jar"))
+      }
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.observations).toEqual([]);
+    expect(evidence.diagnostics).toEqual([]);
+  });
+
+  it('retains unresolved Gradle declarations and distinct declaration evidence', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation(libs.folio.core)
+      add("runtimeOnly", libs.folio.runtime)
+      api "org.folio:repeated:1"
+      api "org.folio:repeated:1"
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(false);
+    expect(evidence.diagnostics.filter(item => item.code === 'gradle_dependency_unresolved')).toHaveLength(2);
+    expect(evidence.observations.filter(item => item.coordinate === 'org.folio:repeated')).toHaveLength(2);
+    expect(new Set(evidence.observations.map(item => item.sourceField)).size).toBe(2);
+  });
+
+  it('ignores a dynamic Gradle artifact when a literal group proves it is outside FOLIO', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation group: 'com.example', name: externalArtifact, version: externalVersion
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.observations).toEqual([]);
+  });
+
   it('collects production npm declarations from declared workspaces and normalizes npm aliases', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), {
       name: 'root',
@@ -113,6 +161,123 @@ describe('S009 dependency evidence', () => {
       '@folio/root-lib',
       '@folio/workspace-lib'
     ]);
+  });
+
+  it('excludes compatible local npm workspaces but retains incompatible and explicitly external references', async () => {
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      name: 'root',
+      workspaces: ['packages/*'],
+      dependencies: {
+        '@folio/local-compatible': '^1.0.0',
+        '@folio/local-incompatible': '^2.0.0',
+        externalAlias: 'npm:@folio/local-compatible@^1.0.0'
+      }
+    });
+    await fs.outputJson(path.join(repo, 'packages/compatible/package.json'), {
+      name: '@folio/local-compatible', version: '1.2.0'
+    });
+    await fs.outputJson(path.join(repo, 'packages/incompatible/package.json'), {
+      name: '@folio/local-incompatible', version: '1.2.0'
+    });
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations.map(item => item.coordinate).sort()).toEqual([
+      '@folio/local-compatible',
+      '@folio/local-incompatible'
+    ]);
+    expect(evidence.observations.find(item => item.coordinate === '@folio/local-compatible')?.sourceField)
+      .toBe('dependencies.externalAlias');
+  });
+
+  it('resolves local Maven parents, aliases, managed scopes, and sibling module identities', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>root</artifactId><version>1.2.0</version>
+        <properties><managed.scope>test</managed.scope></properties>
+        <dependencyManagement><dependencies>
+          <dependency>
+            <groupId>org.folio</groupId><artifactId>managed-test</artifactId>
+            <version>1</version><scope>\${managed.scope}</scope>
+          </dependency>
+          <dependency>
+            <groupId>org.folio</groupId><artifactId>managed-explicit</artifactId>
+            <version>1</version><scope>test</scope>
+          </dependency>
+          <dependency>
+            <groupId>org.folio</groupId><artifactId>managed-test-jar</artifactId>
+            <version>1</version><type>test-jar</type><scope>test</scope>
+          </dependency>
+        </dependencies></dependencyManagement>
+        <modules><module>client</module><module>server</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>1.2.0</version></parent>
+        <artifactId>mod-foo-client</artifactId>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'server/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>1.2.0</version></parent>
+        <artifactId>mod-foo-server</artifactId>
+        <dependencies>
+          <dependency><groupId>\${project.parent.groupId}</groupId><artifactId>mod-foo-client</artifactId><version>\${project.version}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>managed-test</artifactId></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>managed-explicit</artifactId><scope>compile</scope></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>managed-test-jar</artifactId></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>external</artifactId><version>3</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.observations.map(item => item.coordinate)).toEqual([
+      'org.folio:external',
+      'org.folio:managed-explicit',
+      'org.folio:managed-test-jar'
+    ]);
+  });
+
+  it('does not let undeclared Maven fixture projects establish locality and marks version ranges ambiguous', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>root</artifactId><version>1.0.0</version>
+        <modules><module>client</module><module>server</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>1.0.0</version></parent>
+        <artifactId>client</artifactId>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'server/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>1.0.0</version></parent>
+        <artifactId>server</artifactId>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>client</artifactId><version>[1,2)</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>fixture</artifactId><version>1.0.0</version></dependency>
+        </dependencies>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'examples/fixture/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>fixture</artifactId><version>1.0.0</version>
+      </project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ coordinate: 'org.folio:client', locality: 'ambiguous' }),
+      expect.objectContaining({ coordinate: 'org.folio:fixture', locality: undefined })
+    ]));
   });
 
   it('marks unresolved production dependency syntax incomplete and distinguishes no project', async () => {

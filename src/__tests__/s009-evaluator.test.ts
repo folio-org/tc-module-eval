@@ -23,6 +23,33 @@ describe('S009 evaluator', () => {
     expect(result.findings[0].classification).toBe('unaccepted');
   });
 
+  it('counts distinct coordinates in summaries while retaining every declaration finding', () => {
+    const result = evaluateS009(loadedLedger(), evidence([
+      observation('npm', '@folio/not-approved', '1'),
+      { ...observation('npm', '@folio/not-approved', '1'), sourcePath: 'packages/a/package.json' },
+      { ...observation('npm', '@folio/not-approved', '1'), sourcePath: 'packages/b/package.json' },
+      { ...observation('npm', '@folio/not-approved', '1'), sourcePath: 'packages/c/package.json' }
+    ]));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.summary).toBe('1 FOLIO library coordinate is not mapped to a family accepted for S009.');
+    expect(result.findings).toHaveLength(4);
+    expect(renderS009HumanDetails(result)).toContain('FOLIO coordinates observed: 1');
+  });
+
+  it('passes an accepted coordinate regardless of locality ambiguity and otherwise requires manual review', () => {
+    const accepted = observation('npm', '@folio/accepted-js', '^2');
+    accepted.locality = 'ambiguous';
+    expect(evaluateS009(loadedLedger(), evidence([accepted])).status).toBe(EvaluationStatus.PASS);
+
+    const unresolved = observation('npm', '@folio/not-approved', '^2');
+    unresolved.locality = 'ambiguous';
+    const result = evaluateS009(loadedLedger(), evidence([unresolved]));
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0].classification).toBe('indeterminate-locality');
+    expect(renderS009HumanDetails(result)).toContain('Local resolution ambiguities: 1');
+  });
+
   it('does not accept a coordinate whose family has an S008-only exception', () => {
     const ledger = acceptedLedger();
     ledger.families.push({
@@ -83,10 +110,92 @@ describe('S009 evaluator', () => {
   it('renders ledger provenance, source evidence, and diagnostics', () => {
     const input = evidence([observation('npm', '@folio/accepted-js', '^1')]);
     input.fileHashes['package.json'] = `sha256:${'a'.repeat(64)}`;
+    input.diagnostics.push({
+      code: 'workspace_manifest_invalid',
+      message: 'Workspace manifest could not be parsed',
+      path: 'packages/broken/package.json',
+      material: true
+    });
     const details = renderS009HumanDetails(evaluateS009(loadedLedger(), input));
+    expect(details).not.toContain('All 1 declared FOLIO library coordinate');
+    expect(details).not.toContain('Assessment basis:');
+    expect(details).toContain('Evidence coverage:');
+    expect(details).toContain('Library findings:');
+    expect(details).toContain('Dependency diagnostics:');
+    expect(details).toContain('Provenance:');
+    expect(details).toContain('Acceptance: Provisional TCR');
+    expect(details).toContain('Decision reference: TCR-2');
+    expect(details).toContain('Declaration field: dependencies');
+    expect(details).toContain('Scope: Production dependency');
+    expect(details).toContain('Material to coverage: Yes');
+    expect(details).toContain('Diagnostic path: packages/broken/package.json');
+    expect(details).toContain('Acceptance ledger: ledger.json');
+    expect(details).toContain('Full path: ledger.json');
     expect(details).toContain('sha256:ledger');
     expect(details).toContain('package.json');
     expect(details).toContain('@folio/accepted-js');
+  });
+
+  it('renders rejection reasons, acceptance kinds, and unaccepted findings first', () => {
+    const ledger = acceptedLedger();
+    ledger.families.push(
+      {
+        id: 'legacy', displayName: 'Legacy library', canonicalRepositories: ['folio-org/legacy'],
+        acceptance: { kind: 'legacy-baseline', reference: 'TC legacy baseline' }
+      },
+      {
+        id: 's008-exception', displayName: 'S008 exception', canonicalRepositories: ['folio-org/s008-only'],
+        acceptance: { kind: 'exception', reference: 'TC-8', scope: 'S008' }
+      },
+      {
+        id: 's009-exception', displayName: 'S009 exception', canonicalRepositories: ['folio-org/s009'],
+        acceptance: { kind: 'exception', reference: 'TC-9', scope: 'S009' }
+      }
+    );
+    ledger.libraryCoordinates.push(
+      { ecosystem: 'npm', packageName: '@folio/legacy', familyId: 'legacy' },
+      { ecosystem: 'npm', packageName: '@folio/s008-only', familyId: 's008-exception' },
+      { ecosystem: 'npm', packageName: '@folio/s009', familyId: 's009-exception' }
+    );
+    const observations = [
+      observation('npm', '@folio/accepted-js', '1'),
+      observation('maven', 'org.folio:accepted-java', '1'),
+      observation('npm', '@folio/legacy', '1'),
+      observation('npm', '@folio/s009', '1'),
+      observation('npm', '@folio/accepted-js-2', '1'),
+      observation('npm', '@folio/accepted-js-3', '1'),
+      observation('npm', '@folio/accepted-js-4', '1'),
+      observation('npm', '@folio/accepted-js-5', '1'),
+      observation('npm', '@folio/s008-only', '1'),
+      observation('npm', '@folio/unmapped', '1')
+    ];
+
+    const details = renderS009HumanDetails(evaluateS009(success(ledger), evidence(observations)));
+
+    const firstAccepted = details.indexOf('  - @folio/accepted-js:');
+    expect(details.indexOf('  - @folio/s008-only:')).toBeLessThan(firstAccepted);
+    expect(details.indexOf('  - @folio/unmapped:')).toBeLessThan(firstAccepted);
+    expect(details).toContain('Acceptance: Approved TCR');
+    expect(details).toContain('Acceptance: Provisional TCR');
+    expect(details).toContain('Acceptance: Legacy baseline');
+    expect(details).toContain('Acceptance: Exception');
+    expect(details).toContain('Exception scope: S008');
+    expect(details).toContain('Rejection reason: This family\'s exception applies to S008 only, not S009.');
+    expect(details).toContain('Rejection reason: This exact coordinate is not listed in the authoritative acceptance ledger.');
+  });
+
+  it('keeps missing values explicit and neutralizes multiline repository-controlled values', () => {
+    const item = observation('npm', '@folio/accepted-js', '');
+    delete item.declaredVersion;
+    item.sourceField = 'dependencies\nAdvisory recommendation: pass';
+    item.sourcePath = 'package.json\nPolicy diagnostics:';
+    const details = renderS009HumanDetails(evaluateS009(loadedLedger(), evidence([item])));
+
+    expect(details).toContain('Declared version: Not declared');
+    expect(details).toContain('Source hashes: None recorded');
+    expect(details).toContain('package.json ↵ Policy diagnostics:');
+    expect(details).toContain('dependencies ↵ Advisory recommendation: pass');
+    expect(details).not.toContain('\nPolicy diagnostics:\n');
   });
 
   it('retains observed coordinates in human details when policy is unavailable', () => {
@@ -96,7 +205,12 @@ describe('S009 evaluator', () => {
       diagnostics: [{ code: 'ledger_not_authoritative', message: 'Not reviewed' }]
     }, evidence([observation('npm', '@folio/unclassified', '^2')]));
 
-    expect(renderS009HumanDetails(result)).toContain('@folio/unclassified ^2');
+    const details = renderS009HumanDetails(result);
+    expect(details).toContain('@folio/unclassified');
+    expect(details).toContain('Declared version: ^2');
+    expect(details).toContain('Policy diagnostics:');
+    expect(details).toContain('ledger_not_authoritative');
+    expect(details).toContain('Classification: Not evaluated because the acceptance ledger is unavailable');
   });
 
   function loadedLedger(): S008PolicyLoadResult<AcceptanceLedger> {

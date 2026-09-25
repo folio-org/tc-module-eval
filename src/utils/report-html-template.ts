@@ -9,7 +9,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S005: 'Personal data disclosure',
   S006: 'Sensitive information',
   S007: 'Officially supported technologies',
-  S008: 'FOLIO interface usage'
+  S008: 'FOLIO interface usage',
+  S009: 'FOLIO library dependencies'
 };
 
 function escapeHtml(text: string): string {
@@ -75,7 +76,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     .card{overflow:hidden;border:1px solid var(--border);border-radius:11px;background:#fff;scroll-margin-top:20px}.card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(44,91,168,.12)}.card-toggle{display:grid;grid-template-columns:12px 44px minmax(0,1fr) auto;gap:12px;align-items:start;width:100%;padding:15px 18px;border:0;background:#fff;cursor:pointer;text-align:left;user-select:none}.card-toggle:hover{background:#FBFAF7}.card-toggle .chevron{margin-top:5px}.criterion-id{font:500 12.5px/21px var(--mono);color:var(--ink2)}.card-copy{display:flex;flex-direction:column;gap:3px;min-width:0}.card-title{font-size:14.5px;line-height:21px;font-weight:600}.card-summary{display:-webkit-box;overflow:hidden;color:var(--ink2);font-size:13px;line-height:1.5;overflow-wrap:anywhere;text-wrap:pretty;-webkit-line-clamp:2;-webkit-box-orient:vertical}.badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:260px}.pill,.agent{white-space:nowrap;border-radius:5px;font-family:var(--mono);font-size:11px;line-height:1}.pill{padding:6px 8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}.agent{padding:5px 7px;border:1px solid;font-weight:500}.card-body{padding:2px 22px 20px 42px;border-top:1px solid var(--line)}.evidence{display:flex;flex-direction:column;gap:5px;padding:14px 0 4px}.label{font-size:11px;line-height:1}.evidence-text{font-size:13.5px;line-height:1.6;overflow-wrap:anywhere;text-wrap:pretty}
     .section-row{display:flex;align-items:center;gap:8px;width:100%;padding:16px 0 6px;border:0;background:transparent;cursor:pointer;text-align:left;user-select:none}.section-row .chevron{width:10px;height:10px}.section-label{font:600 11px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}.count-chip{padding:3px 6px;border-radius:4px;background:var(--chip);color:var(--muted);font:500 11px/1 var(--mono)}.section-line{flex:1;height:1px;background:var(--line)}.kv{display:grid;grid-template-columns:minmax(110px,190px) minmax(0,1fr);gap:12px;padding:4px 6px;font-size:13.5px;line-height:1.55}.kv-key{color:var(--muted)}.kv-value{overflow-wrap:anywhere;text-wrap:pretty}.item-row{display:grid;grid-template-columns:12px minmax(0,1fr);gap:8px;width:calc(100% - var(--indent));margin-left:var(--indent);padding:4px 6px;border:0;border-radius:6px;background:transparent;text-align:left}.item-row.toggle{cursor:pointer}.item-row:hover{background:#FAF9F5}.item-row .chevron{width:10px;height:10px;margin-top:6px}.leaf{width:4px;height:4px;margin:9px 0 0 3px;border-radius:50%;background:#B9B5A9}.item-copy{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:2px;align-items:baseline;min-width:0;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}.lead{color:var(--accent);font:500 12.5px/1.55 var(--mono)}.tag{padding:1px 6px;border-radius:4px;background:var(--chip);color:#5E5B54;font:500 11px/1.4 var(--mono)}.nested-count{color:var(--muted);font:500 11px/1 var(--mono)}.more-text{color:var(--muted)}.para{padding:10px 0 2px;font-size:13.5px;line-height:1.6;text-wrap:pretty}.link-button,.list-more{border:0;background:transparent;color:var(--accent);cursor:pointer;font-weight:500}.link-button{padding:0;font-size:12.5px}.list-more{padding:4px 6px 4px 26px;font-size:12.5px}.link-button:hover,.list-more:hover{text-decoration:underline}
     .compact{overflow:hidden;border:1px solid var(--border);border-radius:11px;background:#fff}.compact-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:10px 18px 10px 42px;border-top:1px solid var(--line);scroll-margin-top:20px}.compact-row:first-child{border-top:0}.compact-row.selected{box-shadow:inset 3px 0 var(--accent)}.compact-title{font-size:13.5px;line-height:1.4;font-weight:500}.compact-sub{margin-top:2px;color:var(--muted);font-size:12.5px;line-height:1.4}.category{color:var(--muted);font:400 12px/1.4 var(--mono)}.empty{padding:40px;border:1px dashed var(--control);border-radius:12px;color:var(--muted);text-align:center;font-size:14px;line-height:1.5}.footer{padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font:400 12px/1.5 var(--mono)}
-    @media(max-width:760px){.layout{display:block}.sidebar{position:relative;max-height:none;width:100%;padding:22px}.main{padding:8px 22px 48px}.jump-list,.shortcuts{display:none}.card-toggle{grid-template-columns:12px 40px minmax(0,1fr)}.badges{grid-column:3;margin-top:5px;justify-content:flex-start}.card-body{padding-left:22px}.summary-note{width:100%;margin-left:0}.compact-row{padding-left:18px}.category{display:none}}
+    @media(max-width:760px){.layout{display:block}.sidebar{position:relative;max-height:none;width:100%;padding:22px}.main{padding:8px 22px 48px}.jump-list,.shortcuts{display:none}.card-toggle{grid-template-columns:12px 40px minmax(0,1fr)}.badges{grid-column:3;margin-top:5px;justify-content:flex-start}.card-body{padding-left:22px}#c-S009 .kv{grid-template-columns:minmax(100px,40%) minmax(0,1fr)}.summary-note{width:100%;margin-left:0}.compact-row{padding-left:18px}.category{display:none}}
   </style>
 </head>
 <body>
@@ -168,6 +169,14 @@ export function createHtmlReport(result: EvaluationResult): string {
           node.children.forEach(function (observation) { observation.hideCount = true; });
         });
       }
+      if (item.id === 'S009') {
+        tree.forEach(function hideNestedCounts(node) {
+          node.children.forEach(function (child) {
+            if (child.children.length) child.hideCount = true;
+            hideNestedCounts(child);
+          });
+        });
+      }
       var agentIndex = tree.findIndex(function (node) { return /^Agent review:?$/.test(node.text); });
       if (agentIndex > 0 && item.id !== 'S005' && item.id !== 'S007') tree.unshift(tree.splice(agentIndex,1)[0]);
       var licenses = evidence.match(/^(Found (\d+) dependencies\.)\s*Licenses:\s*(.+)$/s);
@@ -187,7 +196,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         tree.push({text:'Dependency licenses',children:children,countText:licenses[2]});
       }
       var allDetails = item.details.join(' ');
-      var recommendation = item.recommendation || ((allDetails.match(/Advisory recommendation: (\w+)/) || [])[1]);
+      var recommendation = item.recommendation || (item.id === 'S009' ? undefined : ((allDetails.match(/Advisory recommendation: (\w+)/) || [])[1]));
       return {
         id:item.id,title:item.title,status:item.status,evidence:evidence,summary:evidence,tree:tree,
         recommendation:recommendation,category:category(item.id),subtitle:item.id === 'A001' ? item.evidence : '',

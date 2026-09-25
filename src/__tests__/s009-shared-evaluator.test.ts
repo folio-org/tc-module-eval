@@ -20,7 +20,9 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.details).toContain('@folio/example 1.0.0: unaccepted');
+    expect(result.details).toContain('@folio/example:');
+    expect(result.details).toContain('Classification: Not accepted for S009');
+    expect(result.details).toContain('Declared version: 1.0.0');
     expect(result.details).toMatch(/sha256:[0-9a-f]{64}/);
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -38,8 +40,11 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('@folio/stripes ^10.1.0: accepted');
-    expect(result.details).toContain('org.folio:edge-common 5.1.1: accepted');
+    expect(result.details).toContain('@folio/stripes:');
+    expect(result.details).toContain('Declared version: ^10.1.0');
+    expect(result.details).toContain('org.folio:edge-common:');
+    expect(result.details).toContain('Declared version: 5.1.1');
+    expect(result.details?.match(/Classification: Accepted for S009/g)).toHaveLength(2);
     expect(runner.run).not.toHaveBeenCalled();
   });
 

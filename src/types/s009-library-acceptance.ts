@@ -6,6 +6,7 @@ export type S009Ecosystem = 'maven' | 'npm';
 export interface S009DependencyObservation {
   ecosystem: S009Ecosystem;
   coordinate: string;
+  locality?: 'ambiguous';
   declaredVersion?: string;
   sourcePath: string;
   sourceField: string;
@@ -30,7 +31,7 @@ export interface S009DependencyEvidence {
 
 export interface S009Finding {
   observation: S009DependencyObservation;
-  classification: 'accepted' | 'unaccepted';
+  classification: 'accepted' | 'unaccepted' | 'indeterminate-locality';
   familyId?: string;
   familyDisplayName?: string;
   acceptance?: AcceptanceLedger['families'][number]['acceptance'];
