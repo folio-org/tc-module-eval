@@ -136,6 +136,22 @@ describe('S009 dependency evidence', () => {
     ]);
   });
 
+  it('ignores trailing Gradle dependency configuration closures', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation 'org.folio:edge-common:5.1.1', { transitive = false }
+      runtimeOnly('org.folio:folio-s3-client:3.0.2') { transitive = false }
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.diagnostics).toEqual([]);
+    expect(evidence.observations.map(item => item.coordinate)).toEqual([
+      'org.folio:edge-common',
+      'org.folio:folio-s3-client'
+    ]);
+  });
+
   it('ignores a dynamic Gradle artifact when a literal group proves it is outside FOLIO', async () => {
     await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
       implementation group: 'com.example', name: externalArtifact, version: externalVersion

@@ -62,6 +62,21 @@ describe('S009 shared evaluator integration', () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
+  it('passes accepted Gradle dependencies with trailing configuration closures', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation 'org.folio:edge-common:5.1.1', { transitive = false }
+      runtimeOnly('org.folio:folio-s3-client:3.0.2') { transitive = false }
+    }`);
+    const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'], commandRunner: runner });
+
+    const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.details?.match(/Classification: Accepted for S009/g)).toHaveLength(2);
+    expect(runner.run).not.toHaveBeenCalled();
+  });
+
   it('requires manual review for an unaccepted sibling Maven module with an unresolved local version', async () => {
     await fs.outputFile(path.join(repo, 'pom.xml'), `
       <project><modelVersion>4.0.0</modelVersion>

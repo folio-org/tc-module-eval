@@ -386,6 +386,7 @@ function collectGradleDeclaration(
   declaration: GradleDeclaration
 ): void {
   const expression = declaration.expression.trim();
+  if (expression.startsWith('{')) return;
   const namedGroup = gradleNamedLiteral(expression, 'group');
   if (namedGroup && namedGroup !== 'org.folio') return;
   const map = parseGradleMap(expression);
