@@ -1,5 +1,5 @@
 import { LocalCommandRunner } from '../utils/command-runner';
-import { decodeOpenCodeOutput, parseOpenCodeReviewPayload } from '../utils/opencode-output';
+import { decodeOpenCodeOutput, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
 
 const advisory = {
   recommendation: 'needs_reviewer_judgment', confidence: 'medium',
@@ -20,6 +20,30 @@ async function capture(output: string, maxOutputBytes = 1024 * 1024) {
 }
 
 describe('structured OpenCode capture', () => {
+  it('keeps provider error metadata when the message contains truncated JSON', async () => {
+    const result = await capture(wire({ type: 'error', error: { name: 'APIError', data: {
+      statusCode: 400, message: 'Bad request: {"error": truncated'
+    } } }));
+    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({ failure: 'provider_error', providerError: {
+      name: 'APIError', statusCode: 400, message: expect.stringContaining('Bad request:')
+    } });
+  });
+
+  it.each(['{summary: string}', 'function f() {'])('keeps debug configuration containing %s', prompt => {
+    const result = sanitizeStructuredOutput(JSON.stringify({ prompt, plugin: [], tools: { read: true }, password: 'SYNTHETIC_SECRET' }), 'json', 10000);
+    expect(JSON.parse(result.text)).toMatchObject({ plugin: [], tools: { read: true }, password: '[REDACTED]' });
+    expect(result.text).not.toContain('SYNTHETIC_SECRET');
+  });
+
+  it.each([
+    'Bad request: {"password":{"value":"SYNTHETIC_SECRET"',
+    'Bad request: password="SYNTHETIC_SECRET'
+  ])('preserves error classification without publishing unsafe fragments: %s', async message => {
+    const result = await capture(wire({ type: 'error', error: { name: 'APIError', data: { statusCode: 400, message } } }));
+    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({ failure: 'provider_error', providerError: { name: 'APIError', statusCode: 400 } });
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
   it.each([
     `password='{"value":"SYNTHETIC_SECRET"}'`,
     `password='{"value":"SYNTHETIC_SECRET"}`,
@@ -73,6 +97,13 @@ const finish = (reason = 'stop', messageID = 'msg_a') => ({
 });
 
 describe('final OpenCode answer selection', () => {
+  it.each(['{}', '{"summary":"unrelated"}', 'function f() {'])('uses the validated fence rather than trailing %s', async suffix => {
+    const answer = '```json\n' + JSON.stringify(advisory) + '\n```\n' + suffix;
+    expect(parseOpenCodeReviewPayload(wire(textEvent(answer)))).toEqual(advisory);
+    const result = await capture(wire(start(), text(answer), finish()));
+    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
+  });
+
   it('omits incomplete read previews without rejecting valid final advice', async () => {
     const file = JSON.stringify({ entries: Array.from({ length: 25 }, (_, index) => `entry ${index}`) }, null, 2);
     const tool = { type: 'tool_use', part: { messageID: 'msg_a', type: 'tool', tool: 'read', state: {

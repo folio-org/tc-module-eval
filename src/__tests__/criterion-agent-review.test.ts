@@ -969,7 +969,7 @@ describe('criterion agent review', () => {
   });
 
   it.each(['config', 'agent'])('rejects unsafe sanitized %s debug output before running a review', async stage => {
-    const unsafe = sanitizeStructuredOutput(JSON.stringify({ plugin: ['untrusted'], prompt: '{"unfinished":' }), 'json', 10000).text;
+    const unsafe = sanitizeStructuredOutput('{"plugin":["untrusted"],', 'json', 10000).text;
     const runner = new FakeRunner(stage === 'config' ? unsafe : undefined, stage === 'agent' ? unsafe : undefined);
     const result = await runCriterionAgentReview({
       criterionId: 'S004', repositoryPath: repoPath, instructions: 'review',
@@ -978,6 +978,30 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('unsafe');
     expect(runner.requests.some(request => request.args?.[0] === 'run')).toBe(false);
+  });
+
+  it.each([false, true])('validates debug security fields despite brace-containing prompts (plugin=%s)', plugin => {
+    class SanitizingRunner extends FakeRunner {
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        const result = await super.run(request);
+        if (request.args?.[0] === 'debug') {
+          const debug = JSON.parse(result.stdout);
+          debug.prompt = '{summary: string}\nfunction f() {';
+          if (plugin && request.args[1] === 'config') debug.plugin = ['untrusted'];
+          result.stdout = sanitizeStructuredOutput(JSON.stringify(debug), 'json', 10000).text;
+        }
+        return result;
+      }
+    }
+    const runner = new SanitizingRunner();
+    return runCriterionAgentReview({
+      criterionId: 'S004', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner).then(result => {
+      expect(result.available).toBe(!plugin);
+      if (plugin) expect(result.errors.join('\n')).toContain('rejected plugin entries');
+      expect(runner.requests.some(request => request.args?.[0] === 'run')).toBe(!plugin);
+    });
   });
 
   it('fails closed when OpenCode debug output is not parseable JSON', async () => {

@@ -29,12 +29,12 @@ export function sanitizeStructuredOutput(
         record = JSON.stringify(sanitizeValue({ type: parsed.type, part: { messageID: part.messageID } }));
       } else if (format === 'opencode-json' && extractOpenCodeEventText(parsed) !== undefined) {
         const rawText = extractOpenCodeEventText(parsed)!;
-        const payload = parseJsonObjectFromText(rawText.trim());
+        const candidate = selectJsonObjectFromText(rawText);
+        const payload = candidate?.value;
         let safeText = rawText ? '[invalid advisory JSON]' : '';
         if (payload) {
           // Do not extract an object from inside an enclosing secret assignment.
-          const spans = objectSpans(rawText);
-          const prefix = redactSensitiveText(rawText.slice(0, spans[spans.length - 1]?.start ?? 0));
+          const prefix = redactSensitiveText(rawText.slice(0, candidate!.start));
           rejectIncompleteSecretAssignment(prefix);
           if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(prefix)) throw new Error('Incomplete secret assignment');
           safeText = JSON.stringify(sanitizeValue(payload, 0, false));
@@ -103,16 +103,22 @@ function sanitizeValue(value: unknown, depth = 0, embedded = true): unknown {
     // This is decoded prose, not serialized JSON. Preserve enclosing assignment
     // and private-key context before separating any inline JSON objects.
     const prose = redactSensitiveText(value);
-    rejectIncompleteSecretAssignment(prose);
+    try {
+      rejectIncompleteSecretAssignment(prose);
+    } catch {
+      // Suppress an unsafe string, not its enclosing config or provider error.
+      return '[REDACTED_UNSAFE_TEXT]';
+    }
     // Already-decoded advisory strings are prose, not replacement JSON syntax.
     if (!embedded) return prose;
     const spans = objectSpans(prose);
     let result = '';
     let offset = 0;
     for (const span of spans) {
-      if (!span.value) throw new Error('Malformed embedded JSON');
       result += prose.slice(offset, span.start);
-      result += JSON.stringify(sanitizeValue(span.value, depth + 1));
+      result += span.value
+        ? JSON.stringify(sanitizeValue(span.value, depth + 1))
+        : '[REDACTED_UNPARSEABLE_FRAGMENT]';
       offset = span.end;
     }
     return result + prose.slice(offset);
@@ -265,13 +271,20 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 function parseJsonObjectFromText(text: string): Record<string, unknown> | undefined {
+  return selectJsonObjectFromText(text)?.value;
+}
+
+function selectJsonObjectFromText(text: string): { start: number; value?: Record<string, unknown> } | undefined {
   const whole = parseJsonObject(text);
-  if (whole) return whole;
+  if (whole) return { start: 0, value: whole };
   const fences = [...text.matchAll(/^[ \t]*```json[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*```[ \t]*$|(?![\s\S]))/gmi)];
   const finalFence = fences[fences.length - 1];
-  if (finalFence && !parseJsonObject(finalFence[1].trim())) return undefined;
+  if (finalFence) return {
+    start: finalFence.index! + finalFence[0].indexOf('\n') + 1,
+    value: parseJsonObject(finalFence[1].trim())
+  };
   const spans = objectSpans(text);
-  return spans[spans.length - 1]?.value;
+  return spans[spans.length - 1];
 }
 
 function findBalancedObjectEnd(text: string, start: number): number {
