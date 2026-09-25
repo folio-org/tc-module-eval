@@ -20,6 +20,17 @@ async function capture(output: string, maxOutputBytes = 1024 * 1024) {
 }
 
 describe('structured OpenCode capture', () => {
+  it.each(['summary', 'rationale'])('rejects an unsafe advisory %s rather than accepting a placeholder', async field => {
+    const payload = { ...advisory, [field]: '"password": "SYNTHETIC_SECRET\\' };
+    const result = await capture(wire(textEvent(JSON.stringify(payload))));
+    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({
+      failure: 'malformed_json', diagnostic: 'sanitization rejected a record'
+    });
+    expect(parseOpenCodeReviewPayload(result.stdout)).toBeUndefined();
+    expect(result.stdoutDiagnostics).toContain('record 1: text; Incomplete secret assignment');
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
   it('keeps provider error metadata when the message contains truncated JSON', async () => {
     const result = await capture(wire({ type: 'error', error: { name: 'APIError', data: {
       statusCode: 400, message: 'Bad request: {"error": truncated'

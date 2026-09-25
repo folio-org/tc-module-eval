@@ -105,7 +105,9 @@ function sanitizeValue(value: unknown, depth = 0, embedded = true): unknown {
     const prose = redactSensitiveText(value);
     try {
       rejectIncompleteSecretAssignment(prose);
-    } catch {
+    } catch (error) {
+      // Advice must remain useful; a placeholder cannot stand in for its rationale.
+      if (!embedded) throw error;
       // Suppress an unsafe string, not its enclosing config or provider error.
       return '[REDACTED_UNSAFE_TEXT]';
     }

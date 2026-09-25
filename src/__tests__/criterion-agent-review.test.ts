@@ -483,6 +483,21 @@ describe('criterion agent review', () => {
     expect(result.evidenceReferences).toEqual(['README.md']);
   });
 
+  it('reports advice with an unsafe rationale as unavailable after sanitization', async () => {
+    const captured = sanitizeStructuredOutput(JSON.stringify({
+      recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'Inspect repository evidence.',
+      rationale: '"password": "SYNTHETIC_SECRET\\', evidenceReferences: ['README.md']
+    }), 'opencode-json', 10000);
+    const result = await runCriterionAgentReview({
+      criterionId: 'S006', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Redacted evidence.' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), enabledCriteria: ['S006'] }, new FakeRunner(undefined, undefined, captured.text));
+    expect(result.available).toBe(false);
+    expect(result.errors).toContain('OpenCode decode: sanitization rejected a record');
+    expect(result.rationale).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
   it('keeps OpenCode metadata on malformed advisory output', async () => {
     const result = await runCriterionAgentReview({
       criterionId: 'S004',
