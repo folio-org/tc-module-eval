@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult
@@ -12,6 +13,7 @@ import {
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
+import { decodeOpenCodeOutput, OpenCodeOutput, parseJsonObject } from './opencode-output';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 const OPENCODE_RUN_MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -55,10 +57,11 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'config'],
     cwd: workspace.rootPath,
     env: invocation.env,
-    timeoutMs: config.timeoutMs
+    timeoutMs: config.timeoutMs,
+    stdoutFormat: 'json'
   });
-  if (configDebug.status !== 'success') {
-    return baseUnavailable(`Unable to verify OpenCode config: ${configDebug.errorMessage ?? configDebug.stderr}`);
+  if (configDebug.status !== 'success' || configDebug.stdoutTruncated) {
+    return baseUnavailable(commandFailure('debug config', configDebug, config));
   }
 
   const agentDebug = await commandRunner.run({
@@ -66,10 +69,11 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'agent', config.readOnlyAgentName],
     cwd: workspace.rootPath,
     env: invocation.env,
-    timeoutMs: config.timeoutMs
+    timeoutMs: config.timeoutMs,
+    stdoutFormat: 'json'
   });
-  if (agentDebug.status !== 'success') {
-    return baseUnavailable(`Unable to verify OpenCode agent: ${agentDebug.errorMessage ?? agentDebug.stderr}`);
+  if (agentDebug.status !== 'success' || agentDebug.stdoutTruncated) {
+    return baseUnavailable(commandFailure('debug agent', agentDebug, config));
   }
 
   const permissionError = validateDebugOutput(configDebug.stdout, agentDebug.stdout, invocation.provenancePaths);
@@ -94,14 +98,34 @@ export async function runOpenCodeAgentReview(
     cwd: workspace.rootPath,
     env: invocation.env,
     timeoutMs: config.timeoutMs,
+    stdoutFormat: 'opencode-json',
     maxOutputBytes: OPENCODE_RUN_MAX_OUTPUT_BYTES
   });
 
-  if (run.status !== 'success') {
-    return baseUnavailable(`OpenCode review failed: ${run.errorMessage ?? run.stderr}`);
+  const decoded = decodeOpenCodeOutput(run.stdout);
+  if (run.status !== 'success' || run.stdoutTruncated) {
+    return baseUnavailable(commandFailure('run', run, config, decoded));
   }
 
-  return normalizeOpenCodeResult(run.stdout, request, workspace, config);
+  const result = normalizeOpenCodeResult(decoded, request, workspace, config);
+  if (!result.available) {
+    result.errors.push(commandContext('run', run, config));
+    if (decoded.diagnostic) result.errors.push(`OpenCode decode: ${decoded.diagnostic}`);
+    result.errors.push(...(run.stdoutDiagnostics ?? []).map(diagnostic => `OpenCode capture: ${diagnostic}`));
+  }
+  return result;
+}
+
+function commandContext(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig): string {
+  return redactSensitiveText(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
+}
+
+function commandFailure(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig, decoded?: OpenCodeOutput): string {
+  const reason = run.status === 'success' ? 'capture truncated' : run.status;
+  const provider = decoded?.providerError;
+  const detail = provider ? [provider.name, provider.statusCode, provider.message].filter(value => value !== undefined).join(': ')
+    : redactSensitiveText(run.errorMessage ?? '', 500);
+  return `${commandContext(stage, run, config)}; ${reason}${run.stdoutTruncated && run.status !== 'success' ? '; capture truncated' : ''}${detail ? `; ${detail}` : ''}`;
 }
 
 export function materializeOpenCodeInvocation(
@@ -262,6 +286,9 @@ function validateDebugOutput(configDebug: string, agentDebug: string, trustedPat
   if (!agent) {
     return 'OpenCode agent debug output was not parseable JSON';
   }
+  if (config.type === 'unsafe_output' || agent.type === 'unsafe_output') {
+    return 'OpenCode debug output was unsafe to sanitize';
+  }
 
   const configEntryError = validateConfigHasNoExtensionEntries(config);
   if (configEntryError) {
@@ -368,43 +395,40 @@ function validateResolvedAgentTools(agent: Record<string, unknown> | undefined):
   return undefined;
 }
 
-function parseJsonObject(output: string): Record<string, unknown> | undefined {
-  try {
-    const parsed = JSON.parse(output);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function normalizeOpenCodeResult(
-  output: string,
+  decoded: OpenCodeOutput,
   request: CriterionAgentReviewRequest,
   workspace: PreparedCriterionReviewWorkspace,
   config: CriterionAgentReviewConfig
 ): CriterionAgentReviewResult {
-  const parsed = parseOpenCodeReviewPayload(output);
+  const parsed = decoded.payload;
   if (!parsed) {
+    const reasons = {
+      malformed_json: 'OpenCode returned malformed JSON',
+      no_assistant_text: 'OpenCode returned no assistant text',
+      incomplete_response: `OpenCode returned incomplete response (finish: ${decoded.finishReason ?? 'missing'})`,
+      provider_error: `OpenCode provider error: ${Object.values(decoded.providerError ?? {}).join(': ')}`
+    };
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata: openCodeMetadata(config, workspace),
       warnings: [],
-      errors: ['OpenCode returned malformed JSON']
+      errors: [reasons[decoded.failure ?? 'malformed_json']]
     };
   }
 
   const normalized = normalizeCriterionAgentAdvisoryPayload(parsed, workspace.manifestEntries);
 
-  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
+  if (normalized.errors.length) {
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata: openCodeMetadata(config, workspace),
       warnings: normalized.warnings,
-      errors: ['OpenCode returned incomplete advisory JSON']
+      errors: ['OpenCode returned incomplete advisory JSON', ...normalized.errors]
     };
   }
 
@@ -437,174 +461,4 @@ function openCodeMetadata(
     reviewWorkspaceSanitized: true,
     retainedWorkspacePath: config.debugRetainWorkspace ? workspace.rootPath : undefined
   };
-}
-
-function parseOpenCodeReviewPayload(output: string): Record<string, unknown> | undefined {
-  const parsed = parseJsonObject(output);
-  if (parsed && !parsed.type) {
-    return parsed;
-  }
-
-  const textParts: string[] = [];
-  for (const line of output.split(/\r?\n/)) {
-    const event = parseJsonObject(line.trim());
-    if (!event) {
-      continue;
-    }
-    const text = extractOpenCodeEventText(event);
-    if (text) {
-      textParts.push(text);
-    }
-  }
-
-  if (textParts.length === 0) {
-    return undefined;
-  }
-  return parseJsonObjectFromText(textParts.join('\n').trim());
-}
-
-function extractOpenCodeEventText(event: Record<string, unknown>): string | undefined {
-  const part = event.part;
-  if (part && typeof part === 'object' && !Array.isArray(part)) {
-    const candidate = part as Record<string, unknown>;
-    if (candidate.type === 'text') {
-      return firstString(candidate.text, candidate.content);
-    }
-  }
-
-  const partsText = extractTextParts(event.parts);
-  if (partsText) {
-    return partsText;
-  }
-
-  if (event.type === 'text') {
-    return firstString(event.text, event.content);
-  }
-
-  const message = event.message;
-  if (message && typeof message === 'object' && !Array.isArray(message)) {
-    return extractMessageText(message as Record<string, unknown>);
-  }
-
-  return undefined;
-}
-
-function extractMessageText(message: Record<string, unknown>): string | undefined {
-  const contentText = extractTextParts(message.content);
-  if (contentText) {
-    return contentText;
-  }
-  return extractTextParts(message.parts);
-}
-
-function extractTextParts(value: unknown): string | undefined {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const parts = value.flatMap(entry => {
-    if (typeof entry === 'string') {
-      return [entry];
-    }
-    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-      const text = firstString((entry as Record<string, unknown>).text, (entry as Record<string, unknown>).content);
-      return text ? [text] : [];
-    }
-    return [];
-  });
-
-  return parts.length ? parts.join('\n') : undefined;
-}
-
-function firstString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === 'string');
-}
-
-function parseJsonObjectFromText(text: string): Record<string, unknown> | undefined {
-  const candidates: Record<string, unknown>[] = [];
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenceMatch?.[1]) {
-    const fenced = parseJsonObject(fenceMatch[1].trim());
-    if (fenced) {
-      candidates.push(fenced);
-    }
-  }
-
-  for (const candidate of extractBalancedJsonObjectTexts(text)) {
-    const parsed = parseJsonObject(candidate);
-    if (parsed) {
-      candidates.push(parsed);
-    }
-  }
-
-  const whole = parseJsonObject(text);
-  if (whole) {
-    candidates.push(whole);
-  }
-
-  return [...candidates].reverse().find(isAdvisoryPayload) ?? candidates[candidates.length - 1];
-}
-
-function isAdvisoryPayload(candidate: Record<string, unknown>): boolean {
-  return (
-    'recommendation' in candidate &&
-    'confidence' in candidate &&
-    typeof candidate.summary === 'string' &&
-    typeof candidate.rationale === 'string' &&
-    Array.isArray(candidate.evidenceReferences)
-  );
-}
-
-function extractBalancedJsonObjectTexts(text: string): string[] {
-  const candidates: string[] = [];
-  for (let start = 0; start < text.length; start += 1) {
-    if (text[start] !== '{') {
-      continue;
-    }
-    const end = findBalancedObjectEnd(text, start);
-    if (end > start) {
-      candidates.push(text.slice(start, end + 1));
-    }
-  }
-  return candidates;
-}
-
-function findBalancedObjectEnd(text: string, start: number): number {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = start; index < text.length; index += 1) {
-    const char = text[index];
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-    if (char === '{') {
-      depth += 1;
-      continue;
-    }
-    if (char === '}') {
-      depth -= 1;
-      if (depth === 0) {
-        return index;
-      }
-    }
-  }
-
-  return -1;
 }

@@ -10,12 +10,14 @@ import {
   EvaluationStatus
 } from '../types';
 import {
+  normalizeCriterionAgentAdvisoryPayload,
   prepareCriterionReviewWorkspace,
   reviewCriterionWithAgent,
   runCriterionAgentReview,
   validateEndpointUrl
 } from '../utils/criterion-agent-review';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
+import { sanitizeStructuredOutput } from '../utils/opencode-output';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -23,7 +25,8 @@ class FakeRunner implements CommandRunner {
   constructor(
     private readonly configDebug?: string,
     private readonly agentDebug?: string,
-    private readonly runStdout?: string
+    private readonly runStdout?: string,
+    private readonly resultOverrides: Record<number, Partial<CommandExecutionResult>> = {}
   ) {}
 
   normalize(request: CommandExecutionRequest): string {
@@ -78,7 +81,8 @@ class FakeRunner implements CommandRunner {
       durationMs: 1,
       stdout,
       stderr: '',
-      sanitized: true
+      sanitized: true,
+      ...this.resultOverrides[this.requests.length]
     };
   }
 }
@@ -113,6 +117,28 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('disabled');
   });
+
+  it.each([
+    ['summary', '  '], ['rationale', '\n'], ['recommendation', 'maybe'],
+    ['confidence', -0.01], ['confidence', 1.01], ['confidence', NaN], ['confidence', Infinity],
+    ['evidenceReferences', undefined], ['evidenceReferences', 'README.md'],
+    ['evidenceReferences', []], ['evidenceReferences', ['unknown.md']]
+  ])('rejects invalid %s (%p) in shared normalization', (field, value) => {
+    const normalized = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'pass', confidence: 0.75, summary: 'Evidence checked.',
+      rationale: 'README supports the advice.', evidenceReferences: ['README.md'], [field]: value
+    }, ['README.md']);
+    expect(normalized).toMatchObject({ errors: expect.arrayContaining([expect.stringContaining(field)]) });
+  });
+
+  it.each([[0, 'low'], [0.4, 'medium'], [0.75, 'high'], [1, 'high']])(
+    'accepts bounded numeric confidence %p as %s', (confidence, expected) => {
+      expect(normalizeCriterionAgentAdvisoryPayload({ recommendation: 'pass', confidence,
+        summary: ' Summary ', rationale: ' Rationale ', evidenceReferences: [{ path: 'README.md' }, 'unknown.md']
+      }, ['README.md'])).toMatchObject({ confidence: expected, summary: 'Summary', rationale: 'Rationale',
+        evidenceReferences: ['README.md'], errors: [], warnings: [expect.stringContaining('Dropped')] });
+    }
+  );
 
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await reviewCriterionWithAgent({
@@ -350,7 +376,7 @@ describe('criterion agent review', () => {
           })
         }
       }),
-      JSON.stringify({ type: 'step_finish', part: { type: 'step-finish' } })
+      JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } })
     ].join('\n'));
 
     const result = await runCriterionAgentReview({
@@ -457,6 +483,21 @@ describe('criterion agent review', () => {
     expect(result.evidenceReferences).toEqual(['README.md']);
   });
 
+  it('reports advice with an unsafe rationale as unavailable after sanitization', async () => {
+    const captured = sanitizeStructuredOutput(JSON.stringify({
+      recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'Inspect repository evidence.',
+      rationale: '"password": "SYNTHETIC_SECRET\\', evidenceReferences: ['README.md']
+    }), 'opencode-json', 10000);
+    const result = await runCriterionAgentReview({
+      criterionId: 'S006', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Redacted evidence.' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), enabledCriteria: ['S006'] }, new FakeRunner(undefined, undefined, captured.text));
+    expect(result.available).toBe(false);
+    expect(result.errors).toContain('OpenCode decode: sanitization rejected a record');
+    expect(result.rationale).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  });
+
   it('keeps OpenCode metadata on malformed advisory output', async () => {
     const result = await runCriterionAgentReview({
       criterionId: 'S004',
@@ -464,10 +505,15 @@ describe('criterion agent review', () => {
       instructions: 'review',
       files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
       schemaDescription: 'schema'
-    }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json'));
+    }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json', {
+      3: { stdoutDiagnostics: ['record 1: other; Invalid framing'] }
+    }));
 
     expect(result.available).toBe(false);
-    expect(result.errors).toEqual(['OpenCode returned malformed JSON']);
+    expect(result.errors).toContain('OpenCode returned malformed JSON');
+    expect(result.errors).toContain('OpenCode decode: invalid transport record');
+    expect(result.errors).toContain('OpenCode capture: record 1: other; Invalid framing');
+    expect(result.errors.join('\n')).toContain('OpenCode run:');
     expect(result.metadata).toMatchObject({
       adapter: 'opencode',
       modelLabel: 'test-model'
@@ -498,6 +544,47 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(true);
     expect(result.recommendation).toBe('likely_insufficient');
     expect(result.summary).toBe('Stray brace summary.');
+  });
+
+  it.each([1, 2, 3])('stops at timed-out stage %i without retrying', async stage => {
+    const runner = new FakeRunner(undefined, undefined, undefined, {
+      [stage]: { status: 'timed_out', durationMs: 180000 }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), timeoutMs: 180000 }, runner);
+    expect(result.available).toBe(false);
+    expect(runner.requests).toHaveLength(stage);
+    expect(result.errors.join('\n')).toContain('timed_out');
+    expect(result.errors.join('\n')).toContain('timeout 180000ms');
+    expect(result.errors.join('\n')).not.toContain('malformed');
+  });
+
+  it.each([1, 2, 3])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
+    const runner = new FakeRunner(undefined, undefined, undefined, {
+      [stage]: { stdoutTruncated: true, stdoutBytes: 1048577 }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(runner.requests).toHaveLength(stage);
+    expect(result.errors.join('\n')).toContain('capture truncated');
+  });
+
+  it('retains allowlisted provider diagnostics from stdout on nonzero exit', async () => {
+    const stdout = JSON.stringify({ type: 'error', error: { name: 'APIError', data: {
+      message: 'Rate limit: password=synthetic-credential', statusCode: 429,
+      responseBody: 'DO_NOT_PUBLISH', headers: { authorization: 'DO_NOT_PUBLISH' }
+    } } });
+    const runner = new FakeRunner(undefined, undefined, stdout, { 3: { status: 'failed', exitCode: 1 } });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('429');
+    expect(result.errors.join('\n')).toContain('APIError');
+    expect(JSON.stringify(result)).not.toMatch(/synthetic-credential|DO_NOT_PUBLISH/);
   });
 
   it('normalizes common off-schema OpenCode advisory fields', async () => {
@@ -894,6 +981,42 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('Unable to materialize OpenCode invocation');
+  });
+
+  it.each(['config', 'agent'])('rejects unsafe sanitized %s debug output before running a review', async stage => {
+    const unsafe = sanitizeStructuredOutput('{"plugin":["untrusted"],', 'json', 10000).text;
+    const runner = new FakeRunner(stage === 'config' ? unsafe : undefined, stage === 'agent' ? unsafe : undefined);
+    const result = await runCriterionAgentReview({
+      criterionId: 'S004', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+    expect(result.available).toBe(false);
+    expect(result.errors.join('\n')).toContain('unsafe');
+    expect(runner.requests.some(request => request.args?.[0] === 'run')).toBe(false);
+  });
+
+  it.each([false, true])('validates debug security fields despite brace-containing prompts (plugin=%s)', plugin => {
+    class SanitizingRunner extends FakeRunner {
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        const result = await super.run(request);
+        if (request.args?.[0] === 'debug') {
+          const debug = JSON.parse(result.stdout);
+          debug.prompt = '{summary: string}\nfunction f() {';
+          if (plugin && request.args[1] === 'config') debug.plugin = ['untrusted'];
+          result.stdout = sanitizeStructuredOutput(JSON.stringify(debug), 'json', 10000).text;
+        }
+        return result;
+      }
+    }
+    const runner = new SanitizingRunner();
+    return runCriterionAgentReview({
+      criterionId: 'S004', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner).then(result => {
+      expect(result.available).toBe(!plugin);
+      if (plugin) expect(result.errors.join('\n')).toContain('rejected plugin entries');
+      expect(runner.requests.some(request => request.args?.[0] === 'run')).toBe(!plugin);
+    });
   });
 
   it('fails closed when OpenCode debug output is not parseable JSON', async () => {

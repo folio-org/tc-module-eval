@@ -97,12 +97,12 @@ function parseCsv(value: string | undefined): string[] | undefined {
 }
 
 function parsePositiveInteger(value: string, label: string): number {
-  if (!/^[1-9]\d*$/.test(value)) {
-    throw new Error(`Invalid ${label}: expected a positive integer`);
-  }
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`Invalid ${label}: expected a positive integer`);
+  if (!/^[1-9]\d*$/.test(value)
+    || !Number.isSafeInteger(parsed)
+    || parsed < 1
+    || parsed > 2_147_483_647) {
+    throw new Error(`Invalid ${label}: expected an integer between 1 and 2147483647`);
   }
   return parsed;
 }

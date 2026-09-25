@@ -305,14 +305,14 @@ function normalizeFakeCriterionReviewResult(
     };
   }
 
-  if (!normalized.recommendation || !normalized.confidence || !normalized.summary || !normalized.rationale) {
+  if (normalized.errors.length) {
     return {
       available: false,
       criterionId: request.criterionId,
       evidenceReferences: [],
       metadata,
       warnings,
-      errors: [...errors, 'Fake criterion-agent review returned incomplete advisory JSON']
+      errors: [...errors, 'Fake criterion-agent review returned incomplete advisory JSON', ...normalized.errors]
     };
   }
 
@@ -341,6 +341,7 @@ export interface NormalizedCriterionAgentAdvisoryPayload {
   assessments?: CriterionAgentReviewResult['assessments'];
   reviewerActions?: CriterionAgentReviewResult['reviewerActions'];
   warnings: string[];
+  errors: string[];
 }
 
 export function normalizeCriterionAgentAdvisoryPayload(
@@ -351,12 +352,24 @@ export function normalizeCriterionAgentAdvisoryPayload(
   const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
   const assessments = normalizeAssessments(payload.assessments, manifestEntries);
   const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries);
+  const recommendation = parseAdvisoryRecommendation(payload.recommendation);
+  const confidence = parseAdvisoryConfidence(payload.confidence);
+  const summary = typeof payload.summary === 'string' ? redactSensitiveText(payload.summary).trim() : undefined;
+  const rationale = typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale).trim() : undefined;
+  const errors: string[] = [];
+  if (!recommendation) errors.push('recommendation must be a supported advisory recommendation');
+  if (!confidence) errors.push('confidence must be low, medium, high, or a finite number between 0 and 1');
+  if (!summary) errors.push('summary must be a nonblank string');
+  if (!rationale) errors.push('rationale must be a nonblank string');
+  if (!Array.isArray(payload.evidenceReferences)) errors.push('evidenceReferences must be an array');
+  else if (!evidenceReferences.length) errors.push('evidenceReferences must include a manifest entry');
   return {
-    recommendation: parseAdvisoryRecommendation(payload.recommendation),
-    confidence: parseAdvisoryConfidence(payload.confidence),
-    summary: typeof payload.summary === 'string' ? redactSensitiveText(payload.summary) : undefined,
-    rationale: typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale) : undefined,
+    recommendation,
+    confidence,
+    summary,
+    rationale,
     evidenceReferences,
+    errors,
     assessments,
     reviewerActions,
     warnings: [
@@ -446,7 +459,7 @@ function parseAdvisoryConfidence(value: unknown): CriterionAgentReviewResult['co
   if (value === 'low' || value === 'medium' || value === 'high') {
     return value;
   }
-  if (typeof value === 'number') {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) {
     if (value >= 0.75) {
       return 'high';
     }

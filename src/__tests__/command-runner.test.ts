@@ -199,4 +199,31 @@ describe('CommandRunner', () => {
     expect(output).toContain('output truncated');
     expect(output).not.toContain('abc123');
   });
+
+  it('distinguishes exact byte capture, overflow, and a literal truncation marker', async () => {
+    const runner = new LocalCommandRunner();
+    const output = JSON.stringify({ text: 'é [output truncated to 20 bytes]' });
+    const request = { command: process.execPath,
+      args: ['-e', 'const b = Buffer.from(process.env.TEST_WIRE); process.stdout.write(b.subarray(0, 10)); process.stdout.write(b.subarray(10))'],
+      cwd: process.cwd(), env: { TEST_WIRE: output }, stdoutFormat: 'json' as const,
+      maxOutputBytes: Buffer.byteLength(output) };
+    const exact = await runner.run(request);
+    expect(exact.stdout).toBe(output);
+    expect(exact.stdoutBytes).toBe(Buffer.byteLength(output));
+    expect(exact.stdoutTruncated).toBe(false);
+    const overflow = await runner.run({ ...request, maxOutputBytes: request.maxOutputBytes - 1 });
+    expect(overflow.stdoutTruncated).toBe(true);
+    expect(overflow.stdout).not.toContain('\uFFFD');
+    expect(runner.normalize(request)).not.toBe(runner.normalize({ ...request, stdoutFormat: 'text' }));
+  });
+
+  it('reports sanitized representation overflow without publishing broken JSON', async () => {
+    const output = '{"password":"x"}';
+    const result = await new LocalCommandRunner().run({ command: process.execPath,
+      args: ['-e', 'process.stdout.write(process.env.TEST_WIRE)'], cwd: process.cwd(),
+      env: { TEST_WIRE: output }, stdoutFormat: 'json', maxOutputBytes: Buffer.byteLength(output) });
+    expect(result.stdoutTruncated).toBe(true);
+    expect(result.stdoutBytes).toBe(Buffer.byteLength(output));
+    expect(result.stdout).toBe('');
+  });
 });

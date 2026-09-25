@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { redactSensitiveText } from './redaction';
 import { isDirectory } from './repo-files';
+import { sanitizeStructuredOutput } from './opencode-output';
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -37,6 +38,7 @@ export function normalizeCommandRequest(
     cwd: path.resolve(request.cwd),
     timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxOutputBytes: request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+    stdoutFormat: request.stdoutFormat ?? 'text',
     envHash,
     requiresIsolation: request.requiresIsolation === true,
     allowLocalCommands,
@@ -179,7 +181,10 @@ export class LocalCommandRunner implements CommandRunner {
 
       child.on('close', (code, signal) => {
         clearTimeout(timeout);
-        const stdout = this.formatCapturedOutput(stdoutChunks, stdoutBytes, maxOutputBytes);
+        const structured = request.stdoutFormat && request.stdoutFormat !== 'text'
+          ? sanitizeStructuredOutput(Buffer.concat(stdoutChunks).toString('utf-8'), request.stdoutFormat, maxOutputBytes)
+          : undefined;
+        const stdout = structured?.text ?? this.formatCapturedOutput(stdoutChunks, stdoutBytes, maxOutputBytes);
         const stderr = this.formatCapturedOutput(stderrChunks, stderrBytes, maxOutputBytes);
         const status = timedOut ? 'timed_out' : code === 0 ? 'success' : 'failed';
         const resolvedSignal = signal ?? forcedSignal;
@@ -189,6 +194,11 @@ export class LocalCommandRunner implements CommandRunner {
           signal: resolvedSignal,
           stdout,
           stderr,
+          stdoutBytes,
+          stderrBytes,
+          stdoutDiagnostics: structured?.diagnostics,
+          stdoutTruncated: stdoutBytes > maxOutputBytes || (structured?.truncated ?? Buffer.byteLength(stdout) > maxOutputBytes),
+          stderrTruncated: stderrBytes > maxOutputBytes || Buffer.byteLength(stderr) > maxOutputBytes,
           errorMessage: status === 'timed_out'
             ? sanitizeCommandOutput(this.formatTimeoutMessage(started, request.timeoutMs ?? DEFAULT_TIMEOUT_MS, resolvedSignal, stderr), maxOutputBytes)
             : status === 'failed'
@@ -251,6 +261,11 @@ export class LocalCommandRunner implements CommandRunner {
       durationMs: Date.now() - started,
       stdout: values.stdout ?? '',
       stderr: values.stderr ?? '',
+      stdoutBytes: values.stdoutBytes,
+      stderrBytes: values.stderrBytes,
+      stdoutDiagnostics: values.stdoutDiagnostics,
+      stdoutTruncated: values.stdoutTruncated,
+      stderrTruncated: values.stderrTruncated,
       errorMessage: values.errorMessage,
       sanitized: true
     };

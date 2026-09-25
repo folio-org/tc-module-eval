@@ -80,7 +80,8 @@ export function buildS006AgentReviewRequest(
       'Do not claim that any credential, token, key, password, private URL, credential URL, endpoint, or secret is live, valid, exploitable, revoked, or safe.',
       'This review is advisory only for Technical Council reviewer judgment. Agent advice must not decide the final S006 status.',
       'Every advisory claim must cite only repoRelativePath values present in the manifest.',
-      'Return only JSON with these required fields: recommendation, confidence, summary, rationale, and evidenceReferences.',
+      'Return exactly one JSON object, without prose or Markdown fences, with these required fields: recommendation, confidence, summary, rationale, and evidenceReferences.',
+      `Output shape example (replace the explanation with your evidence-based assessment): ${JSON.stringify({ recommendation: 'needs_reviewer_judgment', confidence: 'low', summary: 'Reviewer judgment is needed.', rationale: 'Explain the evidence and limitations here.', evidenceReferences: [REDACTED_SUMMARY_REVIEW_PATH] })}`,
       'recommendation must be one of likely_sufficient, likely_insufficient, or needs_reviewer_judgment; confidence must be low, medium, or high; summary and rationale must be strings; evidenceReferences must be an array of manifest repoRelativePath strings only.'
     ].join('\n'),
     files,

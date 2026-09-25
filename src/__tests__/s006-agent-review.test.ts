@@ -279,6 +279,25 @@ describe('S006 agent review adapter', () => {
     };
   }
 
+  it('accepts a coverage-only review citing only its generated summary', async () => {
+    writeFile('README.md', '# Clean module');
+    const clean = await analyzeRepo();
+    const analysis: S006SensitiveInformationAnalysisResult = { ...clean,
+      classification: { ...clean.classification, status: EvaluationStatus.MANUAL, materiallyWeakenedCoverage: true },
+      coverage: { ...clean.coverage, complete: false, materiallyWeakened: true }
+    };
+    const request = buildS006AgentReviewRequest(repoPath, analysis);
+    expect(request.files).toHaveLength(1);
+    const references = [request.files[0].repoRelativePath];
+    const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({ available: true,
+      criterionId: 'S006', recommendation: 'needs_reviewer_judgment', confidence: 'low',
+      summary: 'Coverage is incomplete.', rationale: 'The summary records materially weakened coverage.',
+      evidenceReferences: references, warnings: [], errors: []
+    }));
+    expect(result.available).toBe(true);
+    expect(result.evidenceReferences).toEqual(references);
+  });
+
   function writeFile(relativePath: string, content: string): void {
     const absolutePath = path.join(repoPath, relativePath);
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
