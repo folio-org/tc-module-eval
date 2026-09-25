@@ -59,7 +59,7 @@ interface GradleDeclaration {
   scope: typeof GRADLE_CONFIGURATIONS[number];
   expression: string;
   offset: number;
-  index: number;
+  index: string;
 }
 
 export async function collectS009DependencyEvidence(repoPath: string): Promise<S009DependencyEvidence> {
@@ -185,7 +185,7 @@ function resolveMavenProject(
     const parentPath = relativePathDisabled
       ? undefined
       : path.resolve(path.dirname(parsed.pomPath), relativeValue || '../pom.xml');
-    const parentProject = parentPath && projects.get(parentPath);
+    const parentProject = parentPath && (projects.get(parentPath) ?? projects.get(path.join(parentPath, 'pom.xml')));
     if (parentProject) {
       const candidate = resolveMavenProject(context, parentProject, projects, cache, nextVisiting);
       if (candidate && mavenParentMatches(parsed.project.parent, candidate)) parent = candidate;
@@ -323,8 +323,8 @@ function collectMavenDependencies(
     const declaredVersion = resolveMavenText(rawVersion, effective.properties);
     const localVersions = localProjects.get(`${groupId}:${artifactId}`);
     if (localVersions?.size && declaredVersion && localVersions.has(declaredVersion)) continue;
-    const ambiguousLocality = Boolean(localVersions?.size && (
-      !declaredVersion || /^[[(].*[\])]$/.test(declaredVersion)
+    const ambiguousLocality = Boolean(localVersions !== undefined && (
+      !localVersions.size || !declaredVersion || /^[[(].*[\])]$/.test(declaredVersion)
     ));
     addObservation(context, {
       ecosystem: 'maven',
@@ -386,12 +386,6 @@ function collectGradleDeclaration(
   declaration: GradleDeclaration
 ): void {
   const expression = declaration.expression.trim();
-  if (isIgnoredGradleExpression(expression)) return;
-  const literal = quotedLiteral(expression);
-  if (literal !== undefined) {
-    collectGradleCoordinate(context, sourcePath, declaration.scope, literal, declaration.index);
-    return;
-  }
   const namedGroup = gradleNamedLiteral(expression, 'group');
   if (namedGroup && namedGroup !== 'org.folio') return;
   const map = parseGradleMap(expression);
@@ -409,6 +403,23 @@ function collectGradleDeclaration(
     }
     if (map.group && !map.group.includes('$')) return;
   }
+  const argumentsList = splitGradleArguments(expression);
+  if (argumentsList.length > 1) {
+    for (const [argumentIndex, argument] of argumentsList.entries()) {
+      collectGradleDeclaration(context, sourcePath, content, {
+        ...declaration,
+        expression: argument,
+        index: `${declaration.index}.${argumentIndex}`
+      });
+    }
+    return;
+  }
+  if (isIgnoredGradleExpression(expression)) return;
+  const literal = quotedLiteral(expression);
+  if (literal !== undefined) {
+    collectGradleCoordinate(context, sourcePath, declaration.scope, literal, declaration.index);
+    return;
+  }
   const line = content.slice(0, declaration.offset).split(/\r?\n/).length;
   diagnostic(
     context,
@@ -423,7 +434,7 @@ function collectGradleCoordinate(
   sourcePath: string,
   scope: string,
   rawCoordinate: string,
-  declarationIndex: number
+  declarationIndex: string
 ): void {
   const [groupId, artifactId, ...versionParts] = rawCoordinate.split(':');
   if (groupId.includes('$')) {
@@ -470,7 +481,7 @@ function scanGradleDeclarations(content: string): GradleDeclaration[] {
       const scope = args[0] && quotedLiteral(args[0]);
       if (scope && isGradleConfiguration(scope) && args[1]) {
         const count = counts.get(scope) ?? 0;
-        declarations.push({ scope, expression: args.slice(1).join(','), offset: start, index: count });
+        declarations.push({ scope, expression: args.slice(1).join(','), offset: start, index: String(count) });
         counts.set(scope, count + 1);
       }
       index = call.end;
@@ -493,7 +504,7 @@ function scanGradleDeclarations(content: string): GradleDeclaration[] {
     }
     if (!expression?.trim()) continue;
     const count = counts.get(identifier) ?? 0;
-    declarations.push({ scope: identifier, expression, offset: start, index: count });
+    declarations.push({ scope: identifier, expression, offset: start, index: String(count) });
     counts.set(identifier, count + 1);
     index = end;
   }
@@ -587,9 +598,14 @@ function gradleNamedLiteral(value: string, name: string): string | undefined {
 }
 
 function collectNpm(context: Context): void {
+  const rootPath = path.join(context.repoPath, 'package.json');
+  try {
+    const rootStats = fs.lstatSync(rootPath);
+    if (!rootStats.isFile() || rootStats.isSymbolicLink()) return;
+  } catch {
+    return;
+  }
   const packageFiles = candidateFiles(context, file => path.basename(file) === 'package.json');
-  const rootPath = packageFiles.find(file => file === path.join(context.repoPath, 'package.json'));
-  if (!rootPath) return;
   const root = readNpmManifest(context, rootPath);
   if (!root) return;
 

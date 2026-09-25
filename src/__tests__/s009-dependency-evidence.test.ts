@@ -121,6 +121,21 @@ describe('S009 dependency evidence', () => {
     expect(new Set(evidence.observations.map(item => item.sourceField)).size).toBe(2);
   });
 
+  it('collects every comma-separated Gradle dependency argument', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation 'com.google.guava:guava:33.0.0-jre', 'org.folio:folio-unapproved-lib:1.0.0'
+      runtimeOnly('com.example:ordinary:1', 'org.folio:second-unapproved:2')
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.observations.map(item => item.coordinate)).toEqual([
+      'org.folio:folio-unapproved-lib',
+      'org.folio:second-unapproved'
+    ]);
+  });
+
   it('ignores a dynamic Gradle artifact when a literal group proves it is outside FOLIO', async () => {
     await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
       implementation group: 'com.example', name: externalArtifact, version: externalVersion
@@ -277,6 +292,91 @@ describe('S009 dependency evidence', () => {
     expect(evidence.observations).toEqual(expect.arrayContaining([
       expect.objectContaining({ coordinate: 'org.folio:client', locality: 'ambiguous' }),
       expect.objectContaining({ coordinate: 'org.folio:fixture', locality: undefined })
+    ]));
+  });
+
+  it('marks a sibling Maven dependency ambiguous when the local module version is unresolved', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version>
+        <modules><module>client</module><module>server</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version></parent>
+        <artifactId>client</artifactId>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'server/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version></parent>
+        <artifactId>server</artifactId>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>client</artifactId><version>\${revision}</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations).toEqual([
+      expect.objectContaining({ coordinate: 'org.folio:client', locality: 'ambiguous' })
+    ]);
+  });
+
+  it('resolves a Maven parent relativePath that names a directory', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>root</artifactId><version>1</version>
+        <modules><module>parent</module><module>child</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'parent/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>local-parent</artifactId><version>1</version>
+        <dependencyManagement><dependencies><dependency>
+          <groupId>org.folio</groupId><artifactId>test-helper</artifactId><version>1</version><scope>test</scope>
+        </dependency></dependencies></dependencyManagement>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'child/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent>
+          <groupId>org.folio</groupId><artifactId>local-parent</artifactId><version>1</version>
+          <relativePath>../parent</relativePath>
+        </parent>
+        <artifactId>child</artifactId>
+        <dependencies><dependency>
+          <groupId>org.folio</groupId><artifactId>test-helper</artifactId>
+        </dependency></dependencies>
+      </project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.observations).toEqual([]);
+  });
+
+  it('always includes the root package manifest even when recursive discovery is capped', async () => {
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      dependencies: { '@folio/not-approved': '1.0.0' }
+    });
+    for (let index = 0; index < 129; index += 1) {
+      await fs.outputJson(path.join(repo, `a-${String(index).padStart(3, '0')}/package.json`), { private: true });
+    }
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.hasDependencyProject).toBe(true);
+    expect(evidence.complete).toBe(false);
+    expect(evidence.projectFiles).toContain('package.json');
+    expect(evidence.observations).toEqual([
+      expect.objectContaining({ coordinate: '@folio/not-approved' })
+    ]);
+    expect(evidence.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'manifest_limit', material: true })
     ]));
   });
 

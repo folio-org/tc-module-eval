@@ -48,6 +48,52 @@ describe('S009 shared evaluator integration', () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
+  it('fails when an unaccepted FOLIO Gradle dependency follows another comma-separated declaration', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation 'com.google.guava:guava:33.0.0-jre', 'org.folio:folio-unapproved-lib:1.0.0'
+    }`);
+    const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'], commandRunner: runner });
+
+    const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.details).toContain('org.folio:folio-unapproved-lib:');
+    expect(runner.run).not.toHaveBeenCalled();
+  });
+
+  it('requires manual review for an unaccepted sibling Maven module with an unresolved local version', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version>
+        <modules><module>client</module><module>server</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version></parent>
+        <artifactId>new-client</artifactId>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'server/pom.xml'), `
+      <project><modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>\${revision}</version></parent>
+        <artifactId>new-server</artifactId>
+        <dependencies><dependency>
+          <groupId>org.folio</groupId><artifactId>new-client</artifactId><version>\${revision}</version>
+        </dependency></dependencies>
+      </project>
+    `);
+    const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'], commandRunner: runner });
+
+    const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('Manual review: local resolution is ambiguous');
+    expect(runner.run).not.toHaveBeenCalled();
+  });
+
   it('runs S009 alone and in the full shared criterion set', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), { dependencies: {} });
     const evaluator = new TestEvaluator('javascript');
