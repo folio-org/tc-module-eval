@@ -497,7 +497,7 @@
       "criterionDetails": {
         "channel": "official",
         "policyDiagnosticCodes": [],
-        "ledgerDigest": "sha256:a3a0c72f352de4d4ee4d6209676a5dbc5276d9fedfcdc5b82064c699a2658ac0",
+        "ledgerDigest": "sha256:7c75f3a3f3e0c7420851af78359f32f95d34b3c2e595eec2cb24384720f7d5a7",
         "catalogDigest": "sha256:331710bb624cec31c2f883aa4c14edafcfa1fe90dc9fe575d1a9233b228753e6",
         "baseline": {
           "descriptorHash": "sha256:ac95191236d92167cc64d9924d8ee5aef84b0c9462a9d4c2f7eb906969173317",
@@ -513,9 +513,15 @@
     },
     {
       "criterionId": "S009",
-      "status": "manual",
-      "evidence": "Security requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
+      "details": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
+      "criterionDetails": {
+        "projectFileCount": 1,
+        "observationCount": 3,
+        "evidenceDiagnosticCodes": [],
+        "policyDiagnosticCodes": []
+      }
     },
     {
       "criterionId": "S010",

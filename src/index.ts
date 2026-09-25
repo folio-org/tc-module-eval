@@ -17,6 +17,8 @@ export { loadS008Catalog } from './utils/s008-catalog';
 export { collectS008Declarations } from './utils/s008-interface-declarations';
 export { compareEurekaInterfaces, isEurekaInterfaceCompatible } from './utils/eureka-interface-compatibility';
 export { evaluateS008, renderS008HumanDetails } from './utils/s008-evaluator';
+export { collectS009DependencyEvidence } from './utils/s009-dependency-evidence';
+export { evaluateS009, renderS009HumanDetails } from './utils/s009-evaluator';
 export { Logger, ConsoleLogger, NoopLogger, getLogger, setLogger, resetLogger } from './utils/logger';
 
 // Language-specific evaluators

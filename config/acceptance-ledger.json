@@ -3,7 +3,7 @@
   "authoritative": true,
   "source": {
     "reviewedBy": "FOLIO Technical Council",
-    "reference": "platform-lsp"
+    "reference": "platform-lsp; docs/s009-library-baseline.md"
   },
   "families": [
     {
@@ -1535,6 +1535,442 @@
         "kind": "legacy-baseline",
         "reference": "platform-lsp"
       }
+    },
+    {
+      "id": "applications-poc-tools",
+      "displayName": "Applications PoC Tools",
+      "canonicalRepositories": [
+        "folio-org/applications-poc-tools"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "data-import-processing-core",
+      "displayName": "Data Import Processing Core",
+      "canonicalRepositories": [
+        "folio-org/data-import-processing-core"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "data-import-utils",
+      "displayName": "Data Import Utils",
+      "canonicalRepositories": [
+        "folio-org/data-import-utils"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "edge-api-utils",
+      "displayName": "Edge API Utils",
+      "canonicalRepositories": [
+        "folio-org/edge-api-utils"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "edge-common",
+      "displayName": "Edge Common",
+      "canonicalRepositories": [
+        "folio-org/edge-common"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "edge-common-spring",
+      "displayName": "Edge Common Spring",
+      "canonicalRepositories": [
+        "folio-org/edge-common-spring"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-custom-fields",
+      "displayName": "FOLIO Custom Fields",
+      "canonicalRepositories": [
+        "folio-org/folio-custom-fields"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-di-support",
+      "displayName": "FOLIO Dependency Injection Support",
+      "canonicalRepositories": [
+        "folio-org/folio-di-support"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-flow-engine",
+      "displayName": "FOLIO Flow Engine",
+      "canonicalRepositories": [
+        "folio-org/folio-flow-engine"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-holdingsiq-client",
+      "displayName": "FOLIO HoldingsIQ Client",
+      "canonicalRepositories": [
+        "folio-org/folio-holdingsiq-client"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-isbn-util",
+      "displayName": "FOLIO ISBN Utils",
+      "canonicalRepositories": [
+        "folio-org/folio-isbn-util"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-kafka-wrapper",
+      "displayName": "FOLIO Kafka Wrapper",
+      "canonicalRepositories": [
+        "folio-org/folio-kafka-wrapper"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-liquibase-util",
+      "displayName": "FOLIO Liquibase Utils",
+      "canonicalRepositories": [
+        "folio-org/folio-liquibase-util"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-query-tool-metadata",
+      "displayName": "FOLIO Query Tool Metadata",
+      "canonicalRepositories": [
+        "folio-org/folio-query-tool-metadata"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-s3-client",
+      "displayName": "FOLIO S3 Client",
+      "canonicalRepositories": [
+        "folio-org/folio-s3-client"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-service-tools",
+      "displayName": "FOLIO Service Tools",
+      "canonicalRepositories": [
+        "folio-org/folio-service-tools"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-spring-support",
+      "displayName": "FOLIO Spring Support",
+      "canonicalRepositories": [
+        "folio-org/folio-spring-support",
+        "folio-org/spring-module-core"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio-vertx-lib",
+      "displayName": "FOLIO Vert.x Library",
+      "canonicalRepositories": [
+        "folio-org/folio-vertx-lib"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-create-item",
+      "displayName": "Create Item Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-create-item"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-find-finc-metadata-collection",
+      "displayName": "Find finc Metadata Collection Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-find-finc-metadata-collection"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-find-finc-metadata-source",
+      "displayName": "Find finc Metadata Source Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-find-finc-metadata-source"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-find-vendor",
+      "displayName": "Find Vendor Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-find-vendor"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-markdown-better",
+      "displayName": "Markdown Better Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-example"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-markdown-editor",
+      "displayName": "Markdown Editor Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-example"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "folio_plugin-select-application",
+      "displayName": "Select Application Plugin",
+      "canonicalRepositories": [
+        "folio-org/ui-plugin-select-application"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "generate-marc-utils",
+      "displayName": "Generate MARC Utils",
+      "canonicalRepositories": [
+        "folio-org/generate-marc-utils"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "job-profile-wrangler",
+      "displayName": "Job Profile Wrangler",
+      "canonicalRepositories": [
+        "folio-org/mod-di-converter-storage"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "lib-fqm-query-processor",
+      "displayName": "FQM Query Processor",
+      "canonicalRepositories": [
+        "folio-org/lib-fqm-query-processor"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "lib-linked-data-dictionary",
+      "displayName": "Linked Data Dictionary",
+      "canonicalRepositories": [
+        "folio-org/lib-linked-data-dictionary"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "lib-linked-data-fingerprint",
+      "displayName": "Linked Data Fingerprint",
+      "canonicalRepositories": [
+        "folio-org/lib-linked-data-fingerprint"
+      ],
+      "acceptance": {
+        "kind": "approved-tcr",
+        "reference": "TCR-48"
+      }
+    },
+    {
+      "id": "lib-linked-data-marc4ld",
+      "displayName": "Linked Data MARC4LD",
+      "canonicalRepositories": [
+        "folio-org/lib-linked-data-marc4ld"
+      ],
+      "acceptance": {
+        "kind": "approved-tcr",
+        "reference": "TCR-47"
+      }
+    },
+    {
+      "id": "lib-linked-data-rdf4ld",
+      "displayName": "Linked Data RDF4LD",
+      "canonicalRepositories": [
+        "folio-org/lib-linked-data-rdf4ld"
+      ],
+      "acceptance": {
+        "kind": "approved-tcr",
+        "reference": "TCR-58"
+      }
+    },
+    {
+      "id": "mod-record-specifications-validator",
+      "displayName": "Record Specifications Validator",
+      "canonicalRepositories": [
+        "folio-org/mod-record-specifications"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "raml-module-builder",
+      "displayName": "RAML Module Builder",
+      "canonicalRepositories": [
+        "folio-org/raml-module-builder"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "react-intl-safe-html",
+      "displayName": "React Intl Safe HTML",
+      "canonicalRepositories": [
+        "folio-org/react-intl-safe-html"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "stripes",
+      "displayName": "Stripes Framework",
+      "canonicalRepositories": [
+        "folio-org/stripes",
+        "folio-org/stripes-acq-components",
+        "folio-org/stripes-authority-components",
+        "folio-org/stripes-authorization-components",
+        "folio-org/stripes-build",
+        "folio-org/stripes-cli",
+        "folio-org/stripes-components",
+        "folio-org/stripes-connect",
+        "folio-org/stripes-core",
+        "folio-org/stripes-data-transfer-components",
+        "folio-org/stripes-erm-components",
+        "folio-org/stripes-erm-testing",
+        "folio-org/stripes-final-form",
+        "folio-org/stripes-form",
+        "folio-org/stripes-hub",
+        "folio-org/stripes-inventory-components",
+        "folio-org/stripes-leipzig-components",
+        "folio-org/stripes-loader",
+        "folio-org/stripes-logger",
+        "folio-org/stripes-marc-components",
+        "folio-org/stripes-react-hotkeys",
+        "folio-org/stripes-redux",
+        "folio-org/stripes-smart-components",
+        "folio-org/stripes-template-editor",
+        "folio-org/stripes-testing",
+        "folio-org/stripes-types",
+        "folio-org/stripes-ui",
+        "folio-org/stripes-util",
+        "folio-org/stripes-webpack"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
+    },
+    {
+      "id": "workflow-components",
+      "displayName": "Workflow Components",
+      "canonicalRepositories": [
+        "folio-org/mod-workflow"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "docs/s009-library-baseline.md"
+      }
     }
   ],
   "moduleIdentities": [
@@ -2219,5 +2655,809 @@
       "familyId": "mod-users-keycloak"
     }
   ],
-  "libraryCoordinates": []
+  "libraryCoordinates": [
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "applications-poc-tools",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "cql2pgjson",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "cql2pgjson-cli",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "data-import-processing-core",
+      "familyId": "data-import-processing-core"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "data-import-support",
+      "familyId": "data-import-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "data-import-test-support",
+      "familyId": "data-import-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "data-import-utils",
+      "familyId": "data-import-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "data-import-utils-parent",
+      "familyId": "data-import-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "dbschema",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "domain-models-api-aspects",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "domain-models-api-interfaces",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "domain-models-interface-extensions",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "domain-models-maven-plugin",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "domain-models-runtime",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "edge-api-utils",
+      "familyId": "edge-api-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "edge-common",
+      "familyId": "edge-common"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "edge-common-spring",
+      "familyId": "edge-common-spring"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-auth-openid",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-backend-common",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-backend-testing",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-custom-fields",
+      "familyId": "folio-custom-fields"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-di-support",
+      "familyId": "folio-di-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-flow-engine",
+      "familyId": "folio-flow-engine"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-holdingsiq-client",
+      "familyId": "folio-holdingsiq-client"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-integration-apisix",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-integration-kafka",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-integration-kong",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-isbn-util",
+      "familyId": "folio-isbn-util"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-kafka-common",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-kafka-consumer",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-kafka-producer",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-kafka-wrapper",
+      "familyId": "folio-kafka-wrapper"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-liquibase-util",
+      "familyId": "folio-liquibase-util"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-permission-utils",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-query-tool-metadata",
+      "familyId": "folio-query-tool-metadata"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-s3-client",
+      "familyId": "folio-s3-client"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-secret-store",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-secret-store-common",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-secret-store-starter",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-security",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-service-tools",
+      "familyId": "folio-service-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-service-tools-dev",
+      "familyId": "folio-service-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-service-tools-spring-dev",
+      "familyId": "folio-service-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-service-tools-test",
+      "familyId": "folio-service-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-base",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-common",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-cql",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-i18n",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-kafka",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-support",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-system-user",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-tenant-settings",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-spring-testing",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-tls-utils",
+      "familyId": "applications-poc-tools"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "folio-vertx-lib",
+      "familyId": "folio-vertx-lib"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "generate-marc-utils",
+      "familyId": "generate-marc-utils"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "job-profile-wrangler",
+      "familyId": "job-profile-wrangler"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "lib-fqm-query-processor",
+      "familyId": "lib-fqm-query-processor"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "lib-linked-data-dictionary",
+      "familyId": "lib-linked-data-dictionary"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "lib-linked-data-fingerprint",
+      "familyId": "lib-linked-data-fingerprint"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "lib-linked-data-marc4ld",
+      "familyId": "lib-linked-data-marc4ld"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "lib-linked-data-rdf4ld",
+      "familyId": "lib-linked-data-rdf4ld"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-configuration-client",
+      "familyId": "mod-configuration"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-data-import-converter-storage-client",
+      "familyId": "mod-di-converter-storage"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-di-converter-storage-client",
+      "familyId": "mod-di-converter-storage"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-inventory-storage-dto",
+      "familyId": "mod-inventory-storage"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-pubsub-client",
+      "familyId": "mod-pubsub"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-record-specifications-dto",
+      "familyId": "mod-record-specifications"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-record-specifications-validator",
+      "familyId": "mod-record-specifications-validator"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-source-record-manager-client",
+      "familyId": "mod-source-record-manager"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "mod-source-record-storage-client",
+      "familyId": "mod-source-record-storage"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "openapi-deref-plugin",
+      "familyId": "folio-vertx-lib"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "postgres-runner",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "postgres-testing",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "raml-module-builder",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "raml-module-builder-bom",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "rules",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-domain",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-messaging",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-module-core",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-tenant",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-test",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "spring-web",
+      "familyId": "folio-spring-support"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "testing",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "util",
+      "familyId": "raml-module-builder"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "vertx-lib",
+      "familyId": "folio-vertx-lib"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "vertx-lib-pg-testing",
+      "familyId": "folio-vertx-lib"
+    },
+    {
+      "ecosystem": "maven",
+      "groupId": "org.folio",
+      "artifactId": "workflow-components",
+      "familyId": "workflow-components"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-bursar-export",
+      "familyId": "folio_plugin-bursar-export"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-create-inventory-records",
+      "familyId": "folio_plugin-create-inventory-records"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-create-item",
+      "familyId": "folio_plugin-create-item"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-eusage-reports",
+      "familyId": "folio_plugin-eusage-reports"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-agreement",
+      "familyId": "folio_plugin-find-agreement"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-authority",
+      "familyId": "folio_plugin-find-authority"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-contact",
+      "familyId": "folio_plugin-find-contact"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-eresource",
+      "familyId": "folio_plugin-find-eresource"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-erm-usage-data-provider",
+      "familyId": "folio_plugin-find-erm-usage-data-provider"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-finc-metadata-collection",
+      "familyId": "folio_plugin-find-finc-metadata-collection"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-finc-metadata-source",
+      "familyId": "folio_plugin-find-finc-metadata-source"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-fund",
+      "familyId": "folio_plugin-find-fund"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-import-profile",
+      "familyId": "folio_plugin-find-import-profile"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-instance",
+      "familyId": "folio_plugin-find-instance"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-interface",
+      "familyId": "folio_plugin-find-interface"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-license",
+      "familyId": "folio_plugin-find-license"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-organization",
+      "familyId": "folio_plugin-find-organization"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-package-title",
+      "familyId": "folio_plugin-find-package-title"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-po-line",
+      "familyId": "folio_plugin-find-po-line"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-user",
+      "familyId": "folio_plugin-find-user"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-find-vendor",
+      "familyId": "folio_plugin-find-vendor"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-markdown-better",
+      "familyId": "folio_plugin-markdown-better"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-markdown-editor",
+      "familyId": "folio_plugin-markdown-editor"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-query-builder",
+      "familyId": "folio_plugin-query-builder"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/plugin-select-application",
+      "familyId": "folio_plugin-select-application"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/react-intl-safe-html",
+      "familyId": "react-intl-safe-html"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-acq-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-authority-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-authorization-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-build",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-cli",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-connect",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-core",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-data-transfer-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-erm-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-erm-testing",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-final-form",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-form",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-hub",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-inventory-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-leipzig-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-loader",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-logger",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-marc-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-react-hotkeys",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-redux",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-smart-components",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-template-editor",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-testing",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-types",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-ui",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-util",
+      "familyId": "stripes"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/stripes-webpack",
+      "familyId": "stripes"
+    }
+  ]
 }
