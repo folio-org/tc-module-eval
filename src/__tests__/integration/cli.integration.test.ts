@@ -29,8 +29,26 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S008') {
         return normalizeS008GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S009') {
+        return normalizeS009GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS009GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      projectFileCount: details.evidence?.projectFiles?.length ?? 0,
+      observationCount: details.evidence?.observations?.length ?? 0,
+      evidenceDiagnosticCodes: (details.evidence?.diagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort(),
+      policyDiagnosticCodes: (details.policyDiagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort()
+    }
   };
 }
 

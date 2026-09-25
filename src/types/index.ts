@@ -48,7 +48,7 @@ export interface EvaluationResult {
   criteria: CriterionResult[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -116,6 +116,7 @@ export interface EvaluationRunArtifacts {
   moduleDescriptor?: ModuleDescriptorArtifact;
   moduleKind?: ModuleKindResult;
   s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
+  s009DependencyEvidence?: import('./s009-library-acceptance').S009DependencyEvidence;
 }
 
 export interface EvaluationRun {
@@ -156,6 +157,7 @@ export * from './s005-personal-data-disclosure';
 export * from './s006-sensitive-information';
 export * from './s007-officially-supported-technologies';
 export * from './s008-interface-acceptance';
+export * from './s009-library-acceptance';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 

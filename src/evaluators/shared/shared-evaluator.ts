@@ -39,6 +39,8 @@ import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
 import { loadS008Catalog } from '../../utils/s008-catalog';
 import { collectS008Declarations } from '../../utils/s008-interface-declarations';
 import { evaluateS008, renderS008HumanDetails } from '../../utils/s008-evaluator';
+import { collectS009DependencyEvidence } from '../../utils/s009-dependency-evidence';
+import { evaluateS009, renderS009HumanDetails } from '../../utils/s009-evaluator';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -57,7 +59,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS005(repoPath, evaluationRun),
       S006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS006(repoPath, evaluationRun),
       S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun),
-      S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun)
+      S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun),
+      S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun)
     });
   }
 
@@ -314,6 +317,28 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: analysis.status,
       evidence: analysis.summary,
       details: renderS008HumanDetails(analysis),
+      criterionDetails: analysis
+    };
+  }
+
+  private async evaluateS009(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S009']
+    });
+    const evidence = await run.getOrCreateArtifact('s009DependencyEvidence', () =>
+      collectS009DependencyEvidence(repoPath)
+    );
+    const ledgerLoad = evidence.hasDependencyProject
+      ? await loadAcceptanceLedger()
+      : { ok: false as const, sourcePath: '', diagnostics: [] };
+    const analysis = evaluateS009(ledgerLoad, evidence);
+    return {
+      criterionId: 'S009',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS009HumanDetails(analysis),
       criterionDetails: analysis
     };
   }

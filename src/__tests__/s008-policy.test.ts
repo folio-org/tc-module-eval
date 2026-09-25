@@ -37,7 +37,19 @@ describe('S008 trusted policy loaders', () => {
     expect(checkedIn).toMatchObject({ ok: true });
     if (checkedIn.ok) {
       expect(checkedIn.value.authoritative).toBe(true);
-      expect(checkedIn.value.source.reference).toBe('platform-lsp');
+      expect(checkedIn.value.source.reference).toContain('docs/s009-library-baseline.md');
+      expect(checkedIn.value.families).toHaveLength(207);
+      expect(checkedIn.value.libraryCoordinates).toHaveLength(143);
+      expect(checkedIn.value.libraryCoordinates.filter(item => item.ecosystem === 'maven')).toHaveLength(88);
+      expect(checkedIn.value.libraryCoordinates.filter(item => item.ecosystem === 'npm')).toHaveLength(55);
+      expect(checkedIn.value.libraryCoordinates).toEqual(expect.arrayContaining([
+        { ecosystem: 'maven', groupId: 'org.folio', artifactId: 'edge-common', familyId: 'edge-common' },
+        { ecosystem: 'npm', packageName: '@folio/stripes', familyId: 'stripes' },
+        { ecosystem: 'maven', groupId: 'org.folio', artifactId: 'mod-configuration-client', familyId: 'mod-configuration' }
+      ]));
+      expect(checkedIn.value.libraryCoordinates).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ ecosystem: 'maven', groupId: 'org.folio', artifactId: 'folio-core-schema' })
+      ]));
     }
     const missing = await loadS008Catalog('development', { development: path.join(dir, 'missing.json') });
     expect(missing).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: 'policy_missing' })] });

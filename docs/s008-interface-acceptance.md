@@ -6,7 +6,7 @@ Use `--s008-catalog official` (the default) or explicitly select `--s008-catalog
 
 ## Acceptance ledger
 
-`config/acceptance-ledger.json` is shared with future S009. TC review is required for every change. Family acceptance does not automatically approve Maven or npm packages: each library coordinate is explicit. Module renames, forks, and splits likewise need explicit reviewed `moduleIdentities` mappings. The current legacy baseline intentionally has no library coordinates.
+`config/acceptance-ledger.json` is shared with S009. TC review is required for every change. Family acceptance does not automatically approve Maven or npm packages: each library coordinate is explicit. Module renames, forks, and splits likewise need explicit reviewed `moduleIdentities` mappings. S009's exact package allowlist is documented separately in the [library baseline](s009-library-baseline.md); it does not affect S008 interface evidence.
 
 ## Catalog refresh
 
