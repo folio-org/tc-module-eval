@@ -145,13 +145,9 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
   },
   {
     id: 'S010',
-    description: 'Handles absence of third-party systems',
+    description: 'Gracefully handles the absence of third party systems or related configuration',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Performance requirements'
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S011',

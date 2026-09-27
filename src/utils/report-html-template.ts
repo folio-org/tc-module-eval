@@ -10,7 +10,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S006: 'Sensitive information',
   S007: 'Officially supported technologies',
   S008: 'FOLIO interface usage',
-  S009: 'FOLIO library dependencies'
+  S009: 'FOLIO library dependencies',
+  S010: 'Third-party system resilience'
 };
 
 function escapeHtml(text: string): string {

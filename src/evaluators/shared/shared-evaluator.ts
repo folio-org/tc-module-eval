@@ -41,6 +41,10 @@ import { collectS008Declarations } from '../../utils/s008-interface-declarations
 import { evaluateS008, renderS008HumanDetails } from '../../utils/s008-evaluator';
 import { collectS009DependencyEvidence } from '../../utils/s009-dependency-evidence';
 import { evaluateS009, renderS009HumanDetails } from '../../utils/s009-evaluator';
+import { collectS010Evidence } from '../../utils/s010-evidence';
+import { evaluateS010 } from '../../utils/s010-evaluator';
+import { buildS010CriterionDetails, renderS010HumanDetails } from '../../utils/s010-report-details';
+import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -60,7 +64,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS006(repoPath, evaluationRun),
       S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun),
       S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun),
-      S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun)
+      S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun),
+      S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun)
     });
   }
 
@@ -340,6 +345,34 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       evidence: analysis.summary,
       details: renderS009HumanDetails(analysis),
       criterionDetails: analysis
+    };
+  }
+
+  private async evaluateS010(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S010']
+    });
+    const evidence = await run.getOrCreateArtifact('s010ThirdPartyEvidence', () =>
+      collectS010Evidence(repoPath, this.language)
+    );
+    const analysis = evaluateS010(evidence);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S010',
+      status: analysis.status,
+      hasReviewMaterial: hasS010AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS010WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    return {
+      criterionId: 'S010',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS010HumanDetails(analysis, agentReview),
+      criterionDetails: buildS010CriterionDetails(analysis),
+      agentReview
     };
   }
 

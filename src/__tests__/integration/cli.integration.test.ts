@@ -4,7 +4,7 @@ import * as os from 'os';
 import { execFileSync } from 'child_process';
 import { ModuleEvaluator } from '../../module-evaluator';
 import { ReportGenerator } from '../../utils/report-generator';
-import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from '../../types';
+import { CommandRunner, EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from '../../types';
 
 const GOLDEN_EVALUATED_AT = '<<normalized-evaluatedAt>>';
 type NormalizedEvaluationReport = Omit<EvaluationResult, 'evaluatedAt'> & { evaluatedAt: string };
@@ -32,8 +32,32 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S009') {
         return normalizeS009GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S010') {
+        return normalizeS010GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS010GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      runtimeKind: details.evidence?.runtimeKind,
+      moduleKind: details.evidence?.moduleKind?.kind,
+      discoveryCoverage: details.evidence?.discoveryCoverage,
+      semanticCoverage: details.evidence?.semanticCoverage,
+      findingOutcomes: (details.findings ?? []).reduce((counts: Record<string, number>, finding: any) => {
+        counts[finding.outcome] = (counts[finding.outcome] ?? 0) + 1;
+        return counts;
+      }, {}),
+      diagnosticCodes: (details.diagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort(),
+      agentReviewUnavailableReason: details.agentReviewUnavailableReason
+    }
   };
 }
 
@@ -730,6 +754,76 @@ describe('CLI Integration Tests', () => {
         expect(embeddedReportData(html).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'S007' })]));
         expect(html).toContain('Result contribution: pass');
         expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
+      } finally {
+        await fs.remove(localRepo);
+      }
+    });
+  });
+
+  describe('Local S010 Third-Party Resilience Integration', () => {
+    const fixtures: Array<{ name: string; expected: EvaluationStatus; files: Record<string, string> }> = [
+      {
+        name: 's010-java-required',
+        expected: EvaluationStatus.PASS,
+        files: {
+          'pom.xml': '<project><artifactId>mod-s010</artifactId></project>',
+          'descriptors/ModuleDescriptor-template.json': JSON.stringify({
+            id: 'mod-s010-1.0.0', launchDescriptor: { env: [{ name: 'SEARCH_URL', required: true }] }
+          }),
+          'src/main/java/SearchConfig.java': 'class SearchConfig { @Value("${SEARCH_URL}") String url; }'
+        }
+      },
+      {
+        name: 's010-java-wrapper',
+        expected: EvaluationStatus.MANUAL,
+        files: {
+          'pom.xml': '<project><artifactId>mod-s010-wrapper</artifactId></project>',
+          'descriptors/ModuleDescriptor-template.json': '{"id":"mod-s010-wrapper-1.0.0"}',
+          'src/main/java/SearchGateway.java': 'class SearchGateway { String client = "generated-client"; }'
+        }
+      },
+      {
+        name: 'folio-spring-base',
+        expected: EvaluationStatus.NOT_APPLICABLE,
+        files: { 'pom.xml': '<project><artifactId>folio-spring-base</artifactId></project>' }
+      },
+      {
+        name: 's010-stripes-ui',
+        expected: EvaluationStatus.PASS,
+        files: {
+          'package.json': JSON.stringify({ name: 's010-stripes-ui', dependencies: { react: '^18', '@folio/stripes-core': '^10' } }),
+          'src/components/Lookup.tsx': [
+            'export async function lookup() {',
+            '  const controller = new AbortController();',
+            '  try { return await fetch("https://example.org/search", { signal: controller.signal }); }',
+            '  catch (error) { return []; }',
+            '}'
+          ].join('\n')
+        }
+      }
+    ];
+
+    test.each(fixtures)('evaluates $name from committed source without target commands', async fixture => {
+      const localRepo = await createLocalGitRepo(fixture.name, fixture.files);
+      const commandRunner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
+      try {
+        const evaluator = new ModuleEvaluator({
+          outputDir: testOutputDir,
+          criteriaFilter: ['S010'],
+          commandRunner
+        });
+        const evaluation = await evaluator.evaluateModule(localRepo);
+        const s010 = evaluation.criteria[0];
+        expect(s010).toMatchObject({ criterionId: 'S010', status: fixture.expected });
+        expect(s010.criterionDetails).toMatchObject({ criterionId: 'S010' });
+        expect(commandRunner.run).not.toHaveBeenCalled();
+
+        const reports = await new ReportGenerator(testOutputDir).generateReports(evaluation);
+        const json = JSON.parse(await fs.readFile(reports.jsonPath!, 'utf8'));
+        const html = await fs.readFile(reports.htmlPath!, 'utf8');
+        expect(json.criteria[0].criterionDetails.criterionId).toBe('S010');
+        expect(embeddedReportData(html).items[0]).toMatchObject({ id: 'S010', title: 'Third-party system resilience' });
+        expect(html).not.toContain('Performance requirements');
       } finally {
         await fs.remove(localRepo);
       }
