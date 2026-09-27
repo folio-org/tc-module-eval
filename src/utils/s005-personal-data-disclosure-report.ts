@@ -355,7 +355,7 @@ function formatWarningLines(warnings: string[]): string[] {
     '',
     'Warnings:',
     ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning => `  - ${boundS005Text(warning)}`),
-    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
+    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS, '  ')
   ];
 }
 
@@ -438,8 +438,9 @@ function formatReferences(references: string[]): string {
   return ` (evidence: ${references.slice(0, MAX_REPORT_LIST_ITEMS).map(reference => boundS005Text(reference)).join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
 }
 
-function overflowLine(total: number, visible: number): string[] {
-  return total > visible ? [`    - ... ${total - visible} more`] : [];
+// The overflow marker must be indented like the list items it follows, or it nests under the last item.
+function overflowLine(total: number, visible: number, indent = '    '): string[] {
+  return total > visible ? [`${indent}- ... ${total - visible} more`] : [];
 }
 
 function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistItem): unknown {

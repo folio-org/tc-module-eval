@@ -1652,7 +1652,7 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('Review summary:');
     expect(rendered.details).toContain('Material coverage warnings:');
-    expect(rendered.details).toContain('file-truncated .env.production');
+    expect(rendered.details).toContain('.env.production [file-truncated]');
     expect(details.coverageSummary.materialWarningCount).toBeGreaterThan(0);
     expect(details.coverageSummary.scanLimitWarnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'file-truncated', path: '.env.production', materialToCoverage: true })

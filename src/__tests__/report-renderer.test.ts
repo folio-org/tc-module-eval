@@ -261,6 +261,39 @@ describe('EvaluationReportRenderer', () => {
     expect(findings.children[0].children.find((node: any) => node.text === 'Evidence:')).toMatchObject({ hideCount: true });
   });
 
+  it('turns "... N more" overflow markers into hidden counts instead of list entries', () => {
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml({
+      ...result,
+      criteria: [{
+        criterionId: 'S005',
+        status: EvaluationStatus.MANUAL,
+        evidence: 'S005 manual',
+        details: [
+          'Warnings:',
+          '  - first warning',
+          '  - second warning',
+          '  - ... 14 more',
+          'Possible mismatches:',
+          '  - Mismatch signals:',
+          '    - likely_omission/name: Disclosure does not check name. (evidence: a.json:1 [direct_contract/strong/name], b.json:2 [direct_contract/strong/name], ... 8 more)'
+        ].join('\n')
+      }]
+    });
+
+    const tree = preparedItems(html)[0].tree;
+    const warnings = tree.find((node: any) => node.text === 'Warnings:');
+    const mismatch = tree.find((node: any) => node.text === 'Possible mismatches:').children[0].children[0];
+
+    expect(warnings.children.map((node: any) => node.text)).toEqual(['first warning', 'second warning']);
+    expect(warnings.hidden).toBe(14);
+    expect(mismatch.children.map((node: any) => node.text)).toEqual([
+      'a.json:1 [direct_contract/strong/name]',
+      'b.json:2 [direct_contract/strong/name]'
+    ]);
+    expect(mismatch.hidden).toBe(8);
+  });
+
   it('escapes untrusted module names in the HTML title', () => {
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml({

@@ -288,7 +288,7 @@ function formatWarningLines(heading: string, warnings: S006ScanWarning[]): strin
   return [
     `  - ${heading}`,
     ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning =>
-      `    - ${warning.kind}${warning.path ? ` ${warning.path}` : ''}: ${warning.message}`
+      `    - ${warning.path ? `${warning.path} [${warning.kind}]` : `[${warning.kind}]`} ${warning.message}`
     ),
     ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
   ];
@@ -302,7 +302,7 @@ function formatSkippedLines(heading: string, skippedFiles: S006SkippedFile[]): s
   return [
     `  - ${heading}`,
     ...skippedFiles.slice(0, MAX_REPORT_LIST_ITEMS).map(skippedFile =>
-      `    - ${skippedFile.path} (${skippedFile.reason}${skippedFile.message ? `: ${skippedFile.message}` : ''})`
+      `    - ${skippedFile.path} [${skippedFile.reason}]${skippedFile.message ? ` ${skippedFile.message}` : ''}`
     ),
     ...overflowLine(skippedFiles.length, MAX_REPORT_LIST_ITEMS)
   ];

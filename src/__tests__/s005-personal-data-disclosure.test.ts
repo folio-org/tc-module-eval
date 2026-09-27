@@ -1099,6 +1099,19 @@ Last Reviewed: 2026-09-24
     expect(details).toContain(rationale);
     expect(details).toContain('RATIONALE_END');
   });
+
+  it('indents the warning overflow marker like the warnings it follows', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] This module does not store or process personal data.');
+    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
+    analysis.warnings = Array.from({ length: 10 }, (_entry, index) => `warning ${index + 1}`);
+
+    const lines = formatS005Evidence(analysis, { kind: 'backend-module', evidence: [], warnings: [] }).details.split('\n');
+
+    expect(lines).toContain('  - warning 8');
+    expect(lines).toContain('  - ... 2 more');
+    expect(lines).not.toContain('    - ... 2 more');
+  });
 });
 
 function successfulReview(overrides: Partial<CriterionAgentReviewResult> = {}): CriterionAgentReviewResult {
