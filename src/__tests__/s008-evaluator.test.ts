@@ -1,5 +1,6 @@
 import { AcceptanceLedger, EvaluationStatus, S008Catalog, S008DeclarationResult, S008PolicyLoadResult } from '../types';
 import { evaluateS008, renderS008HumanDetails } from '../utils/s008-evaluator';
+import { DEFAULT_ACCEPTANCE_LEDGER_PATH, displayPolicyPath } from '../utils/acceptance-ledger';
 import { EvaluationReportRenderer } from '../utils/report-renderer';
 
 describe('S008 analyzer', () => {
@@ -80,4 +81,11 @@ describe('S008 analyzer', () => {
     return { declarations: [{ id, version, optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[0]' }], diagnostics: [], sourcePaths: ['descriptor.json'], fileHashes: { 'descriptor.json': `sha256:${'d'.repeat(64)}` }, complete: true };
   }
   function ok<T>(value: T): S008PolicyLoadResult<T> { return { ok: true, value, sourcePath: '/policy.json', digest: `sha256:${'e'.repeat(64)}`, diagnostics: [] }; }
+});
+
+describe('S008 policy file display paths', () => {
+  it('reports bundled policy files relative to the evaluator and leaves external paths unchanged', () => {
+    expect(displayPolicyPath(DEFAULT_ACCEPTANCE_LEDGER_PATH)).toBe('config/acceptance-ledger.json');
+    expect(displayPolicyPath('/policy.json')).toBe('/policy.json');
+  });
 });

@@ -6,6 +6,13 @@ import schema from '../schemas/acceptance-ledger.schema.json';
 import { AcceptanceLedger, S008PolicyDiagnostic, S008PolicyLoadResult } from '../types';
 
 export const DEFAULT_ACCEPTANCE_LEDGER_PATH = path.resolve(__dirname, '../../config/acceptance-ledger.json');
+const EVALUATOR_ROOT = path.resolve(__dirname, '../..');
+
+/** Reports policy files bundled with the evaluator by their project-relative path, not the local checkout location. */
+export function displayPolicyPath(sourcePath: string): string {
+  const relative = path.relative(EVALUATOR_ROOT, sourcePath);
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative.split(path.sep).join('/') : sourcePath;
+}
 const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
 
 export async function loadAcceptanceLedger(

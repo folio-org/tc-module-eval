@@ -130,7 +130,7 @@ describe('S009 evaluator', () => {
     expect(details).toContain('Material to coverage: Yes');
     expect(details).toContain('Diagnostic path: packages/broken/package.json');
     expect(details).toContain('Acceptance ledger: ledger.json');
-    expect(details).toContain('Full path: ledger.json');
+    expect(details).toContain('Path: ledger.json');
     expect(details).toContain('sha256:ledger');
     expect(details).toContain('package.json');
     expect(details).toContain('@folio/accepted-js');
