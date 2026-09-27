@@ -34,6 +34,51 @@ Recommendations and deprecation notes remain visible but cannot cause failure on
 
 S012 build tools, S013 testing, infrastructure compatibility, live policy synchronization, and new-module applicability remain outside S007.
 
+## S010 Third-Party System Resilience
+
+S010 applies to deployable Java and Stripes/React modules and covers every runtime
+dependency outside the evaluated module, including other FOLIO modules, databases,
+brokers, object storage, search, and external services. Explicit FOLIO library
+repositories are `not_applicable`. General Node.js and mixed or unresolved runtimes
+remain `manual` in the initial implementation. S008 interface and S009 library
+acceptance decisions are independent of S010 resilience behavior.
+
+The deterministic evaluator reads bounded immutable `HEAD` blobs only. It never runs
+target builds, tests, package installs, scripts, services, databases, or network
+clients, and it ignores uncommitted or earlier generated artifacts. Narrow Java and
+Stripes/React recognizers link dependency declarations or calls to their failure path,
+failure bound, fallback, startup coupling, and readiness outcome. Unsupported wrappers,
+generated clients, dynamic configuration, incomplete discovery, or ambiguous linkage
+remain `manual`; missing visible handling alone never proves failure.
+
+- `pass`: every identified scenario has satisfactory linked evidence, or complete
+  semantic coverage proves there are no external runtime dependencies. Missing required
+  configuration may pass through clear startup fail-fast when no sensible default exists.
+  A required dependency may also pass when startup failure is clear and bounded, or when
+  runtime loss is bounded and controlled; a required dependency may make the module
+  unready after startup.
+- `fail`: positive linked evidence proves an optional dependency has an uncontrolled
+  outcome or makes the module unready, or required configuration explicitly continues
+  into deferred/uncontrolled failure. An explicitly uncontrolled required dependency
+  outage also fails.
+- `manual`: applicability, discovery, dependency ownership, bounds, fallback, startup,
+  readiness, or another material semantic fact remains unresolved.
+- `not_applicable`: the repository is explicitly identified as a FOLIO library.
+
+Optional dependencies may use feature isolation or controlled module-wide degradation,
+but loss must remain bounded and must not make the module unready. Tests strengthen
+evidence but are not mandatory. For deterministic manual results, optional S010 agent
+review receives a broader bounded redacted committed-source snapshot. Its cited advice
+helps human review but never changes criterion status.
+
+For Java databases, the evaluator groups JDBC, JPA, R2DBC, datasource, Liquibase, and
+Flyway usage into dependency-level evidence rather than one diagnostic per source file.
+It recognizes unconditional Spring startup lifecycle ownership and local exception
+propagation. A finite database bound is proven only when committed configuration shows
+both a positive connection bound and a positive operation bound; framework defaults,
+transactions, and batch-to-row retries are not treated as resilience proof. Conditional
+or incompletely linked database behavior remains `manual` for agent and human review.
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

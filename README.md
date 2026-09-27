@@ -73,6 +73,12 @@ criteria. S007 consumes only applicable language and framework entries. See
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
 
+S010 third-party resilience uses conservative committed-source checks for Java and
+Stripes/React modules. Difficult static cases remain manual and can use the optional
+agent review for broader cited analysis, for example
+`--criterion-agent-opencode --criterion-agent-criteria S010`. Agent advice never changes
+the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-third-party-system-resilience).
+
 ### For Local Development: Use Devcontainer
 
 For local development, use the provided devcontainer configuration in `.devcontainer/`. The container provides isolation with all required tools (Node.js, Java 21, Maven, Gradle).

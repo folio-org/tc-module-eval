@@ -526,8 +526,19 @@
     {
       "criterionId": "S010",
       "status": "manual",
-      "evidence": "Performance requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S010 manual: runtime dependency behavior or evidence coverage requires reviewer judgment.",
+      "details": "S010 manual: runtime dependency behavior or evidence coverage requires reviewer judgment.",
+      "criterionDetails": {
+        "runtimeKind": "java",
+        "moduleKind": "backend-module",
+        "discoveryCoverage": "complete",
+        "semanticCoverage": "incomplete",
+        "findingOutcomes": {
+          "unresolved": 4
+        },
+        "diagnosticCodes": [],
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "S011",

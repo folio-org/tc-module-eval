@@ -1,0 +1,174 @@
+import {
+  EvaluationStatus,
+  S010Evidence,
+  S010ScenarioEvidence
+} from '../types';
+import { evaluateS010 } from '../utils/s010-evaluator';
+
+const moduleKind = (kind: S010Evidence['moduleKind']['kind']): S010Evidence['moduleKind'] => ({
+  kind,
+  evidence: [`fixture ${kind}`],
+  warnings: []
+});
+
+const evidence = (overrides: Partial<S010Evidence> = {}): S010Evidence => ({
+  moduleKind: moduleKind('backend-module'),
+  runtimeKind: 'java',
+  discoveryCoverage: 'complete',
+  semanticCoverage: 'complete',
+  scenarios: [],
+  diagnostics: [],
+  ...overrides
+});
+
+const scenario = (overrides: Partial<S010ScenarioEvidence> = {}): S010ScenarioEvidence => ({
+  id: 'search/runtime-unavailable',
+  dependencyId: 'search',
+  requirement: 'optional',
+  scenario: 'runtime-unavailable',
+  proof: 'unresolved',
+  sourceReferences: [{ path: 'src/SearchClient.java', detail: 'search request' }],
+  boundedFailure: 'unknown',
+  readiness: 'unknown',
+  ...overrides
+});
+
+describe('S010 deterministic evaluator', () => {
+  it('returns not applicable for explicit libraries', () => {
+    const result = evaluateS010(evidence({ moduleKind: moduleKind('library') }));
+
+    expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
+    expect(result.summary).toContain('library');
+  });
+
+  it.each(['node', 'mixed', 'unknown'] as const)('keeps %s runtimes manual', runtimeKind => {
+    const result = evaluateS010(evidence({ runtimeKind }));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0]).toMatchObject({ outcome: 'unresolved', statusDetermining: true });
+  });
+
+  it('passes a semantically complete empty dependency scope', () => {
+    const result = evaluateS010(evidence());
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.findings[0]).toMatchObject({ outcome: 'satisfactory', dependencyId: 'dependency-scope' });
+  });
+
+  it('keeps detector-empty incomplete evidence manual', () => {
+    const result = evaluateS010(evidence({ semanticCoverage: 'incomplete' }));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0].rationale).toContain('not establish');
+  });
+
+  it('accepts clear fail-fast handling for required configuration', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'configuration-absent',
+      proof: 'clear-fail-fast',
+      boundedFailure: 'not-applicable',
+      readiness: 'not-applicable'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.findings[0].outcome).toBe('satisfactory');
+  });
+
+  it('accepts a bounded clear startup failure for a required dependency', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'startup-unavailable',
+      proof: 'clear-fail-fast',
+      boundedFailure: 'proven',
+      readiness: 'not-applicable'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.findings[0].outcome).toBe('satisfactory');
+  });
+
+  it('keeps an unbounded required startup failure manual', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'startup-unavailable',
+      proof: 'clear-fail-fast',
+      boundedFailure: 'unknown',
+      readiness: 'not-applicable'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('accepts bounded controlled runtime loss of a required dependency even when readiness is not preserved', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'runtime-unavailable',
+      proof: 'controlled-degradation',
+      boundedFailure: 'proven',
+      readiness: 'not-preserved'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('fails an explicitly uncontrolled required dependency outage', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'runtime-unavailable',
+      proof: 'uncontrolled-failure',
+      boundedFailure: 'proven',
+      readiness: 'not-preserved'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+  });
+
+  it('fails an explicit required configuration path that defers failure', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      requirement: 'required',
+      scenario: 'configuration-absent',
+      proof: 'uncontrolled-failure'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings[0]).toMatchObject({ outcome: 'violation', statusDetermining: true });
+  });
+
+  it('passes linked optional degradation with a bound and preserved readiness', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      proof: 'controlled-degradation',
+      boundedFailure: 'proven',
+      readiness: 'preserved'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('fails an optional outage that explicitly makes the module unready', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario({
+      proof: 'controlled-degradation',
+      boundedFailure: 'proven',
+      readiness: 'not-preserved'
+    })] }));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+  });
+
+  it('keeps missing visible handling manual', () => {
+    const result = evaluateS010(evidence({ scenarios: [scenario()] }));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings[0].outcome).toBe('unresolved');
+  });
+
+  it('lets a proven violation outrank an unrelated material diagnostic', () => {
+    const result = evaluateS010(evidence({
+      scenarios: [scenario({ proof: 'uncontrolled-failure' })],
+      diagnostics: [{ code: 'unsupported-wrapper', message: 'another client is unresolved', material: true }]
+    }));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.diagnostics).toHaveLength(1);
+  });
+});

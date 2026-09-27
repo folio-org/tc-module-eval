@@ -2,7 +2,7 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, and `S007` officially supported technologies review.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, and `S010` third-party system resilience review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
@@ -38,6 +38,21 @@ policy. Available advice must cite at least one validated path from the review m
 Agent output may clarify an unresolved declaration, conflict, or unlisted framework,
 but it cannot change the deterministic status. Disabled, excluded, unavailable,
 failed, or malformed review leaves S007 manual and records the unavailable reason.
+
+## S010 Third-Party System Resilience Review
+
+S010 invokes agent review only when deterministic committed-source analysis is manual.
+The agent receives a bounded, redacted, repository-wide cross-section of committed
+manifests, configuration, production source, tests, and documentation plus the
+deterministic scenarios and coverage diagnostics. Generated output, dependencies,
+binary files, symlinks, `.env` files, and uncommitted changes are excluded.
+
+The review inventories runtime dependencies and traces configuration, operations,
+failure bounds, fallback behavior, startup coupling, and readiness effects. It may
+identify evidence missed by narrow deterministic recognizers, but it cannot change
+the deterministic status. Every assessment and reviewer action must cite committed
+repository source; generated summaries alone are not valid support. Disabled,
+excluded, unavailable, malformed, or uncited review leaves S010 manual.
 
 ## S006 Sensitive Information Review
 
