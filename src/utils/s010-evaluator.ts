@@ -34,6 +34,12 @@ export function evaluateS010(evidence: S010Evidence): S010Analysis {
   const findings = evidence.scenarios.map(classifyScenario);
   if (findings.length === 0) {
     findings.push(emptyScopeFinding(evidence));
+  } else if (evidence.discoveryCoverage !== 'complete' || evidence.semanticCoverage !== 'complete') {
+    findings.push(unresolvedFinding(
+      'evidence-coverage/incomplete',
+      'evidence-coverage',
+      'Repository evidence coverage is incomplete or unsupported, so satisfactory scenarios cannot establish S010 compliance.'
+    ));
   }
 
   const status = findings.some(finding => finding.outcome === 'violation')

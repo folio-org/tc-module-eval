@@ -44,6 +44,7 @@ interface PackageJson {
 }
 
 interface EnvDeclaration {
+  name: string;
   dependencyId: string;
   required: boolean;
   hasDefault: boolean;
@@ -81,7 +82,7 @@ export async function collectS010Evidence(
       && springPlaceholder(binding.content, declaration, false)
     );
     scenarios.push({
-      id: `${declaration.dependencyId}/configuration-absent`,
+      id: `${declaration.dependencyId}:${declaration.name}/configuration-absent`,
       dependencyId: declaration.dependencyId,
       requirement: declaration.required ? 'required' : 'optional',
       scenario: 'configuration-absent',
@@ -112,7 +113,6 @@ export async function collectS010Evidence(
 
   for (const file of javaFiles) {
     if (!hasJavaClientOperation(file.content)) continue;
-    if (scenarios.some(item => item.sourceReferences.some(reference => reference.path === file.path))) continue;
     const dependencyId = dependencyFromFile(file.path);
     const conditional = /@ConditionalOnProperty\b|@Profile\b/.test(file.content);
     const bounded = /\.timeout\s*\(|TimeLimiter|connectTimeout|readTimeout|responseTimeout/.test(file.content);
@@ -120,7 +120,7 @@ export async function collectS010Evidence(
     const startupCoupled = /@PostConstruct\b|ApplicationReadyEvent|HealthIndicator|ReadinessState/.test(file.content);
     const controlled = conditional && bounded && handled && !startupCoupled;
     scenarios.push({
-      id: `${dependencyId}/runtime-unavailable`,
+      id: `${dependencyId}:${file.path}/runtime-unavailable`,
       dependencyId,
       requirement: conditional ? 'optional' : 'unresolved',
       scenario: 'runtime-unavailable',
@@ -137,18 +137,19 @@ export async function collectS010Evidence(
     for (const file of snapshot.files.filter(isJavaScriptProductionSource)) {
       for (const match of file.content.matchAll(/fetch\s*\(\s*['"]https?:\/\/([^/'"?]+)/g)) {
         const dependencyId = match[1].toLowerCase();
+        const operationLine = lineAtOffset(file.content, match.index ?? 0);
         const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
         const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
         const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
           || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
         const controlled = bounded && handled && !bootstrap;
         scenarios.push({
-          id: `${dependencyId}/runtime-unavailable`,
+          id: `${dependencyId}:${file.path}:${operationLine}/runtime-unavailable`,
           dependencyId,
           requirement: controlled ? 'optional' : 'unresolved',
           scenario: 'runtime-unavailable',
           proof: controlled ? 'controlled-degradation' : 'unresolved',
-          sourceReferences: [{ path: file.path, line: lineAtOffset(file.content, match.index ?? 0), detail: 'Direct browser request' }],
+          sourceReferences: [{ path: file.path, line: operationLine, detail: 'Direct browser request' }],
           boundedFailure: bounded ? 'proven' : 'unknown',
           readiness: controlled ? 'preserved' : 'unknown',
           ...(!controlled ? { rationale: 'Direct browser dependency behavior is not bounded and feature-local in the available evidence.' } : {})
@@ -281,7 +282,7 @@ function databaseStartupPropagates(content: string): boolean {
 function hasGlobalDatabaseFailureBound(files: CommittedSourceFile[], startup: boolean): boolean {
   const content = files
     .filter(file => /\.(?:properties|ya?ml)$/.test(file.path))
-    .map(file => file.content)
+    .map(file => databaseConfiguration(file))
     .join('\n');
   const connectionBound = hasPositiveSetting(content, /(?:connection[-.]?timeout|setConnectionTimeout)\s*(?:[:=(]\s*)/gi);
   const operationBound = hasPositiveSetting(
@@ -291,6 +292,44 @@ function hasGlobalDatabaseFailureBound(files: CommittedSourceFile[], startup: bo
       : /(?:socketTimeout|query[-.]?timeout|statement[-.]?timeout)\s*(?:[:=(]\s*)/gi
   );
   return connectionBound && operationBound;
+}
+
+function databaseConfiguration(file: CommittedSourceFile): string {
+  if (file.path.endsWith('.properties')) {
+    return file.content.split('\n')
+      .filter(line => /^\s*(?:spring|quarkus)\.(?:datasource|r2dbc)\./i.test(line))
+      .join('\n');
+  }
+
+  const settings: string[] = [];
+  const parents: Array<{ indentation: number; key: string }> = [];
+  let scalarIndentation: number | undefined;
+  for (const line of file.content.split('\n')) {
+    const indentation = line.match(/^\s*/)?.[0].length ?? 0;
+    if (scalarIndentation !== undefined) {
+      if (!line.trim() || indentation > scalarIndentation) continue;
+      scalarIndentation = undefined;
+    }
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+
+    const mapping = /^(\s*)([^:#][^:]*):(?:\s*(.*))?$/.exec(line);
+    if (!mapping) continue;
+    while (parents.length > 0 && parents[parents.length - 1].indentation >= indentation) parents.pop();
+
+    const key = mapping[2].trim().replace(/^['"]|['"]$/g, '');
+    const value = (mapping[3] ?? '').replace(/\s+#.*$/, '').trim();
+    const path = [...parents.map(parent => parent.key), key].join('.');
+    if (/^(?:(?:[&!]\S+)\s+)*[>|](?:[1-9][+-]?|[+-][1-9]?)?$/.test(value)) {
+      scalarIndentation = indentation;
+      continue;
+    }
+    if (value) {
+      if (/(?:^|\.)(?:datasource|r2dbc)(?:\.|$)/i.test(path)) settings.push(`${key}: ${value}`);
+    } else {
+      parents.push({ indentation, key });
+    }
+  }
+  return settings.join('\n');
 }
 
 function hasPositiveSetting(content: string, prefix: RegExp): boolean {
@@ -370,6 +409,7 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
         const entry = value as Record<string, unknown>;
         if (typeof entry.name !== 'string' || !EXTERNAL_CONFIG_PATTERN.test(entry.name)) continue;
         declarations.push({
+          name: entry.name,
           dependencyId: dependencyFromConfig(entry.name),
           required: entry.required === true,
           hasDefault: typeof entry.value === 'string' && entry.value.length > 0,
@@ -389,15 +429,13 @@ function springBinding(content: string, declaration: EnvDeclaration): boolean {
 }
 
 function springPlaceholder(content: string, declaration: EnvDeclaration, withDefault: boolean): boolean {
-  const name = dependencyConfigPattern(declaration.dependencyId);
+  const name = escapeRegExp(declaration.name);
   const suffix = withDefault ? ':[^}]*' : '';
-  return new RegExp(`@Value\\s*\\(\\s*["']\\$\\{${name}${suffix}\\}["']\\s*\\)`, 'i').test(content);
+  return new RegExp(`@Value\\s*\\(\\s*["']\\$\\{${name}${suffix}\\}["']\\s*\\)`).test(content);
 }
 
-function dependencyConfigPattern(dependencyId: string): string {
-  return dependencyId === 'database'
-    ? '(?:DB|DATABASE)(?:_[A-Z0-9]+)*'
-    : `${dependencyId.replace(/[-]/g, '[_-]')}(?:_[A-Z0-9]+)*`;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function dependencyFromConfig(name: string): string {
@@ -436,8 +474,40 @@ function packageStripesInterfaces(packageJson: PackageJson | undefined): string[
 
 function deduplicateScenarios(scenarios: S010ScenarioEvidence[]): S010ScenarioEvidence[] {
   const unique = new Map<string, S010ScenarioEvidence>();
-  for (const scenario of scenarios) unique.set(scenario.id, scenario);
+  for (const scenario of scenarios) {
+    const existing = unique.get(scenario.id);
+    unique.set(scenario.id, existing ? mergeScenarios(existing, scenario) : scenario);
+  }
   return [...unique.values()];
+}
+
+function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence): S010ScenarioEvidence {
+  const proof = left.proof === 'uncontrolled-failure' || right.proof === 'uncontrolled-failure'
+    ? 'uncontrolled-failure'
+    : left.proof === right.proof
+      ? left.proof
+      : 'unresolved';
+  const readiness = left.readiness === 'not-preserved' || right.readiness === 'not-preserved'
+    ? 'not-preserved'
+    : left.readiness === right.readiness
+      ? left.readiness
+      : 'unknown';
+  const sourceReferences = [...left.sourceReferences, ...right.sourceReferences].filter((reference, index, all) =>
+    all.findIndex(candidate => candidate.path === reference.path
+      && candidate.line === reference.line
+      && candidate.detail === reference.detail) === index
+  );
+  return {
+    ...left,
+    requirement: left.requirement === right.requirement ? left.requirement : 'unresolved',
+    proof,
+    boundedFailure: left.boundedFailure === right.boundedFailure ? left.boundedFailure : 'unknown',
+    readiness,
+    sourceReferences,
+    ...(proof === 'unresolved' ? {
+      rationale: left.rationale ?? right.rationale ?? 'Conflicting repository evidence remains unresolved.'
+    } : {})
+  };
 }
 
 function isProductionSource(filePath: string): boolean {

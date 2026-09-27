@@ -534,7 +534,7 @@
         "discoveryCoverage": "complete",
         "semanticCoverage": "incomplete",
         "findingOutcomes": {
-          "unresolved": 4
+          "unresolved": 22
         },
         "diagnosticCodes": [],
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured"

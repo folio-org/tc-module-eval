@@ -14,6 +14,7 @@ const MANIFEST_PATH = '.criterion-agent/S010/snapshot-manifest.json';
 const MAX_FILES = 32;
 const MAX_FILE_BYTES = 64 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024;
+const MAX_MANIFEST_BYTES = 48 * 1024;
 const REVIEW_FILE_PATTERN = /(?:^|\/)(?:src|app|lib|server|client|config|descriptors?|test|tests|__tests__|docs?)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md|docker-compose[^/]*\.ya?ml)$/i;
 const EXCLUDED_PATTERN = /(?:^|\/)(?:node_modules|vendor|dist|target|build|coverage|\.git|\.idea|\.vscode)(?:\/|$)|(?:^|\/)\.env(?:\.|$)/i;
 
@@ -92,13 +93,12 @@ export async function buildS010AgentReviewRequest(
     findings: analysis.findings,
     diagnostics: analysis.diagnostics
   }, null, 2), 48 * 1024);
-  const manifest = redactSensitiveText(JSON.stringify({
-    revision: snapshot.revision,
-    complete: snapshot.complete,
-    includedPaths: selected.map(file => file.repoRelativePath),
-    omitted,
-    limits: { maxFiles: MAX_FILES, maxFileBytes: MAX_FILE_BYTES, maxTotalBytes: MAX_TOTAL_BYTES }
-  }, null, 2), 48 * 1024);
+  let manifest = buildManifest(snapshot.revision, snapshot.complete, selected, omitted);
+  while (Buffer.byteLength(manifest) > MAX_MANIFEST_BYTES && selected.length > 0) {
+    const removed = selected.pop();
+    if (removed) omitted.push({ path: removed.repoRelativePath, reason: `manifest byte limit (${MAX_MANIFEST_BYTES})` });
+    manifest = buildManifest(snapshot.revision, snapshot.complete, selected, omitted);
+  }
 
   return {
     criterionId: 'S010',
@@ -128,6 +128,44 @@ export async function buildS010AgentReviewRequest(
     ],
     schemaDescription: 'JSON object. Required: recommendation (likely_sufficient|likely_insufficient|needs_reviewer_judgment), confidence (low|medium|high), nonblank summary, nonblank rationale, nonempty evidenceReferences, nonempty assessments. Assessment: technologyId, type (aligned_fact|substantive_concern|analyzer_limitation|evidence_gap|policy_question), nonblank summary, nonempty evidenceReferences. Reviewer action: nonblank action, nonempty evidenceReferences; at least one is required for needs_reviewer_judgment. Every reference must exactly match a manifest repoRelativePath.'
   };
+}
+
+function buildManifest(
+  revision: string,
+  complete: boolean,
+  selected: CriterionAgentReviewFile[],
+  omitted: Array<{ path: string; reason: string }>
+): string {
+  const omissionSummary = summarizeOmissions(omitted);
+  return redactSensitiveText(JSON.stringify({
+    revision,
+    complete,
+    includedPaths: selected.map(file => file.repoRelativePath),
+    omittedCount: omitted.length,
+    omittedCounts: omissionSummary.counts,
+    omittedExamples: omissionSummary.examples,
+    limits: {
+      maxFiles: MAX_FILES,
+      maxFileBytes: MAX_FILE_BYTES,
+      maxTotalBytes: MAX_TOTAL_BYTES,
+      maxManifestBytes: MAX_MANIFEST_BYTES
+    }
+  }, null, 2));
+}
+
+function summarizeOmissions(omitted: Array<{ path: string; reason: string }>): {
+  counts: Record<string, number>;
+  examples: Record<string, string[]>;
+} {
+  const counts: Record<string, number> = {};
+  const examples: Record<string, string[]> = {};
+  for (const item of omitted) {
+    counts[item.reason] = (counts[item.reason] ?? 0) + 1;
+    const paths = examples[item.reason] ?? [];
+    if (paths.length < 3) paths.push(item.path);
+    examples[item.reason] = paths;
+  }
+  return { counts, examples };
 }
 
 function validateS010Review(

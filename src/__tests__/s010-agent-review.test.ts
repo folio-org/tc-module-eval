@@ -8,6 +8,7 @@ import {
   hasS010AgentReviewMaterial,
   reviewS010WithAgent
 } from '../utils/s010-agent-review';
+import { prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
 
 describe('S010 advisory agent review', () => {
   let repo: string;
@@ -55,6 +56,48 @@ describe('S010 advisory agent review', () => {
     const request = await buildS010AgentReviewRequest(repo, analysis());
 
     expect(request.files.map(file => file.repoRelativePath)).toContain('src/client.ts');
+  });
+
+  it('keeps the omission manifest valid and bounded for large repositories', async () => {
+    for (let index = 0; index < 300; index += 1) {
+      const longName = `${String(index).padStart(3, '0')}-${'x'.repeat(180)}.yml`;
+      await fs.outputFile(path.join(repo, 'config', longName), `setting: ${index}`);
+    }
+    await fs.outputFile(path.join(repo, 'src/client.ts'), 'fetch(process.env.SEARCH_URL)');
+    execFileSync('git', ['add', '.'], { cwd: repo });
+    execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
+
+    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const manifestFile = request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'));
+    const manifest = JSON.parse(manifestFile?.content ?? '') as Record<string, any>;
+
+    expect(manifest.omittedCount).toBeGreaterThan(250);
+    expect(manifest.omittedCounts).toEqual(expect.objectContaining({ 'file limit (32)': expect.any(Number) }));
+    expect(manifest.omittedExamples['file limit (32)']).toHaveLength(3);
+    expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThan(48 * 1024);
+  });
+
+  it('keeps the manifest valid after workspace preparation when included paths are very long', async () => {
+    const segment = 'x'.repeat(180);
+    const deepDirectory = path.join('config', ...Array(18).fill(segment));
+    for (let index = 0; index < 40; index += 1) {
+      await fs.outputFile(path.join(repo, deepDirectory, `${String(index).padStart(2, '0')}.yml`), `setting: ${index}`);
+    }
+    execFileSync('git', ['add', '.'], { cwd: repo });
+    execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
+
+    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const manifestFile = request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'));
+    expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThanOrEqual(48 * 1024);
+    expect(() => JSON.parse(manifestFile?.content ?? '')).not.toThrow();
+
+    const workspace = prepareCriterionReviewWorkspace(request);
+    try {
+      const prepared = await fs.readFile(path.join(workspace.rootPath, 'docs', '.criterion-agent/S010/snapshot-manifest.json'), 'utf8');
+      expect(() => JSON.parse(prepared)).not.toThrow();
+    } finally {
+      await fs.remove(workspace.rootPath);
+    }
   });
 
   it('accepts cited repository assessments without changing deterministic status', async () => {

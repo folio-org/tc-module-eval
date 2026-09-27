@@ -65,6 +65,70 @@ describe('S010 evidence collection', () => {
     expect(result.semanticCoverage).toBe('incomplete');
   });
 
+  it('keeps same-family environment declarations distinct and matches only the exact variable', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-database-client</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-database-client-1.0.0',
+        launchDescriptor: { env: [
+          { name: 'DB_HOST', required: true, value: '' },
+          { name: 'DB_USERNAME', required: true, value: '' }
+        ] }
+      }),
+      'src/main/java/org/folio/DatabaseConfig.java': 'class DatabaseConfig { @Value("${DB_USERNAME}") String username; }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'database:DB_HOST/configuration-absent', proof: 'unresolved' }),
+      expect.objectContaining({ id: 'database:DB_USERNAME/configuration-absent', proof: 'clear-fail-fast' })
+    ]));
+    expect(result.scenarios).toHaveLength(2);
+    expect(result.semanticCoverage).toBe('incomplete');
+  });
+
+  it.each([
+    ['S3_URL', 'object-storage'],
+    ['ELASTICSEARCH_URL', 'search']
+  ])('matches the exact %s Spring placeholder', async (variable, dependencyId) => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-client</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-client-1.0.0',
+        launchDescriptor: { env: [{ name: variable, required: true, value: '' }] }
+      }),
+      'src/main/java/org/folio/ClientConfig.java': `class ClientConfig { @Value("\${${variable}}") String value; }`
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({ dependencyId, proof: 'clear-fail-fast' })]);
+  });
+
+  it('keeps the unresolved result when duplicate declarations disagree', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-client</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-client-1.0.0',
+        launchDescriptor: { env: [{ name: 'SEARCH_URL', required: true, value: '' }] }
+      }),
+      'config/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-client-1.0.0',
+        launchDescriptor: { env: [{ name: 'SEARCH_URL', required: false, value: '' }] }
+      }),
+      'src/main/java/org/folio/SearchConfig.java': 'class SearchConfig { @Value("${SEARCH_URL}") String url; }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      id: 'search:SEARCH_URL/configuration-absent',
+      requirement: 'unresolved',
+      proof: 'unresolved'
+    })]);
+  });
+
   it('links an optional Java client fallback only when bound and handling share a source owner', async () => {
     const root = repository({
       'pom.xml': '<project><artifactId>mod-optional-search</artifactId></project>',
@@ -103,6 +167,46 @@ describe('S010 evidence collection', () => {
 
     expect(result.scenarios).toEqual([expect.objectContaining({ proof: 'unresolved' })]);
     expect(result.semanticCoverage).toBe('incomplete');
+  });
+
+  it('checks runtime clients even when the same file supplies configuration evidence', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-kafka</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-kafka-1.0.0',
+        launchDescriptor: { env: [{ name: 'KAFKA_HOST', required: true, value: '' }] }
+      }),
+      'src/main/java/org/folio/KafkaConfig.java': [
+        'class KafkaConfig {',
+        '  @Value("${KAFKA_HOST}") String host;',
+        '  KafkaTemplate<String, String> template;',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'kafka:KAFKA_HOST/configuration-absent' }),
+      expect.objectContaining({ scenario: 'runtime-unavailable', proof: 'unresolved' })
+    ]));
+    expect(result.scenarios).toHaveLength(2);
+  });
+
+  it('keeps colliding file-derived dependency names as separate runtime scenarios', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-inventory</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({ id: 'mod-inventory-1.0.0' }),
+      'src/main/java/one/InventoryClient.java': 'class InventoryClient { WebClient client; }',
+      'src/main/java/two/InventoryService.java': 'class InventoryService { RestTemplate client; }',
+      'src/main/java/three/Client.java': 'class Client { HttpClient client; }',
+      'src/main/java/four/Client.java': 'class Client { WebClient client; }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios.filter(item => item.scenario === 'runtime-unavailable')).toHaveLength(4);
+    expect(new Set(result.scenarios.map(item => item.id)).size).toBe(4);
   });
 
   it('collects one bounded required database startup scenario from Spring lifecycle evidence', async () => {
@@ -171,6 +275,70 @@ describe('S010 evidence collection', () => {
       id: 'database/startup-unavailable',
       requirement: 'required',
       proof: 'clear-fail-fast',
+      boundedFailure: 'unknown'
+    })]);
+    expect(result.semanticCoverage).toBe('incomplete');
+  });
+
+  it('does not use unrelated HTTP timeout settings as a database startup bound', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-database</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({ id: 'mod-database-1.0.0' }),
+      'src/main/resources/application.yml': [
+        'spring:',
+        '  datasource:',
+        '    url: jdbc:postgresql://localhost/postgres',
+        'folio:',
+        '  http-client:',
+        '    connection-timeout: 5000',
+        '    socketTimeout: 10'
+      ].join('\n'),
+      'src/main/java/org/folio/SystemSchemaInitializer.java': [
+        'class SystemSchemaInitializer implements InitializingBean {',
+        '  FolioSpringLiquibase liquibase;',
+        '  public void afterPropertiesSet() throws LiquibaseException { liquibase.performLiquibaseUpdate(); }',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      id: 'database/startup-unavailable',
+      boundedFailure: 'unknown'
+    })]);
+  });
+
+  it('does not use YAML comments or block scalar text as database startup bounds', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-database</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({ id: 'mod-database-1.0.0' }),
+      'src/main/resources/application.yml': [
+        'spring:',
+        '  datasource:',
+        '    url: jdbc:postgresql://localhost/postgres',
+        '    # connection-timeout: 5000',
+        'documentation: |2-',
+        '  datasource:',
+        '    connection-timeout: 5000',
+        '    socketTimeout: 10',
+        'notes: &documentation >-',
+        '  r2dbc:',
+        '    connection-timeout: 5000',
+        '    socketTimeout: 10'
+      ].join('\n'),
+      'src/main/java/org/folio/SystemSchemaInitializer.java': [
+        'class SystemSchemaInitializer implements InitializingBean {',
+        '  FolioSpringLiquibase liquibase;',
+        '  public void afterPropertiesSet() throws LiquibaseException { liquibase.performLiquibaseUpdate(); }',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      id: 'database/startup-unavailable',
       boundedFailure: 'unknown'
     })]);
     expect(result.semanticCoverage).toBe('incomplete');

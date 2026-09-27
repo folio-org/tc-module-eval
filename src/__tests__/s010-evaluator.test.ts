@@ -62,6 +62,22 @@ describe('S010 deterministic evaluator', () => {
     expect(result.findings[0].rationale).toContain('not establish');
   });
 
+  it('keeps satisfactory scenarios manual when semantic coverage is incomplete', () => {
+    const result = evaluateS010(evidence({
+      semanticCoverage: 'incomplete',
+      scenarios: [scenario({
+        proof: 'controlled-degradation',
+        boundedFailure: 'proven',
+        readiness: 'preserved'
+      })]
+    }));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dependencyId: 'evidence-coverage', outcome: 'unresolved', statusDetermining: true })
+    ]));
+  });
+
   it('accepts clear fail-fast handling for required configuration', () => {
     const result = evaluateS010(evidence({ scenarios: [scenario({
       requirement: 'required',
