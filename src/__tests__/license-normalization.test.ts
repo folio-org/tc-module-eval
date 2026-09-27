@@ -61,6 +61,8 @@ describe('License Name Normalization', () => {
     // Test Eclipse Public License variations from real FOLIO data
     test('should normalize Eclipse license variations', () => {
       expect(normalizeLicenseName('Eclipse Public License v2.0')).toBe('EPL-2.0');
+      expect(normalizeLicenseName('Eclipse Public License - v 2.0')).toBe('EPL-2.0');
+      expect(normalizeLicenseName('(Eclipse Public License - v 1.0) AspectJ (org.aspectj:aspectjweaver:1.9.25.1 - https://example.org)')).toBe('EPL-1.0');
       expect(normalizeLicenseName('Eclipse Distribution License - v 1.0')).toBe('EPL-1.0');
       expect(normalizeLicenseName('Eclipse Public License 1.0')).toBe('EPL-1.0');
       expect(normalizeLicenseName('Eclipse Public License, Version 2.0')).toBe('Eclipse Public License 2.0');
