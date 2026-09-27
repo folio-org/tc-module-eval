@@ -192,6 +192,27 @@ describe('S010 deterministic evaluator', () => {
 });
 
 describe('S010 human details', () => {
+  it('keeps multiline advisory prose inside its report rows', () => {
+    const analysis = evaluateS010(evidence({ semanticCoverage: 'incomplete' }));
+    const details = renderS010HumanDetails(analysis, {
+      available: true, criterionId: 'S010', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+      summary: 'Required service.\nNot an optional feature.',
+      rationale: 'Investigated startup.\n\nScope: tenant initialization.',
+      evidenceReferences: ['src/Client.java'], warnings: [], errors: [],
+      assessments: [{ technologyId: 'search', type: 'evidence_gap',
+        summary: 'Bound unknown.\nReadiness unresolved.', evidenceReferences: ['src/Client.java'] }],
+      reviewerActions: [{ action: 'Check failure bound.\nThen readiness.', evidenceReferences: ['src/Client.java'] }]
+    });
+    const advisory = details.slice(details.indexOf('Agent review (advisory):')).split('\n');
+    expect(advisory.filter(line => !line.startsWith('  '))).toEqual(['Agent review (advisory):']);
+    expect(advisory).toContain('  - Rationale: Investigated startup. Scope: tenant initialization.');
+    expect(advisory).toContain('    - Search service — Needs verification:');
+    expect(advisory).toContain('      - Finding: Bound unknown. Readiness unresolved.');
+    expect(advisory).toContain('  - What to verify:');
+    expect(advisory).toContain('    - Check failure bound. Then readiness.');
+    expect(advisory).toContain('        - src/Client.java');
+  });
+
   it('names the configuration key or file for each scenario and groups rows by dependency', () => {
     const finding = (id: string, dependencyId: string) => ({
       id, dependencyId, scenario: 'configuration-absent' as const, outcome: 'unresolved' as const,

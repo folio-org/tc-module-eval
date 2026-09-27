@@ -813,7 +813,9 @@ describe('S006 sensitive information finding extraction', () => {
       [
         '# https://jdbc.postgresql.org/documentation/use/#connection-parameters',
         'okapi: https://okapi-prod.library.example.edu',
-        'endpoint: org.folio.prod.example.com'
+        'endpoint: org.folio.prod.example.com',
+        'logging.level.org.apache.kafka.common.config.AbstractConfig: warn',
+        'logging.level.org.apache.kafka.common.metrics: warn'
       ].join('\n')
     );
     writeRepoFile(
@@ -1062,6 +1064,25 @@ describe('S006 sensitive information finding extraction', () => {
         excerpt: expect.objectContaining({ text: `password=${password}` })
       })
     ]));
+  });
+
+  it.each([
+    ['generic-api-key', 'Generic API Key', 'password-secret-assignment', 'medium'],
+    ['datadog-access-token', 'Datadog API Key', 'provider-api-key', 'high'],
+    ['github-pat', 'GitHub Personal Access Token', 'provider-api-key', 'high']
+  ])('maps %s without promoting generic matches to provider credentials', async (rule, description, detectorId, confidence) => {
+    repoPath = createTempRepo();
+    const match = 'relationshipId="c0097d76-7ccf-4fc7-b87a-b0ec7278966f"';
+    writeRepoFile(repoPath, 'README.md', match);
+    const result = await analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({ status: 'failed', exitCode: 1, report: [{
+        RuleID: rule, Description: description, File: 'README.md', StartLine: 1,
+        Match: match, Entropy: 4
+      }] })
+    });
+    expect(result.findings).toEqual([expect.objectContaining({
+      detectorId, confidence, statusImpact: 'manual_review'
+    })]);
   });
 
   it('uses the Gitleaks Match field for retained excerpts', async () => {

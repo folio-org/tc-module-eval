@@ -1,4 +1,5 @@
-import { EvaluationResult } from '../types';
+import { EvaluationResult, S007AnalysisResult } from '../types';
+import { renderAgentReviewLines } from './agent-review-report';
 
 const CRITERION_TITLES: Record<string, string> = {
   A001: 'Product Council approval',
@@ -39,6 +40,41 @@ function jsonForHtml(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
+// Use structured advice as the HTML source of truth, not criterion-specific prose copies.
+function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
+  const original = criterion.details?.split('\n') ?? [];
+  let inReview = false;
+  let hadReview = false;
+  const legacyReview: string[] = [];
+  const details = original.filter(line => {
+    if (/^Agent review(?: \(advisory\))?:$/.test(line.trim())) {
+      inReview = true;
+      hadReview = true;
+      return false;
+    }
+    if (inReview && line.trim() && !/^\s/.test(line)) inReview = false;
+    if (inReview) legacyReview.push(line);
+    return !inReview && !/^\s+- Agent review:/.test(line);
+  });
+  const review = criterion.agentReview;
+  if (!review && !hadReview) return original;
+  if (!review?.available) {
+    const reason = [...(review?.errors ?? []), ...legacyReview].join(' ');
+    const status = review ? 'Unavailable' : 'Not run';
+    const explanation = /timed.out|timeout/i.test(reason)
+      ? 'The review exceeded its time limit.'
+      : /disabled|unconfigured/i.test(reason)
+        ? 'Agent review is disabled or unconfigured.'
+        : 'No usable advisory review was returned. See the JSON report for diagnostic details.';
+    return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...details];
+  }
+  const names = criterion.criterionId === 'S007'
+    ? Object.fromEntries(((criterion.criterionDetails as S007AnalysisResult | undefined)?.findings ?? [])
+      .map(finding => [finding.technologyId, finding.displayName]))
+    : {};
+  return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
+}
+
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
   const report = {
@@ -54,8 +90,8 @@ export function createHtmlReport(result: EvaluationResult): string {
       title: criterionTitle(criterion.criterionId, criterion.evidence),
       status: criterion.status,
       evidence: criterion.evidence,
-      details: criterion.details ? criterion.details.split('\n') : [],
-      recommendation: criterion.agentReview?.recommendation
+      details: reportDetailLines(criterion),
+      recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined
     }))
   };
 
@@ -78,6 +114,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     .section-row{display:flex;align-items:center;gap:8px;width:100%;padding:16px 0 6px;border:0;background:transparent;cursor:pointer;text-align:left;user-select:none}.section-row .chevron{width:10px;height:10px}.section-label{font:600 11px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}.count-chip{padding:3px 6px;border-radius:4px;background:var(--chip);color:var(--muted);font:500 11px/1 var(--mono)}.section-line{flex:1;height:1px;background:var(--line)}.kv{display:grid;grid-template-columns:minmax(110px,190px) minmax(0,1fr);gap:12px;padding:4px 6px;font-size:13.5px;line-height:1.55}.kv-key{color:var(--muted)}.kv-value{overflow-wrap:anywhere;text-wrap:pretty}.item-row{display:grid;grid-template-columns:12px minmax(0,1fr);gap:8px;width:calc(100% - var(--indent));margin-left:var(--indent);padding:4px 6px;border:0;border-radius:6px;background:transparent;text-align:left}.item-row.toggle{cursor:pointer}.item-row:hover{background:#FAF9F5}.item-row .chevron{width:10px;height:10px;margin-top:6px}.leaf{width:4px;height:4px;margin:9px 0 0 3px;border-radius:50%;background:#B9B5A9}.item-copy{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:2px;align-items:baseline;min-width:0;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}.lead{color:var(--accent);font:500 12.5px/1.55 var(--mono)}.tag{padding:1px 6px;border-radius:4px;background:var(--chip);color:#5E5B54;font:500 11px/1.4 var(--mono)}.nested-count{color:var(--muted);font:500 11px/1 var(--mono)}.more-text{color:var(--muted)}.para{padding:10px 0 2px;font-size:13.5px;line-height:1.6;text-wrap:pretty}.link-button,.list-more{border:0;background:transparent;color:var(--accent);cursor:pointer;font-weight:500}.link-button{padding:0;font-size:12.5px}.list-more{padding:4px 6px 4px 26px;font-size:12.5px}.link-button:hover,.list-more:hover{text-decoration:underline}
     .compact{overflow:hidden;border:1px solid var(--border);border-radius:11px;background:#fff}.compact-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:10px 18px 10px 42px;border-top:1px solid var(--line);scroll-margin-top:20px}.compact-row:first-child{border-top:0}.compact-row.selected{box-shadow:inset 3px 0 var(--accent)}.compact-title{font-size:13.5px;line-height:1.4;font-weight:500}.compact-sub{margin-top:2px;color:var(--muted);font-size:12.5px;line-height:1.4}.category{color:var(--muted);font:400 12px/1.4 var(--mono)}.empty{padding:40px;border:1px dashed var(--control);border-radius:12px;color:var(--muted);text-align:center;font-size:14px;line-height:1.5}.footer{padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font:400 12px/1.5 var(--mono)}
     @media(max-width:760px){.layout{display:block}.sidebar{position:relative;max-height:none;width:100%;padding:22px}.main{padding:8px 22px 48px}.jump-list,.shortcuts{display:none}.card-toggle{grid-template-columns:12px 40px minmax(0,1fr)}.badges{grid-column:3;margin-top:5px;justify-content:flex-start}.card-body{padding-left:22px}#c-S009 .kv{grid-template-columns:minmax(100px,40%) minmax(0,1fr)}.summary-note{width:100%;margin-left:0}.compact-row{padding-left:18px}.category{display:none}}
+    @media(max-width:480px){#c-S007 .kv,#c-S010 .kv{grid-template-columns:minmax(0,1fr);gap:2px}}
   </style>
 </head>
 <body>
@@ -188,8 +225,29 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      var agentIndex = tree.findIndex(function (node) { return /^Agent review:?$/.test(node.text); });
-      if (agentIndex > 0 && item.id !== 'S005' && item.id !== 'S007') tree.unshift(tree.splice(agentIndex,1)[0]);
+      var agentIndex = tree.findIndex(function (node) { return /^Agent review(?: \(advisory\))?:?$/.test(node.text); });
+      if (agentIndex >= 0) {
+        tree[agentIndex].hideCount = true;
+        tree[agentIndex].children.forEach(function (node) {
+          var prose = node.text.match(/^(?:Summary|Rationale):\s+(.+)$/s);
+          node.showFullText = !!prose && prose[1].trim().split(/\s+/).length <= 100;
+          if (node.text === 'Sources:') node.unit = 'sources';
+        });
+      }
+      if (agentIndex >= 0) {
+        tree[agentIndex].children.forEach(function (group) {
+          if (!/^(Findings|What to verify):?$/.test(group.text)) return;
+          group.openByDefault = true;
+          group.unit = /^Findings/.test(group.text) ? 'findings' : 'checks';
+          group.children.forEach(function (finding) {
+            finding.hideCount = true;
+            finding.children.forEach(function (detail) {
+              if (detail.text === 'Sources:') detail.unit = 'sources';
+            });
+          });
+        });
+      }
+      if (agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
       var licenses = evidence.match(/^(Found (\d+) dependencies\.)\s*Licenses:\s*(.+)$/s);
       if (licenses) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';
@@ -299,17 +357,18 @@ export function createHtmlReport(result: EvaluationResult): string {
       match=remaining.match(/^\[([\w\/\-]+)\]\s*/); if(match){tag=match[1];remaining=remaining.slice(match[0].length);} else if(!lead){match=remaining.match(/^([a-z_]+\/[a-z_]+):\s*/);if(match){tag=match[1];remaining=remaining.slice(match[0].length);}}
       return {lead:lead,tag:tag,text:remaining.replace(/\s\|\s/g,' · ')};
     }
-    function clampedText(container,text,key) {
+    function clampedText(container,text,key,showFullText) {
+      if(showFullText){container.appendChild(document.createTextNode(text));return;}
       var expanded=!!state.clamps[key],limit=220; container.appendChild(document.createTextNode(text.length>limit&&!expanded?text.slice(0,limit).trimEnd()+'…':text));
       if(text.length>limit){container.appendChild(document.createTextNode(' '));var more=h('button','link-button',expanded?'less':'more');more.type='button';focusKey(more,'clamp-'+key);more.addEventListener('click',function(event){event.stopPropagation();state.clamps[key]=!expanded;render();});container.appendChild(more);}
     }
     function renderNodes(parent,nodes,depth,prefix,hidden) {
       var cap=6,moreKey=prefix+'#more',showAll=!!state.nodes[moreKey]; var list=!showAll&&nodes.length>cap+2?nodes.slice(0,cap):nodes;
       list.forEach(function (node,index) {
-        var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection;
-        if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')),h('span','count-chip',String(node.countText||kids)),h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
+        var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection||!!node.openByDefault;
+        if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')));if(!node.hideCount)section.appendChild(h('span','count-chip',String(node.countText||kids)));section.appendChild(h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
-        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead)copy.appendChild(h('span','lead',parts.lead));if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
+        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead)copy.appendChild(h('span','lead',parts.lead));if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
         if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden);
       });
       if(hidden){var omitted=h('div','item-row');omitted.style.setProperty('--indent',Math.max(0,depth-1)*22+'px');omitted.append(h('span','leaf'),h('span','more-text',hidden+' more not included in the report'));parent.appendChild(omitted);}

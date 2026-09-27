@@ -199,7 +199,7 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'tenant-host-endpoint',
     category: 'tenant_or_host_endpoint',
     label: 'Tenant or host endpoint',
-    pattern: /\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db)[a-z0-9.-]*\.(?:edu|org|com|net|internal|local)(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
+    pattern: /\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db)[a-z0-9.-]*\.(?:edu|org|com|net|internal|local)(?![a-z0-9.-])(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'pass_neutral', medium: 'manual_candidate', high: 'manual_candidate' },

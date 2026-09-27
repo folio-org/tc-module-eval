@@ -227,8 +227,8 @@ describe('S007 shared evaluator', () => {
       evidenceReferences: ['package.json']
     });
     expect(result.details).toContain('Vue is explicitly declared.');
-    expect(result.details).toContain('Practical assessments:');
-    expect(result.details).toContain('Reviewer actions:');
+    expect(result.details).toContain('Findings:');
+    expect(result.details).toContain('What to verify:');
     expect(result.details).toContain('Deterministic result remains Manual.');
   });
 

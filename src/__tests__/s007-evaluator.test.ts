@@ -91,6 +91,41 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'unresolved', contribution: 'manual' });
   });
 
+  it.each([
+    ['21', 'compliant', 'pass'],
+    ['11', 'normative-violation', 'fail'],
+    ['17', 'unresolved', 'manual'],
+    ['22', 'unresolved', 'manual'],
+    [undefined, 'unresolved', 'manual']
+  ])('resolves ambiguous Java exceptions only when every rule agrees for %s', (version, classification, contribution) => {
+    const result = evaluateS007(policy, {
+      ...evidence([observation('java', version, version)]), complete: false
+    }, 'java');
+    expect(result.findings[0]).toMatchObject({ classification, contribution });
+    expect(result.findings.some(finding => finding.classification === 'coverage-incomplete')).toBe(true);
+    if (version === '21') {
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.findings[0].advisories.join(' ')).toContain('every possible exception');
+    }
+  });
+
+  it('does not use rule agreement to bypass provenance, conflicts, or advisory exceptions', () => {
+    const remote = observation('java', '21', '21');
+    remote.provenance = 'shared-remote-resolution';
+    const conflicting = observation('java', '21', '21');
+    conflicting.conflictPaths = ['other/pom.xml'];
+    for (const candidate of [remote, conflicting]) {
+      const result = evaluateS007(policy, { ...evidence([candidate]), complete: false }, 'java');
+      expect(result.findings[0].contribution).toBe('manual');
+    }
+    if (!policy.ok) throw new Error('Policy missing');
+    const modified = JSON.parse(JSON.stringify(policy));
+    const java = modified.policy.sections.flatMap((section: any) => section.entries).find((entry: any) => entry.id === 'java');
+    java.exceptions[0].strength = 'advisory';
+    expect(evaluateS007(modified, { ...evidence([observation('java', '21', '21')]), complete: false }, 'java')
+      .findings[0].contribution).toBe('manual');
+  });
+
   it('returns manual for an explicit unlisted framework candidate', () => {
     const candidate = observation('angular', '^18.0.0');
     candidate.unlistedFrameworkCandidate = true;

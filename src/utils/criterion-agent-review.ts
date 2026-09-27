@@ -25,6 +25,8 @@ export interface CriterionAgentReviewRequest {
   repositoryPath: string;
   instructions: string;
   files: CriterionAgentReviewFile[];
+  /** Browse intact source on disk instead of attaching its entire inventory to the prompt. */
+  repositoryBrowsing?: { maxFileBytes: number };
   schemaDescription: string;
 }
 
@@ -174,7 +176,12 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       }
       usedWorkspacePaths.add(workspaceKey);
       fs.mkdirSync(path.dirname(workspacePath), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(workspacePath, truncateToByteBudget(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
+      if (request.repositoryBrowsing && Buffer.byteLength(file.content) > request.repositoryBrowsing.maxFileBytes) {
+        throw new Error(`Review file exceeds the ${request.repositoryBrowsing.maxFileBytes}-byte workspace limit: ${file.repoRelativePath}`);
+      }
+      fs.writeFileSync(workspacePath, request.repositoryBrowsing
+        ? file.content
+        : truncateToByteBudget(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
       return {
         id: safeRelativePath,
         repoRelativePath: file.repoRelativePath,
@@ -182,12 +189,18 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       };
     });
 
+    if (request.repositoryBrowsing) {
+      fs.writeFileSync(path.join(rootPath, 'repository-files.json'), JSON.stringify(entries, null, 2), { mode: 0o600 });
+    }
     const manifestPath = path.join(rootPath, 'manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify({
       criterionId: request.criterionId,
       instructions: request.instructions,
       schemaDescription: request.schemaDescription,
-      files: entries
+      ...(request.repositoryBrowsing ? { repositoryRoot: 'docs', fileIndex: 'repository-files.json' } : {}),
+      files: request.repositoryBrowsing
+        ? entries.filter(entry => entry.repoRelativePath.startsWith('.criterion-agent/'))
+        : entries
     }, null, 2), { mode: 0o600 });
 
     return {

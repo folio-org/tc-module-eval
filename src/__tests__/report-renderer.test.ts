@@ -157,15 +157,55 @@ describe('EvaluationReportRenderer', () => {
     expect(details).toContain('Contradictions:');
     expect(details).toContain('PERSONAL_DATA_DISCLOSURE.md:');
     expect(details).toContain('RATIONALE_END');
-    expect(details).toContain('synthetic-review-model');
-    expect(details.indexOf('Contradictions:')).toBeLessThan(details.indexOf('Agent review:'));
-    expect(data.items[1].details.join('\n')).toContain('incomplete response (finish: missing)');
+    expect(details).not.toContain('synthetic-review-model');
+    expect(details.indexOf('Agent review (advisory):')).toBeLessThan(details.indexOf('Contradictions:'));
+    expect(data.items[1].details.join('\n')).toContain('Status: Unavailable');
+    expect(report.criteria[1].agentReview?.errors).toContain('OpenCode returned incomplete response (finish: missing)');
     expect(data.items.map((item: { status: string }) => item.status)).toEqual(['manual', 'manual']);
     // Execute the actual browser-side preparation, not only the serialized input.
     const items = preparedItems(html);
     const sections = items[0].tree.map((node: { text: string }) => node.text);
     expect(sections).toContain('Possible mismatches:');
-    expect(sections[sections.length - 1]).toBe('Agent review:');
+    expect(sections[0]).toBe('Agent review (advisory):');
+  });
+
+  it('uses the same structured advisory section across criteria without exposing runtime metadata', () => {
+    const report: EvaluationResult = { ...result, criteria: ['S004', 'S005', 'S006', 'S007', 'S010'].map(criterionId => ({
+      criterionId, status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+      details: 'Evidence:\n  - Keep before\nAgent review:\n  - Model label: hidden-model\n  - Adapter: fake\n  - Summary: stale\nDiagnostics:\n  - Keep after',
+      agentReview: { available: true, criterionId, recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+        summary: 'Current summary', rationale: 'Current rationale', evidenceReferences: ['pom.xml'], warnings: [], errors: [],
+        metadata: { adapter: 'fake', modelLabel: 'hidden-model', reviewMode: 'read-only',
+          promptInputSanitized: true, reviewWorkspaceSanitized: true } }
+    })) };
+    const original = JSON.stringify(report);
+    const html = new EvaluationReportRenderer().renderHtml(report);
+    expect(html).not.toMatch(/hidden-model|Adapter:|Model label:|Summary: stale/);
+    for (const item of preparedItems(html)) {
+      expect(item.tree[0]).toMatchObject({ text: 'Agent review (advisory):', hideCount: true });
+      expect(item.tree[0].children.map((node: any) => node.text)).toEqual([
+        'Recommendation: Reviewer judgment needed', 'Confidence: medium', 'Summary: Current summary',
+        'Rationale: Current rationale', 'Sources:', 'Advisory only; the criterion status is unchanged.'
+      ]);
+      expect(item.tree[0].children[4]).toMatchObject({ unit: 'sources', children: [{ text: 'pom.xml', children: [] }] });
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Agent review (advisory):', 'Evidence:', 'Diagnostics:']);
+    }
+    expect(JSON.stringify(report)).toBe(original);
+  });
+
+  it('keeps unavailable diagnostics in JSON without leaking model names into HTML', () => {
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+      details: 'Agent review:\n  - Not applied: model hidden-model timed_out',
+      agentReview: { available: false, criterionId: 'S010', recommendation: 'likely_sufficient',
+        evidenceReferences: [], warnings: [], errors: ['model hidden-model timed_out'] }
+    }] };
+    const renderer = new EvaluationReportRenderer();
+    const html = renderer.renderHtml(report);
+    expect(html).not.toContain('hidden-model');
+    expect(reportData(html).items[0].recommendation).toBeUndefined();
+    expect(reportData(html).items[0].details).toContain('  - Summary: The review exceeded its time limit.');
+    expect(renderer.renderJson(report)).toContain('model hidden-model timed_out');
   });
 
   it('should render JSON with stable indentation', () => {
@@ -231,6 +271,27 @@ describe('EvaluationReportRenderer', () => {
       title: 'FOLIO library dependencies',
       evidence: 'All 3 declared FOLIO library coordinates are mapped to families accepted for S009.'
     });
+  });
+
+  it.each(['S004', 'S007', 'S010'])('shows short %s agent prose in full without expanding unrelated or long text', criterionId => {
+    const short = Array(100).fill('evidence').join(' ');
+    const long = `${short} extra`;
+    const html = new EvaluationReportRenderer().renderHtml({
+      ...result,
+      criteria: [{ criterionId, status: EvaluationStatus.MANUAL, evidence: 'Review needed.', details: [
+        'Other findings:', `  - Summary: ${short}`,
+        criterionId === 'S004' ? 'Agent review:' : 'Agent review (advisory):',
+        `  - Summary: ${short}`, `  - Rationale: ${long}`, `  - Finding: ${short}`
+      ].join('\n'), agentReview: {
+        available: true, criterionId, recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+        summary: short, rationale: long, evidenceReferences: [], warnings: [], errors: []
+      } }]
+    });
+    const tree = preparedItems(html)[0].tree;
+    const agent = tree.find((node: any) => node.text.startsWith('Agent review'));
+    expect(agent.children.find((node: any) => node.text.startsWith('Summary:')).showFullText).toBe(true);
+    expect(agent.children.find((node: any) => node.text.startsWith('Rationale:')).showFullText).toBe(false);
+    expect(tree.find((node: any) => node.text === 'Other findings:').children[0].showFullText).toBeUndefined();
   });
 
   it('prepares S009 detail hierarchy without nested field counts or inferred agent recommendations', () => {

@@ -1,4 +1,5 @@
 import { CriterionAgentReviewResult, S010Analysis, S010Finding } from '../types';
+import { renderAgentReviewLines } from './agent-review-report';
 
 export function renderS010HumanDetails(
   analysis: S010Analysis,
@@ -31,22 +32,8 @@ export function renderS010HumanDetails(
     lines.push(`  - ${diagnostic.path ? `${diagnostic.path} — ` : ''}${diagnostic.message}`);
   }
   if (agentReview?.available) {
-    lines.push(
-      'Agent review (advisory):',
-      `  - Recommendation: ${agentReview.recommendation}`,
-      `  - Confidence: ${agentReview.confidence}`,
-      `  - Summary: ${agentReview.summary}`,
-      `  - Rationale: ${agentReview.rationale}`
-    );
-    for (const assessment of agentReview.assessments ?? []) {
-      lines.push(`  - Assessment (${assessment.technologyId}/${assessment.type}): ${assessment.summary}`);
-      lines.push(`    - Evidence: ${assessment.evidenceReferences.join(', ')}`);
-    }
-    for (const action of agentReview.reviewerActions ?? []) {
-      lines.push(`  - Reviewer action: ${action.action}`);
-      lines.push(`    - Evidence: ${action.evidenceReferences.join(', ')}`);
-    }
-    lines.push('  - Deterministic S010 status remains MANUAL.');
+    lines.push(...renderAgentReviewLines(agentReview));
+    lines.push('  - Deterministic result remains Manual review.');
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);
   }

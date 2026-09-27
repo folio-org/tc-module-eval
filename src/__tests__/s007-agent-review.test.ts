@@ -186,6 +186,8 @@ describe('S007 agent review', () => {
     expect(request.instructions).toContain('install dependencies');
     expect(request.instructions).toContain('modify');
     expect(request.instructions).toContain('network calls');
+    expect(request.instructions).toContain('provides policy context but is not repository evidence');
+    expect(request.instructions).toContain('check each evidenceReferences array separately');
     const manifest = request.files.find(file => file.repoRelativePath === 'package.json')?.content ?? '';
     expect(manifest).toContain('dependencies.react');
     expect(manifest).toContain('^18.0.0');
@@ -454,6 +456,7 @@ describe('S007 agent review', () => {
 
     expect(review.available).toBe(false);
     expect(review.errors.join('\n')).toContain('assessment without repository evidence');
+    expect(review.metadata?.adapter).toBe('fake');
   });
 
   async function write(relativePath: string, content: string): Promise<void> {

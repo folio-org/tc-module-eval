@@ -38,11 +38,11 @@ export async function reviewS007WithAgent(
   }
   const review = await runCriterionAgentReview(request, config, commandRunner);
   if (review.available && !review.evidenceReferences.some(reference => reference !== SUMMARY_PATH)) {
-    return unavailable('S007 agent review returned no validated repository evidence references.');
+    return { ...unavailable('S007 agent review returned no validated repository evidence references.'), metadata: review.metadata };
   }
   if (review.available) {
     const invalidReason = validateS007Review(analysis, review);
-    if (invalidReason) return unavailable(invalidReason);
+    if (invalidReason) return { ...unavailable(invalidReason), metadata: review.metadata };
   }
   return review;
 }
@@ -104,6 +104,8 @@ export function buildS007AgentReviewRequest(
       'Do not reinterpret the current OST JSON or invent policy. Explain only what the supplied policy and repository evidence establish or leave unresolved.',
       'This review is advisory only. Do not change, approve, reject, pass, or fail the deterministic S007 status.',
       'Every assessment and reviewer action must cite one or more repository repoRelativePath values present in the manifest.',
+      'The generated .criterion-agent/S007/deterministic-summary.json provides policy context but is not repository evidence. Never use it as the sole citation for an assessment or action, including policy questions. Cite the repository declaration that makes the policy question relevant.',
+      'Before returning, check each evidenceReferences array separately: it must include an exact repository repoRelativePath from the manifest, without a docs/ prefix or line-number suffix. A valid top-level citation does not cover an uncited assessment or action. Do not invent citations for missing evidence.',
       'Use likely_insufficient only when an assessment identifies a substantive_concern supported by repository evidence.',
       'Use needs_reviewer_judgment only when reviewerActions names a narrow action that can resolve an evidence gap or policy question.',
       'Each reviewer action must name the exact missing artifact or fact to obtain and the decision it will resolve; do not merely say to review, check, or confirm compliance.',

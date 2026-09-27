@@ -38,7 +38,7 @@ const SIGNAL_RULES: SignalRule[] = [
   { group: 'docker_runtime', label: 'Docker or runtime dependency guidance', pattern: /\b(docker|docker compose|compose\.ya?ml|container|kafka|postgres|elasticsearch|opensearch|runtime dependenc)/i, strength: 'strong' },
   { group: 'env_configuration', label: 'Environment or configuration guidance', pattern: /\b(environment variable|env var|configuration|configure|settings|system property|yaml|properties)\b/i, strength: 'candidate' },
   { group: 'okapi_tenant_enablement', label: 'Okapi, tenant, or module enablement guidance', pattern: /\b(okapi|tenant|tenant init|enable module|module descriptor|_tenant)\b/i, strength: 'strong' },
-  { group: 'stripes_setup', label: 'Stripes frontend setup guidance', pattern: /\b(stripes|okapi url|tenant id|yarn start|ui module|platform-complete)\b/i, strength: 'strong' },
+  { group: 'stripes_setup', label: 'Stripes frontend setup guidance', pattern: /\b(stripes|yarn start|ui module|platform-complete)\b/i, strength: 'strong' },
   { group: 'build_test', label: 'Developer build instructions', pattern: /\b(compile|package|assemble|mvn\s+(clean\s+)?(install|package)|gradle(w)?\s+(build|assemble)|npm\s+run\s+build|yarn\s+build|pnpm\s+build)\b/i, strength: 'candidate' },
   { group: 'external_reference', label: 'External documentation reference', pattern: /https?:\/\/[^\s)]+/i, strength: 'candidate' }
 ];

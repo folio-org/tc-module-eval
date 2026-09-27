@@ -91,6 +91,14 @@ Install this UI module into platform-complete with the related backend modules e
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('stripes_setup');
   });
 
+  it('does not label backend tenant identifiers or Okapi URLs as frontend setup', () => {
+    writeFile('README.md', 'Configure the Okapi URL and tenant ID before enabling this backend module.');
+    const result = analyzeS004Documentation(tempRoot);
+    const groups = result.candidates.flatMap(candidate => candidate.signals.map(signal => signal.group));
+    expect(groups).toContain('okapi_tenant_enablement');
+    expect(groups).not.toContain('stripes_setup');
+  });
+
   it('returns manual for thin operational references', () => {
     writeFile('README.md', `
 # mod-users

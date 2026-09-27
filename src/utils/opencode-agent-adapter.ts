@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  CommandExecutionRequest,
   CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
@@ -13,7 +14,7 @@ import {
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
-import { decodeOpenCodeOutput, OpenCodeOutput, parseJsonObject } from './opencode-output';
+import { decodeOpenCodeOutput, openCodeEventTrace, OpenCodeOutput, parseJsonObject } from './opencode-output';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 const OPENCODE_RUN_MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -32,6 +33,49 @@ export async function runOpenCodeAgentReview(
     errors: [redactSensitiveText(error)],
     metadata: openCodeMetadata(config, workspace)
   });
+
+  const stages: Record<string, unknown>[] = [];
+  const saveTrace = () => {
+    if (config.debugRetainWorkspace) {
+      fs.writeFileSync(path.join(workspace.rootPath, 'agent-debug.json'), JSON.stringify({
+        version: 1, timeoutMs: config.timeoutMs ?? 120000, stages
+      }, null, 2), { mode: 0o600 });
+    }
+  };
+  const runStage = async (stage: string, command: CommandExecutionRequest): Promise<CommandExecutionResult> => {
+    if (!config.debugRetainWorkspace) return commandRunner.run(command);
+    const entry: Record<string, unknown> = { stage, startedAt: new Date().toISOString(), status: 'running' };
+    stages.push(entry);
+    saveTrace();
+    let result: CommandExecutionResult;
+    try {
+      result = await commandRunner.run(command);
+    } catch (error) {
+      entry.status = 'runner_exception';
+      entry.finishedAt = new Date().toISOString();
+      saveTrace();
+      throw error;
+    }
+    Object.assign(entry, {
+      finishedAt: new Date().toISOString(), status: result.status, durationMs: result.durationMs,
+      exitCode: result.exitCode, signal: result.signal,
+      stdoutBytes: result.stdoutBytes, stderrBytes: result.stderrBytes,
+      stdoutTruncated: result.stdoutTruncated ?? false, stderrTruncated: result.stderrTruncated ?? false
+    });
+    if (command.stdoutFormat === 'opencode-json') {
+      const records = result.stdout.split(/\r?\n/).filter(line => line.trim());
+      entry.events = records.slice(0, 2000).map((line, index) => {
+        const event = parseJsonObject(line);
+        const metadata = event?.debugTrace;
+        return { record: index + 1, ...openCodeEventTrace(
+          metadata && typeof metadata === 'object' ? metadata as Record<string, unknown> : event
+        ) };
+      });
+      entry.omittedEvents = Math.max(0, records.length - 2000);
+    }
+    saveTrace();
+    return result;
+  };
 
   if (config.providerConfigError) {
     return baseUnavailable(config.providerConfigError);
@@ -52,7 +96,7 @@ export async function runOpenCodeAgentReview(
   } catch (error) {
     return baseUnavailable(`Unable to materialize OpenCode invocation: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const configDebug = await commandRunner.run({
+  const configDebug = await runStage('debug-config', {
     command: 'opencode',
     args: ['debug', 'config'],
     cwd: workspace.rootPath,
@@ -64,7 +108,7 @@ export async function runOpenCodeAgentReview(
     return baseUnavailable(commandFailure('debug config', configDebug, config));
   }
 
-  const agentDebug = await commandRunner.run({
+  const agentDebug = await runStage('debug-agent', {
     command: 'opencode',
     args: ['debug', 'agent', config.readOnlyAgentName],
     cwd: workspace.rootPath,
@@ -81,7 +125,7 @@ export async function runOpenCodeAgentReview(
     return baseUnavailable(permissionError);
   }
 
-  const run = await commandRunner.run({
+  const run = await runStage('review', {
     command: 'opencode',
     args: [
       'run',
@@ -91,7 +135,19 @@ export async function runOpenCodeAgentReview(
       config.modelLabel,
       '--format',
       'json',
-      request.instructions,
+      [
+        request.instructions,
+        'Writing style for all report prose: write for a Technical Council decision-maker, not an implementation debugger. Use plain English, short sentences, and concrete outcomes. Lead with the conclusion and its operational impact.',
+        'Summary: at most two short sentences, targeting 45 words total. State the overall judgment and the main risk or remaining decision. Do not list every dependency or repeat the recommendation label.',
+        'Rationale: at most three short sentences, targeting 70 words total. Explain the decisive evidence, scope actually investigated, and material uncertainty without repeating the summary or narrating your investigation.',
+        'Assessment summaries: one or two short sentences each, targeting 45 words. State the finding and why it matters. Distinguish an observed defect from behavior that has not been verified. Avoid raw assessment-type identifiers in prose.',
+        'Reviewer actions: one direct sentence each, targeting 30 words. Name the specific fact to verify and the decision it resolves. Do not repeat the finding or combine unrelated checks.',
+        'Describe operational behavior first: what happens when a dependency is unavailable, what is established, and what remains unknown. Keep analyzer limitations secondary; avoid internal terms such as configuration-absent outcomes in reader-facing prose.',
+        'Consolidate repeated observations within each required subject assessment. Explain shared limitations once in the rationale, without dropping distinct risks, required assessments, or citations. Put necessary method names and configuration keys in assessment details, not in executive summaries or reviewer actions unless essential to identify the requested check.',
+        'Before returning JSON, check consistency across recommendation, summary, rationale, assessments, and reviewer actions. Never describe behavior as proven in one field while marking it unverified in another. If evidence is incomplete or contradictory, retain that uncertainty throughout; do not resolve it by guessing. This self-check is not proof of correctness.',
+        'Keep file paths in evidenceReferences rather than repeating source inventories in prose. Include a technical identifier or supporting line number only when needed to locate or explain decisive evidence or when criterion instructions require it. Explain unfamiliar jargon. Avoid implementation walkthroughs, boilerplate caveats, and repeated qualifications.',
+        'These are writing targets, not limits on investigation or material findings. Preserve required citations, meaningful uncertainty, and criterion-specific coverage. Keep the required JSON schema and enum values unchanged.'
+      ].join('\n'),
       '--file',
       workspace.manifestPath
     ],

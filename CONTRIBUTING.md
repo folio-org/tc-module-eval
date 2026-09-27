@@ -33,6 +33,14 @@ yarn build
 yarn global add .
 ```
 
+## Verification
+
+Use `yarn test:unit --runInBand` and `yarn build` for routine verification.
+Bare `yarn test` (or `npm test`) includes network integration tests that clone
+external repositories and enable their build commands with `allowLocalCommands: true`.
+Run the full suite or `yarn test:integration` only when those target builds are
+explicitly authorized; the evaluator's safe CLI defaults do not protect this suite.
+
 ## Architecture
 
 The evaluation process:

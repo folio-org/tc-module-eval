@@ -42,16 +42,38 @@ failed, or malformed review leaves S007 manual and records the unavailable reaso
 ## S010 Third-Party System Resilience Review
 
 S010 invokes agent review only when deterministic committed-source analysis is manual.
-The agent receives a bounded, repository-wide cross-section of committed
-manifests, configuration, production source, tests, and documentation plus the
-deterministic scenarios and coverage diagnostics. Generated output, dependencies,
-binary files, symlinks, `.env` files, and uncommitted changes are excluded.
+Unlike the evidence-packet reviews above, S010 lets OpenCode browse the eligible
+committed source tree with read, glob, grep, and list. There is no ranked 32-file
+selection: files outside conventional source directories are available too.
+Files are copied intact, with repository-relative paths preserved under `docs/`
+in an isolated workspace. The agent chooses what to search and read, follows
+cross-file references, and seeks evidence that contradicts or extends the
+deterministic summary. Repository contents are not all injected into the prompt.
+
+Generated output, vendored dependencies, binaries, non-regular entries (including
+symlinks and submodules), `.env` files, and uncommitted changes are excluded.
+Repository-authored `AGENTS.md`, `CLAUDE.md`, `opencode.json`/`opencode.jsonc`,
+`.opencode/`, `.claude/`, `.agents/`, and `.criterion-agent/` are excluded as well.
+Commands, builds, tests, mutations, external-directory access, and web tools remain
+disabled. This enables source investigation, not runtime verification.
+
+Workspace preparation has safety ceilings of 50,000 tree entries/files, 16 MiB
+of tree metadata, 1 MiB per file, and 128 MiB of source. Git errors or exceeded
+ceilings make agent review unavailable instead of silently selecting a subset or
+truncating source. The coverage summary records the committed revision and
+non-text/unsafe-entry omissions. The existing `--criterion-agent-timeout-ms`
+bounds the OpenCode run; there is no separate token or tool-call budget. A hard
+timeout makes review unavailable. The agent is instructed to report unfinished
+material traces as `needs_reviewer_judgment` when it can finish a response.
 
 The review inventories runtime dependencies and traces configuration, operations,
 failure bounds, fallback behavior, startup coupling, and readiness effects. It may
 identify evidence missed by narrow deterministic recognizers, but it cannot change
 the deterministic status. Every assessment and reviewer action must cite committed
-repository source; generated summaries alone are not valid support. Disabled,
+repository source; generated summaries alone are not valid support. Citation paths
+are validated against the workspace; the agent is also instructed to include line
+numbers in assessment text and describe its actual investigation scope, but those
+claims are not independently verified. Disabled,
 excluded, unavailable, malformed, or uncited review leaves S010 manual.
 
 ## S006 Sensitive Information Review
@@ -112,9 +134,24 @@ Advanced options:
 - `--criterion-agent-proxy-env <names>` allowlists proxy environment variable names.
 - `--criterion-agent-endpoint <url>` configures a provider endpoint.
 - `--criterion-agent-endpoint-allowlist <urls>` permits non-HTTPS explicitly trusted endpoint URLs on the same parsed origin.
-- `--criterion-agent-debug-retain-workspace` retains the temporary review workspace for local debugging.
+- `--criterion-agent-debug-retain-workspace` retains the temporary review workspace and a content-free `agent-debug.json` run trace for local debugging.
 
-When `--criterion-agent-debug-retain-workspace` is used, the evaluator keeps the manifest and generated OpenCode config but removes copied/generated OpenCode auth data after the run.
+When this flag is used, the evaluator keeps the manifest and review inputs but still deletes the entire separate OpenCode runtime directory, including configuration, auth data, and session storage. The JSON report's `agentReview.metadata.retainedWorkspacePath` identifies the workspace. Treat retained inputs as private repository content; do not publish the whole workspace.
+
+`agent-debug.json` records each command's start/end time, duration, status, exit code/signal, output byte counts, and truncation flags, including failed and timed-out commands. For the review command it also retains up to 2,000 content-free events: event type, OpenCode-reported timestamp, allowlisted tool name/status, and tool duration when supplied. Unknown names are replaced with `other`. Prompts, environment variables, credentials, paths, tool inputs/outputs, assistant prose, and reasoning text are not included in the trace. The trace file is owner-readable/writable only.
+
+The trace is updated before and after each command, not continuously. Event timestamps are reported by OpenCode, not measured provider latency. Missing events, capture truncation, and `omittedEvents` limit what can be concluded; a quiet interval cannot distinguish model computation from provider waiting. A forcibly killed evaluator may leave only the last command's `running` entry. Debug mode does not increase timeouts, change permissions, or retry commands.
+
+For example, to investigate S010 with a seven-minute ceiling:
+
+```bash
+node dist/cli.js evaluate https://github.com/folio-org/mod-search \
+  --criteria S010 --criterion-agent-opencode --criterion-agent-criteria S010 \
+  --criterion-agent-model openrouter/deepseek/deepseek-v4-flash \
+  --criterion-agent-timeout-ms 420000 --criterion-agent-debug-retain-workspace
+```
+
+Remove the retained workspace when troubleshooting is finished. Without the flag, no trace file is written and the temporary review workspace is deleted as before.
 
 Explicit CLI model and auth-store values take precedence over environment-based generation.
 

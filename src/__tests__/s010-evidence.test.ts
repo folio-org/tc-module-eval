@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { collectS010Evidence } from '../utils/s010-evidence';
+import { evaluateS010 } from '../utils/s010-evaluator';
+import { EvaluationStatus } from '../types';
 
 const roots: string[] = [];
 
@@ -25,6 +27,83 @@ function repository(files: Record<string, string>): string {
 }
 
 describe('S010 evidence collection', () => {
+  it.each([
+    'org.opensearch.client.RestHighLevelClient',
+    'org.opensearch.client.RestClient',
+    'org.opensearch.client.opensearch.OpenSearchClient',
+    'org.opensearch.client.opensearch.OpenSearchAsyncClient'
+  ])('recognizes %s without inferring resilience from nearby signals', async clientType => {
+    const client = clientType.split('.').pop();
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-search</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': '{"id":"mod-search-1.0.0"}',
+      'src/main/java/IndexRepository.java': [
+        `import ${clientType};`,
+        '@ConditionalOnProperty(name="SEARCH_ENABLED")',
+        `class IndexRepository { ${client} openSearchClient;`,
+        '  Object search() { return openSearchClient.search(request); }',
+        `  void setElasticsearchClient(${client} elasticsearchClient) { this.openSearchClient = elasticsearchClient; }`,
+        '  void unrelated() { try { other.connectTimeout(1000); } catch (Exception e) {} }',
+        '}'
+      ].join('\n'),
+      'src/main/java/Other.java': 'class Other { void setup() { other.readTimeout(1000); } }',
+      'src/test/java/TestClient.java': 'import org.opensearch.client.RestHighLevelClient;'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      id: 'search/runtime-unavailable', dependencyId: 'search', requirement: 'unresolved',
+      proof: 'unresolved', boundedFailure: 'unknown', readiness: 'unknown',
+      sourceReferences: [expect.objectContaining({ path: 'src/main/java/IndexRepository.java', line: 1 })]
+    })]);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.semanticCoverage).toBe('incomplete');
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('retains unsupported clients beside recognized OpenSearch clients and in other files', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-search</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': '{"id":"mod-search-1.0.0"}',
+      'src/main/java/Mixed.java': 'class Mixed { org.opensearch.client.opensearch.OpenSearchClient search; MongoClient mongo; ElasticsearchClient elastic; }',
+      'src/main/java/Unknown.java': 'class Unknown { CustomClient openSearchClient; }',
+      'src/main/java/Elastic.java': 'class Elastic { ElasticsearchClient elastic; }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toHaveLength(1);
+    expect(result.scenarios[0].sourceReferences.map(ref => ref.path)).toEqual(['src/main/java/Mixed.java']);
+    const diagnostic = result.diagnostics.find(item => item.code === 'unsupported-runtime-pattern');
+    expect(diagnostic?.message).toContain('3 production files');
+    for (const name of ['Mixed', 'Unknown', 'Elastic']) expect(diagnostic?.message).toContain(`${name}.java`);
+  });
+
+  it('does not treat defaulted or non-required configuration inputs as optional services', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-search</artifactId></project>',
+      'descriptors/ModuleDescriptor.json': JSON.stringify({
+        id: 'mod-search-1.0.0',
+        launchDescriptor: { env: [
+          { name: 'KAFKA_HOST', value: 'kafka' },
+          { name: 'ELASTICSEARCH_URL', required: false, value: 'http://opensearch:9200' },
+          { name: 'DB_HOST', required: true, value: '' }
+        ] }
+      }),
+      'src/main/java/org/folio/Config.java': 'class Config { @Value("${DB_HOST}") String host; }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+    const configuration = result.scenarios.filter(scenario => scenario.scenario === 'configuration-absent');
+    expect(configuration.map(scenario => [scenario.dependencyId, scenario.requirement, scenario.proof])).toEqual([
+      ['kafka', 'unresolved', 'unresolved'],
+      ['search', 'unresolved', 'unresolved'],
+      ['database', 'required', 'clear-fail-fast']
+    ]);
+    expect(configuration[0].sourceReferences[0].detail).toContain('does not establish whether the service is optional');
+  });
+
   it('recognizes required Spring configuration with framework fail-fast semantics', async () => {
     const root = repository({
       'pom.xml': '<project><artifactId>mod-search-client</artifactId></project>',

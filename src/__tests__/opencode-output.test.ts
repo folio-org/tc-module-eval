@@ -1,5 +1,5 @@
 import { LocalCommandRunner } from '../utils/command-runner';
-import { decodeOpenCodeOutput, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
+import { decodeOpenCodeOutput, openCodeEventTrace, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
 
 const advisory = {
   recommendation: 'needs_reviewer_judgment', confidence: 'medium',
@@ -20,6 +20,21 @@ async function capture(output: string, maxOutputBytes = 1024 * 1024) {
 }
 
 describe('structured OpenCode capture', () => {
+  it('retains only allowlisted tool metadata through real capture', async () => {
+    const result = await capture(wire({ type: 'tool_use', timestamp: 1200, part: {
+      tool: 'grep', state: { status: 'completed', time: { start: 1000, end: 1150 },
+        input: { pattern: 'SYNTHETIC_SECRET' }, output: 'PRIVATE_SOURCE' }
+    } }, { type: 'reasoning', timestamp: 1300, part: { text: 'PRIVATE_REASONING' } }));
+    const events = result.stdout.split('\n').map(line => JSON.parse(line).debugTrace);
+    expect(events).toEqual([
+      { type: 'tool_use', timestamp: 1200, tool: 'grep', status: 'completed', durationMs: 150 },
+      { type: 'reasoning', timestamp: 1300 }
+    ]);
+    expect(result.stdout).not.toMatch(/SYNTHETIC_SECRET|PRIVATE_SOURCE|PRIVATE_REASONING/);
+    expect(openCodeEventTrace({ type: 'tool_use', timestamp: 'SECRET', tool: 'SECRET', status: 'SECRET', durationMs: -5 }))
+      .toEqual({ type: 'tool_use', tool: 'other', status: 'unknown' });
+  });
+
   it.each(['summary', 'rationale'])('rejects an unsafe advisory %s rather than accepting a placeholder', async field => {
     const payload = { ...advisory, [field]: '"password": "SYNTHETIC_SECRET\\' };
     const result = await capture(wire(textEvent(JSON.stringify(payload))));

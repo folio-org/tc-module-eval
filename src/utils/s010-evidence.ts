@@ -23,6 +23,7 @@ const LIBRARY_NAMES = new Set([
 const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md)$/i;
 const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
+const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
 const UNSUPPORTED_PATTERNS = [
   { category: 'dynamic runtime discovery', pattern: /java\.lang\.reflect|Class\.forName|ServiceLoader/i },
   { category: 'generated or framework client', pattern: /generated[-_/ ]client|vertx|raml-module-builder/i },
@@ -84,11 +85,12 @@ export async function collectS010Evidence(
     scenarios.push({
       id: `${declaration.dependencyId}:${declaration.name}/configuration-absent`,
       dependencyId: declaration.dependencyId,
-      requirement: declaration.required ? 'required' : 'optional',
+      // A default or non-required override says nothing about service optionality.
+      requirement: declaration.required ? 'required' : 'unresolved',
       scenario: 'configuration-absent',
       proof: clearFailFast ? 'clear-fail-fast' : 'unresolved',
       sourceReferences: [
-        { path: declaration.path, detail: `${declaration.required ? 'Required' : 'Optional'} external configuration declaration` },
+        { path: declaration.path, detail: `${declaration.required ? 'Required configuration input' : 'Configuration input not marked required'}; this declaration does not establish whether the service is optional` },
         ...(binding ? [{ path: binding.path, line: lineOf(binding.content, '@Value'), detail: 'Spring configuration binding' }] : [])
       ],
       boundedFailure: 'not-applicable',
@@ -109,6 +111,26 @@ export async function collectS010Evidence(
     ) {
       semanticIncomplete = true;
     }
+  }
+
+  const searchFiles = javaFiles.filter(file => JAVA_OPENSEARCH_PATTERN.test(file.content));
+  if (searchFiles.length > 0) {
+    scenarios.push({
+      id: 'search/runtime-unavailable',
+      dependencyId: 'search',
+      requirement: 'unresolved',
+      scenario: 'runtime-unavailable',
+      proof: 'unresolved',
+      sourceReferences: searchFiles.map(file => ({
+        path: file.path,
+        line: lineAtOffset(file.content, JAVA_OPENSEARCH_PATTERN.exec(file.content)!.index),
+        detail: 'OpenSearch Java client reference; client presence does not establish outage handling'
+      })),
+      boundedFailure: 'unknown',
+      readiness: 'unknown',
+      rationale: 'OpenSearch client usage is recognized. Verify operation-level failure bounds, startup or tenant-initialization effects, readiness, and recovery; client configuration or exception handling alone does not prove resilience.'
+    });
+    semanticIncomplete = true;
   }
 
   for (const file of javaFiles) {
@@ -180,7 +202,14 @@ export async function collectS010Evidence(
       .filter(file => !('javascriptOnly' in unsupported) || /\.[cm]?[jt]sx?$/.test(file.path))
       .filter(file => unsupported.category !== 'datastore client'
         || !databaseFiles.some(databaseFile => databaseFile.path === file.path))
-      .filter(file => unsupported.pattern.test(file.content))
+      .filter(file => {
+        // Recognized OpenSearch files may use legacy elasticsearchClient field/setter names.
+        // Keep diagnostics for other actual datastore types, not these identifiers.
+        const pattern = unsupported.category === 'datastore client' && searchFiles.includes(file)
+          ? /\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/
+          : unsupported.pattern;
+        return pattern.test(file.content);
+      })
       .map(file => file.path);
     if (matchingPaths.length === 0) continue;
     diagnostics.push({

@@ -2,6 +2,30 @@ import { isSensitiveKey, redactSensitiveText } from './redaction';
 
 const UNSAFE_OUTPUT = '{"type":"unsafe_output"}';
 
+// A strict projection, not redacted free text: no paths, arguments, output, or reasoning.
+export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
+  const part = asObject(event?.part);
+  const state = asObject(part.state);
+  const time = asObject(state.time);
+  const number = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  const type = ['text', 'tool_use', 'reasoning', 'step_start', 'step_finish', 'error', 'unsafe_output'].includes(String(event?.type))
+    ? String(event?.type) : 'other';
+  const tool = part.tool ?? event?.tool;
+  const status = state.status ?? event?.status;
+  const start = number(time.start);
+  const end = number(time.end);
+  return {
+    type,
+    timestamp: number(event?.timestamp),
+    ...(type === 'tool_use' ? {
+      tool: ['read', 'glob', 'grep', 'list', 'bash', 'edit', 'write', 'webfetch', 'websearch', 'task', 'skill', 'todowrite'].includes(String(tool)) ? String(tool) : 'other',
+      status: ['pending', 'running', 'completed', 'error'].includes(String(status)) ? String(status) : 'unknown',
+      durationMs: start !== undefined && end !== undefined && end >= start ? end - start : number(event?.durationMs)
+    } : {})
+  };
+}
+
 export function sanitizeStructuredOutput(
   output: string,
   format: 'json' | 'opencode-json',
@@ -54,6 +78,9 @@ export function sanitizeStructuredOutput(
       const reason = error instanceof Error && reasons.includes(error.message) ? error.message : 'Sanitization failed';
       const type = ['text', 'tool_use', 'reasoning', 'step_start', 'step_finish', 'error'].includes(String(parsed?.type)) ? parsed!.type : 'other';
       note(`record ${index + 1}: ${type}; ${reason}`);
+    }
+    if (format === 'opencode-json' && typeof parsed?.type === 'string') {
+      record = JSON.stringify({ ...JSON.parse(record), debugTrace: openCodeEventTrace(parsed) });
     }
     const size = Buffer.byteLength(record) + (records.length ? 1 : 0);
     if (bytes + size > maxBytes) return { text: records.join('\n'), truncated: true, diagnostics };
