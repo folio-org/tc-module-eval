@@ -514,6 +514,11 @@ describe('S006 sensitive information finding extraction', () => {
         endLine: 4
       }
     });
+
+    const topExample = formatS006Evidence(result).details.split('\n')
+      .find(line => line.includes('config/key.txt:2-4'));
+    expect(topExample).toContain(`-----BEGIN PRIVATE KEY----- ⏎ ${privateKeyBody} ⏎ -----END PRIVATE KEY-----`);
+    expect(formatS006Evidence(result).details).not.toMatch(new RegExp(`^${privateKeyBody}`, 'm'));
   });
 
   it('reports private-key block line numbers consistently for bare CR line endings', async () => {

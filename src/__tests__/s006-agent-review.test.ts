@@ -118,6 +118,16 @@ describe('S006 agent review adapter', () => {
     expect(request.files.every(file => !path.isAbsolute(file.repoRelativePath))).toBe(true);
   });
 
+  it('keeps multiline matched excerpts on one line in agent excerpt files', async () => {
+    writeFile('docs/key.md', 'Example:\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n');
+    const analysis = await analyzeRepo();
+    const request = buildS006AgentReviewRequest(repoPath, analysis);
+    const excerptFile = request.files.find(file => file.repoRelativePath === '.criterion-agent/S006/excerpts/documentation.txt');
+
+    expect(excerptFile?.content).toContain('matched excerpt: -----BEGIN PRIVATE KEY----- ⏎ MIIEvQIBADANBgkqhkiG9w0BAQEFAASC ⏎ -----END PRIVATE KEY-----');
+    expect(excerptFile?.content).not.toMatch(/^MIIEvQIB/m);
+  });
+
   it('sends only finding excerpts, not surrounding source windows, to agent review', async () => {
     const rawSlackWebhook = 'https://hooks.slack.com/services/T00000000/B00000000/abcdefABCDEF123456';
     writeFile('docs/slack.md', `Webhook used in review repro: ${rawSlackWebhook}\n`);

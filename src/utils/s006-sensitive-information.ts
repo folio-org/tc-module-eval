@@ -3,6 +3,7 @@ export {
   buildS006DetectorMatch,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
+  formatS006ExcerptInline,
   getS006Confidence,
   getS006DetectorById,
   getS006Severity,

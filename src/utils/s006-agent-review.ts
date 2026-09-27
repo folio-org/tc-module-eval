@@ -15,6 +15,7 @@ import {
 import {
   MAX_S006_SCAN_BYTES_PER_FILE,
   S006_CONTEXT_LABELS,
+  formatS006ExcerptInline,
   strongestS006ReportFindings
 } from './s006-sensitive-information';
 import { truncateToByteBudget } from './redaction';
@@ -175,7 +176,7 @@ function buildContextExcerptContent(
       `- source ${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}${finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : ''}`,
       `  detector: ${finding.detectorId}; category: ${finding.category}; confidence: ${finding.confidence}; severity: ${finding.severity}; valueClassification: ${finding.valueClassification}`,
       `  rationale: ${finding.rationale}`,
-      `  matched excerpt: ${finding.excerpt.text}`,
+      `  matched excerpt: ${formatS006ExcerptInline(finding.excerpt.text)}`,
       '  source window omitted; use the matched excerpt above.',
       ''
     );

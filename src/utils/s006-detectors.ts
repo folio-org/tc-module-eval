@@ -329,6 +329,11 @@ export function getCompiledS006DetectorPattern(detector: S006DetectorRegistryEnt
   return pattern;
 }
 
+// Line-based report and agent text must keep multiline matches (e.g. key blocks) on one line.
+export function formatS006ExcerptInline(text: string): string {
+  return text.replace(/\r\n|\r|\n/g, ' ⏎ ');
+}
+
 export function boundS006ExcerptText(input: string): string {
   const buffer = Buffer.from(input);
   return buffer.length > MAX_S006_EXCERPT_BYTES

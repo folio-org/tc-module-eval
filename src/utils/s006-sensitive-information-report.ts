@@ -16,6 +16,7 @@ import {
   strongestS006ReportFindings
 } from './s006-ranking';
 import { truncateToByteBudget } from './redaction';
+import { formatS006ExcerptInline } from './s006-detectors';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 
@@ -259,7 +260,7 @@ function formatCompactFindingLines(findings: S006SensitiveInformationFinding[]):
   return findings.slice(0, MAX_REPORT_LIST_ITEMS).map(finding => {
     const location = `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`;
     const lineRange = finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
-    return `  - ${location}${lineRange} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${finding.excerpt.text}`;
+    return `  - ${location}${lineRange} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${formatS006ExcerptInline(finding.excerpt.text)}`;
   });
 }
 
