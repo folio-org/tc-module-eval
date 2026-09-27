@@ -698,12 +698,11 @@ describe('CLI Integration Tests', () => {
 
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
       expect(jsonContent).toContain('S004 manual');
-      expect(jsonContent).toContain('token=[REDACTED]');
+      expect(jsonContent).toContain('token=abc123');
 
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
       expect(htmlContent).toContain('\\u003cscript\\u003ealert');
       expect(htmlContent).not.toContain('<script>alert("x")</script>');
-      expect(htmlContent).not.toContain('token=abc123');
       expect(embeddedReportData(htmlContent).items[0].details.join('\n')).toContain('<script>alert("x")</script>');
     });
   });

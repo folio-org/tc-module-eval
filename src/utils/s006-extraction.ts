@@ -12,7 +12,8 @@ import {
   S006ValueClassification
 } from '../types';
 import {
-  buildS006RedactedDetectorMatch,
+  boundS006ExcerptText,
+  buildS006DetectorMatch,
   createS006FingerprintRun,
   getCompiledS006DetectorPattern,
   getS006DetectorById,
@@ -392,7 +393,7 @@ function buildS006GitleaksFinding(
 
   const detector = getS006GitleaksDetector(source);
   const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
-  const excerptText = buildS006GitleaksRedactedExcerpt(source, detector.redactionPlaceholder);
+  const excerptText = boundS006ExcerptText(source.Match || source.Secret || '');
   const valueClassification = classifyS006GitleaksValue(source, excerptText);
   const confidence = adjustS006FindingConfidenceForContext(
     detector,
@@ -413,9 +414,8 @@ function buildS006GitleaksFinding(
     valueClassification,
     confidence,
     severity,
-    redactedExcerpt: {
+    excerpt: {
       text: excerptText,
-      placeholder: detector.redactionPlaceholder,
       multiline: Boolean(endLine && line && endLine > line),
       startLine: line,
       endLine: endLine && line && endLine !== line ? endLine : line
@@ -499,14 +499,7 @@ function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: str
   if (/\b(?:example|sample|dummy|fake|test|fixture|mock|changeme|change[_-]?me|replace[_-]?me)\b/.test(valueText)) {
     return 'synthetic';
   }
-  if (/\b(?:redacted|\*{3,}|x{3,})\b/i.test(excerptText)) {
-    return 'live-looking';
-  }
   return 'live-looking';
-}
-
-function buildS006GitleaksRedactedExcerpt(_source: S006GitleaksFinding, fallbackPlaceholder: string): string {
-  return fallbackPlaceholder;
 }
 
 function normalizeS006GitleaksPath(filePath: string | undefined): string | undefined {
@@ -526,20 +519,20 @@ function buildS006Finding(
   fingerprintRun: S006FingerprintRun,
   line: number
 ): S006SensitiveInformationFinding {
-  const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, fingerprintRun, line);
-  const confidence = adjustS006FindingConfidenceForContext(detector, redacted.valueClassification, redacted.confidence, context);
+  const match = buildS006DetectorMatch(detector, rawMatch, fingerprintRun, line);
+  const confidence = adjustS006FindingConfidenceForContext(detector, match.valueClassification, match.confidence, context);
   const baseFinding: Omit<S006SensitiveInformationFinding, 'rationale' | 'statusImpact'> = {
     path: filePath,
     line,
-    endLine: redacted.redactedExcerpt.endLine,
-    detectorId: redacted.detectorId,
-    category: redacted.category,
+    endLine: match.excerpt.endLine,
+    detectorId: match.detectorId,
+    category: match.category,
     context,
-    valueClassification: redacted.valueClassification,
+    valueClassification: match.valueClassification,
     confidence,
     severity: getS006Severity(detector, confidence),
-    redactedExcerpt: redacted.redactedExcerpt,
-    valueFingerprint: redacted.valueFingerprint
+    excerpt: match.excerpt,
+    valueFingerprint: match.valueFingerprint
   };
   const statusImpact: S006FindingStatusImpact = isS006DeterministicFailFinding(baseFinding)
     ? 'deterministic_fail'
@@ -564,15 +557,14 @@ function buildS006GitleaksFindingRationale(
 
   return buildS006RationaleCore(finding, detector, {
     sourceLabel: 'from Gitleaks',
-    extraFields: `${rule}${description}`,
-    redactionNote: 'Gitleaks redaction was applied before retaining evidence'
+    extraFields: `${rule}${description}`
   });
 }
 
 function buildS006RationaleCore(
   finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
   detector: S006DetectorRegistryEntry,
-  options: { sourceLabel?: string; extraFields?: string; redactionNote: string }
+  options: { sourceLabel?: string; extraFields?: string } = {}
 ): string {
   const statusImpact = finding.statusImpact === 'deterministic_fail'
     ? 'deterministic failure candidate'
@@ -582,7 +574,7 @@ function buildS006RationaleCore(
     : 'context limits deterministic failure and preserves the finding for reviewer judgment';
   const label = options.sourceLabel ? `${detector.label} ${options.sourceLabel}` : detector.label;
 
-  return `${label} is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}${options.extraFields ?? ''}; ${contextNote}; ${options.redactionNote}.`;
+  return `${label} is a ${statusImpact}: category=${finding.category}, context=${finding.context}, confidence=${finding.confidence}, severity=${finding.severity}, valueClassification=${finding.valueClassification}${options.extraFields ?? ''}; ${contextNote}.`;
 }
 
 function retainS006Finding(
@@ -595,8 +587,7 @@ function retainS006Finding(
     finding.detectorId,
     finding.path,
     finding.line ?? '',
-    finding.endLine ?? finding.line ?? '',
-    finding.redactedExcerpt.placeholder
+    finding.endLine ?? finding.line ?? ''
   ].join('\0');
   const exactKey = [
     broadKey,
@@ -676,7 +667,7 @@ function classifyS006DeterministicResult(
   if (findings.length > 0) {
     return {
       status: EvaluationStatus.MANUAL,
-      reason: `S006 retained ${findings.length} sensitive or environment-specific finding${findings.length === 1 ? '' : 's'} that require reviewer judgment based on context, confidence, severity, and redacted evidence.`,
+      reason: `S006 retained ${findings.length} sensitive or environment-specific finding${findings.length === 1 ? '' : 's'} that require reviewer judgment based on context, confidence, severity, and matched evidence.`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };
@@ -720,9 +711,7 @@ function buildS006FindingRationale(
   finding: Omit<S006SensitiveInformationFinding, 'rationale'>,
   detector: S006DetectorRegistryEntry
 ): string {
-  return buildS006RationaleCore(finding, detector, {
-    redactionNote: 'detector-local redaction was applied before retaining evidence'
-  });
+  return buildS006RationaleCore(finding, detector);
 }
 
 function adjustS006FindingConfidenceForContext(

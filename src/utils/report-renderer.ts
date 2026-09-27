@@ -1,5 +1,4 @@
 import { EvaluationResult, EvaluationStatus } from '../types';
-import { redactJsonValue, redactSensitiveText } from './redaction';
 import { createHtmlReport } from './report-html-template';
 
 export interface EvaluationReportStats {
@@ -21,11 +20,11 @@ export interface ReportRenderer {
  */
 export class EvaluationReportRenderer implements ReportRenderer {
   renderJson(result: EvaluationResult): string {
-    return JSON.stringify(redactJsonValue(result), null, 2);
+    return JSON.stringify(result, null, 2);
   }
 
   renderHtml(result: EvaluationResult): string {
-    return createHtmlReport(redactJsonValue(result));
+    return createHtmlReport(result);
   }
 
   // Retained for focused escaping tests and callers that format small HTML fragments.

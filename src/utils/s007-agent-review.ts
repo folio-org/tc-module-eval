@@ -13,7 +13,7 @@ import {
   resolveReviewPathWithinRepo,
   runCriterionAgentReview
 } from './criterion-agent-review';
-import { redactSensitiveText } from './redaction';
+import { truncateToByteBudget } from './redaction';
 
 const SUMMARY_PATH = '.criterion-agent/S007/deterministic-summary.json';
 const MAX_SUMMARY_BYTES = 24 * 1024;
@@ -114,7 +114,7 @@ export function buildS007AgentReviewRequest(
     files: [
       {
         repoRelativePath: SUMMARY_PATH,
-        content: sanitizeReviewMaterial(JSON.stringify(summary, null, 2), MAX_SUMMARY_BYTES)
+        content: truncateToByteBudget(JSON.stringify(summary, null, 2), MAX_SUMMARY_BYTES)
       },
       ...selected.files
     ],
@@ -232,7 +232,7 @@ function serializeEvidenceDeclarations(repoPath: string, evidence: S007FindingEv
       ...(item.resolutionSource ? { resolutionSource: item.resolutionSource } : {})
     };
   });
-  return sanitizeReviewMaterial(JSON.stringify({ declarations }, null, 2), MAX_MANIFEST_BYTES);
+  return truncateToByteBudget(JSON.stringify({ declarations }, null, 2), MAX_MANIFEST_BYTES);
 }
 
 function validReviewPath(repoPath: string, candidate: string | undefined): string | undefined {
@@ -243,20 +243,6 @@ function validReviewPath(repoPath: string, candidate: string | undefined): strin
   } catch {
     return undefined;
   }
-}
-
-function sanitizeReviewMaterial(content: string, maxBytes: number): string {
-  return redactSensitiveText(redactFormatSpecificSecrets(content), maxBytes);
-}
-
-function redactFormatSpecificSecrets(content: string): string {
-  const xmlSecretElement = /<([A-Za-z_][\w:.-]*(?:token|password|passwd|secret|api[-_.]?key|access[-_.]?key|refresh[-_.]?token)[\w:.-]*)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
-  const xmlSecretAttribute = /(\s[A-Za-z_][\w:.-]*(?:token|password|passwd|secret|api[-_.]?key|access[-_.]?key|refresh[-_.]?token)[\w:.-]*\s*=\s*)(["'])[^"']*\2/gi;
-  const jsonSecretField = /("[^"\r\n]*(?:token|password|passwd|secret|api[-_.]?key|access[-_.]?key|refresh[-_.]?token)[^"\r\n]*"\s*:\s*)("(?:\\.|[^"\\])*"|[^,}\r\n]+)/gi;
-  return content
-    .replace(xmlSecretElement, '<$1>[REDACTED]</$1>')
-    .replace(xmlSecretAttribute, '$1$2[REDACTED]$2')
-    .replace(jsonSecretField, '$1"[REDACTED]"');
 }
 
 function unavailable(message: string): CriterionAgentReviewResult {

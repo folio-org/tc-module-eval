@@ -11,6 +11,7 @@ import {
   S008ProviderCandidate
 } from '../types';
 import { isEurekaInterfaceCompatible } from './eureka-interface-compatibility';
+import { displayPolicyPath } from './acceptance-ledger';
 
 export function evaluateS008(
   moduleKind: ModuleKindResult,
@@ -40,9 +41,9 @@ export function evaluateS008(
     ...base,
     status,
     summary,
-    ledger: { sourcePath: ledgerLoad.sourcePath, digest: ledgerLoad.digest },
+    ledger: { sourcePath: displayPolicyPath(ledgerLoad.sourcePath), digest: ledgerLoad.digest },
     catalog: {
-      sourcePath: catalogLoad.sourcePath,
+      sourcePath: displayPolicyPath(catalogLoad.sourcePath),
       digest: catalogLoad.digest,
       baseline: catalogLoad.value.baseline,
       applications: catalogLoad.value.applications,

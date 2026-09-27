@@ -1,12 +1,12 @@
 import {
-  S006RedactedReportDetails,
+  S006ReportDetails,
+  S006ReportFinding,
   S006SensitiveInformationAnalysisResult,
   S006SensitiveInformationFinding,
   S006SkippedFile,
   S006ScanWarning
 } from '../types';
 import { strongestS006ReportFindings } from './s006-ranking';
-import { redactS006Path, redactS006ReportText } from './s006-report-redaction';
 
 const MAX_CRITERION_FINDINGS = 16;
 const MAX_CRITERION_SKIPPED_FILES = 40;
@@ -14,23 +14,21 @@ const MAX_CRITERION_WARNINGS = 40;
 
 export function buildS006CriterionDetails(
   analysis: S006SensitiveInformationAnalysisResult
-): S006RedactedReportDetails {
+): S006ReportDetails {
   return {
     criterionId: 'S006',
     findingCount: analysis.findings.length,
     retainedFindingCount: Math.min(analysis.findings.length, MAX_CRITERION_FINDINGS),
-    findings: strongestS006ReportFindings(analysis.findings, MAX_CRITERION_FINDINGS).map(redactS006Finding),
-    scanner: redactS006ScannerSummary(analysis),
+    findings: strongestS006ReportFindings(analysis.findings, MAX_CRITERION_FINDINGS).map(toS006ReportFinding),
+    scanner: analysis.scanner,
     coverage: {
       scannedFiles: analysis.coverage.scannedFiles,
       scannedBytes: analysis.coverage.scannedBytes,
       candidateFiles: analysis.coverage.candidateFiles,
       skippedFiles: analysis.coverage.skippedFiles
-        .slice(0, MAX_CRITERION_SKIPPED_FILES)
-        .map(redactS006SkippedFile),
+        .slice(0, MAX_CRITERION_SKIPPED_FILES),
       warnings: analysis.coverage.warnings
-        .slice(0, MAX_CRITERION_WARNINGS)
-        .map(redactS006Warning),
+        .slice(0, MAX_CRITERION_WARNINGS),
       materiallyWeakened: analysis.coverage.materiallyWeakened,
       complete: analysis.coverage.complete
     },
@@ -43,34 +41,19 @@ export function buildS006CriterionDetails(
       scanLimitWarnings: analysis.coverage.warnings
         .filter(isS006ScanLimitWarning)
         .slice(0, MAX_CRITERION_WARNINGS)
-        .map(redactS006Warning)
     },
     classification: {
       ...analysis.classification,
-      reason: redactS006ReportText(analysis.classification.reason),
-      findingReferences: analysis.classification.findingReferences
-        .slice(0, MAX_CRITERION_FINDINGS)
-        .map(redactS006Path)
+      findingReferences: analysis.classification.findingReferences.slice(0, MAX_CRITERION_FINDINGS)
     },
-    warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS).map(redactS006Warning),
+    warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS),
     agentReviewUnavailableReason: analysis.agentReviewUnavailableReason
-      ? redactS006ReportText(analysis.agentReviewUnavailableReason)
-      : undefined
   };
 }
 
-function redactS006ScannerSummary(analysis: S006SensitiveInformationAnalysisResult) {
+function toS006ReportFinding(finding: S006SensitiveInformationFinding): S006ReportFinding {
   return {
-    name: analysis.scanner.name,
-    status: analysis.scanner.status,
-    findingCount: analysis.scanner.findingCount,
-    warning: analysis.scanner.warning ? redactS006Warning(analysis.scanner.warning) : undefined
-  };
-}
-
-function redactS006Finding(finding: S006SensitiveInformationFinding) {
-  return {
-    path: redactS006Path(finding.path),
+    path: finding.path,
     line: finding.line,
     endLine: finding.endLine,
     detectorId: finding.detectorId,
@@ -78,27 +61,8 @@ function redactS006Finding(finding: S006SensitiveInformationFinding) {
     context: finding.context,
     confidence: finding.confidence,
     severity: finding.severity,
-    redactedExcerpt: {
-      ...finding.redactedExcerpt,
-      text: redactS006ReportText(finding.redactedExcerpt.text)
-    },
-    rationale: redactS006ReportText(finding.rationale)
-  };
-}
-
-function redactS006SkippedFile(skippedFile: S006SkippedFile): S006SkippedFile {
-  return {
-    ...skippedFile,
-    path: redactS006Path(skippedFile.path),
-    message: skippedFile.message ? redactS006ReportText(skippedFile.message) : undefined
-  };
-}
-
-function redactS006Warning(warning: S006ScanWarning): S006ScanWarning {
-  return {
-    ...warning,
-    message: redactS006ReportText(warning.message),
-    path: warning.path ? redactS006Path(warning.path) : undefined
+    excerpt: finding.excerpt,
+    rationale: finding.rationale
   };
 }
 

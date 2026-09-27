@@ -11,7 +11,7 @@ import {
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
   EvaluationStatus,
-  S006RedactedReportDetails
+  S006ReportDetails
 } from '../types';
 import * as EvaluationRunUtils from '../utils/evaluation-run';
 import { LocalCommandRunner } from '../utils/command-runner';
@@ -87,7 +87,7 @@ describe('S006 shared evaluator', () => {
     writeRepoFile('README.md', '# Clean module\n');
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
-    const details = result.criterionDetails as S006RedactedReportDetails;
+    const details = result.criterionDetails as S006ReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(details.findingCount).toBe(0);
@@ -109,8 +109,7 @@ describe('S006 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.evidence).toContain('S006 fail: 1 deterministic failure finding');
     expect(result.details).toContain('src/main/resources/application.yml:1');
-    expect(result.details).toContain('[REDACTED_PROVIDER_API_KEY]');
-    expect(JSON.stringify(result)).not.toContain(rawKey);
+    expect(result.details).toContain(rawKey);
   });
 
   it.each([
@@ -206,12 +205,12 @@ describe('S006 shared evaluator', () => {
     writeRepoFile('docs/secrets.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, run());
-    const details = result.criterionDetails as S006RedactedReportDetails;
+    const details = result.criterionDetails as S006ReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview).toBeUndefined();
     expect(result.evidence).toContain('S006 manual');
-    expect(result.details).toContain('Top redacted examples:');
+    expect(result.details).toContain('Top examples:');
     expect(details.agentReviewUnavailableReason).toContain(expected);
     expect(result.details).toContain(expected);
   });
@@ -279,7 +278,7 @@ describe('S006 shared evaluator', () => {
     writeRepoFile('docs/secrets.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRunWithAgent(config()));
-    const details = result.criterionDetails as S006RedactedReportDetails;
+    const details = result.criterionDetails as S006ReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(false);
@@ -322,7 +321,7 @@ describe('S006 shared evaluator', () => {
     }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner()));
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, run);
-    const details = result.criterionDetails as S006RedactedReportDetails;
+    const details = result.criterionDetails as S006ReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(false);
@@ -348,10 +347,9 @@ describe('S006 shared evaluator', () => {
     expect(result.evidence).toBe(baseline.evidence);
     expect(result.agentReview?.available).toBe(false);
     expect(result.agentReview?.errors.join('\n')).toContain(error);
-    const { agentReviewUnavailableReason: _baselineReason, ...baselineDetails } = baseline.criterionDetails as S006RedactedReportDetails;
-    const { agentReviewUnavailableReason: _reason, ...details } = result.criterionDetails as S006RedactedReportDetails;
+    const { agentReviewUnavailableReason: _baselineReason, ...baselineDetails } = baseline.criterionDetails as S006ReportDetails;
+    const { agentReviewUnavailableReason: _reason, ...details } = result.criterionDetails as S006ReportDetails;
     expect(details).toEqual(baselineDetails);
-    expect(JSON.stringify(result)).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
   });
 
   it('still scans explicit FOLIO library repositories instead of returning not applicable', async () => {
@@ -360,12 +358,11 @@ describe('S006 shared evaluator', () => {
     writeRepoFile('.env.production', `OPENAI_API_KEY=${rawKey}\n`);
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
-    const details = result.criterionDetails as S006RedactedReportDetails;
+    const details = result.criterionDetails as S006ReportDetails;
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.status).not.toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(details.findings.some(finding => finding.path === '.env.production')).toBe(true);
-    expect(JSON.stringify(result)).not.toContain(rawKey);
   });
 
   it('criteria filtering to S006 evaluates only S006 and does not create unrelated shared artifacts', async () => {

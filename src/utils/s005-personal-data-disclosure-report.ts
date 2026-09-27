@@ -19,8 +19,7 @@ import {
 } from '../types';
 import {
   REQUIRED_DISCLOSURE_FILENAME,
-  redactS005PersonalDataPath,
-  redactS005PersonalDataText
+  boundS005Text
 } from './s005-personal-data-disclosure';
 
 const MAX_REPORT_LIST_ITEMS = 8;
@@ -78,32 +77,28 @@ export function formatS005Evidence(
 
   const allLines = [...supportingLines, ...findingsLines, ...warningLines, ...agentLines]
     .filter((line): line is string => line !== undefined);
-  const unredactedDetails = allLines.join('\n');
-  const fullyRedactedDetails = redactS005PersonalDataText(
-    unredactedDetails,
-    Buffer.byteLength(unredactedDetails, 'utf8') * 4 + MAX_REPORT_DETAILS_BYTES
-  );
+  const fullDetails = allLines.join('\n');
 
-  if (Buffer.byteLength(fullyRedactedDetails, 'utf8') <= MAX_REPORT_DETAILS_BYTES) {
+  if (Buffer.byteLength(fullDetails, 'utf8') <= MAX_REPORT_DETAILS_BYTES) {
     return {
-      evidence: redactS005PersonalDataText(evidence, 700),
-      details: fullyRedactedDetails
+      evidence: boundS005Text(evidence, 700),
+      details: fullDetails
     };
   }
 
-  const findingsText = redactS005PersonalDataText(formatBoundedFindings(analysis).join('\n'), 2_000);
-  const warningsText = redactS005PersonalDataText(warningLines.join('\n'), 500);
-  const agentText = redactS005PersonalDataText(formatBoundedAgentReview(analysis, agentReview).join('\n'), 4_000);
+  const findingsText = boundS005Text(formatBoundedFindings(analysis).join('\n'), 2_000);
+  const warningsText = boundS005Text(warningLines.join('\n'), 500);
+  const agentText = boundS005Text(formatBoundedAgentReview(analysis, agentReview).join('\n'), 4_000);
   const tail = [findingsText, warningsText, agentText].filter(Boolean).join('\n');
   const separator = tail ? '\n' : '';
   const supportBudget = MAX_REPORT_DETAILS_BYTES - Buffer.byteLength(separator + tail, 'utf8');
-  const details = redactS005PersonalDataText(
+  const details = boundS005Text(
     supportingLines.filter((line): line is string => line !== undefined).join('\n'),
     supportBudget
   ) + separator + tail;
 
   return {
-    evidence: redactS005PersonalDataText(evidence, 700),
+    evidence: boundS005Text(evidence, 700),
     details
   };
 }
@@ -115,14 +110,14 @@ function formatBoundedFindings(analysis: S005PersonalDataDisclosureAnalysisResul
     ...(analysis.contradictions.length ? [
       '  - Contradictions:',
       ...analysis.contradictions.slice(0, MAX_REPORT_LIST_ITEMS).map(contradiction =>
-        `    - ${redactS005PersonalDataText(contradiction.message, 500)}${formatBoundedReferences(contradiction.lineNumbers.map(line => `${REQUIRED_DISCLOSURE_FILENAME}:${line}`))}`
+        `    - ${boundS005Text(contradiction.message, 500)}${formatBoundedReferences(contradiction.lineNumbers.map(line => `${REQUIRED_DISCLOSURE_FILENAME}:${line}`))}`
       ),
       ...overflowLine(analysis.contradictions.length, MAX_REPORT_LIST_ITEMS)
     ] : []),
     ...(analysis.possibleMismatches.length ? [
       '  - Mismatch signals:',
       ...analysis.possibleMismatches.slice(0, MAX_REPORT_LIST_ITEMS).map(mismatch =>
-        `    - ${mismatch.kind}${mismatch.category ? `/${mismatch.category}` : ''}: ${redactS005PersonalDataText(mismatch.message, 500)}${formatBoundedReferences(mismatch.evidenceReferences)}`
+        `    - ${mismatch.kind}${mismatch.category ? `/${mismatch.category}` : ''}: ${boundS005Text(mismatch.message, 500)}${formatBoundedReferences(mismatch.evidenceReferences)}`
       ),
       ...overflowLine(analysis.possibleMismatches.length, MAX_REPORT_LIST_ITEMS)
     ] : []),
@@ -135,7 +130,7 @@ function formatBoundedReferences(references: string[]): string {
     return '';
   }
   const visible = references.slice(0, MAX_REPORT_LIST_ITEMS)
-    .map(reference => redactS005PersonalDataPath(reference, 160));
+    .map(reference => boundS005Text(reference, 160));
   return ` (evidence: ${visible.join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
 }
 
@@ -149,12 +144,12 @@ function formatBoundedAgentReview(
       'Agent review:',
       ...(agentReview.recommendation ? [`  - Advisory recommendation: ${agentReview.recommendation}`] : []),
       ...(agentReview.confidence ? [`  - Confidence: ${agentReview.confidence}`] : []),
-      ...(agentReview.summary ? [`  - Summary: ${redactS005PersonalDataText(agentReview.summary, 900)}`] : []),
-      ...(agentReview.rationale ? [`  - Rationale: ${redactS005PersonalDataText(agentReview.rationale, 1_800)}`] : []),
-      ...(agentReview.warnings.length ? [`  - Warnings: ${redactS005PersonalDataText(agentReview.warnings.join('; '), 200)}`] : []),
-      ...(agentReview.errors.length ? [`  - Errors: ${redactS005PersonalDataText(agentReview.errors.join('; '), 200)}`] : []),
-      ...(agentReview.metadata ? [`  - Adapter: ${redactS005PersonalDataText(agentReview.metadata.adapter, 100)}`] : []),
-      ...(agentReview.metadata?.modelLabel ? [`  - Model label: ${redactS005PersonalDataText(agentReview.metadata.modelLabel, 200)}`] : [])
+      ...(agentReview.summary ? [`  - Summary: ${boundS005Text(agentReview.summary, 900)}`] : []),
+      ...(agentReview.rationale ? [`  - Rationale: ${boundS005Text(agentReview.rationale, 1_800)}`] : []),
+      ...(agentReview.warnings.length ? [`  - Warnings: ${boundS005Text(agentReview.warnings.join('; '), 200)}`] : []),
+      ...(agentReview.errors.length ? [`  - Errors: ${boundS005Text(agentReview.errors.join('; '), 200)}`] : []),
+      ...(agentReview.metadata ? [`  - Adapter: ${boundS005Text(agentReview.metadata.adapter, 100)}`] : []),
+      ...(agentReview.metadata?.modelLabel ? [`  - Model label: ${boundS005Text(agentReview.metadata.modelLabel, 200)}`] : [])
     ];
   }
 
@@ -166,11 +161,11 @@ function formatBoundedAgentReview(
   return [
     '',
     'Agent review:',
-    `  - Not applied: ${redactS005PersonalDataText(reason, 1_000)}`,
-    ...(agentReview?.errors.length ? [`  - Errors: ${redactS005PersonalDataText(agentReview.errors.join('; '), 200)}`] : []),
-    ...(agentReview?.warnings.length ? [`  - Warnings: ${redactS005PersonalDataText(agentReview.warnings.join('; '), 200)}`] : []),
-    ...(agentReview?.metadata ? [`  - Adapter: ${redactS005PersonalDataText(agentReview.metadata.adapter, 100)}`] : []),
-    ...(agentReview?.metadata?.modelLabel ? [`  - Model label: ${redactS005PersonalDataText(agentReview.metadata.modelLabel, 200)}`] : [])
+    `  - Not applied: ${boundS005Text(reason, 1_000)}`,
+    ...(agentReview?.errors.length ? [`  - Errors: ${boundS005Text(agentReview.errors.join('; '), 200)}`] : []),
+    ...(agentReview?.warnings.length ? [`  - Warnings: ${boundS005Text(agentReview.warnings.join('; '), 200)}`] : []),
+    ...(agentReview?.metadata ? [`  - Adapter: ${boundS005Text(agentReview.metadata.adapter, 100)}`] : []),
+    ...(agentReview?.metadata?.modelLabel ? [`  - Model label: ${boundS005Text(agentReview.metadata.modelLabel, 200)}`] : [])
   ];
 }
 
@@ -184,34 +179,34 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
             sizeBytes: Buffer.byteLength(analysis.discovery.artifact.content, 'utf-8')
           }
         : undefined,
-      attempts: analysis.discovery.attempts.map(redactS005Attempt),
+      attempts: analysis.discovery.attempts.map(boundS005Attempt),
       readError: analysis.discovery.readError,
-      warnings: analysis.discovery.warnings.map(redactS005Warning)
+      warnings: analysis.discovery.warnings.map(warning => boundS005Text(warning))
     },
     parseResult: analysis.parseResult
       ? {
-          metadata: redactS005Metadata(analysis.parseResult.metadata),
+          metadata: boundS005Metadata(analysis.parseResult.metadata),
           checklistItems: analysis.parseResult.checklistItems.map(summarizeS005ChecklistItem),
           checkedCategories: analysis.parseResult.checkedCategories,
           uncheckedCategories: analysis.parseResult.uncheckedCategories,
           completion: analysis.parseResult.completion,
-          placeholders: analysis.parseResult.placeholders.map(redactS005Placeholder),
+          placeholders: analysis.parseResult.placeholders.map(boundS005Placeholder),
           contradictions: analysis.parseResult.contradictions,
           classification: analysis.parseResult.classification,
           parseError: analysis.parseResult.parseError
             ? { message: analysis.parseResult.parseError.message }
             : undefined,
-          warnings: analysis.parseResult.warnings.map(redactS005Warning)
+          warnings: analysis.parseResult.warnings.map(warning => boundS005Text(warning))
         }
       : undefined,
     evidenceScan: analysis.evidenceScan
       ? {
           signalCount: analysis.evidenceScan.signals.length,
-          signals: strongestS005Signals(analysis.evidenceScan.signals).map(redactS005SignalReference),
+          signals: strongestS005Signals(analysis.evidenceScan.signals).map(boundS005SignalReference),
           scannedFileCount: analysis.evidenceScan.scannedFiles.length,
-          scannedFiles: analysis.evidenceScan.scannedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(filePath => redactS005PersonalDataPath(filePath)),
-          skippedFiles: analysis.evidenceScan.skippedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(redactS005SkippedFile),
-          warnings: analysis.evidenceScan.warnings.map(redactS005Warning)
+          scannedFiles: analysis.evidenceScan.scannedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(filePath => boundS005Text(filePath)),
+          skippedFiles: analysis.evidenceScan.skippedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(boundS005SkippedFile),
+          warnings: analysis.evidenceScan.warnings.map(warning => boundS005Text(warning))
         }
       : undefined,
     classification: analysis.classification,
@@ -220,9 +215,9 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
     matchingEvidence: analysis.matchingEvidence.map(boundS005AssessmentDetails),
     supportingEvidence: analysis.supportingEvidence.map(boundS005AssessmentDetails),
     uncheckedAnswerDetails: analysis.uncheckedAnswerDetails.map(summarizeS005ChecklistItem),
-    placeholders: analysis.placeholders.map(redactS005Placeholder),
+    placeholders: analysis.placeholders.map(boundS005Placeholder),
     contradictions: analysis.contradictions,
-    warnings: analysis.warnings.map(redactS005Warning)
+    warnings: analysis.warnings.map(warning => boundS005Text(warning))
   };
 }
 
@@ -230,7 +225,7 @@ function boundS005MismatchDetails(mismatch: S005PersonalDataPossibleMismatch): u
   return {
     ...mismatch,
     evidenceReferenceCount: mismatch.evidenceReferences.length,
-    evidenceReferences: mismatch.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES).map(reference => redactS005PersonalDataPath(reference))
+    evidenceReferences: mismatch.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES).map(reference => boundS005Text(reference))
   };
 }
 
@@ -238,7 +233,7 @@ function boundS005AssessmentDetails(assessment: S005PersonalDataEvidenceAssessme
   return {
     ...assessment,
     evidenceReferenceCount: assessment.evidenceReferences.length,
-    evidenceReferences: assessment.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES).map(reference => redactS005PersonalDataPath(reference))
+    evidenceReferences: assessment.evidenceReferences.slice(0, MAX_CRITERION_DETAIL_REFERENCES).map(reference => boundS005Text(reference))
   };
 }
 
@@ -249,7 +244,7 @@ function formatAttemptLines(attempts: S005PersonalDataDisclosureAttempt[]): stri
 
   return [
     '  - Attempted disclosure artifacts:',
-    ...attempts.slice(0, MAX_REPORT_LIST_ITEMS).map(attempt => `    - ${redactS005PersonalDataPath(attempt.path)} (${attempt.reason})`),
+    ...attempts.slice(0, MAX_REPORT_LIST_ITEMS).map(attempt => `    - ${boundS005Text(attempt.path)} (${attempt.reason})`),
     ...overflowLine(attempts.length, MAX_REPORT_LIST_ITEMS)
   ];
 }
@@ -318,7 +313,7 @@ function formatSignalLines(signals: S005PersonalDataEvidenceSignal[]): string[] 
   return [
     '  - Strongest signals:',
     ...strongestS005Signals(signals).map(signal =>
-      `    - ${redactS005PersonalDataPath(signal.path)}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}] ${signal.label}: ${signal.excerpt}`
+      `    - ${boundS005Text(signal.path)}${signal.line ? `:${signal.line}` : ''} [${signal.sourceClass}/${signal.strength}/${signal.category}] ${signal.label}: ${signal.excerpt}`
     )
   ];
 }
@@ -359,8 +354,8 @@ function formatWarningLines(warnings: string[]): string[] {
   return [
     '',
     'Warnings:',
-    ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning => `  - ${redactS005Warning(warning)}`),
-    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
+    ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning => `  - ${boundS005Text(warning)}`),
+    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS, '  ')
   ];
 }
 
@@ -440,11 +435,12 @@ function formatReferences(references: string[]): string {
     return '';
   }
 
-  return ` (evidence: ${references.slice(0, MAX_REPORT_LIST_ITEMS).map(reference => redactS005PersonalDataPath(reference)).join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
+  return ` (evidence: ${references.slice(0, MAX_REPORT_LIST_ITEMS).map(reference => boundS005Text(reference)).join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
 }
 
-function overflowLine(total: number, visible: number): string[] {
-  return total > visible ? [`    - ... ${total - visible} more`] : [];
+// The overflow marker must be indented like the list items it follows, or it nests under the last item.
+function overflowLine(total: number, visible: number, indent = '    '): string[] {
+  return total > visible ? [`${indent}- ... ${total - visible} more`] : [];
 }
 
 function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistItem): unknown {
@@ -456,44 +452,40 @@ function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistIte
   };
 }
 
-function redactS005Placeholder(placeholder: S005PersonalDataDisclosurePlaceholderEvidence): S005PersonalDataDisclosurePlaceholderEvidence {
+function boundS005Placeholder(placeholder: S005PersonalDataDisclosurePlaceholderEvidence): S005PersonalDataDisclosurePlaceholderEvidence {
   return {
     ...placeholder,
-    placeholderText: redactS005PersonalDataText(placeholder.placeholderText)
+    placeholderText: boundS005Text(placeholder.placeholderText)
   };
 }
 
-function redactS005Metadata(metadata: S005PersonalDataDisclosureMetadata): S005PersonalDataDisclosureMetadata {
+function boundS005Metadata(metadata: S005PersonalDataDisclosureMetadata): S005PersonalDataDisclosureMetadata {
   return {
     ...metadata,
-    versionText: metadata.versionText ? redactS005PersonalDataText(metadata.versionText) : undefined,
-    lastUpdatedText: metadata.lastUpdatedText ? redactS005PersonalDataText(metadata.lastUpdatedText) : undefined,
-    lastReviewedText: metadata.lastReviewedText ? redactS005PersonalDataText(metadata.lastReviewedText) : undefined
+    versionText: metadata.versionText ? boundS005Text(metadata.versionText) : undefined,
+    lastUpdatedText: metadata.lastUpdatedText ? boundS005Text(metadata.lastUpdatedText) : undefined,
+    lastReviewedText: metadata.lastReviewedText ? boundS005Text(metadata.lastReviewedText) : undefined
   };
 }
 
-function redactS005Warning(warning: string): string {
-  return redactS005PersonalDataPath(warning);
-}
-
-function redactS005Attempt(attempt: S005PersonalDataDisclosureAttempt): S005PersonalDataDisclosureAttempt {
+function boundS005Attempt(attempt: S005PersonalDataDisclosureAttempt): S005PersonalDataDisclosureAttempt {
   return {
     ...attempt,
-    path: redactS005PersonalDataPath(attempt.path)
+    path: boundS005Text(attempt.path)
   };
 }
 
-function redactS005SkippedFile(skippedFile: S005PersonalDataEvidenceScanResult['skippedFiles'][number]): S005PersonalDataEvidenceScanResult['skippedFiles'][number] {
+function boundS005SkippedFile(skippedFile: S005PersonalDataEvidenceScanResult['skippedFiles'][number]): S005PersonalDataEvidenceScanResult['skippedFiles'][number] {
   return {
     ...skippedFile,
-    path: redactS005PersonalDataPath(skippedFile.path)
+    path: boundS005Text(skippedFile.path)
   };
 }
 
-function redactS005SignalReference(signal: S005PersonalDataEvidenceSignal): S005PersonalDataEvidenceSignal {
+function boundS005SignalReference(signal: S005PersonalDataEvidenceSignal): S005PersonalDataEvidenceSignal {
   return {
     ...signal,
-    path: redactS005PersonalDataPath(signal.path),
-    excerpt: redactS005PersonalDataText(signal.excerpt)
+    path: boundS005Text(signal.path),
+    excerpt: boundS005Text(signal.excerpt)
   };
 }

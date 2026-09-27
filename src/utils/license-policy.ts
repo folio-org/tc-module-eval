@@ -229,6 +229,13 @@ export function normalizeLicenseName(licenseName: string): string {
     cleanName = parenthesesMatch[1].trim();
   }
 
+  // Versioned names such as "Eclipse Public License - v 2.0" are variations themselves;
+  // match them before the trailing-text cleanup below strips their " - v 2.0" suffix.
+  const variations = loadLicenseVariations();
+  if (variations.has(cleanName)) {
+    return variations.get(cleanName)!;
+  }
+
   // Step 2: Remove any trailing artifact information after the license name
   // Common patterns: "license name (artifact-info", "license name - url", etc.
   const trailingPatterns = [
@@ -245,7 +252,6 @@ export function normalizeLicenseName(licenseName: string): string {
   cleanName = cleanName.trim();
 
   // Step 4: Try direct mapping from comprehensive license variation map
-  const variations = loadLicenseVariations();
   if (variations.has(cleanName)) {
     return variations.get(cleanName)!;
   }

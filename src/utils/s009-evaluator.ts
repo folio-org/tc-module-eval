@@ -6,6 +6,7 @@ import {
   S009DependencyEvidence,
   S009Finding
 } from '../types';
+import { displayPolicyPath } from './acceptance-ledger';
 
 export function evaluateS009(
   ledgerLoad: S008PolicyLoadResult<AcceptanceLedger>,
@@ -60,7 +61,7 @@ export function evaluateS009(
     ...base,
     status,
     summary,
-    ledger: { sourcePath: ledgerLoad.sourcePath, digest: ledgerLoad.digest },
+    ledger: { sourcePath: displayPolicyPath(ledgerLoad.sourcePath), digest: ledgerLoad.digest },
     findings
   };
 }
@@ -160,7 +161,7 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
   if (analysis.ledger) {
     lines.push(
       `  - Acceptance ledger: ${fileName(analysis.ledger.sourcePath)}`,
-      `    - Full path: ${inline(analysis.ledger.sourcePath)}`,
+      `    - Path: ${inline(analysis.ledger.sourcePath)}`,
       `    - SHA-256 digest: ${inline(analysis.ledger.digest)}`
     );
   } else {

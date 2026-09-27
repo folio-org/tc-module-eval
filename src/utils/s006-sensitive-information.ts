@@ -1,12 +1,13 @@
 export {
-  buildS006RedactedDetectorMatch,
+  boundS006ExcerptText,
+  buildS006DetectorMatch,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
+  formatS006ExcerptInline,
   getS006Confidence,
   getS006DetectorById,
   getS006Severity,
   MAX_S006_EXCERPT_BYTES,
-  redactS006SensitiveInformationText,
   S006_DETECTOR_REGISTRY
 } from './s006-detectors';
 export type { S006FingerprintRun } from './s006-detectors';

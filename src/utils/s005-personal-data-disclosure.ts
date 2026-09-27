@@ -20,7 +20,6 @@ import {
   S005PersonalDataPossibleMismatch
 } from '../types';
 import { GENERATED_REPORT_DIRECTORY_PATTERN, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
-import { redactSensitiveText } from './redaction';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
@@ -49,14 +48,6 @@ const UI_FILE_PATTERN = /(?:^|\/)(?:translations|i18n|lang|ui|stripes|components
 const TEST_SAMPLE_FILE_PATTERN = /(?:^|\/)(?:__tests__|tests?|spec|fixtures?|samples?|examples?)(?:\/|$)|(?:test|spec|fixture|sample|example)\.[^.\/]+$/i;
 const AUTOMATION_CONFIG_FILE_PATTERN = /(?:^|\/)(?:\.github|\.gitlab|\.circleci|circleci|buildkite|ci|github\/workflows|workflows)(?:\/|$)|(?:^|\/)(?:Dockerfile|docker-compose\.ya?ml|Jenkinsfile|Makefile)$/i;
 const HIGH_SIGNAL_PATH_PATTERN = /(?:schema|raml|openapi|swagger|module-descriptor|package\.json|readme|docs?|documentation|translation|i18n|lang|ui|stripes|component|route|persistence|database|migration|db\/|sql|log4j|logback|logging|logger|queue|event|kafka|pubsub|producer|consumer|cache|redis|s3|blob|bucket|profile|avatar|photo|api|example|sample|fixture)/i;
-const HIGH_RISK_PERSONAL_EXAMPLE_PATTERN = /\b(?:john|jane)\s+doe\b|\b(?:ssn|social security number)\s*[:=]?\s*\d{3}[-\s]?\d{2}[-\s]?\d{4}\b|\b(?:credit card|card number)\s*[:=]?\s*(?:\d[ -]?){13,19}\b|\b\d{4}\s+[A-Z][a-z]+(?:\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln))\b/gi;
-const LONG_FREE_FORM_VALUE_PATTERN = /(["'`])([^"'`\n]{180,})\1/g;
-const PATH_SECRET_PATTERN = /\b(api[-_]?key|token|secret|password|passwd|pwd|credential|auth)([-_:=])[^/\\\s]+/gi;
-const PERSONAL_FIELD_VALUE_PATTERN = new RegExp(
-  '(["\']?\\b(?:firstName|first_name|lastName|last_name|middleName|middle_name|preferredName|preferred_name|displayName|display_name|fullName|full_name|personalName|personal_name|username|userName|user_name|loginName|login_name|userId|user_id|userUuid|user_uuid|patronId|patron_id|borrowerId|borrower_id|requesterId|requester_id|barcode|externalId|external_id|personalIdentifier|personal_identifier|emailAddress|email_address|email|phone|telephone|mobilePhone|mobile_phone|address|streetAddress|street_address|addressLine\\d*|address_line\\d*|postalCode|postal_code|zipCode|zip_code|city|province|country|location|dateOfBirth|date_of_birth|birthDate|birth_date|birthday|dob|ipAddress|ip_address|clientIp|client_ip|remoteAddr|remote_addr|macAddress|mac_address|notes?|comments?|staffInformation|staff_information|freeForm|free_form|message)["\']?\\s*[:=]\\s*)(?:"[^"\\n]{1,180}"|\'[^\'\\n]{1,180}\'|`[^`\\n]{1,180}`|[A-Za-z0-9._@+\\-:]{2,180})',
-  'gi'
-);
-const NETWORK_IDENTIFIER_VALUE_PATTERN = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b|\b(?:[0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4}\b|\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/gi;
 const S005_EVIDENCE_SKIPPED_DIRS: ReadonlySet<string> = new Set([
   '.git',
   '.hg',
@@ -157,7 +148,7 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
     return {
       status: 'unreadable',
       attempts: [],
-      readError: redactS005PersonalDataPath(
+      readError: boundS005Text(
         error instanceof Error ? error.message : String(error),
         MAX_DISCOVERY_READ_ERROR_BYTES
       ),
@@ -202,7 +193,7 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
         path: REQUIRED_DISCLOSURE_FILENAME,
         reason: 'exact-file-read-error'
       }),
-      readError: redactS005PersonalDataPath(
+      readError: boundS005Text(
         error instanceof Error ? error.message : String(error),
         MAX_DISCOVERY_READ_ERROR_BYTES
       ),
@@ -246,7 +237,7 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
       continue;
     }
 
-    const rawLabel = redactS005PersonalDataText(stripInlineMarkdown(checkboxMatch[2]), MAX_CHECKLIST_LABEL_BYTES);
+    const rawLabel = boundS005Text(stripInlineMarkdown(checkboxMatch[2]), MAX_CHECKLIST_LABEL_BYTES);
     checklistItems.push({
       order: checklistItems.length + 1,
       lineNumber,
@@ -262,7 +253,7 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
   if (!checklistItems.length && !headingCount) {
     const parseError = {
       message: 'No Markdown headings or checklist items were found in the disclosure form.',
-      excerpt: redactS005PersonalDataText(content, MAX_PARSE_ERROR_BYTES)
+      excerpt: boundS005Text(content, MAX_PARSE_ERROR_BYTES)
     };
 
     return {
@@ -806,27 +797,8 @@ export function normalizeS005ChecklistCategory(label: string): S005PersonalDataC
   return 'other';
 }
 
-export function redactS005PersonalDataText(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
-  return boundUtf8(
-    redactSensitiveText(input)
-      .replace(PERSONAL_FIELD_VALUE_PATTERN, (_match, prefix: string) => `${prefix}[REDACTED_VALUE]`)
-      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
-      .replace(/\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g, '[REDACTED_PHONE]')
-      .replace(NETWORK_IDENTIFIER_VALUE_PATTERN, '[REDACTED_NETWORK_IDENTIFIER]')
-      .replace(HIGH_RISK_PERSONAL_EXAMPLE_PATTERN, '[REDACTED_PERSONAL_EXAMPLE]')
-      .replace(LONG_FREE_FORM_VALUE_PATTERN, (_match, quote) => `${quote}[REDACTED_LONG_TEXT]${quote}`),
-    maxBytes
-  );
-}
-
-export function redactS005PersonalDataPath(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
-  return redactS005PersonalDataText(input.replace(PATH_SECRET_PATTERN, (_match, key: string, separator: string) => {
-    return `${key}${separator}[REDACTED]`;
-  }), maxBytes);
-}
-
-function redactS005EvidenceExcerpt(input: string): string {
-  return redactS005PersonalDataText(input, MAX_S005_EVIDENCE_EXCERPT_BYTES);
+export function boundS005Text(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
+  return boundUtf8(input, maxBytes);
 }
 
 function collectBoundedS005EvidenceCandidates(repoPath: string): {
@@ -853,7 +825,7 @@ function collectBoundedS005EvidenceCandidates(repoPath: string): {
       stats = fs.lstatSync(currentPath);
     } catch {
       skippedFiles.push({
-        path: redactS005PersonalDataPath(relativePosixPath(repoPath, currentPath)),
+        path: boundS005Text(relativePosixPath(repoPath, currentPath)),
         reason: 'read-error',
         message: 'Unable to inspect path while discovering S005 evidence candidates.'
       });
@@ -880,7 +852,7 @@ function collectBoundedS005EvidenceCandidates(repoPath: string): {
       entries = fs.readdirSync(currentPath).sort((left, right) => left.localeCompare(right));
     } catch {
       skippedFiles.push({
-        path: redactS005PersonalDataPath(relativePosixPath(repoPath, currentPath)),
+        path: boundS005Text(relativePosixPath(repoPath, currentPath)),
         reason: 'read-error',
         message: 'Unable to read directory while discovering S005 evidence candidates.'
       });
@@ -1033,7 +1005,7 @@ function extractS005EvidenceSignals(
         label: categoryPattern.label,
         path: relativePath,
         line: index + 1,
-        excerpt: redactS005EvidenceExcerpt(line.trim()),
+        excerpt: boundS005Text(line.trim(), MAX_S005_EVIDENCE_EXCERPT_BYTES),
         sourceClass,
         strength
       });
@@ -1091,7 +1063,7 @@ function readBoundedEvidenceText(
   } catch (error) {
     return {
       status: 'read-error',
-      message: redactS005PersonalDataText(error instanceof Error ? error.message : String(error), 240)
+      message: boundS005Text(error instanceof Error ? error.message : String(error), 240)
     };
   }
 }
@@ -1116,20 +1088,20 @@ function captureMetadata(
 ): void {
   const versionMatch = line.match(VERSION_PATTERN);
   if (versionMatch && !metadata.versionText) {
-    metadata.versionText = redactS005PersonalDataText(stripInlineMarkdown(versionMatch[1]).trim(), 240);
+    metadata.versionText = boundS005Text(stripInlineMarkdown(versionMatch[1]).trim(), 240);
     metadata.versionLineNumber = lineNumber;
   }
 
   const updatedMatch = line.match(LAST_UPDATED_PATTERN);
   if (updatedMatch && !metadata.lastUpdatedText) {
-    metadata.lastUpdatedText = redactS005PersonalDataText(stripInlineMarkdown(updatedMatch[1]).trim(), 240);
+    metadata.lastUpdatedText = boundS005Text(stripInlineMarkdown(updatedMatch[1]).trim(), 240);
     metadata.lastUpdatedLineNumber = lineNumber;
     addPlaceholderIfNeeded('Last Updated', metadata.lastUpdatedText, lineNumber, line, placeholders);
   }
 
   const reviewedMatch = line.match(LAST_REVIEWED_PATTERN);
   if (reviewedMatch && !metadata.lastReviewedText) {
-    metadata.lastReviewedText = redactS005PersonalDataText(stripInlineMarkdown(reviewedMatch[1]).trim(), 240);
+    metadata.lastReviewedText = boundS005Text(stripInlineMarkdown(reviewedMatch[1]).trim(), 240);
     metadata.lastReviewedLineNumber = lineNumber;
     addPlaceholderIfNeeded('Last Reviewed', metadata.lastReviewedText, lineNumber, line, placeholders);
   }
@@ -1152,8 +1124,8 @@ function addPlaceholderIfNeeded(
   placeholders.push({
     field,
     lineNumber,
-    placeholderText: redactS005PersonalDataText(value, 120),
-    excerpt: redactS005PersonalDataText(line, 240)
+    placeholderText: boundS005Text(value, 120),
+    excerpt: boundS005Text(line, 240)
   });
 }
 

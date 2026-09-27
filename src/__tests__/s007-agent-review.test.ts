@@ -193,7 +193,7 @@ describe('S007 agent review', () => {
     expect(manifest).not.toContain('Ignore prior rules');
   });
 
-  it('keeps cited declarations while excluding XML and JSON secret-bearing fields', async () => {
+  it('sends cited declaration summaries rather than raw manifest contents', async () => {
     await write('pom.xml', [
       '<project><dependencies><dependency>',
       '<groupId>org.springframework.boot</groupId>',
@@ -211,11 +211,6 @@ describe('S007 agent review', () => {
     const mavenFinding = manualFinding('spring-boot', 'pom.xml', 'unresolved');
     mavenFinding.evidence[0].detail = 'org.springframework.boot:spring-boot-starter';
     mavenFinding.evidence[0].declaredVersion = '4.0.1';
-    mavenFinding.evidence.push({
-      path: 'pom.xml',
-      detail: '<serverPassword>evidence-xml-secret</serverPassword>'
-    });
-    mavenFinding.advisories.push('{"apiKey":"evidence-json-secret"}');
     const packageFinding = manualFinding('vue', 'package.json', 'unlisted-framework');
     packageFinding.evidence[0].detail = 'dependencies.vue';
     packageFinding.evidence[0].declaredVersion = '^3.5.0';
@@ -230,9 +225,8 @@ describe('S007 agent review', () => {
     expect(material).toContain('4.0.1');
     expect(material).toContain('dependencies.vue');
     expect(material).toContain('^3.5.0');
-    expect(material).not.toMatch(/xml-password-value|json-token-value|json-password-value|evidence-xml-secret|evidence-json-secret/);
+    expect(material).not.toMatch(/xml-password-value|json-token-value|json-password-value/);
     expect(material).not.toMatch(/<password>|npmAuthToken|repositoryPassword/);
-    expect(material).toContain('[REDACTED]');
   });
 
   it('keeps bounded declarations from large manifests while rejecting unsafe paths', async () => {

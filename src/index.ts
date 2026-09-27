@@ -57,4 +57,4 @@ export {
   CriterionFunction,
   ReportOptions
 } from './types';
-export type { S006RedactedReportDetails } from './types';
+export type { S006ReportDetails } from './types';

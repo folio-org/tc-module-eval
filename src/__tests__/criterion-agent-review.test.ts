@@ -233,7 +233,7 @@ describe('criterion agent review', () => {
     expect(result.errors.join('\n')).not.toContain('hunter2');
   });
 
-  it('prepares a sanitized manifest workspace', () => {
+  it('prepares a bounded manifest workspace', () => {
     const workspace = prepareCriterionReviewWorkspace({
       criterionId: 'S004',
       repositoryPath: repoPath,
@@ -248,10 +248,9 @@ describe('criterion agent review', () => {
       const mode = fs.statSync(workspace.rootPath).mode & 0o777;
 
       expect(mode).toBe(0o700);
-      expect(manifest).toContain('token=[REDACTED]');
-      expect(readme).toContain('password=[REDACTED]');
+      expect(manifest).toContain('do not leak token=secret');
+      expect(readme).toContain('password=hunter2');
       expect(readme).toContain('output truncated');
-      expect(readme).not.toContain('hunter2');
     } finally {
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
     }
