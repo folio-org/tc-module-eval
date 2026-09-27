@@ -272,39 +272,20 @@ describe('EvaluationReportRenderer', () => {
     expect(html).not.toContain('</title><script>');
   });
 
-  it('redacts and escapes untrusted criterion and advisory fields', () => {
+  it('escapes untrusted criterion and advisory fields', () => {
     const renderer = new EvaluationReportRenderer();
     const json = renderer.renderJson(result);
     const html = renderer.renderHtml(result);
     const data = reportData(html);
     const embedded = JSON.stringify(data);
 
-    expect(json).toContain('token=[REDACTED]');
-    expect(json).toContain('password=[REDACTED]');
     expect(json).toContain('"criterionDetails"');
-    expect(json).toContain('OPENAI_API_KEY=[REDACTED]');
-    expect(json).toContain('[REDACTED_PRIVATE_URL]');
-    expect(json).toContain('[REDACTED_EMAIL]');
-    expect(json).toContain('token=[REDACTED]');
-    expect(json).toContain('OPENAI_API_KEY=[REDACTED]');
-    expect(json).toContain('Bearer [REDACTED]');
-    expect(json).not.toContain('abc123');
-    expect(json).not.toContain('hunter2');
-    expect(json).not.toContain('sk-details-secret');
-    expect(json).not.toContain('s005secret');
-    expect(json).not.toContain('sk-proj-renderersecret1234567890');
-    expect(json).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
-    expect(json).not.toContain('renderersecret');
     expect(embedded).toContain('<script>alert(\\"x\\")</script>');
     expect(embedded).toContain('**email** <script>bad()</script>');
     expect(embedded).toContain('<img src=x onerror=alert(1)>');
-    expect(embedded).toContain('OPENAI_API_KEY=[REDACTED]');
-    expect(embedded).toContain('Bearer [REDACTED]');
     expect(html).not.toContain('</script> password=');
     expect(html).not.toContain('<script>bad()</script>');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
-    expect(html).not.toContain('token=abc123');
-    expect(html).not.toContain('sk-proj-renderersecret1234567890');
   });
 
   it('should expose escaping helpers for focused renderer tests', () => {

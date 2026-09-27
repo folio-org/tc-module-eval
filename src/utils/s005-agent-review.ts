@@ -16,8 +16,7 @@ import {
   MAX_S005_EVIDENCE_EXCERPT_BYTES,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
   REQUIRED_DISCLOSURE_FILENAME,
-  redactS005PersonalDataPath,
-  redactS005PersonalDataText
+  boundS005Text
 } from './s005-personal-data-disclosure';
 
 const PARSED_SUMMARY_REVIEW_PATH = '.criterion-agent/S005/parsed-disclosure-summary.json';
@@ -121,13 +120,10 @@ function buildParsedSummaryContent(analysis: S005PersonalDataDisclosureAnalysisR
     possibleMismatches: analysis.possibleMismatches,
     matchingEvidence: analysis.matchingEvidence,
     supportingEvidence: analysis.supportingEvidence,
-    warnings: analysis.warnings.map(warning => redactS005PersonalDataPath(warning))
+    warnings: analysis.warnings.map(warning => boundS005Text(warning))
   };
 
-  return redactS005PersonalDataText(
-    redactS005PersonalDataPath(JSON.stringify(summary, null, 2), MAX_S005_AGENT_SUMMARY_BYTES),
-    MAX_S005_AGENT_SUMMARY_BYTES
-  );
+  return boundS005Text(JSON.stringify(summary, null, 2), MAX_S005_AGENT_SUMMARY_BYTES);
 }
 
 function buildEvidenceExcerptFiles(
@@ -157,13 +153,13 @@ function buildEvidenceExcerptContent(
 ): string {
   resolveS005ReviewPath(repoPath, repoRelativePath);
   const excerptLines = [
-    `S005 bounded evidence excerpts for ${redactS005PersonalDataPath(repoRelativePath)}.`,
+    `S005 bounded evidence excerpts for ${repoRelativePath}.`,
     'Use these excerpts only as advisory review evidence.',
     ''
   ];
 
   for (const signal of signals) {
-    const excerpt = redactS005PersonalDataText(
+    const excerpt = boundS005Text(
       signal.excerpt,
       MAX_S005_EVIDENCE_EXCERPT_BYTES
     );
@@ -178,7 +174,7 @@ function buildEvidenceExcerptContent(
 function readS005ReviewFile(repoPath: string, repoRelativePath: string): string {
   const absolutePath = resolveS005ReviewPath(repoPath, repoRelativePath);
   const content = readBoundedFileBytes(absolutePath, MAX_S005_AGENT_SOURCE_BYTES);
-  return redactS005PersonalDataText(
+  return boundS005Text(
     content.toString('utf-8').replace(/\uFFFD$/, ''),
     MAX_S005_AGENT_SOURCE_BYTES
   );

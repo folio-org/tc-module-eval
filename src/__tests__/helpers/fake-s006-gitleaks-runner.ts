@@ -7,7 +7,7 @@ import {
   CommandRunner
 } from '../../types';
 import {
-  buildS006RedactedDetectorMatch,
+  buildS006DetectorMatch,
   createS006FingerprintRun,
   S006_DETECTOR_REGISTRY
 } from '../../utils/s006-sensitive-information';
@@ -63,9 +63,9 @@ export class FakeS006GitleaksRunner implements CommandRunner {
           if (occupiedRanges.some(range => start < range.end && range.start < end)) {
             continue;
           }
-          const redacted = buildS006RedactedDetectorMatch(detector, match[0], detectorRun, this.lineForOffset(text, match.index));
+          const detected = buildS006DetectorMatch(detector, match[0], detectorRun, this.lineForOffset(text, match.index));
           if (
-            redacted.valueClassification === 'placeholder' ||
+            detected.valueClassification === 'placeholder' ||
             isEnvironmentReferenceOnly(match[0]) ||
             isBlankAssignment(match[0]) ||
             isNonSecretTestConstant(match[0])
@@ -77,12 +77,12 @@ export class FakeS006GitleaksRunner implements CommandRunner {
             RuleID: detector.id,
             Description: detector.label,
             File: relativePath,
-            StartLine: redacted.redactedExcerpt.startLine,
-            EndLine: redacted.redactedExcerpt.endLine,
-            Match: redacted.redactedExcerpt.text,
-            Secret: 'REDACTED',
-            Entropy: redacted.valueClassification === 'synthetic' ? 2 : 4,
-            Fingerprint: `${relativePath}:${detector.id}:${redacted.redactedExcerpt.startLine}:${redacted.valueFingerprint.value}`
+            StartLine: detected.excerpt.startLine,
+            EndLine: detected.excerpt.endLine,
+            Match: detected.excerpt.text,
+            Secret: match[0],
+            Entropy: detected.valueClassification === 'synthetic' ? 2 : 4,
+            Fingerprint: `${relativePath}:${detector.id}:${detected.excerpt.startLine}:${detected.valueFingerprint.value}`
           });
         }
       }

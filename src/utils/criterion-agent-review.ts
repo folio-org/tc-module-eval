@@ -11,7 +11,7 @@ import {
 import { LocalCommandRunner } from './command-runner';
 import { isWithinRepo, realPath } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
-import { redactSensitiveText } from './redaction';
+import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
 
@@ -174,7 +174,7 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       }
       usedWorkspacePaths.add(workspaceKey);
       fs.mkdirSync(path.dirname(workspacePath), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(workspacePath, redactSensitiveText(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
+      fs.writeFileSync(workspacePath, truncateToByteBudget(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
       return {
         id: safeRelativePath,
         repoRelativePath: file.repoRelativePath,
@@ -185,7 +185,7 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
     const manifestPath = path.join(rootPath, 'manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify({
       criterionId: request.criterionId,
-      instructions: redactSensitiveText(request.instructions),
+      instructions: request.instructions,
       schemaDescription: request.schemaDescription,
       files: entries
     }, null, 2), { mode: 0o600 });

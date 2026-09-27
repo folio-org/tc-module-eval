@@ -59,7 +59,6 @@ export async function runS006GitleaksScan(
         'json',
         '--report-path',
         reportPath,
-        '--redact=100',
         '--no-banner',
         '--no-color',
         '--exit-code',

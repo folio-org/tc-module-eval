@@ -13,13 +13,13 @@ import type {
   S005PersonalDataDisclosureAnalysisResult,
   S006SensitiveInformationAnalysisResult
 } from '../types';
-import type { S006RedactedReportDetails as RootS006RedactedReportDetails } from '../index';
+import type { S006ReportDetails as RootS006ReportDetails } from '../index';
 import { EvaluationStatus } from '../types';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 import {
   analyzeS006SensitiveInformation,
   buildS006CriterionDetails,
-  buildS006RedactedDetectorMatch,
+  buildS006DetectorMatch,
   classifyS006SourceContext,
   createS006FingerprintRun,
   findFirstS006DetectorMatch,
@@ -65,7 +65,7 @@ function hasRealGitleaksBinary(): boolean {
 const realGitleaksIt = hasRealGitleaksBinary() ? it : it.skip;
 
 describe('S006 detector vocabulary', () => {
-  it('models provider-shaped API keys with category, detector id, confidence, and required redaction', async () => {
+  it('models provider-shaped API keys with category, detector id, confidence, and the matched value', async () => {
     const detector = getS006DetectorById('provider-api-key');
     const rawMatch = findFirstS006DetectorMatch(detector, 'OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz');
 
@@ -73,40 +73,37 @@ describe('S006 detector vocabulary', () => {
     expect(detector).toMatchObject({
       id: 'provider-api-key',
       category: 'provider_api_key',
-      defaultConfidence: 'high',
-      redactionRequired: true
+      defaultConfidence: 'high'
     });
 
-    const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, createS006FingerprintRun());
-    expect(redacted).toMatchObject({
+    const match = buildS006DetectorMatch(detector, rawMatch!, createS006FingerprintRun());
+    expect(match).toMatchObject({
       detectorId: 'provider-api-key',
       category: 'provider_api_key',
       confidence: 'high',
       severity: 'critical'
     });
-    expect(redacted.redactedExcerpt.text).toBe('[REDACTED_PROVIDER_API_KEY]');
-    expect(JSON.stringify(redacted)).not.toContain(rawMatch);
+    expect(match.excerpt.text).toBe(rawMatch);
   });
 
   it('models private key blocks as high-confidence multiline secret evidence', async () => {
     const detector = getS006DetectorById('private-key-block');
     const rawMatch = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----';
-    const redacted = buildS006RedactedDetectorMatch(detector, rawMatch, createS006FingerprintRun(), 7);
+    const match = buildS006DetectorMatch(detector, rawMatch, createS006FingerprintRun(), 7);
 
     expect(findFirstS006DetectorMatch(detector, rawMatch)).toBe(rawMatch);
-    expect(redacted).toMatchObject({
+    expect(match).toMatchObject({
       detectorId: 'private-key-block',
       category: 'private_key',
       confidence: 'high',
       severity: 'critical',
-      redactedExcerpt: {
-        text: '[REDACTED_PRIVATE_KEY_BLOCK]',
+      excerpt: {
+        text: rawMatch,
         multiline: true,
         startLine: 7,
         endLine: 9
       }
     });
-    expect(JSON.stringify(redacted)).not.toContain('MIIEvQIB');
   });
 
   it('distinguishes credential-bearing URLs from private URLs without credentials', async () => {
@@ -121,23 +118,22 @@ describe('S006 detector vocabulary', () => {
     expect(findFirstS006DetectorMatch(privateUrl, rawPrivateUrl)).toBe(rawPrivateUrl);
 
     const run = createS006FingerprintRun();
-    expect(buildS006RedactedDetectorMatch(credentialUrl, rawCredentialUrl, run)).toMatchObject({
+    expect(buildS006DetectorMatch(credentialUrl, rawCredentialUrl, run)).toMatchObject({
       category: 'credential_url',
       confidence: 'high',
       severity: 'critical'
     });
-    expect(buildS006RedactedDetectorMatch(privateUrl, rawPrivateUrl, run)).toMatchObject({
+    expect(buildS006DetectorMatch(privateUrl, rawPrivateUrl, run)).toMatchObject({
       category: 'private_url',
       confidence: 'medium',
       severity: 'medium'
     });
   });
 
-  it('requires every detector to redact at least one matching calibration value before JSON serialization', async () => {
+  it('requires every detector to retain at least one matching calibration value as its excerpt', async () => {
     const run = createS006FingerprintRun();
 
     for (const detector of S006_DETECTOR_REGISTRY) {
-      expect(detector.redactor).toEqual(expect.any(Function));
       expect(detector.statusContributionByConfidence).toMatchObject({
         low: expect.any(String),
         medium: expect.any(String),
@@ -148,10 +144,7 @@ describe('S006 detector vocabulary', () => {
       const rawMatch = findFirstS006DetectorMatch(detector, detector.calibrationCases[0].rawValue);
       expect(rawMatch).toBeDefined();
 
-      const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, run);
-      const serialized = JSON.stringify(redacted);
-      expect(redacted.redactedExcerpt.text).toContain(detector.redactionPlaceholder);
-      expect(serialized).not.toContain(rawMatch);
+      expect(buildS006DetectorMatch(detector, rawMatch!, run).excerpt.text).toBe(rawMatch);
     }
   });
 
@@ -161,13 +154,13 @@ describe('S006 detector vocabulary', () => {
         const rawMatch = findFirstS006DetectorMatch(detector, calibrationCase.rawValue);
         expect(rawMatch).toBeDefined();
 
-        const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, createS006FingerprintRun());
-        expect(redacted.valueClassification).toBe(calibrationCase.expectedValueClassification);
+        const match = buildS006DetectorMatch(detector, rawMatch!, createS006FingerprintRun());
+        expect(match.valueClassification).toBe(calibrationCase.expectedValueClassification);
         if (calibrationCase.expectedConfidence) {
-          expect(redacted.confidence).toBe(calibrationCase.expectedConfidence);
+          expect(match.confidence).toBe(calibrationCase.expectedConfidence);
         }
         if (calibrationCase.expectedSeverity) {
-          expect(redacted.severity).toBe(calibrationCase.expectedSeverity);
+          expect(match.severity).toBe(calibrationCase.expectedSeverity);
         }
       }
     }
@@ -446,7 +439,7 @@ describe('S006 sensitive information finding extraction', () => {
     }
   });
 
-  it('detects provider-shaped API keys in source config without returning raw key material', async () => {
+  it('detects provider-shaped API keys in source config and reports the matched key', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
@@ -465,11 +458,11 @@ describe('S006 sensitive information finding extraction', () => {
       category: 'provider_api_key',
       confidence: 'high',
       severity: 'critical',
-      redactedExcerpt: expect.objectContaining({
-        text: '[REDACTED_PROVIDER_API_KEY]'
+      excerpt: expect.objectContaining({
+        text: rawKey
       })
     });
-    expect(serialized).not.toContain(rawKey);
+    expect(serialized).toContain(rawKey);
   });
 
   it('caps retained findings and reports material finding-limit coverage', async () => {
@@ -492,10 +485,10 @@ describe('S006 sensitive information finding extraction', () => {
       })
     ]));
     expect(result.coverage.warnings).not.toBe(result.warnings);
-    expect(serialized).not.toContain('CorrectHorseBatteryStaple');
+    expect(serialized).toContain('SERVICE_0_PASSWORD=CorrectHorseBatteryStaple000');
   });
 
-  it('detects multiline private key blocks with stable redacted placeholders', async () => {
+  it('detects multiline private key blocks with their full excerpt', async () => {
     repoPath = createTempRepo();
     const privateKeyBody = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC';
     writeRepoFile(
@@ -514,15 +507,13 @@ describe('S006 sensitive information finding extraction', () => {
       endLine: 4,
       confidence: 'high',
       severity: 'critical',
-      redactedExcerpt: {
-        text: '[REDACTED_PRIVATE_KEY_BLOCK]',
-        placeholder: '[REDACTED_PRIVATE_KEY_BLOCK]',
+      excerpt: {
+        text: expect.stringContaining(privateKeyBody),
         multiline: true,
         startLine: 2,
         endLine: 4
       }
     });
-    expect(JSON.stringify(result)).not.toContain(privateKeyBody);
   });
 
   it('reports private-key block line numbers consistently for bare CR line endings', async () => {
@@ -541,10 +532,14 @@ describe('S006 sensitive information finding extraction', () => {
         detectorId: 'private-key-block',
         path: 'server.pem',
         line: 3,
-        endLine: 5
+        endLine: 5,
+        excerpt: expect.objectContaining({
+          text: expect.stringContaining(privateKeyBody),
+          startLine: 3,
+          endLine: 5
+        })
       })
     ]));
-    expect(JSON.stringify(result)).not.toContain(privateKeyBody);
   });
 
   it('marks truncated possible private key blocks as material uncertainty without leaking partial body lines', async () => {
@@ -573,7 +568,7 @@ describe('S006 sensitive information finding extraction', () => {
     expect(serialized).not.toContain('bbbbbbbb');
   });
 
-  it('detects live-looking password and token assignments without retaining placeholders', async () => {
+  it('detects live-looking password and token assignments while ignoring placeholders', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -597,18 +592,18 @@ describe('S006 sensitive information finding extraction', () => {
         line: 1,
         valueClassification: 'live-looking',
         confidence: 'medium',
-        severity: 'high'
+        severity: 'high',
+        excerpt: expect.objectContaining({ text: 'password=CorrectHorseBatteryStaple' })
       }),
       expect.objectContaining({
         line: 2,
         valueClassification: 'live-looking',
         confidence: 'medium',
-        severity: 'high'
+        severity: 'high',
+        excerpt: expect.objectContaining({ text: 'refresh_token=abcdefghijklmnopqrstuvwxyz123456' })
       })
     ]));
     expect(assignments.some(finding => finding.line === 3 || finding.line === 4 || finding.line === 5 || finding.line === 6 || finding.line === 7)).toBe(false);
-    expect(JSON.stringify(result)).not.toContain('CorrectHorseBatteryStaple');
-    expect(JSON.stringify(result)).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
   });
 
   it('suppresses secret references that do not commit secret values', async () => {
@@ -660,7 +655,7 @@ describe('S006 sensitive information finding extraction', () => {
     expect(result.findings.filter(finding => finding.detectorId === 'password-secret-assignment')).toEqual([]);
   });
 
-  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', async () => {
+  it('retains bearer token assignments as matched excerpts', async () => {
     repoPath = createTempRepo();
     const tokenTail = 'abcdefghijklmnopqrstuvwxyz123456';
     const detector = getS006DetectorById('password-secret-assignment');
@@ -668,43 +663,36 @@ describe('S006 sensitive information finding extraction', () => {
     writeRepoFile(repoPath, 'config/application.properties', `access_token = Bearer ${tokenTail}\n`);
 
     const result = await analyzeRepo(repoPath);
-    const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, createS006FingerprintRun());
+    const match = buildS006DetectorMatch(detector, rawMatch!, createS006FingerprintRun());
 
     expect(rawMatch).toBe(`access_token = Bearer ${tokenTail}`);
-    expect(redacted).toMatchObject({
+    expect(match).toMatchObject({
       detectorId: 'password-secret-assignment',
-      redactedExcerpt: expect.objectContaining({
-        text: 'access_token = [REDACTED_SECRET_ASSIGNMENT]'
+      excerpt: expect.objectContaining({
+        text: `access_token = Bearer ${tokenTail}`
       })
     });
-    expect(JSON.stringify(result)).toContain('[REDACTED_TOKEN]');
-    expect(JSON.stringify(result)).not.toContain(`Bearer ${tokenTail}`);
-    expect(JSON.stringify(result)).not.toContain(tokenTail);
+    expect(JSON.stringify(result)).toContain(`Bearer ${tokenTail}`);
   });
 
-  it('redacts credential URLs without preserving username, password, host, or the full URL', async () => {
+  it('retains credential URLs as the matched excerpt', async () => {
     repoPath = createTempRepo();
     const credentialUrl = 'https://admin:s3cr3t@10.0.0.12:9130/admin';
     writeRepoFile(repoPath, 'config/service.yml', `proxy: ${credentialUrl}\n`);
 
     const result = await analyzeRepo(repoPath);
     const finding = result.findings.find(candidate => candidate.detectorId === 'credential-url');
-    const serialized = JSON.stringify(result);
 
     expect(finding).toMatchObject({
       category: 'credential_url',
       confidence: 'high',
-      redactedExcerpt: expect.objectContaining({
-        text: '[REDACTED_CREDENTIAL_URL]'
+      excerpt: expect.objectContaining({
+        text: credentialUrl
       })
     });
-    expect(serialized).not.toContain('admin');
-    expect(serialized).not.toContain('s3cr3t');
-    expect(serialized).not.toContain('10.0.0.12');
-    expect(serialized).not.toContain(credentialUrl);
   });
 
-  it('redacts credential URLs with token-only credentials without preserving token, host, or the full URL', async () => {
+  it('detects credential URLs with token-only credentials', async () => {
     repoPath = createTempRepo();
     const credentialUrl = 'https://SECRETTOKEN1234567890@github.com/folio/repo.git';
     writeRepoFile(repoPath, 'config/service.yml', `repo: ${credentialUrl}\n`);
@@ -714,13 +702,11 @@ describe('S006 sensitive information finding extraction', () => {
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         detectorId: 'credential-url',
-        redactedExcerpt: expect.objectContaining({
-          text: '[REDACTED_CREDENTIAL_URL]'
+        excerpt: expect.objectContaining({
+          text: credentialUrl
         })
       })
     ]));
-    expect(JSON.stringify(result)).not.toContain('SECRETTOKEN1234567890');
-    expect(JSON.stringify(result)).not.toContain('github.com/folio/repo.git');
   });
 
   it('detects private URLs and local absolute paths as environment-specific findings', async () => {
@@ -737,17 +723,17 @@ describe('S006 sensitive information finding extraction', () => {
       expect.objectContaining({
         detectorId: 'private-url',
         category: 'private_url',
-        severity: 'medium'
+        severity: 'medium',
+        excerpt: expect.objectContaining({ text: expect.stringContaining('10.0.0.12') })
       }),
       expect.objectContaining({
         detectorId: 'local-absolute-path',
         category: 'local_absolute_path',
-        severity: 'low'
+        severity: 'low',
+        excerpt: expect.objectContaining({ text: expect.stringContaining('/Users/alice') })
       })
     ]));
     expect(result.findings.find(finding => finding.detectorId === 'private-url')?.category).not.toBe('credential_url');
-    expect(JSON.stringify(result)).not.toContain('10.0.0.12');
-    expect(JSON.stringify(result)).not.toContain('/Users/alice');
   });
 
   it('ignores public localhost-adjacent domains that are not private URLs', async () => {
@@ -916,50 +902,36 @@ describe('S006 sensitive information finding extraction', () => {
     ]));
   });
 
-  it('redacts access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens by detector', async () => {
+  it('retains access-key pairs, OAuth tokens, JWTs, Okapi tokens, and opaque bearer tokens as matched excerpts', async () => {
     const run = createS006FingerprintRun();
     const cases = [
       {
         detectorId: 'provider-api-key' as const,
         raw: 'AKIA1234567890ABCDEF',
-        absent: ['AKIA1234567890ABCDEF'],
-        expected: '[REDACTED_PROVIDER_API_KEY]'
       },
       {
         detectorId: 'provider-api-key' as const,
         raw: 'ya29.abcdefghijklmnopqrstuvwxyz123456',
-        absent: ['ya29.abcdefghijklmnopqrstuvwxyz123456'],
-        expected: '[REDACTED_PROVIDER_API_KEY]'
       },
       {
         detectorId: 'password-secret-assignment' as const,
         raw: 'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY1234567890',
-        absent: ['wJalrXUtnFEMI'],
-        expected: '[REDACTED_SECRET_ASSIGNMENT]'
       },
       {
         detectorId: 'password-secret-assignment' as const,
         raw: 'refreshToken=abcdefghijklmnopqrstuvwxyz123456',
-        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
-        expected: '[REDACTED_SECRET_ASSIGNMENT]'
       },
       {
         detectorId: 'bearer-or-jwt-token' as const,
         raw: 'Bearer abcdefghijklmnopqrstuvwxyz123456',
-        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
-        expected: 'Bearer [REDACTED_TOKEN]'
       },
       {
         detectorId: 'bearer-or-jwt-token' as const,
         raw: 'X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456',
-        absent: ['abcdefghijklmnopqrstuvwxyz123456'],
-        expected: '[REDACTED_TOKEN]'
       },
       {
         detectorId: 'bearer-or-jwt-token' as const,
         raw: 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123',
-        absent: ['eyJhbGciOiJIUzI1NiIsInR5cCI'],
-        expected: '[REDACTED_TOKEN]'
       }
     ];
 
@@ -968,11 +940,10 @@ describe('S006 sensitive information finding extraction', () => {
       const rawMatch = findFirstS006DetectorMatch(detector, testCase.raw);
       expect(rawMatch).toBeDefined();
 
-      const redacted = buildS006RedactedDetectorMatch(detector, rawMatch!, run);
-      expect(redacted.redactedExcerpt.text).toContain(testCase.expected);
-      for (const absent of testCase.absent) {
-        expect(JSON.stringify(redacted)).not.toContain(absent);
-      }
+      const match = buildS006DetectorMatch(detector, rawMatch!, run);
+      expect(match.detectorId).toBe(testCase.detectorId);
+      expect(match.excerpt.text).toBe(rawMatch);
+      expect(testCase.raw).toContain(match.excerpt.text);
     }
   });
 
@@ -985,7 +956,7 @@ describe('S006 sensitive information finding extraction', () => {
     const tokenFindings = result.findings.filter(finding => finding.detectorId === 'password-secret-assignment');
 
     expect(tokenFindings).toHaveLength(1);
-    expect(JSON.stringify(result)).not.toContain(repeated);
+    expect(tokenFindings[0].excerpt.text).toContain(repeated);
   });
 
   it('retains distinct detector hits on the same line when fingerprints differ', async () => {
@@ -1000,11 +971,13 @@ describe('S006 sensitive information finding extraction', () => {
     expect(passwordFindings).toHaveLength(2);
     expect(passwordFindings.map(finding => finding.valueFingerprint.value)).toHaveLength(2);
     expect(new Set(passwordFindings.map(finding => finding.valueFingerprint.value)).size).toBe(2);
-    expect(JSON.stringify(result)).not.toContain(first);
-    expect(JSON.stringify(result)).not.toContain(second);
+    expect(passwordFindings.map(finding => finding.excerpt.text)).toEqual(expect.arrayContaining([
+      `first_password=${first}`,
+      `second_password=${second}`
+    ]));
   });
 
-  it('does not expose default passwords as raw values or bare hashes in serialized output', async () => {
+  it('classifies default passwords as synthetic without exposing bare value hashes', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'docker-compose.yml', 'POSTGRES_PASSWORD=postgres\nADMIN_PASSWORD=admin\n');
 
@@ -1014,16 +987,15 @@ describe('S006 sensitive information finding extraction', () => {
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         detectorId: 'password-secret-assignment',
-        valueClassification: 'synthetic'
+        valueClassification: 'synthetic',
+        excerpt: expect.objectContaining({ text: 'POSTGRES_PASSWORD=postgres' })
       })
     ]));
-    expect(serialized).not.toContain('postgres');
-    expect(serialized).not.toContain('admin');
     expect(serialized).not.toContain(createHash('sha256').update('postgres').digest('hex'));
     expect(serialized).not.toContain(createHash('sha256').update('admin').digest('hex'));
   });
 
-  it('redacts bearer and JWT findings from Gitleaks-backed analysis', async () => {
+  it('retains bearer and JWT findings from Gitleaks-backed analysis', async () => {
     repoPath = createTempRepo();
     const bearer = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
     const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.signatureABC123';
@@ -1031,15 +1003,16 @@ describe('S006 sensitive information finding extraction', () => {
     writeRepoFile(repoPath, 'src/__tests__/fixtures/token.txt', jwt);
 
     const result = await analyzeRepo(repoPath);
-    const serialized = JSON.stringify(result);
+    const tokenFindings = result.findings.filter(finding => finding.detectorId === 'bearer-or-jwt-token');
 
-    expect(result.findings.filter(finding => finding.detectorId === 'bearer-or-jwt-token')).toHaveLength(2);
-    expect(serialized).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
-    expect(serialized).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI');
-    expect(serialized).toContain('[REDACTED_TOKEN]');
+    expect(tokenFindings).toHaveLength(2);
+    expect(tokenFindings.map(finding => finding.excerpt.text)).toEqual(expect.arrayContaining([
+      expect.stringContaining(bearer),
+      jwt
+    ]));
   });
 
-  it('keeps Gitleaks-backed criterion details redacted', async () => {
+  it('keeps Gitleaks-backed criterion details free of value fingerprints', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-abcdef1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, '.env.production', `OPENAI_API_KEY=${rawKey}\n`);
@@ -1047,10 +1020,8 @@ describe('S006 sensitive information finding extraction', () => {
     const result = await analyzeRepo(repoPath);
     const reportDetails = buildS006CriterionDetails(result);
 
-    expect(JSON.stringify(result)).not.toContain(rawKey);
-    expect(JSON.stringify(reportDetails)).not.toContain(rawKey);
     expect(JSON.stringify(reportDetails)).not.toContain('valueFingerprint');
-    expect(reportDetails.findings[0].redactedExcerpt.text).toBe('[REDACTED_PROVIDER_API_KEY]');
+    expect(reportDetails.findings[0].excerpt.text).toBe(rawKey);
   });
 
   it('keeps local credential URL and assignment coverage when Gitleaks reports clean', async () => {
@@ -1070,7 +1041,6 @@ describe('S006 sensitive information finding extraction', () => {
         report: []
       })
     });
-    const serialized = JSON.stringify(result);
 
     expect(result.scanner).toMatchObject({
       status: 'completed',
@@ -1080,18 +1050,16 @@ describe('S006 sensitive information finding extraction', () => {
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         detectorId: 'credential-url',
-        redactedExcerpt: expect.objectContaining({ text: '[REDACTED_CREDENTIAL_URL]' })
+        excerpt: expect.objectContaining({ text: credentialUrl })
       }),
       expect.objectContaining({
         detectorId: 'password-secret-assignment',
-        redactedExcerpt: expect.objectContaining({ text: 'password=[REDACTED_SECRET_ASSIGNMENT]' })
+        excerpt: expect.objectContaining({ text: `password=${password}` })
       })
     ]));
-    expect(serialized).not.toContain(credentialUrl);
-    expect(serialized).not.toContain(password);
   });
 
-  it('does not trust raw Gitleaks Match or Secret fields for retained excerpts', async () => {
+  it('uses the Gitleaks Match field for retained excerpts', async () => {
     repoPath = createTempRepo();
     const rawSlackWebhook = 'https://hooks.slack.com/services/T00000000/B00000000/abcdefABCDEF123456';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `webhook: ${rawSlackWebhook}\n`);
@@ -1113,17 +1081,13 @@ describe('S006 sensitive information finding extraction', () => {
         }]
       })
     });
-    const serialized = JSON.stringify(result);
 
     expect(result.findings[0]).toMatchObject({
       path: 'src/main/resources/application.yml',
-      redactedExcerpt: expect.objectContaining({
-        text: '[REDACTED_SECRET_ASSIGNMENT]'
+      excerpt: expect.objectContaining({
+        text: `webhook: ${rawSlackWebhook}`
       })
     });
-    expect(serialized).not.toContain(rawSlackWebhook);
-    expect(serialized).not.toContain('hooks.slack.com');
-    expect(serialized).not.toContain('abcdefABCDEF123456');
   });
 });
 
@@ -1155,12 +1119,11 @@ describe('S006 deterministic classification by context, confidence, and coverage
       context: 'production_source_or_configuration',
       confidence: 'high',
       severity: 'critical',
-      redactedExcerpt: expect.objectContaining({
-        text: '[REDACTED_PROVIDER_API_KEY]'
+      excerpt: expect.objectContaining({
+        text: rawKey
       })
     });
     expect(finding.rationale).toContain('deterministic failure candidate');
-    expect(JSON.stringify(result)).not.toContain(rawKey);
   });
 
   it('fails root PEM private-key material instead of treating it as clean coverage', async () => {
@@ -1176,10 +1139,10 @@ describe('S006 deterministic classification by context, confidence, and coverage
         path: 'server.pem',
         detectorId: 'private-key-block',
         context: 'production_source_or_configuration',
-        statusImpact: 'deterministic_fail'
+        statusImpact: 'deterministic_fail',
+        excerpt: expect.objectContaining({ text: privateKey })
       })
     ]));
-    expect(JSON.stringify(result)).not.toContain('MIIEvQIB');
   });
 
   it('returns manual for mod-search-style docker env defaults instead of failing local passwords', async () => {
@@ -1225,10 +1188,10 @@ describe('S006 deterministic classification by context, confidence, and coverage
         detectorId: 'bearer-or-jwt-token',
         context: 'documentation',
         confidence: 'high',
-        severity: 'high'
+        severity: 'high',
+        excerpt: expect.objectContaining({ text: expect.stringContaining(okapiToken) })
       })
     ]));
-    expect(JSON.stringify(result)).not.toContain(okapiToken);
   });
 
   it('keeps test credentials low impact or manual without deterministic failure', async () => {
@@ -1258,11 +1221,11 @@ describe('S006 deterministic classification by context, confidence, and coverage
       expect.objectContaining({
         detectorId: 'provider-api-key',
         context: 'test_fixture',
-        confidence: 'medium'
+        confidence: 'medium',
+        excerpt: expect.objectContaining({ text: generatedTestToken })
       })
     ]));
     expect(result.findings.some(finding => finding.rationale.includes('deterministic failure candidate'))).toBe(false);
-    expect(JSON.stringify(result)).not.toContain(generatedTestToken);
   });
 
   it('retains provider-shaped and private-key findings under docs, samples, and tests as manual evidence', async () => {
@@ -1377,9 +1340,9 @@ describe('S006 deterministic classification by context, confidence, and coverage
       detectorId: 'credential-url',
       context: 'ci_or_deployment_configuration',
       confidence: 'high',
-      severity: 'critical'
+      severity: 'critical',
+      excerpt: expect.objectContaining({ text: credentialUrl })
     });
-    expect(JSON.stringify(result)).not.toContain(credentialUrl);
 
     fs.rmSync(repoPath, { recursive: true, force: true });
     repoPath = createTempRepo();
@@ -1419,7 +1382,7 @@ describe('S006 Gitleaks adapter', () => {
     fs.rmSync(repoPath, { recursive: true, force: true });
   });
 
-  it('runs gitleaks dir with redacted JSON report output', async () => {
+  it('runs gitleaks dir with JSON report output', async () => {
     const runner = new StaticGitleaksRunner({
       status: 'success',
       exitCode: 0,
@@ -1438,13 +1401,13 @@ describe('S006 Gitleaks adapter', () => {
       repoPath,
       '--report-format',
       'json',
-      '--redact=100',
       '--no-banner',
       '--no-color',
       '--exit-code',
       '1'
     ]));
     expect(request.args).toContain('--report-path');
+    expect(request.args).not.toContain('--redact=100');
   });
 
   it('parses exit-code-one Gitleaks findings from the JSON report', async () => {
@@ -1502,7 +1465,7 @@ describe('S006 Gitleaks adapter', () => {
     });
   });
 
-  realGitleaksIt('lets the real Gitleaks binary find and redact a private-key fixture when available', async () => {
+  realGitleaksIt('lets the real Gitleaks binary find a private-key fixture and return the matched block when available', async () => {
     const privateKeyBody = 'MIIEpAIBAAKCAQEA7uFqW+o0fakeprivatekeymaterialforgitleakstest';
     const privateKeyTail = 'gitleaksRealBinarySmokeTestPrivateKeyBody1234567890';
     writeRepoFile(
@@ -1523,14 +1486,11 @@ describe('S006 Gitleaks adapter', () => {
       expect.objectContaining({
         RuleID: 'private-key',
         File: 'config/server.key',
-        Match: 'REDACTED',
-        Secret: 'REDACTED'
+        Match: expect.stringContaining(privateKeyTail),
+        Secret: expect.stringContaining(privateKeyBody)
       })
     ]));
-    const serializedFindings = JSON.stringify(result.findings);
-    expect(serializedFindings).not.toContain(repoPath);
-    expect(serializedFindings).not.toContain(privateKeyBody);
-    expect(serializedFindings).not.toContain(privateKeyTail);
+    expect(JSON.stringify(result.findings)).not.toContain(repoPath);
   });
 
   it.each([
@@ -1606,11 +1566,9 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.FAIL);
     expect(deterministicIndex).toBeGreaterThanOrEqual(0);
     expect(documentationIndex).toBeGreaterThan(deterministicIndex);
-    expect(rendered.details).toContain('[REDACTED_PROVIDER_API_KEY]');
-    expect(rendered.details).toContain('X-Okapi-Token=[REDACTED]');
+    expect(rendered.details).toContain(rawProductionKey);
+    expect(rendered.details).toContain(`X-Okapi-Token: ${rawDocumentationToken}`);
     expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
-    expect(rendered.details).not.toContain(rawProductionKey);
-    expect(rendered.details).not.toContain(rawDocumentationToken);
   });
 
   it('renders local Docker defaults with local-default context and reviewer rationale', async () => {
@@ -1632,11 +1590,10 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('local docker defaults');
     expect(rendered.details).toContain('Confirm local Docker defaults are not reused outside local development');
-    expect(rendered.details).toContain('[REDACTED_SECRET_ASSIGNMENT]');
-    expect(rendered.details).not.toContain('postgres');
+    expect(rendered.details).toContain('POSTGRES_PASSWORD: postgres');
   });
 
-  it('renders documentation snippets as manual evidence without raw token exposure', async () => {
+  it('renders documentation snippets as manual evidence with the matched token excerpt', async () => {
     repoPath = createTempRepo();
     const rawToken = 'abcdefghijklmnopqrstuvwxyz123456';
     writeRepoFile(repoPath, 'README.md', `Example: curl -H "Authorization: Bearer ${rawToken}"\n`);
@@ -1646,8 +1603,7 @@ describe('S006 report formatting and criterion details', () => {
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
-    expect(rendered.details).toContain('[REDACTED_TOKEN]');
-    expect(rendered.details).not.toContain(rawToken);
+    expect(rendered.details).toContain(`Bearer ${rawToken}`);
   });
 
   it('reports pass scan coverage, skipped-file counts, and non-material warnings', async () => {
@@ -1698,7 +1654,7 @@ describe('S006 report formatting and criterion details', () => {
     ]));
   });
 
-  it('builds bounded redacted JSON criterionDetails without value fingerprints or raw secret values', async () => {
+  it('builds bounded JSON criterionDetails with matched excerpts and without value fingerprints', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
@@ -1713,10 +1669,10 @@ describe('S006 report formatting and criterion details', () => {
     expect(details.coverageSummary.skippedFileCount).toBe(1);
     expect(details.findings[0]).toMatchObject({
       path: 'src/main/resources/application.yml',
-      redactedExcerpt: expect.objectContaining({ text: '[REDACTED_PROVIDER_API_KEY]' })
+      excerpt: expect.objectContaining({ text: rawKey })
     });
-    expect(serialized).not.toContain(rawKey);
     expect(serialized).not.toContain('valueFingerprint');
+    expect(details.findings[0]).not.toHaveProperty('valueClassification');
   });
 
   it('bounds strongest finding objects and keeps deterministic failures first for JSON consumers', async () => {
@@ -1763,9 +1719,8 @@ describe('S006 report formatting and criterion details', () => {
 
     expect(rendered.details).toContain('Agent review:');
     expect(rendered.details).toContain('Advisory recommendation: needs_reviewer_judgment');
-    expect(rendered.details).toContain('[REDACTED_PRIVATE_URL]');
-    expect(rendered.details).toContain('token=[REDACTED]');
-    expect(rendered.details).not.toContain('secretish');
+    expect(rendered.details).toContain('http://192.168.1.10/admin');
+    expect(rendered.details).toContain('token=secretish');
   });
 });
 
@@ -1850,7 +1805,7 @@ describe('S006 context labels and type exports', () => {
     expect(s004.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(s005.classification.parseState).toBe('not_parsed');
     expect(s006.criterionId).toBe('S006');
-    const rootExportedDetails: RootS006RedactedReportDetails = buildS006CriterionDetails(s006);
+    const rootExportedDetails: RootS006ReportDetails = buildS006CriterionDetails(s006);
     expect(rootExportedDetails.criterionId).toBe('S006');
   });
 });

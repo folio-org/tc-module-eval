@@ -16,7 +16,7 @@ S005 checks `PERSONAL_DATA_DISCLOSURE.md` mechanics and completion, plus bounded
 
 ## S006 Sensitive Information Review
 
-S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. Reports redact raw values. High-confidence production, CI, or deployment evidence can fail; documentation, fixtures, local defaults, private endpoints, and incomplete scans require manual review.
+S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. Reports show matched values as bounded excerpts. High-confidence production, CI, or deployment evidence can fail; documentation, fixtures, local defaults, private endpoints, and incomplete scans require manual review.
 
 The devcontainer and GitHub Actions install Gitleaks. Elsewhere, install `gitleaks` on `PATH` or set `GITLEAKS_PATH`. An unavailable or failed scanner produces a material warning and manual status.
 
@@ -68,7 +68,7 @@ remain `manual`; missing visible handling alone never proves failure.
 Optional dependencies may use feature isolation or controlled module-wide degradation,
 but loss must remain bounded and must not make the module unready. Tests strengthen
 evidence but are not mandatory. For deterministic manual results, optional S010 agent
-review receives a broader bounded redacted committed-source snapshot. Its cited advice
+review receives a broader bounded committed-source snapshot. Its cited advice
 helps human review but never changes criterion status.
 
 For Java databases, the evaluator groups JDBC, JPA, R2DBC, datasource, Liquibase, and

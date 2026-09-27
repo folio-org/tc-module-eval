@@ -24,7 +24,7 @@ describe('S010 advisory agent review', () => {
     await fs.remove(repo);
   });
 
-  it('builds a redacted immutable broad snapshot and excludes unsafe or generated surfaces', async () => {
+  it('builds an immutable broad snapshot and excludes unsafe or generated surfaces', async () => {
     await fs.outputJson(path.join(repo, 'package.json'), { name: 'mod-node', token: 'secret-token-value' });
     await fs.outputFile(path.join(repo, 'src/client.ts'), 'fetch(process.env.SEARCH_URL); password=secret-password-value');
     await fs.outputFile(path.join(repo, 'test/client.test.ts'), 'it("falls back", () => {})');
@@ -41,8 +41,7 @@ describe('S010 advisory agent review', () => {
 
     expect(paths).toEqual(expect.arrayContaining(['package.json', 'src/client.ts', 'test/client.test.ts', 'docs/resilience.md']));
     expect(paths).not.toEqual(expect.arrayContaining(['dist/generated.js', '.env', 'src/uncommitted.ts']));
-    expect(material).not.toContain('secret-token-value');
-    expect(material).not.toContain('secret-password-value');
+    expect(material).toContain('secret-password-value');
     expect(request.instructions).toContain('advisory only');
     expect(request.instructions).toContain('Do not run commands');
     expect(request.instructions).toContain('Return at least one assessment');

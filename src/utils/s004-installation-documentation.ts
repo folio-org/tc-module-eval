@@ -10,7 +10,7 @@ import {
   S004SignalGroup
 } from '../types';
 import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
-import { redactSensitiveText } from './redaction';
+import { truncateToByteBudget } from './redaction';
 
 const ROOT_DOC_NAMES = ['README.md', 'README.MD', 'readme.md'];
 const CONVENTIONAL_DOC_NAMES = ['INSTALL.md', 'INSTALLATION.md', 'DEPLOYMENT.md', 'RUNNING.md'];
@@ -151,8 +151,8 @@ export function formatS004Evidence(
   }
 
   return {
-    evidence: redactSensitiveText(evidence),
-    details: redactSensitiveText(lines.filter((line): line is string => line !== undefined).join('\n'))
+    evidence,
+    details: lines.filter((line): line is string => line !== undefined).join('\n')
   };
 }
 
@@ -330,5 +330,5 @@ function extractMarkdownLinks(content: string): string[] {
 function excerptAround(lines: string[], index: number): string {
   const start = Math.max(0, index - EXCERPT_RADIUS);
   const end = Math.min(lines.length, index + EXCERPT_RADIUS + 1);
-  return redactSensitiveText(lines.slice(start, end).join(' ').replace(/\s+/g, ' ').trim(), 700);
+  return truncateToByteBudget(lines.slice(start, end).join(' ').replace(/\s+/g, ' ').trim(), 700);
 }

@@ -15,7 +15,7 @@ import {
   rankS006Severity,
   strongestS006ReportFindings
 } from './s006-ranking';
-import { redactS006Path, redactS006ReportText } from './s006-report-redaction';
+import { truncateToByteBudget } from './redaction';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 
@@ -52,7 +52,7 @@ export function formatS006Evidence(
     'Finding groups:',
     ...formatFindingGroupLines(analysis.findings),
     '',
-    'Top redacted examples:',
+    'Top examples:',
     ...formatCompactFindingLines(report.strongestFindings),
     ...formatFindingOverflowLine(analysis.findings.length, report.strongestFindings.length),
     '',
@@ -72,8 +72,8 @@ export function formatS006Evidence(
   appendAgentReviewLines(lines, analysis, agentReview);
 
   return {
-    evidence: redactS006ReportText(evidence, 700),
-    details: redactS006ReportText(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
+    evidence: truncateToByteBudget(evidence, 700),
+    details: truncateToByteBudget(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
   };
 }
 
@@ -85,7 +85,7 @@ function formatScannerSummary(analysis: S006SensitiveInformationAnalysisResult):
 
   const warning = analysis.scanner.warning;
   const warningText = warning
-    ? `; ${warning.kind}: ${redactS006ReportText(warning.message)}`
+    ? `; ${warning.kind}: ${warning.message}`
     : '';
   return `Gitleaks unavailable; ${findingLabel}${warningText}`;
 }
@@ -163,7 +163,7 @@ function formatWhyLines(
       ? `  - ${deterministicFailureCount} high-confidence live-looking finding${deterministicFailureCount === 1 ? '' : 's'} in production or CI/deployment context can fail S006.`
       : '  - No deterministic failure was found.',
     analysis.findings.length > 0
-      ? `  - ${analysis.findings.length} redacted finding${analysis.findings.length === 1 ? ' still needs' : 's still need'} reviewer judgment.`
+      ? `  - ${analysis.findings.length} finding${analysis.findings.length === 1 ? ' still needs' : 's still need'} reviewer judgment.`
       : undefined,
     analysis.coverage.materiallyWeakened
       ? `  - Scan coverage is materially weakened by ${materialWarningCount || 'one or more'} warning${materialWarningCount === 1 ? '' : 's'} and ${materialSkippedFileCount} material skipped file${materialSkippedFileCount === 1 ? '' : 's'}.`
@@ -200,7 +200,7 @@ function formatReviewerFocusLines(
     lines.push('  - Review material coverage gaps before treating the scan as complete.');
   }
   if (!agentReview?.available && analysis.classification.status === EvaluationStatus.MANUAL) {
-    lines.push('  - Agent advisory review was unavailable; make the S006 call from the redacted findings and coverage notes.');
+    lines.push('  - Agent advisory review was unavailable; make the S006 call from the findings and coverage notes.');
   }
 
   return lines.length ? lines : ['  - No reviewer follow-up beyond normal S006 confirmation.'];
@@ -257,9 +257,9 @@ function formatCompactFindingLines(findings: S006SensitiveInformationFinding[]):
   }
 
   return findings.slice(0, MAX_REPORT_LIST_ITEMS).map(finding => {
-    const location = `${redactS006Path(finding.path)}${finding.line === undefined ? '' : `:${finding.line}`}`;
+    const location = `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`;
     const lineRange = finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
-    return `  - ${location}${lineRange} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${redactS006ReportText(finding.redactedExcerpt.text)}`;
+    return `  - ${location}${lineRange} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${finding.excerpt.text}`;
   });
 }
 
@@ -287,7 +287,7 @@ function formatWarningLines(heading: string, warnings: S006ScanWarning[]): strin
   return [
     `  - ${heading}`,
     ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning =>
-      `    - ${warning.kind}${warning.path ? ` ${redactS006Path(warning.path)}` : ''}: ${redactS006ReportText(warning.message)}`
+      `    - ${warning.kind}${warning.path ? ` ${warning.path}` : ''}: ${warning.message}`
     ),
     ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
   ];
@@ -301,7 +301,7 @@ function formatSkippedLines(heading: string, skippedFiles: S006SkippedFile[]): s
   return [
     `  - ${heading}`,
     ...skippedFiles.slice(0, MAX_REPORT_LIST_ITEMS).map(skippedFile =>
-      `    - ${redactS006Path(skippedFile.path)} (${skippedFile.reason}${skippedFile.message ? `: ${redactS006ReportText(skippedFile.message)}` : ''})`
+      `    - ${skippedFile.path} (${skippedFile.reason}${skippedFile.message ? `: ${skippedFile.message}` : ''})`
     ),
     ...overflowLine(skippedFiles.length, MAX_REPORT_LIST_ITEMS)
   ];
@@ -318,10 +318,10 @@ function appendAgentReviewLines(
       'Agent review:',
       agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${redactS006ReportText(agentReview.summary)}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${redactS006ReportText(agentReview.rationale)}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.map(warning => redactS006ReportText(warning)).join('; ')}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${agentReview.errors.map(error => redactS006ReportText(error)).join('; ')}` : undefined,
+      agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
+      agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
+      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
+      agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
     );

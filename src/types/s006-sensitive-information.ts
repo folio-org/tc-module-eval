@@ -42,9 +42,8 @@ export type S006ValueClassification = 'placeholder' | 'synthetic' | 'live-lookin
 
 export type S006FindingStatusImpact = 'deterministic_fail' | 'manual_review';
 
-export interface S006RedactedExcerpt {
+export interface S006Excerpt {
   text: string;
-  placeholder: string;
   multiline: boolean;
   startLine?: number;
   endLine?: number;
@@ -82,24 +81,21 @@ export interface S006DetectorRegistryEntry {
   category: S006FindingCategory;
   label: string;
   pattern: RegExp;
-  redactionRequired: true;
-  redactionPlaceholder: string;
   defaultConfidence: S006FindingConfidence;
   severityByConfidence: S006DetectorSeverityMapping;
   statusContributionByConfidence: S006DetectorStatusContributionMapping;
   contextualDowngradeWhenNonLive?: S006FindingConfidence;
-  redactor: (rawMatch: string) => string;
   classifyValue: (rawMatch: string) => S006ValueClassification;
   calibrationCases: S006DetectorCalibrationCase[];
 }
 
-export interface S006RedactedDetectorMatch {
+export interface S006DetectorMatch {
   detectorId: S006DetectorId;
   category: S006FindingCategory;
   valueClassification: S006ValueClassification;
   confidence: S006FindingConfidence;
   severity: S006FindingSeverity;
-  redactedExcerpt: S006RedactedExcerpt;
+  excerpt: S006Excerpt;
   valueFingerprint: S006RunLocalValueFingerprint;
 }
 
@@ -113,13 +109,13 @@ export interface S006SensitiveInformationFinding {
   valueClassification: S006ValueClassification;
   confidence: S006FindingConfidence;
   severity: S006FindingSeverity;
-  redactedExcerpt: S006RedactedExcerpt;
+  excerpt: S006Excerpt;
   valueFingerprint: S006RunLocalValueFingerprint;
   statusImpact: S006FindingStatusImpact;
   rationale: string;
 }
 
-export interface S006RedactedReportFinding {
+export interface S006ReportFinding {
   path: string;
   line?: number;
   endLine?: number;
@@ -128,7 +124,7 @@ export interface S006RedactedReportFinding {
   context: S006FindingContext;
   confidence: S006FindingConfidence;
   severity: S006FindingSeverity;
-  redactedExcerpt: S006RedactedExcerpt;
+  excerpt: S006Excerpt;
   rationale: string;
 }
 
@@ -200,11 +196,11 @@ export interface S006SensitiveInformationAnalysisResult {
   agentReviewUnavailableReason?: string;
 }
 
-export interface S006RedactedReportDetails {
+export interface S006ReportDetails {
   criterionId: 'S006';
   findingCount: number;
   retainedFindingCount: number;
-  findings: S006RedactedReportFinding[];
+  findings: S006ReportFinding[];
   scanner: S006SecretScannerSummary;
   coverage: S006ScanCoverage;
   coverageSummary: {

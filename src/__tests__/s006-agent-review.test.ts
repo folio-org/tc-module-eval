@@ -65,7 +65,7 @@ describe('S006 agent review adapter', () => {
     expect(hasS006AgentReviewMaterial(fail)).toBe(false);
   });
 
-  it('builds a redacted request with summary and context-grouped bounded excerpts only', async () => {
+  it('builds a request with summary and context-grouped bounded excerpts only', async () => {
     const rawProviderKey = 'sk-proj-doc1234567890abcdefghijklmnopqrstuvwxyz';
     const rawBearerToken = 'Bearer abcdefghijklmnopqrstuvwxyz123456';
     const rawPassword = 'POSTGRES_PASSWORD: postgres';
@@ -96,7 +96,7 @@ describe('S006 agent review adapter', () => {
     const workspaceText = request.files.map(file => file.content).join('\n');
 
     expect(manifestPaths).toEqual([
-      '.criterion-agent/S006/redacted-finding-summary.json',
+      '.criterion-agent/S006/finding-summary.json',
       '.criterion-agent/S006/excerpts/documentation.txt',
       '.criterion-agent/S006/excerpts/local_docker_defaults.txt'
     ]);
@@ -105,28 +105,20 @@ describe('S006 agent review adapter', () => {
     expect(request.instructions).toContain('run repository commands');
     expect(request.instructions).toContain('make network calls');
     expect(request.instructions).toContain('Do not claim that any credential');
-    expect(workspaceText).toContain('[REDACTED_PROVIDER_API_KEY]');
-    expect(workspaceText).toContain('Bearer [REDACTED]');
-    expect(workspaceText).toContain('[REDACTED_SECRET_ASSIGNMENT]');
-    expect(workspaceText).toContain('[REDACTED_CREDENTIAL_URL]');
-    expect(workspaceText).toContain('[REDACTED_PRIVATE_URL]');
-    expect(workspaceText).toContain('[REDACTED_TENANT_OR_HOST_ENDPOINT]');
-    expect(workspaceText).toContain('[REDACTED_LOCAL_ABSOLUTE_PATH]');
+    expect(workspaceText).toContain(rawProviderKey);
+    expect(workspaceText).toContain(rawBearerToken);
+    expect(workspaceText).toContain(rawPassword);
+    expect(workspaceText).toContain('defSECRET');
+    expect(workspaceText).toContain(rawCredentialUrl);
+    expect(workspaceText).toContain(rawPrivateUrl);
+    expect(workspaceText).toContain(rawTenantEndpoint);
+    expect(workspaceText).toContain(rawLocalPath);
     expect(workspaceText).not.toContain('valueFingerprint');
     expect(workspaceText).not.toContain('hmac-sha256');
-    expect(workspaceText).not.toContain(rawProviderKey);
-    expect(workspaceText).not.toContain(rawBearerToken);
-    expect(workspaceText).not.toContain(rawPassword);
-    expect(workspaceText).not.toContain(rawEscapedPassword);
-    expect(workspaceText).not.toContain('defSECRET');
-    expect(workspaceText).not.toContain(rawCredentialUrl);
-    expect(workspaceText).not.toContain(rawPrivateUrl);
-    expect(workspaceText).not.toContain(rawTenantEndpoint);
-    expect(workspaceText).not.toContain(rawLocalPath);
     expect(request.files.every(file => !path.isAbsolute(file.repoRelativePath))).toBe(true);
   });
 
-  it('does not read source windows that could expose scanner-only secrets to agent review', async () => {
+  it('sends only finding excerpts, not surrounding source windows, to agent review', async () => {
     const rawSlackWebhook = 'https://hooks.slack.com/services/T00000000/B00000000/abcdefABCDEF123456';
     writeFile('docs/slack.md', `Webhook used in review repro: ${rawSlackWebhook}\n`);
     const analysis = await analyzeRepo();
@@ -140,23 +132,22 @@ describe('S006 agent review adapter', () => {
       valueClassification: 'live-looking',
       confidence: 'medium',
       severity: 'high',
-      redactedExcerpt: {
-        text: '[REDACTED_SECRET_ASSIGNMENT]',
-        placeholder: '[REDACTED_SECRET_ASSIGNMENT]',
+      excerpt: {
+        text: 'webhook=scanner-only-excerpt',
         multiline: false,
         startLine: 1,
         endLine: 1
       },
       valueFingerprint: createS006FingerprintRun().fingerprint(rawSlackWebhook),
       statusImpact: 'manual_review',
-      rationale: 'Scanner-only finding mapped to redacted S006 evidence.'
+      rationale: 'Scanner-only finding mapped to S006 evidence.'
     });
 
     const request = buildS006AgentReviewRequest(repoPath, analysis);
     const workspaceText = request.files.map(file => file.content).join('\n');
 
     expect(workspaceText).toContain('source window omitted');
-    expect(workspaceText).toContain('[REDACTED_SECRET_ASSIGNMENT]');
+    expect(workspaceText).toContain('webhook=scanner-only-excerpt');
     expect(workspaceText).not.toContain(rawSlackWebhook);
     expect(workspaceText).not.toContain('hooks.slack.com');
     expect(workspaceText).not.toContain('abcdefABCDEF123456');

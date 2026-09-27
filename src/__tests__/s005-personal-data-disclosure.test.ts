@@ -11,8 +11,7 @@ import {
   gatherS005PersonalDataEvidence,
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
-  parseS005PersonalDataDisclosureMarkdown,
-  redactS005PersonalDataPath
+  parseS005PersonalDataDisclosureMarkdown
 } from '../utils/s005-personal-data-disclosure';
 
 function createTempRepo(): string {
@@ -168,7 +167,7 @@ Last Reviewed: YYYY-MM-DD
     expect(Buffer.byteLength(result.parseError?.excerpt ?? '')).toBeLessThanOrEqual(520);
   });
 
-  it('preserves bounded and S005-redacted checklist labels with stable metadata', () => {
+  it('preserves bounded checklist labels with stable metadata', () => {
     const result = parseS005PersonalDataDisclosureMarkdown(`
 # Personal Data Disclosure
 
@@ -185,25 +184,13 @@ Last Reviewed: YYYY-MM-DD
       sectionHeading: 'Personal data stored',
       normalizedCategory: 'email'
     });
-    expect(item.rawLabel).toContain('[REDACTED_EMAIL]');
-    expect(item.rawLabel).toContain('Bearer [REDACTED]');
+    expect(item.rawLabel).toContain('user@example.org');
+    expect(item.rawLabel).toContain('Bearer abc123456789');
     expect(item.rawLabel).toContain('[truncated to');
     expect(Buffer.byteLength(item.rawLabel)).toBeLessThanOrEqual(320);
   });
 });
 
-describe('S005 redaction helpers', () => {
-  it('redacts path-like secret values from the first key/value separator', () => {
-    const redacted = redactS005PersonalDataPath('schemas/auth=mytoken-value-123/credential:prefix_secret_value/pwd_test.json');
-
-    expect(redacted).toContain('auth=[REDACTED]');
-    expect(redacted).toContain('credential:[REDACTED]');
-    expect(redacted).toContain('pwd_[REDACTED]');
-    expect(redacted).not.toContain('mytoken');
-    expect(redacted).not.toContain('prefix_secret_value');
-    expect(redacted).not.toContain('test.json');
-  });
-});
 
 describe('S005 personal data disclosure artifact discovery', () => {
   let repoPath: string;
@@ -455,8 +442,6 @@ describe('S005 bounded personal-data evidence scanner', () => {
         strength: 'strong'
       })
     ]));
-    expect(result.signals.find(signal => signal.path === 'ramls/users.raml' && signal.category === 'email')?.excerpt)
-      .toContain('[REDACTED_VALUE]');
   });
 
   it('preserves legitimate replacement characters in evidence excerpts', () => {
@@ -537,11 +522,10 @@ class UserEventsProducer {
     ]));
 
     const loggingSignal = result.signals.find(signal => signal.category === 'logging' && signal.excerpt.includes('publishing'));
-    expect(loggingSignal?.excerpt).toContain('[REDACTED_VALUE]');
-    expect(loggingSignal?.excerpt).toContain('apiToken=[REDACTED]');
+    expect(loggingSignal?.excerpt).toContain('email=user@example.org apiToken=super-secret');
   });
 
-  it('keeps test fixtures and sample payloads at context strength and redacts risky examples', () => {
+  it('keeps test fixtures and sample payloads at context strength', () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'src/test/resources/fixtures/users.json', `
 {
@@ -557,32 +541,10 @@ class UserEventsProducer {
     expect(result.signals.length).toBeGreaterThan(0);
     expect(result.signals.every(signal => signal.sourceClass === 'test_sample')).toBe(true);
     expect(result.signals.every(signal => signal.strength === 'context')).toBe(true);
-    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('jane.doe@example.org');
-    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('312-555-0199');
-    expect(result.signals.map(signal => signal.excerpt).join('\n')).not.toContain('Jane Doe');
-    expect(result.signals.map(signal => signal.excerpt).join('\n')).toContain('[REDACTED_LONG_TEXT]');
   });
 
-  it('redacts short personal values from evidence excerpts', () => {
-    repoPath = createTempRepo();
-    writeRepoFile(repoPath, 'src/main/resources/schemas/user.json', `
-{
-  "firstName": "Mary Smith",
-  "barcode": "12345",
-  "addressLine1": "12 Oak St"
-}
-`);
 
-    const result = gatherS005PersonalDataEvidence(repoPath);
-    const excerpts = result.signals.map(signal => signal.excerpt).join('\n');
-
-    expect(excerpts).not.toContain('Mary Smith');
-    expect(excerpts).not.toContain('12345');
-    expect(excerpts).not.toContain('12 Oak St');
-    expect(excerpts).toContain('[REDACTED_VALUE]');
-  });
-
-  it('redacts network identifiers from evidence excerpts', () => {
+  it('detects network identifiers in evidence excerpts', () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'src/main/resources/schemas/network-user.json', `
 {
@@ -598,10 +560,7 @@ class UserEventsProducer {
     expect(result.signals).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: 'ip_or_mac_address' })
     ]));
-    expect(excerpts).not.toContain('192.168.10.42');
-    expect(excerpts).not.toContain('203.0.113.42');
-    expect(excerpts).not.toContain('aa:bb:cc:dd:ee:ff');
-    expect(excerpts).toContain('[REDACTED_VALUE]');
+    expect(excerpts).toContain('192.168.10.42');
   });
 
   it('skips CI workflow metadata so build terms do not become strong evidence', () => {
@@ -1021,7 +980,7 @@ Version: v1.0
     ]));
   });
 
-  it('redacts metadata and path values from structured criterion details', () => {
+  it('omits raw labels and section headings from structured criterion details', () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', `
 # Personal Data Disclosure
@@ -1048,13 +1007,6 @@ Last Reviewed: reviewer@example.org
     }).details;
     const combinedReportText = `${details}\n${rendered}`;
 
-    expect(combinedReportText).not.toContain('reviewer@example.org');
-    expect(combinedReportText).not.toContain('312-555-0199');
-    expect(combinedReportText).not.toContain('Mary Smith');
-    expect(combinedReportText).not.toContain('12345');
-    expect(combinedReportText).not.toContain('abc123');
-    expect(combinedReportText).toContain('[REDACTED_EMAIL]');
-    expect(combinedReportText).toContain('[REDACTED]');
     expect(combinedReportText).toContain('checklistItems');
     expect(combinedReportText).not.toContain('rawLabel');
     expect(combinedReportText).not.toContain('sectionHeading');
@@ -1109,7 +1061,6 @@ Last Reviewed: 2026-09-24
     expect(details).toContain('RATIONALE_END');
     expect(details).toContain('MODEL_END');
     expect(details.indexOf('Contradictions:')).toBeLessThan(details.indexOf('Agent review:'));
-    expect(details).not.toContain('synthetic-person@example.org');
     expect(details).not.toContain('\uFFFD');
   });
 
@@ -1134,7 +1085,7 @@ Last Reviewed: 2026-09-24
     expect(details).toContain('Model label: bounded-model');
   });
 
-  it('does not truncate a fitting redacted report to overflow field budgets', () => {
+  it('does not truncate a fitting report to overflow field budgets', () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] This module does not store or process personal data.');
     const rationale = `Complete rationale ${'é'.repeat(1_100)} RATIONALE_END`;

@@ -7,7 +7,7 @@ import {
 } from '../types';
 import { CriterionAgentReviewFile, CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
 import { readCommittedSource } from './committed-source';
-import { redactSensitiveText } from './redaction';
+import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
 const MANIFEST_PATH = '.criterion-agent/S010/snapshot-manifest.json';
@@ -67,7 +67,7 @@ export async function buildS010AgentReviewRequest(
     || left.path.localeCompare(right.path)
   );
   for (const file of prioritized) {
-    const content = redactSensitiveText(file.content, MAX_FILE_BYTES);
+    const content = truncateToByteBudget(file.content, MAX_FILE_BYTES);
     const size = Buffer.byteLength(content);
     if (selected.length >= MAX_FILES) {
       omitted.push({ path: file.path, reason: `file limit (${MAX_FILES})` });
@@ -82,7 +82,7 @@ export async function buildS010AgentReviewRequest(
     if (diagnostic.path) omitted.push({ path: diagnostic.path, reason: diagnostic.code });
   }
 
-  const summary = redactSensitiveText(JSON.stringify({
+  const summary = truncateToByteBudget(JSON.stringify({
     criterionId: 'S010',
     deterministicStatus: analysis.status,
     summary: analysis.summary,
@@ -137,7 +137,7 @@ function buildManifest(
   omitted: Array<{ path: string; reason: string }>
 ): string {
   const omissionSummary = summarizeOmissions(omitted);
-  return redactSensitiveText(JSON.stringify({
+  return JSON.stringify({
     revision,
     complete,
     includedPaths: selected.map(file => file.repoRelativePath),
@@ -150,7 +150,7 @@ function buildManifest(
       maxTotalBytes: MAX_TOTAL_BYTES,
       maxManifestBytes: MAX_MANIFEST_BYTES
     }
-  }, null, 2));
+  }, null, 2);
 }
 
 function summarizeOmissions(omitted: Array<{ path: string; reason: string }>): {

@@ -43,32 +43,3 @@ export function truncateToByteBudget(text: string, maxBytes: number): string {
   const truncated = buffer.subarray(0, maxBytes).toString('utf-8').replace(/\uFFFD$/, '');
   return `${truncated}\n[output truncated to ${maxBytes} bytes]`;
 }
-
-export function redactLocalUserPaths(input: string): string {
-  return input
-    .replace(/\/private\/var\/[^\s"'`<>)]*/g, '/private/var/[REDACTED_PATH]')
-    .replace(/\/var\/[^\s"'`<>)]*/g, '/var/[REDACTED_PATH]')
-    .replace(/\/Users\/[^\s"'`<>)]*/g, '/Users/[REDACTED_PATH]')
-    .replace(/\/home\/[^\s"'`<>)]*/g, '/home/[REDACTED_PATH]')
-    .replace(/[A-Za-z]:\\Users\\[^"'`<>)]*/g, 'C:\\Users\\[REDACTED_PATH]');
-}
-
-export function redactJsonValue<T>(value: T): T {
-  if (typeof value === 'string') {
-    return redactSensitiveText(value) as T;
-  }
-  if (Array.isArray(value)) {
-    return value.map(item => redactJsonValue(item)) as T;
-  }
-  if (value instanceof Date) {
-    return value as T;
-  }
-  if (value && typeof value === 'object') {
-    const copy: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      copy[key] = redactJsonValue(entry);
-    }
-    return copy as T;
-  }
-  return value;
-}

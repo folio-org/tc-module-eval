@@ -1,9 +1,4 @@
 import { CriterionAgentReviewResult, S010Analysis, S010Finding } from '../types';
-import { redactJsonValue, redactSensitiveText } from './redaction';
-
-export function buildS010CriterionDetails(analysis: S010Analysis): S010Analysis {
-  return redactJsonValue(analysis);
-}
 
 export function renderS010HumanDetails(
   analysis: S010Analysis,
@@ -51,7 +46,7 @@ export function renderS010HumanDetails(
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);
   }
-  return redactSensitiveText(lines.join('\n'));
+  return lines.join('\n');
 }
 
 function findingPriority(finding: S010Finding): number {

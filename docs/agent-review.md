@@ -6,7 +6,7 @@ Supported advisory criteria: `S004` installation documentation, `S005` personal 
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- The evaluated repository is copied into a bounded, sanitized review workspace.
+- Selected repository files are copied into a bounded review workspace. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
 - Provider keys are read from environment variables, not CLI arguments.
 - The generated OpenCode agent is read-only and rejects mutating tools.
@@ -16,7 +16,7 @@ Agent review runs through reusable criterion-agent infrastructure:
 
 S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechanics, checklist answers, placeholders or contradictions, and bounded read-only source signals. It does not certify privacy or legal compliance; completed forms stay `manual`, deterministic `fail` covers only mechanics or completion defects, and explicit FOLIO libraries are `not_applicable`.
 
-Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, redacted parsed summary, and bounded redacted excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references. S005 excerpts are redacted review hints, not PII-safe extracts.
+Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, parsed summary, and bounded excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references.
 
 If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
 
@@ -27,7 +27,7 @@ unresolved declaration, conflict, unlisted framework, or incomplete coverage and
 manifest contains useful repository evidence. Policy-load and policy-semantics-only
 manual results do not invoke it.
 
-The review workspace contains a bounded deterministic summary and selected, redacted
+The review workspace contains a bounded deterministic summary and selected
 declaration summaries rather than raw manifest contents. Absolute paths, traversal
 paths, symlinks, and duplicate files are excluded; each generated declaration summary
 has its own byte limit. Repository content is untrusted evidence: the agent is
@@ -42,7 +42,7 @@ failed, or malformed review leaves S007 manual and records the unavailable reaso
 ## S010 Third-Party System Resilience Review
 
 S010 invokes agent review only when deterministic committed-source analysis is manual.
-The agent receives a bounded, redacted, repository-wide cross-section of committed
+The agent receives a bounded, repository-wide cross-section of committed
 manifests, configuration, production source, tests, and documentation plus the
 deterministic scenarios and coverage diagnostics. Generated output, dependencies,
 binary files, symlinks, `.env` files, and uncommitted changes are excluded.
@@ -56,11 +56,11 @@ excluded, unavailable, malformed, or uncited review leaves S010 manual.
 
 ## S006 Sensitive Information Review
 
-S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports use detector-local redaction and must not include raw sensitive values or value fingerprints.
+S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports show the matched value as a bounded excerpt so reviewers can judge it directly; value fingerprints are not reported.
 
 Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
 
-When enabled, S006 agent review runs only for manual findings or material scan-coverage uncertainty. It receives redacted summaries and bounded redacted excerpts only, never raw detector values or fingerprints. Agent review is advisory only and cannot pass or fail S006. If agent review is disabled, unavailable, malformed, or has no material, deterministic evidence remains and S006 records the unavailable reason when applicable.
+When enabled, S006 agent review runs only for manual findings or material scan-coverage uncertainty. It receives the finding summary and bounded matched excerpts only, never surrounding source windows or fingerprints. Agent review is advisory only and cannot pass or fail S006. If agent review is disabled, unavailable, malformed, or has no material, deterministic evidence remains and S006 records the unavailable reason when applicable.
 
 ## OpenRouter
 
@@ -114,7 +114,7 @@ Advanced options:
 - `--criterion-agent-endpoint-allowlist <urls>` permits non-HTTPS explicitly trusted endpoint URLs on the same parsed origin.
 - `--criterion-agent-debug-retain-workspace` retains the temporary review workspace for local debugging.
 
-When `--criterion-agent-debug-retain-workspace` is used, the evaluator keeps the sanitized manifest and generated OpenCode config but removes copied/generated OpenCode auth data after the run.
+When `--criterion-agent-debug-retain-workspace` is used, the evaluator keeps the manifest and generated OpenCode config but removes copied/generated OpenCode auth data after the run.
 
 Explicit CLI model and auth-store values take precedence over environment-based generation.
 

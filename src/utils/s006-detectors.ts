@@ -5,17 +5,14 @@ import {
   S006DetectorRegistryEntry,
   S006FindingConfidence,
   S006FindingSeverity,
-  S006RedactedDetectorMatch,
+  S006DetectorMatch,
   S006RunLocalValueFingerprint,
   S006ValueClassification
 } from '../types';
 import {
   PRIVATE_KEY_BLOCK_PATTERN,
   PRIVATE_URL_PATTERN,
-  URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN,
-  redactLocalUserPaths,
-  redactSensitiveText,
-  truncateToByteBudget
+  URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN
 } from './redaction';
 
 const PLACEHOLDER_VALUE_PATTERN =
@@ -25,7 +22,6 @@ const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest
 const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';
 const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
 const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
-const SECRET_ASSIGNMENT_REDACTION_PATTERN = new RegExp(`^(${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*)${SECRET_ASSIGNMENT_VALUE}$`, 'i');
 
 export const MAX_S006_EXCERPT_BYTES = 700;
 
@@ -35,12 +31,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'provider_api_key',
     label: 'Provider-shaped API key',
     pattern: /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{18,}|sk-or-v1-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{20,})\b/g,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_PROVIDER_API_KEY]',
     defaultConfidence: 'high',
     severityByConfidence: { low: 'medium', medium: 'high', high: 'critical' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: () => '[REDACTED_PROVIDER_API_KEY]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -64,12 +57,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'private_key',
     label: 'Private key block',
     pattern: PRIVATE_KEY_BLOCK_PATTERN,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_PRIVATE_KEY_BLOCK]',
     defaultConfidence: 'high',
     severityByConfidence: { low: 'medium', medium: 'high', high: 'critical' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: () => '[REDACTED_PRIVATE_KEY_BLOCK]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -86,20 +76,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'bearer_or_jwt_token',
     label: 'Bearer or JWT-like token',
     pattern: /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*[A-Za-z0-9._~+/=-]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b/gi,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_TOKEN]',
     defaultConfidence: 'high',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: rawMatch => {
-      if (/^Bearer\s+/i.test(rawMatch)) {
-        return 'Bearer [REDACTED_TOKEN]';
-      }
-      if (/^(?:X-Okapi-Token|Okapi-Token)\s*[:=]/i.test(rawMatch)) {
-        return rawMatch.replace(/^((?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*)[A-Za-z0-9._~+/=-]{20,}$/i, '$1[REDACTED_TOKEN]');
-      }
-      return '[REDACTED_TOKEN]';
-    },
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -123,17 +102,10 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'password_or_secret_assignment',
     label: 'Password, token, or secret assignment',
     pattern: SECRET_ASSIGNMENT_PATTERN,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_SECRET_ASSIGNMENT]',
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'high', high: 'critical' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
     contextualDowngradeWhenNonLive: 'low',
-    redactor: rawMatch =>
-      rawMatch.replace(
-        SECRET_ASSIGNMENT_REDACTION_PATTERN,
-        '$1[REDACTED_SECRET_ASSIGNMENT]'
-      ),
     classifyValue: rawMatch => classifyAssignmentValue(rawMatch),
     calibrationCases: [
       {
@@ -157,12 +129,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'credential_url',
     label: 'Credential-bearing URL',
     pattern: CREDENTIAL_URL_PATTERN,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_CREDENTIAL_URL]',
     defaultConfidence: 'high',
     severityByConfidence: { low: 'medium', medium: 'high', high: 'critical' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: () => '[REDACTED_CREDENTIAL_URL]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -179,12 +148,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'private_url',
     label: 'Private URL without embedded credentials',
     pattern: PRIVATE_URL_PATTERN,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_PRIVATE_URL]',
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'info', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'pass_neutral', medium: 'manual_candidate', high: 'manual_candidate' },
-    redactor: () => '[REDACTED_PRIVATE_URL]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -208,12 +174,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'environment_file',
     label: 'Environment file path',
     pattern: /(?:^|\/)\.env(?:[.\w-]*)?/g,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_ENV_FILE_PATH]',
     defaultConfidence: 'low',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'fail_candidate' },
-    redactor: () => '[REDACTED_ENV_FILE_PATH]',
     classifyValue: rawMatch => (/\b(?:example|sample|template|dist)\b/i.test(rawMatch) ? 'synthetic' : 'live-looking'),
     calibrationCases: [
       {
@@ -237,12 +200,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'tenant_or_host_endpoint',
     label: 'Tenant or host endpoint',
     pattern: /\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db)[a-z0-9.-]*\.(?:edu|org|com|net|internal|local)(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_TENANT_OR_HOST_ENDPOINT]',
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'pass_neutral', medium: 'manual_candidate', high: 'manual_candidate' },
-    redactor: () => '[REDACTED_TENANT_OR_HOST_ENDPOINT]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -259,12 +219,9 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     category: 'local_absolute_path',
     label: 'Local absolute path',
     pattern: /(?:\/Users\/[A-Za-z0-9._/-]+|\/home\/[A-Za-z0-9._/-]+|\/var\/[A-Za-z0-9._/-]+|[A-Za-z]:\\Users\\[A-Za-z0-9._\\-]+)/g,
-    redactionRequired: true,
-    redactionPlaceholder: '[REDACTED_LOCAL_ABSOLUTE_PATH]',
     defaultConfidence: 'low',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'medium' },
     statusContributionByConfidence: { low: 'manual_candidate', medium: 'manual_candidate', high: 'manual_candidate' },
-    redactor: () => '[REDACTED_LOCAL_ABSOLUTE_PATH]',
     classifyValue: rawMatch => classifySyntheticOrLive(rawMatch),
     calibrationCases: [
       {
@@ -283,22 +240,6 @@ const S006_COMPILED_DETECTOR_PATTERNS = new Map(
     new RegExp(detector.pattern.source, detector.pattern.flags)
   ])
 );
-
-export function redactS006SensitiveInformationText(input: string, maxBytes?: number): string {
-  let redacted = input;
-  for (const detector of S006_DETECTOR_REGISTRY) {
-    const pattern = getCompiledS006DetectorPattern(detector);
-    pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, rawMatch => redactDetectorMatch(detector, rawMatch));
-  }
-  redacted = redactLocalUserPaths(redactSensitiveText(redacted));
-
-  if (maxBytes === undefined) {
-    return redacted;
-  }
-
-  return truncateToByteBudget(redacted, maxBytes);
-}
 
 export function getS006DetectorById(detectorId: S006DetectorId): S006DetectorRegistryEntry {
   const detector = S006_DETECTOR_REGISTRY.find(entry => entry.id === detectorId);
@@ -333,15 +274,15 @@ export function createS006FingerprintRun(key: Buffer = randomBytes(32)): S006Fin
   };
 }
 
-export function buildS006RedactedDetectorMatch(
+export function buildS006DetectorMatch(
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
   fingerprintRun: S006FingerprintRun,
   startLine?: number
-): S006RedactedDetectorMatch {
+): S006DetectorMatch {
   const valueClassification = detector.classifyValue(rawMatch);
   const confidence = getS006Confidence(detector, valueClassification);
-  const redactedText = boundS006RedactedExcerptText(redactDetectorMatch(detector, rawMatch));
+  const excerptText = boundS006ExcerptText(rawMatch);
   const lineSpan = rawMatch.split(/\r\n|\n|\r/).length;
 
   return {
@@ -350,9 +291,8 @@ export function buildS006RedactedDetectorMatch(
     valueClassification,
     confidence,
     severity: getS006Severity(detector, confidence),
-    redactedExcerpt: {
-      text: redactedText,
-      placeholder: detector.redactionPlaceholder,
+    excerpt: {
+      text: excerptText,
       multiline: lineSpan > 1,
       startLine,
       endLine: startLine === undefined ? undefined : startLine + lineSpan - 1
@@ -381,14 +321,6 @@ export function getS006Severity(
   return detector.severityByConfidence[confidence];
 }
 
-function redactDetectorMatch(detector: S006DetectorRegistryEntry, rawMatch: string): string {
-  const redacted = detector.redactor(rawMatch);
-  if (redacted.includes(rawMatch)) {
-    return detector.redactionPlaceholder;
-  }
-  return redacted;
-}
-
 export function getCompiledS006DetectorPattern(detector: S006DetectorRegistryEntry): RegExp {
   const pattern = S006_COMPILED_DETECTOR_PATTERNS.get(detector.id);
   if (!pattern) {
@@ -397,7 +329,7 @@ export function getCompiledS006DetectorPattern(detector: S006DetectorRegistryEnt
   return pattern;
 }
 
-function boundS006RedactedExcerptText(input: string): string {
+export function boundS006ExcerptText(input: string): string {
   const buffer = Buffer.from(input);
   return buffer.length > MAX_S006_EXCERPT_BYTES
     ? `${buffer.subarray(0, MAX_S006_EXCERPT_BYTES).toString('utf-8').replace(/\uFFFD$/, '')}...`
