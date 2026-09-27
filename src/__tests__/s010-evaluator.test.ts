@@ -1,9 +1,11 @@
 import {
   EvaluationStatus,
+  S010Analysis,
   S010Evidence,
   S010ScenarioEvidence
 } from '../types';
 import { evaluateS010 } from '../utils/s010-evaluator';
+import { renderS010HumanDetails } from '../utils/s010-report-details';
 
 const moduleKind = (kind: S010Evidence['moduleKind']['kind']): S010Evidence['moduleKind'] => ({
   kind,
@@ -186,5 +188,35 @@ describe('S010 deterministic evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.diagnostics).toHaveLength(1);
+  });
+});
+
+describe('S010 human details', () => {
+  it('names the configuration key or file for each scenario and groups rows by dependency', () => {
+    const finding = (id: string, dependencyId: string) => ({
+      id, dependencyId, scenario: 'configuration-absent' as const, outcome: 'unresolved' as const,
+      rationale: 'Static evidence does not prove the missing-configuration startup outcome.', evidence: [], statusDetermining: true
+    });
+    const analysis = {
+      criterionId: 'S010' as const, status: EvaluationStatus.MANUAL, summary: 'manual', diagnostics: [],
+      evidence: { moduleKind: { kind: 'backend-module', evidence: [], warnings: [] }, runtimeKind: 'java', discoveryCoverage: 'complete', semanticCoverage: 'incomplete', scenarios: [], diagnostics: [] },
+      findings: [
+        finding('kafka:KAFKA_HOST/configuration-absent', 'kafka'),
+        finding('okapi:OKAPI_URL/configuration-absent', 'okapi'),
+        finding('database:DB_PORT/configuration-absent', 'database'),
+        finding('kafka:KAFKA_PORT/configuration-absent', 'kafka'),
+        finding('database:DB_HOST/configuration-absent', 'database')
+      ]
+    } as unknown as S010Analysis;
+
+    const rows = renderS010HumanDetails(analysis).split('\n').filter(line => line.startsWith('  - '));
+
+    expect(rows).toEqual([
+      '  - database (DB_HOST) / configuration-absent: unresolved',
+      '  - database (DB_PORT) / configuration-absent: unresolved',
+      '  - kafka (KAFKA_HOST) / configuration-absent: unresolved',
+      '  - kafka (KAFKA_PORT) / configuration-absent: unresolved',
+      '  - okapi (OKAPI_URL) / configuration-absent: unresolved'
+    ]);
   });
 });
