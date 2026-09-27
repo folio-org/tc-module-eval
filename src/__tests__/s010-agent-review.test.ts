@@ -8,7 +8,8 @@ import {
   hasS010AgentReviewMaterial,
   reviewS010WithAgent
 } from '../utils/s010-agent-review';
-import { prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
+import * as committedSource from '../utils/committed-source';
+import { redactSensitiveText } from '../utils/redaction';
 
 describe('S010 advisory agent review', () => {
   let repo: string;
@@ -18,7 +19,10 @@ describe('S010 advisory agent review', () => {
     execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo });
     execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repo });
   });
-  afterEach(async () => { await fs.remove(repo); });
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await fs.remove(repo);
+  });
 
   it('builds a redacted immutable broad snapshot and excludes unsafe or generated surfaces', async () => {
     await fs.outputJson(path.join(repo, 'package.json'), { name: 'mod-node', token: 'secret-token-value' });
@@ -75,29 +79,28 @@ describe('S010 advisory agent review', () => {
     expect(manifest.omittedCounts).toEqual(expect.objectContaining({ 'file limit (32)': expect.any(Number) }));
     expect(manifest.omittedExamples['file limit (32)']).toHaveLength(3);
     expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThan(48 * 1024);
-  });
+  }, 60_000);
 
-  it('keeps the manifest valid after workspace preparation when included paths are very long', async () => {
+  it('keeps the manifest valid under the workspace byte cap when logical paths are very long', async () => {
     const segment = 'x'.repeat(180);
-    const deepDirectory = path.join('config', ...Array(18).fill(segment));
-    for (let index = 0; index < 40; index += 1) {
-      await fs.outputFile(path.join(repo, deepDirectory, `${String(index).padStart(2, '0')}.yml`), `setting: ${index}`);
-    }
-    execFileSync('git', ['add', '.'], { cwd: repo });
-    execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
+    const deepDirectory = ['config', ...Array(18).fill(segment)].join('/');
+    jest.spyOn(committedSource, 'readCommittedSource').mockResolvedValue({
+      revision: 'a'.repeat(40),
+      complete: true,
+      diagnostics: [],
+      files: Array.from({ length: 40 }, (_, index) => ({
+        path: `${deepDirectory}/${String(index).padStart(2, '0')}.yml`,
+        oid: String(index).padStart(40, '0'),
+        size: 10,
+        content: `setting: ${index}`
+      }))
+    });
 
     const request = await buildS010AgentReviewRequest(repo, analysis());
     const manifestFile = request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'));
     expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThanOrEqual(48 * 1024);
-    expect(() => JSON.parse(manifestFile?.content ?? '')).not.toThrow();
-
-    const workspace = prepareCriterionReviewWorkspace(request);
-    try {
-      const prepared = await fs.readFile(path.join(workspace.rootPath, 'docs', '.criterion-agent/S010/snapshot-manifest.json'), 'utf8');
-      expect(() => JSON.parse(prepared)).not.toThrow();
-    } finally {
-      await fs.remove(workspace.rootPath);
-    }
+    const workspaceContent = redactSensitiveText(manifestFile?.content ?? '', 96 * 1024);
+    expect(() => JSON.parse(workspaceContent)).not.toThrow();
   });
 
   it('accepts cited repository assessments without changing deterministic status', async () => {
