@@ -517,7 +517,8 @@ describe('S006 sensitive information finding extraction', () => {
 
     const topExample = formatS006Evidence(result).details.split('\n')
       .find(line => line.includes('config/key.txt:2-4'));
-    expect(topExample).toContain(`-----BEGIN PRIVATE KEY----- ⏎ ${privateKeyBody} ⏎ -----END PRIVATE KEY-----`);
+    expect(topExample).toContain('[REDACTED_PRIVATE_KEY]');
+    expect(topExample).not.toContain(privateKeyBody);
     expect(formatS006Evidence(result).details).not.toMatch(new RegExp(`^${privateKeyBody}`, 'm'));
   });
 
@@ -1028,7 +1029,8 @@ describe('S006 sensitive information finding extraction', () => {
     const reportDetails = buildS006CriterionDetails(result);
 
     expect(JSON.stringify(reportDetails)).not.toContain('valueFingerprint');
-    expect(reportDetails.findings[0].excerpt.text).toBe(rawKey);
+    expect(reportDetails.findings[0].excerpt.text).toBe('[REDACTED_PROVIDER_API_KEY]');
+    expect(JSON.stringify(reportDetails)).not.toContain(rawKey);
   });
 
   it('keeps local credential URL and assignment coverage when Gitleaks reports clean', async () => {
@@ -1592,8 +1594,9 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.FAIL);
     expect(deterministicIndex).toBeGreaterThanOrEqual(0);
     expect(documentationIndex).toBeGreaterThan(deterministicIndex);
-    expect(rendered.details).toContain(rawProductionKey);
-    expect(rendered.details).toContain(`X-Okapi-Token: ${rawDocumentationToken}`);
+    expect(rendered.details).not.toContain(rawProductionKey);
+    expect(rendered.details).not.toContain(rawDocumentationToken);
+    expect(rendered.details).toContain('scanner/pattern candidate');
     expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
   });
 
@@ -1616,7 +1619,7 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('local docker defaults');
     expect(rendered.details).toContain('Confirm local Docker defaults are not reused outside local development');
-    expect(rendered.details).toContain('POSTGRES_PASSWORD: postgres');
+    expect(rendered.details).toContain('POSTGRES_PASSWORD=[REDACTED]');
   });
 
   it('renders documentation snippets as manual evidence with the matched token excerpt', async () => {
@@ -1629,7 +1632,8 @@ describe('S006 report formatting and criterion details', () => {
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
-    expect(rendered.details).toContain(`Bearer ${rawToken}`);
+    expect(rendered.details).not.toContain(rawToken);
+    expect(rendered.details).toContain('[REDACTED_BEARER_OR_JWT_TOKEN]');
   });
 
   it('reports pass scan coverage, skipped-file counts, and non-material warnings', async () => {
@@ -1680,7 +1684,7 @@ describe('S006 report formatting and criterion details', () => {
     ]));
   });
 
-  it('builds bounded JSON criterionDetails with matched excerpts and without value fingerprints', async () => {
+  it('builds bounded report-safe JSON criterionDetails without matched values or fingerprints', async () => {
     repoPath = createTempRepo();
     const rawKey = 'sk-proj-json1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile(repoPath, 'src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
@@ -1695,10 +1699,18 @@ describe('S006 report formatting and criterion details', () => {
     expect(details.coverageSummary.skippedFileCount).toBe(1);
     expect(details.findings[0]).toMatchObject({
       path: 'src/main/resources/application.yml',
-      excerpt: expect.objectContaining({ text: rawKey })
+      excerpt: expect.objectContaining({ text: '[REDACTED_PROVIDER_API_KEY]' }),
+      disposition: 'deterministic_failure',
+      detectorId: 'provider-api-key',
+      context: 'production_source_or_configuration'
     });
+    expect(serialized).not.toContain(rawKey);
     expect(serialized).not.toContain('valueFingerprint');
     expect(details.findings[0]).not.toHaveProperty('valueClassification');
+    expect(details.findingSummary).toEqual({
+      confidenceRange: { minimum: 'high', maximum: 'high' },
+      severityRange: { minimum: 'critical', maximum: 'critical' }
+    });
   });
 
   it('bounds strongest finding objects and keeps deterministic failures first for JSON consumers', async () => {
@@ -1745,8 +1757,10 @@ describe('S006 report formatting and criterion details', () => {
 
     expect(rendered.details).toContain('Agent review:');
     expect(rendered.details).toContain('Advisory recommendation: needs_reviewer_judgment');
-    expect(rendered.details).toContain('http://192.168.1.10/admin');
-    expect(rendered.details).toContain('token=secretish');
+    expect(rendered.details).toContain('[REDACTED_PRIVATE_URL]');
+    expect(rendered.details).toContain('token=[REDACTED]');
+    expect(rendered.details).not.toContain('http://192.168.1.10/admin');
+    expect(rendered.details).not.toContain('secretish');
   });
 });
 

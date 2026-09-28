@@ -124,6 +124,7 @@ export interface S006ReportFinding {
   context: S006FindingContext;
   confidence: S006FindingConfidence;
   severity: S006FindingSeverity;
+  disposition: 'deterministic_failure' | 'scanner_or_pattern_candidate';
   excerpt: S006Excerpt;
   rationale: string;
 }
@@ -201,6 +202,10 @@ export interface S006ReportDetails {
   findingCount: number;
   retainedFindingCount: number;
   findings: S006ReportFinding[];
+  findingSummary: {
+    confidenceRange?: { minimum: S006FindingConfidence; maximum: S006FindingConfidence };
+    severityRange?: { minimum: S006FindingSeverity; maximum: S006FindingSeverity };
+  };
   scanner: S006SecretScannerSummary;
   coverage: S006ScanCoverage;
   coverageSummary: {

@@ -9,7 +9,11 @@ import {
   reviewS010WithAgent
 } from '../utils/s010-agent-review';
 import * as committedSource from '../utils/committed-source';
-import { prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
+import { prepareCriterionAgentReviewEvidence, prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
+
+async function prepared(request: Awaited<ReturnType<typeof buildS010AgentReviewRequest>>) {
+  return (await prepareCriterionAgentReviewEvidence(request)).request;
+}
 
 describe('S010 advisory agent review', () => {
   let repo: string;
@@ -42,7 +46,7 @@ describe('S010 advisory agent review', () => {
     await fs.outputFile(path.join(repo, 'src/uncommitted.ts'), 'must not appear');
     await fs.outputFile(path.join(repo, 'src/client.ts'), 'uncommitted replacement');
 
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     const paths = request.files.map(file => file.repoRelativePath);
     const material = request.files.map(file => file.content).join('\n');
 
@@ -74,7 +78,7 @@ describe('S010 advisory agent review', () => {
     execFileSync('git', ['add', '-f', '.'], { cwd: repo });
     execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
 
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     const workspace = prepareCriterionReviewWorkspace(request);
     try {
       for (const file of excluded) {
@@ -92,13 +96,13 @@ describe('S010 advisory agent review', () => {
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
     await fs.outputFile(path.join(repo, 'assets/large.png'), png);
     await commit('src/client.ts', 'const dependency = "search";');
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     expect(request.files.map(file => file.repoRelativePath)).toContain('src/client.ts');
     expect(request.files.map(file => file.repoRelativePath)).not.toContain('assets/large.png');
     const manifest = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'))!.content);
     expect(manifest.omissions.counts.binary).toBe(1);
     await commit('src/large.ts', 'x'.repeat(1024 * 1024 + 1));
-    const limited = await buildS010AgentReviewRequest(repo, analysis());
+    const limited = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     expect(limited.files.map(file => file.repoRelativePath)).not.toContain('src/large.ts');
     const omissions = JSON.parse(limited.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'))!.content).omissions;
     expect(omissions.counts).toEqual({ binary: 1, 'file-size': 1 });
@@ -122,7 +126,7 @@ describe('S010 advisory agent review', () => {
     execFileSync('git', ['add', '.'], { cwd: repo });
     execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
 
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     const workspace = prepareCriterionReviewWorkspace(request);
     try {
       expect(workspace.manifestEntries).toHaveLength(47);
@@ -151,7 +155,7 @@ describe('S010 advisory agent review', () => {
     execFileSync('git', ['add', '.'], { cwd: repo });
     execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
 
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     const manifestFile = request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'));
     const manifest = JSON.parse(manifestFile?.content ?? '') as Record<string, any>;
 
@@ -180,7 +184,7 @@ describe('S010 advisory agent review', () => {
     const content = 'x'.repeat(1024 * 1024);
     await commit('src/client.ts', 'source');
     await commit('transport/large.ts', content);
-    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const request = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     const workspace = prepareCriterionReviewWorkspace(request);
     try {
       expect(await fs.readFile(path.join(workspace.rootPath, 'docs/transport/large.ts'), 'utf8')).toBe(content);
@@ -191,7 +195,7 @@ describe('S010 advisory agent review', () => {
       await fs.remove(workspace.rootPath);
     }
     await commit('transport/large.ts', `${content}x`);
-    const limited = await buildS010AgentReviewRequest(repo, analysis());
+    const limited = await prepared(await buildS010AgentReviewRequest(repo, analysis()));
     expect(limited.files.map(file => file.repoRelativePath)).not.toContain('transport/large.ts');
   });
 
@@ -320,7 +324,7 @@ describe('S010 advisory agent review', () => {
     const deterministic = analysis();
     deterministic.evidence.scenarios[0].proof = 'clear-fail-fast';
     const original = JSON.stringify(deterministic);
-    const request = await buildS010AgentReviewRequest(repo, deterministic);
+    const request = await prepared(await buildS010AgentReviewRequest(repo, deterministic));
     const summary = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content);
     expect(summary.scenarios[0].proof).toBe('failure-propagation-observed-duration-unverified');
     expect(JSON.stringify(deterministic)).toBe(original);

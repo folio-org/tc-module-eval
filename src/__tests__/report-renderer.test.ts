@@ -11,6 +11,12 @@ describe('EvaluationReportRenderer', () => {
     return JSON.parse(match![1]);
   }
 
+  function downloadData(html: string): any {
+    const match = html.match(/<script id="download-data" type="application\/json">([\s\S]+?)<\/script>/);
+    expect(match).not.toBeNull();
+    return JSON.parse(match![1]);
+  }
+
   function preparedItems(html: string): any[] {
     const data = reportData(html);
     const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
@@ -195,19 +201,24 @@ describe('EvaluationReportRenderer', () => {
     expect(JSON.stringify(report)).toBe(original);
   });
 
-  it('keeps unavailable diagnostics in JSON without leaking model names into HTML', () => {
+  it('shows the actual unavailable-review reason without inferring a timeout from command context', () => {
     const report: EvaluationResult = { ...result, criteria: [{
       criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual',
-      details: 'Agent review:\n  - Not applied: model hidden-model timed_out',
+      details: 'Agent review:\n  - Not applied: stale legacy reason',
       agentReview: { available: false, criterionId: 'S010', recommendation: 'likely_sufficient',
-        evidenceReferences: [], warnings: [], errors: ['model hidden-model timed_out'] }
+        evidenceReferences: [], warnings: ['Command configured with timeout 420000ms'],
+        errors: ['Provider returned invalid JSON'] }
     }] };
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml(report);
-    expect(html).not.toContain('hidden-model');
     expect(reportData(html).items[0].recommendation).toBeUndefined();
-    expect(reportData(html).items[0].details).toContain('  - Summary: The review exceeded its time limit.');
-    expect(renderer.renderJson(report)).toContain('model hidden-model timed_out');
+    expect(reportData(html).items[0].details).toEqual(expect.arrayContaining([
+      '  - Summary: No usable advisory review was returned.',
+      '  - Reason: Provider returned invalid JSON',
+      '    - Command configured with timeout 420000ms'
+    ]));
+    expect(reportData(html).items[0].details.join('\n')).not.toContain('exceeded its time limit');
+    expect(renderer.renderJson(report)).toContain('Provider returned invalid JSON');
   });
 
   it.each([
@@ -234,8 +245,29 @@ describe('EvaluationReportRenderer', () => {
     }] };
     const details = reportData(new EvaluationReportRenderer().renderHtml(report)).items[0].details;
     expect(details).toContain('  - Status: Unavailable');
-    expect(details).toContain('  - Summary: No usable advisory review was returned. See the JSON report for diagnostic details.');
+    expect(details).toContain('  - Summary: No usable advisory review was returned.');
+    expect(details).toContain('  - Reason: Provider returned incomplete response');
     expect(details).not.toContain('  - Status: Skipped');
+  });
+
+  it('keeps complete sanitized legacy-only diagnostics in the download while bounding HTML details', () => {
+    const longDiagnostic = `seventh ${'x'.repeat(600)} token=legacy-secret`;
+    const diagnostics = [
+      'first failure', 'second detail', 'third detail', 'fourth detail',
+      'fifth detail', 'sixth detail', longDiagnostic
+    ];
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+      details: ['Agent review:', ...diagnostics.map(value => `  - ${value}`)].join('\n')
+    }] };
+    const html = new EvaluationReportRenderer().renderHtml(report);
+    const displayed = reportData(html).items[0].details.join('\n');
+    const downloaded = downloadData(html).criteria[0].details;
+
+    expect(displayed).toContain('... 1 more in the downloaded JSON report');
+    expect(displayed).not.toContain('seventh');
+    expect(downloaded).toContain(`seventh ${'x'.repeat(600)} token=[REDACTED]`);
+    expect(downloaded).not.toContain('legacy-secret');
   });
 
   it('should render JSON with stable indentation', () => {
@@ -253,7 +285,9 @@ describe('EvaluationReportRenderer', () => {
 
     expect(html).toContain('FOLIO Module Evaluation Report');
     expect(html).toContain('Search criteria and evidence');
-    expect(html).toContain('Expand all');
+    expect(html).toContain('Expand criteria');
+    expect(html).toContain('Collapse criteria');
+    expect(html).toContain('Download JSON');
     expect(html).toContain('No automated check');
     expect(html).toContain('window.addEventListener(\'keydown\'');
     expect(html).not.toContain('fetch(');
@@ -265,6 +299,39 @@ describe('EvaluationReportRenderer', () => {
       evidence: 'Apache <2.0> & compatible',
       details: ['Line one', 'Line two']
     });
+  });
+
+  it('renders compatible provenance, a downloadable report, and only commit-pinned tracked source links', () => {
+    const commit = '0123456789abcdef0123456789abcdef01234567';
+    const html = new EvaluationReportRenderer().renderHtml({
+      ...result,
+      provenance: {
+        repositoryCommit: commit,
+        evaluator: { name: 'folio-module-evaluator', version: '1.2.3' },
+        agentReviewModel: 'openrouter/deepseek/deepseek-v4-flash',
+        citedSourcePaths: ['README.md']
+      },
+      criteria: [{
+        criterionId: 'S004',
+        status: EvaluationStatus.MANUAL,
+        evidence: 'Review needed.',
+        details: 'Sources:\n  - README.md:12 documented setup\n  - /tmp/generated.json:1 generated output'
+      }]
+    });
+    const data = reportData(html);
+    const downloaded = downloadData(html);
+
+    expect(data.meta).toMatchObject({
+      commit,
+      evaluator: { name: 'folio-module-evaluator', version: '1.2.3' },
+      agentReviewModel: 'openrouter/deepseek/deepseek-v4-flash',
+      sourceBase: `https://github.com/folio-org/test-module/blob/${commit}/`,
+      citedSourcePaths: ['README.md']
+    });
+    expect(downloaded.provenance.repositoryCommit).toBe(commit);
+    expect(downloaded.criteria[0]).toMatchObject({ criterionId: 'S004', status: 'manual' });
+    expect(html).toContain("data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'')");
+    expect(html).toContain("data.meta.citedSourcePaths.indexOf(file)<0");
   });
 
   it('uses a stable S008 title while retaining the evaluation summary as evidence', () => {
@@ -402,6 +469,7 @@ describe('EvaluationReportRenderer', () => {
     const html = renderer.renderHtml(result);
     const data = reportData(html);
     const embedded = JSON.stringify(data);
+    const downloaded = JSON.stringify(downloadData(html));
 
     expect(json).toContain('"criterionDetails"');
     expect(embedded).toContain('<script>alert(\\"x\\")</script>');
@@ -410,6 +478,11 @@ describe('EvaluationReportRenderer', () => {
     expect(html).not.toContain('</script> password=');
     expect(html).not.toContain('<script>bad()</script>');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
+    expect(downloaded).not.toContain('sk-details-secret');
+    expect(downloaded).not.toContain('sk-proj-renderersecret1234567890');
+    expect(downloaded).not.toContain('renderersecret');
+    expect(downloadData(html).criteria[2]).toHaveProperty('criterionDetails');
+    expect(downloadData(html).criteria[2]).toHaveProperty('agentReview');
   });
 
   it('should expose escaping helpers for focused renderer tests', () => {

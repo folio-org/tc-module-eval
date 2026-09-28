@@ -164,6 +164,39 @@ DB_HOST, DB_PORT, DB_DATABASE, KAFKA_HOST, and KAFKA_PORT configure local develo
     expect(groups).toContain('build_test');
   });
 
+  it('retains a later concrete instruction instead of an earlier TOC or error mention', () => {
+    writeFile('README.md', `
+# Contents
+- [Running](#running)
+
+The module cannot run when its configuration is invalid.
+
+## Running
+Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'strong', line: 7 });
+    expect(runSignal?.excerpt).toContain('docker compose');
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('does not treat ordinary prose as a concrete target before a real command', () => {
+    writeFile('README.md', `
+# Running
+Run locally using the configuration described below.
+Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'strong', line: 3 });
+    expect(runSignal?.excerpt).toContain('docker compose');
+  });
+
   it('fails test-only documentation', () => {
     writeFile('README.md', `
 # mod-tests-only

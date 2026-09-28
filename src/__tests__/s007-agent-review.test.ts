@@ -9,9 +9,13 @@ import {
   S007TechnologyFinding
 } from '../types';
 import * as committedSource from '../utils/committed-source';
-import { prepareCriterionReviewWorkspace, reviewCriterionWithAgent } from '../utils/criterion-agent-review';
+import { prepareCriterionAgentReviewEvidence, prepareCriterionReviewWorkspace, reviewCriterionWithAgent } from '../utils/criterion-agent-review';
 import { buildS007AgentReviewRequest, reviewS007WithAgent } from '../utils/s007-agent-review';
 import { loadS007Policy } from '../utils/s007-policy';
+
+async function prepared(request: Awaited<ReturnType<typeof buildS007AgentReviewRequest>>) {
+  return (await prepareCriterionAgentReviewEvidence(request)).request;
+}
 
 describe('S007 agent review', () => {
   let repoPath: string;
@@ -37,7 +41,7 @@ describe('S007 agent review', () => {
     await fs.outputFile(path.join(repoPath, 'src/application.ts'), 'uncommitted replacement');
     await fs.outputFile(path.join(repoPath, 'src/uncommitted.ts'), 'must not appear');
 
-    const request = await buildS007AgentReviewRequest(repoPath, analysis(finding('react', 'package.json')));
+    const request = await prepared(await buildS007AgentReviewRequest(repoPath, analysis(finding('react', 'package.json'))));
     const paths = request.files.map(file => file.repoRelativePath);
 
     expect(paths).toEqual(expect.arrayContaining(['package.json', 'deployment/runtime.conf', 'src/application.ts']));
@@ -57,7 +61,7 @@ describe('S007 agent review', () => {
     if (!policyLoad.ok) return;
     const deterministic = analysis(finding('unknown-framework', 'pom.xml', 'unlisted-framework'));
 
-    const request = await buildS007AgentReviewRequest(repoPath, deterministic, policyLoad.policy);
+    const request = await prepared(await buildS007AgentReviewRequest(repoPath, deterministic, policyLoad.policy));
     const summary = JSON.parse(request.files.find(file => file.repoRelativePath === '.criterion-agent/S007/deterministic-summary.json')!.content);
     const policy = JSON.parse(request.files.find(file => file.repoRelativePath === '.criterion-agent/S007/policy-context.json')!.content);
 
@@ -71,7 +75,7 @@ describe('S007 agent review', () => {
     await commit({ 'pom.xml': '<project />' });
     const deterministic = analysis(finding('java', 'pom.xml'));
     deterministic.findings = Array.from({ length: 150 }, (_, index) => finding(`technology-${index}`, 'pom.xml'));
-    const request = await buildS007AgentReviewRequest(repoPath, deterministic);
+    const request = await prepared(await buildS007AgentReviewRequest(repoPath, deterministic));
     const summary = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!;
     expect(Buffer.byteLength(summary.content)).toBeGreaterThan(24 * 1024);
     const workspace = prepareCriterionReviewWorkspace(request);
@@ -155,7 +159,7 @@ describe('S007 agent review', () => {
   it('preserves status and redacts advisory output, not repository source', async () => {
     await commit({ 'package.json': '{"dependencies":{"react":"^18"},"token":"source-secret-value"}' });
     const deterministic = analysis(finding('react', 'package.json'));
-    const request = await buildS007AgentReviewRequest(repoPath, deterministic);
+    const request = await prepared(await buildS007AgentReviewRequest(repoPath, deterministic));
     expect(request.files.find(file => file.repoRelativePath === 'package.json')?.content).toContain('source-secret-value');
 
     const review = await reviewS007WithAgent(repoPath, deterministic, fakeConfig({
@@ -182,14 +186,16 @@ describe('S007 agent review', () => {
     expect(review.errors.join('\n')).toContain(error);
   });
 
-  it('throws direct preparation errors and orchestration catches them', async () => {
+  it('reports shared preparation errors as unavailable', async () => {
     jest.spyOn(committedSource, 'readCommittedSource').mockResolvedValue({
       revision: 'a'.repeat(40), complete: false,
       diagnostics: [{ code: 'git-error', message: 'fixture failure', material: true }], files: []
     });
     const deterministic = analysis(finding('react', 'package.json'));
-    await expect(buildS007AgentReviewRequest(repoPath, deterministic)).rejects.toThrow('workspace is incomplete');
-    await expect(reviewS007WithAgent(repoPath, deterministic, fakeConfig({}))).rejects.toThrow('workspace is incomplete');
+    await expect(buildS007AgentReviewRequest(repoPath, deterministic)).resolves.toBeDefined();
+    const direct = await reviewS007WithAgent(repoPath, deterministic, fakeConfig({}));
+    expect(direct.available).toBe(false);
+    expect(direct.errors.join(' ')).toContain('workspace is incomplete');
 
     const result = await reviewCriterionWithAgent({
       criterionId: 'S007', status: EvaluationStatus.MANUAL, hasReviewMaterial: true,
@@ -197,7 +203,7 @@ describe('S007 agent review', () => {
       review: config => reviewS007WithAgent(repoPath, deterministic, config)
     });
     expect(result.agentReview?.available).toBe(false);
-    expect(result.unavailableReason).toContain('Agent review failed unexpectedly');
+    expect(result.unavailableReason).toContain('workspace is incomplete');
   });
 
   it.each([

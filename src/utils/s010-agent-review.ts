@@ -6,7 +6,6 @@ import {
   S010Analysis
 } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { withRepositoryBrowsing } from './agent-review-repository';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
@@ -52,7 +51,7 @@ export async function buildS010AgentReviewRequest(
     findings: analysis.findings,
     diagnostics: analysis.diagnostics
   }, null, 2), 48 * 1024);
-  return withRepositoryBrowsing({
+  return {
     criterionId: 'S010',
     repositoryPath: repoPath,
     instructions: [
@@ -102,7 +101,7 @@ export async function buildS010AgentReviewRequest(
       }, null, 2) }
     ],
     schemaDescription: 'JSON object. Required: recommendation (likely_sufficient|likely_insufficient|needs_reviewer_judgment), confidence (low|medium|high), nonblank summary and rationale, nonempty evidenceReferences, nonempty assessments, reviewerActions. Each assessment includes technologyId, type, summary, evidenceReferences and failureBounds with exactly three cited records (startup, tenant_initialization, runtime): phase, requirement (required|optional|conditional|unknown), status (established|unverified|not_applicable), explanation, evidenceReferences. Exception: cited internal components use type analyzer_limitation and coverageDisposition immaterial without failureBounds. Every reference must exactly match a repository-files.json repoRelativePath. See response-shape.json for a complete example.'
-  });
+  };
 }
 
 function validateS010Review(

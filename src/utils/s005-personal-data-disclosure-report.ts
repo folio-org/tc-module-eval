@@ -92,8 +92,8 @@ export function formatS005Evidence(
   const tail = [findingsText, warningsText, agentText].filter(Boolean).join('\n');
   const separator = tail ? '\n' : '';
   const supportBudget = MAX_REPORT_DETAILS_BYTES - Buffer.byteLength(separator + tail, 'utf8');
-  const details = boundS005Text(
-    supportingLines.filter((line): line is string => line !== undefined).join('\n'),
+  const details = wholeLinePreview(
+    supportingLines.filter((line): line is string => line !== undefined),
     supportBudget
   ) + separator + tail;
 
@@ -101,6 +101,23 @@ export function formatS005Evidence(
     evidence: boundS005Text(evidence, 700),
     details
   };
+}
+
+function wholeLinePreview(lines: string[], maxBytes: number): string {
+  const included: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const candidate = [...included, lines[index]].join('\n');
+    const omitted = lines.length - index - 1;
+    const marker = omitted > 0 ? `\n  - Preview rows included: ${index + 1}; omitted: ${omitted}` : '';
+    if (Buffer.byteLength(candidate + marker, 'utf8') > maxBytes) {
+      break;
+    }
+    included.push(lines[index]);
+  }
+  const omitted = lines.length - included.length;
+  return included.join('\n') + (omitted > 0
+    ? `${included.length ? '\n' : ''}  - Preview rows included: ${included.length}; omitted: ${omitted}`
+    : '');
 }
 
 function formatBoundedFindings(analysis: S005PersonalDataDisclosureAnalysisResult): string[] {
@@ -194,7 +211,10 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
           contradictions: analysis.parseResult.contradictions,
           classification: analysis.parseResult.classification,
           parseError: analysis.parseResult.parseError
-            ? { message: analysis.parseResult.parseError.message }
+            ? {
+                message: boundS005Text(analysis.parseResult.parseError.message),
+                excerpt: analysis.parseResult.parseError.excerpt
+              }
             : undefined,
           warnings: analysis.parseResult.warnings.map(warning => boundS005Text(warning))
         }
@@ -202,10 +222,16 @@ export function buildS005CriterionDetails(analysis: S005PersonalDataDisclosureAn
     evidenceScan: analysis.evidenceScan
       ? {
           signalCount: analysis.evidenceScan.signals.length,
-          signals: strongestS005Signals(analysis.evidenceScan.signals).map(boundS005SignalReference),
+          // Scanner retention is already bounded by category/source-class caps; preserve it all.
+          signals: analysis.evidenceScan.signals.map(boundS005SignalReference),
           scannedFileCount: analysis.evidenceScan.scannedFiles.length,
           scannedFiles: analysis.evidenceScan.scannedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(filePath => boundS005Text(filePath)),
+          scannedFilesIncludedCount: Math.min(analysis.evidenceScan.scannedFiles.length, MAX_CRITERION_DETAIL_FILES),
+          scannedFilesOmittedCount: Math.max(analysis.evidenceScan.scannedFiles.length - MAX_CRITERION_DETAIL_FILES, 0),
+          skippedFileCount: analysis.evidenceScan.skippedFiles.length,
           skippedFiles: analysis.evidenceScan.skippedFiles.slice(0, MAX_CRITERION_DETAIL_FILES).map(boundS005SkippedFile),
+          skippedFilesIncludedCount: Math.min(analysis.evidenceScan.skippedFiles.length, MAX_CRITERION_DETAIL_FILES),
+          skippedFilesOmittedCount: Math.max(analysis.evidenceScan.skippedFiles.length - MAX_CRITERION_DETAIL_FILES, 0),
           warnings: analysis.evidenceScan.warnings.map(warning => boundS005Text(warning))
         }
       : undefined,
@@ -448,7 +474,8 @@ function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistIte
     order: item.order,
     lineNumber: item.lineNumber,
     checked: item.checked,
-    normalizedCategory: item.normalizedCategory
+    normalizedCategory: item.normalizedCategory,
+    normalizedCategories: item.normalizedCategories ?? [item.normalizedCategory]
   };
 }
 

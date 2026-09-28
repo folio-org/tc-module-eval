@@ -221,8 +221,7 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
 
 function extractSignals(relativePath: string, content: string): S004DocumentationSignal[] {
   const lines = content.split(/\r?\n/);
-  const signals: S004DocumentationSignal[] = [];
-  const seen = new Set<string>();
+  const bestByGroup = new Map<S004SignalGroup, S004DocumentationSignal>();
 
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
@@ -233,38 +232,54 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (rule.group === 'install_deploy_run' && isDevelopmentInstallLine(line)) {
         continue;
       }
-      const key = `${rule.group}:${rule.label}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      signals.push({
+      const signal = {
         group: rule.group,
         label: rule.label,
         path: relativePath,
         line: index + 1,
         excerpt: excerptAround(lines, index),
-        strength: rule.strength
-      });
+        strength: contextualSignalStrength(lines, index, rule.strength)
+      };
+      const previous = bestByGroup.get(rule.group);
+      if (!previous || signalRank(signal.strength) < signalRank(previous.strength)) {
+        bestByGroup.set(rule.group, signal);
+      }
     }
   }
 
-  return signals;
+  return [...bestByGroup.values()];
+}
+
+function contextualSignalStrength(
+  lines: string[],
+  index: number,
+  configured: S004DocumentationSignal['strength']
+): S004DocumentationSignal['strength'] {
+  const line = lines[index].trim();
+  if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
+    return 'insufficient';
+  }
+  const command = /\b(docker(?:\s+compose)?|curl|java|mvn|gradle|npm|yarn|pnpm|kubectl|helm)\s+[^\s]|\.\/gradlew\s+[^\s]/i;
+  const instruction = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
+  const uppercaseIdentifier = /\b[A-Z][A-Z0-9_]{2,}\b/;
+  const concreteTarget = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
+  if (command.test(line) || (instruction.test(line) && (uppercaseIdentifier.test(line) || concreteTarget.test(line)))) {
+    return configured === 'candidate' ? 'candidate' : 'strong';
+  }
+  return configured === 'strong' ? 'candidate' : configured;
+}
+
+function isTableOfContentsLine(line: string): boolean {
+  return /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]\(#[^)]+\)\s*$/i.test(line);
+}
+
+function signalRank(strength: S004DocumentationSignal['strength']): number {
+  return strength === 'strong' ? 0 : strength === 'candidate' ? 1 : 2;
 }
 
 function strongestSignals(signals: S004DocumentationSignal[]): S004DocumentationSignal[] {
-  const rank = (strength: S004DocumentationSignal['strength']): number => {
-    if (strength === 'strong') {
-      return 0;
-    }
-    if (strength === 'candidate') {
-      return 1;
-    }
-    return 2;
-  };
-
   return [...signals]
-    .sort((left, right) => rank(left.strength) - rank(right.strength))
+    .sort((left, right) => signalRank(left.strength) - signalRank(right.strength))
     .slice(0, 6);
 }
 

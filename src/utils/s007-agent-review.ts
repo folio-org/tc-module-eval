@@ -1,6 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S007AnalysisResult, S007OfficiallySupportedTechnologiesPolicy } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { withRepositoryBrowsing } from './agent-review-repository';
 
 export async function reviewS007WithAgent(
   repoPath: string,
@@ -31,7 +30,7 @@ export async function buildS007AgentReviewRequest(
   analysis: S007AnalysisResult,
   policy?: S007OfficiallySupportedTechnologiesPolicy
 ): Promise<CriterionAgentReviewRequest> {
-  return withRepositoryBrowsing({
+  return {
     criterionId: 'S007',
     repositoryPath: repoPath,
     instructions: [
@@ -58,7 +57,7 @@ export async function buildS007AgentReviewRequest(
       content: JSON.stringify(policy ?? { unavailable: true, diagnostics: analysis.policyDiagnostics }, null, 2)
     }],
     schemaDescription: 'JSON object with recommendation enum, confidence enum, summary string, rationale string, repository evidenceReferences string[], nonempty cited assessments[], and cited reviewerActions[]'
-  });
+  };
 }
 
 function validateS007Review(analysis: S007AnalysisResult, review: CriterionAgentReviewResult): string | undefined {

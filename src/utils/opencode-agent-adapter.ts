@@ -78,6 +78,8 @@ export async function runOpenCodeAgentReview(
     return result;
   };
 
+  // Shared orchestration performs these checks before evidence preparation. Keep
+  // them here as defense for direct adapter callers and to narrow optional types.
   if (config.providerConfigError) {
     return baseUnavailable(config.providerConfigError);
   }

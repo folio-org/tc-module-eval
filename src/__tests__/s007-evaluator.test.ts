@@ -377,9 +377,8 @@ describe('S007 deterministic evaluator', () => {
 
     expect(details.match(/^- spring-boot \(spring-boot\):/gm)).toHaveLength(1);
     expect(details).toContain('Needs review: policy wording is contested or time-bound.');
-    expect(details).toContain('org.springframework.boot:spring-boot-starter-web — Needs review: policy wording is contested or time-bound');
-    expect(details).toContain('org.springframework.boot:spring-boot-starter-validation — Needs review: policy wording is contested or time-bound');
-    expect(details).toContain('Classification: contested');
+    expect(details).toContain('org.springframework.boot:spring-boot-starter-web (+1 more declarations) — Needs review: policy wording is contested or time-bound');
+    expect(details.match(/Classification: contested/g)).toHaveLength(1);
     expect(details).toContain('Result contribution: manual');
     expect(details).toContain('first/pom.xml — org.springframework.boot:spring-boot-starter-web');
     expect(details).toContain('second/pom.xml — org.springframework.boot:spring-boot-starter-validation');

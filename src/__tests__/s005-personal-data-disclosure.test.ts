@@ -92,6 +92,21 @@ Version: 1.0
     expect(result.checkedCategories).toEqual(['no_personal_data']);
   });
 
+  it('normalizes combined identifiers without changing row-based completion or precedence', () => {
+    const result = parseS005PersonalDataDisclosureMarkdown(`
+# Personal Data Disclosure
+- [x] Username / User Identifier (UUID)
+- [x] Login Name
+- [x] IP Address
+`);
+
+    expect(result.checkedCategories).toEqual(['username', 'user_identifier', 'ip_or_mac_address']);
+    expect(result.completion.checkedMeaningfulAnswers).toBe(3);
+    expect(result.checklistItems[0].normalizedCategories).toEqual(['username', 'user_identifier']);
+    expect(result.checklistItems[1].normalizedCategory).toBe('username');
+    expect(result.checklistItems[2].normalizedCategory).toBe('ip_or_mac_address');
+  });
+
   it('classifies a blank copied template as incomplete', () => {
     const result = parseS005PersonalDataDisclosureMarkdown(`
 # Personal Data Disclosure
@@ -378,6 +393,31 @@ describe('S005 personal data disclosure artifact discovery', () => {
 });
 
 describe('S005 bounded personal-data evidence scanner', () => {
+  it('keeps generic catalog and infrastructure vocabulary context-only while retaining patron identifiers', () => {
+    const repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/catalog.ts', `
+const barcode = item.barcode;
+const location = holding.location;
+const publisher = record.publisher;
+const description = record.circulationDescription;
+const cache = createCache();
+const patronId = loan.patronId;
+const userBarcode = patron.barcode;
+`);
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+    expect(result.signals.filter(signal => ['user_identifier', 'address', 'transmission', 'circulation_transactions', 'cache'].includes(signal.category)))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ line: 2, category: 'user_identifier', strength: 'context' }),
+        expect.objectContaining({ line: 3, category: 'address', strength: 'context' }),
+        expect.objectContaining({ line: 4, category: 'transmission', strength: 'context' }),
+        expect.objectContaining({ line: 5, category: 'circulation_transactions', strength: 'context' }),
+        expect.objectContaining({ line: 6, category: 'cache', strength: 'context' }),
+        expect.objectContaining({ line: 7, category: 'user_identifier', strength: 'strong' }),
+        expect.objectContaining({ line: 8, category: 'user_identifier', strength: 'strong' })
+      ]));
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  });
   let repoPath: string;
 
   afterEach(() => {
@@ -577,6 +617,26 @@ jobs:
 
     expect(result.scannedFiles).not.toContain('.github/workflows/api-cache.yml');
     expect(result.signals).toEqual([]);
+  });
+
+  it('retains a later strong personal identifier when context-only signals fill the bucket first', () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'src/main/java/org/folio/Inventory.java', [
+      ...Array.from({ length: MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS }, (_, index) =>
+        `String inventoryBarcode${index} = item.barcode;`),
+      'String patronId = request.getPatronId();'
+    ].join('\n'));
+
+    const result = gatherS005PersonalDataEvidence(repoPath);
+    const identifiers = result.signals.filter(signal =>
+      signal.category === 'user_identifier' && signal.sourceClass === 'implementation'
+    );
+
+    expect(identifiers).toHaveLength(MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS);
+    expect(identifiers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ excerpt: expect.stringContaining('patronId'), strength: 'strong' })
+    ]));
+    expect(identifiers.filter(signal => signal.strength === 'context')).toHaveLength(MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS - 1);
   });
 
   it('bounds large and binary files, skips dependency/build/report folders, and reports retention caps', () => {

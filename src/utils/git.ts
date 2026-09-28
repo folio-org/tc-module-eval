@@ -121,7 +121,14 @@ export class GitUtils {
    * @param repoPath Path to the cloned repository
    * @returns Basic repository info
    */
-  async getRepoInfo(repoPath: string): Promise<{ name: string; hasPackageJson: boolean; hasPomXml: boolean; hasBuildGradle: boolean }> {
+  async getRepoInfo(repoPath: string): Promise<{
+    name: string;
+    commit: string;
+    trackedFiles: string[];
+    hasPackageJson: boolean;
+    hasPomXml: boolean;
+    hasBuildGradle: boolean;
+  }> {
     // Use stored repo name if available, otherwise fall back to path extraction
     // (fallback maintained for backward compatibility)
     const name = this.repoName || path.basename(path.dirname(repoPath));
@@ -129,9 +136,16 @@ export class GitUtils {
     const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));
     const hasBuildGradle = await fs.pathExists(path.join(repoPath, 'build.gradle')) ||
                           await fs.pathExists(path.join(repoPath, 'build.gradle.kts'));
+    const git = simpleGit(repoPath);
+    const [commit, trackedOutput] = await Promise.all([
+      git.revparse(['HEAD']),
+      git.raw(['ls-files', '-z'])
+    ]);
 
     return {
       name,
+      commit: commit.trim(),
+      trackedFiles: trackedOutput.split('\0').filter(Boolean),
       hasPackageJson,
       hasPomXml,
       hasBuildGradle

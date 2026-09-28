@@ -4,6 +4,7 @@ import {
   S006FindingConfidence,
   S006FindingContext,
   S006FindingSeverity,
+  S006ReportFinding,
   S006SensitiveInformationAnalysisResult,
   S006SensitiveInformationFinding,
   S006SkippedFile,
@@ -15,8 +16,8 @@ import {
   rankS006Severity,
   strongestS006ReportFindings
 } from './s006-ranking';
-import { truncateToByteBudget } from './redaction';
-import { formatS006ExcerptInline } from './s006-detectors';
+import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { projectS006ReportFinding } from './s006-report-details';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 
@@ -35,7 +36,8 @@ export function formatS006Evidence(
   const lines: Array<string | undefined> = [
     'Review summary:',
     `  - Status: ${analysis.classification.status}`,
-    `  - Findings: ${analysis.findings.length} retained (${report.deterministicFailures.length} deterministic failure${report.deterministicFailures.length === 1 ? '' : 's'}, ${report.manualFindings.length} manual review)`,
+    `  - Findings: ${analysis.findings.length} retained (${report.deterministicFailures.length} deterministic failure${report.deterministicFailures.length === 1 ? '' : 's'}, ${report.manualFindings.length} scanner/pattern candidate${report.manualFindings.length === 1 ? '' : 's'})`,
+    ...formatAggregateRangeLines(analysis.findings),
     `  - Secret scanner: ${formatScannerSummary(analysis)}`,
     `  - Coverage: ${formatCoverageSummary(analysis, report.materialSkippedFiles.length, report.materialWarnings.length)}`,
     agentReview?.available
@@ -54,7 +56,7 @@ export function formatS006Evidence(
     ...formatFindingGroupLines(analysis.findings),
     '',
     'Top examples:',
-    ...formatCompactFindingLines(report.strongestFindings),
+    ...formatCompactFindingLines(report.strongestFindings.map(projectS006ReportFinding)),
     ...formatFindingOverflowLine(analysis.findings.length, report.strongestFindings.length),
     '',
     'Coverage:',
@@ -163,8 +165,8 @@ function formatWhyLines(
     deterministicFailureCount > 0
       ? `  - ${deterministicFailureCount} high-confidence live-looking finding${deterministicFailureCount === 1 ? '' : 's'} in production or CI/deployment context can fail S006.`
       : '  - No deterministic failure was found.',
-    analysis.findings.length > 0
-      ? `  - ${analysis.findings.length} finding${analysis.findings.length === 1 ? ' still needs' : 's still need'} reviewer judgment.`
+    analysis.findings.length - deterministicFailureCount > 0
+      ? `  - ${analysis.findings.length - deterministicFailureCount} scanner/pattern candidate${analysis.findings.length - deterministicFailureCount === 1 ? '' : 's'} ${analysis.findings.length - deterministicFailureCount === 1 ? 'needs' : 'need'} reviewer judgment.`
       : undefined,
     analysis.coverage.materiallyWeakened
       ? `  - Scan coverage is materially weakened by ${materialWarningCount || 'one or more'} warning${materialWarningCount === 1 ? '' : 's'} and ${materialSkippedFileCount} material skipped file${materialSkippedFileCount === 1 ? '' : 's'}.`
@@ -248,11 +250,11 @@ function formatFindingGroupLines(findings: S006SensitiveInformationFinding[]): s
     )
     .slice(0, MAX_REPORT_LIST_ITEMS)
     .map(group =>
-      `  - ${group.count} ${formatFindingCategory(group.category, group.count)} in ${formatFindingContext(group.context)} (${formatConfidenceSeverity(group.maxConfidence, group.maxSeverity)})`
+      `  - ${group.count} ${formatFindingCategory(group.category, group.count)} in ${formatFindingContext(group.context)} (maximum confidence ${group.maxConfidence}, maximum severity ${group.maxSeverity})`
     );
 }
 
-function formatCompactFindingLines(findings: S006SensitiveInformationFinding[]): string[] {
+function formatCompactFindingLines(findings: S006ReportFinding[]): string[] {
   if (!findings.length) {
     return ['  - none'];
   }
@@ -260,12 +262,27 @@ function formatCompactFindingLines(findings: S006SensitiveInformationFinding[]):
   return findings.slice(0, MAX_REPORT_LIST_ITEMS).map(finding => {
     const location = `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`;
     const lineRange = finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
-    return `  - ${location}${lineRange} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${formatS006ExcerptInline(finding.excerpt.text)}`;
+    const label = finding.disposition === 'deterministic_failure'
+      ? 'deterministic failure'
+      : 'scanner/pattern candidate';
+    return `  - ${location}${lineRange} | ${label} | rule ${finding.detectorId} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${finding.excerpt.text}`;
   });
 }
 
 function formatConfidenceSeverity(confidence: S006FindingConfidence, severity: S006FindingSeverity): string {
   return `confidence ${confidence}, severity ${severity}`;
+}
+
+function formatAggregateRangeLines(findings: S006SensitiveInformationFinding[]): string[] {
+  if (!findings.length) {
+    return [];
+  }
+  const byConfidence = [...findings].sort((left, right) => rankS006Confidence(left.confidence) - rankS006Confidence(right.confidence));
+  const bySeverity = [...findings].sort((left, right) => rankS006Severity(left.severity) - rankS006Severity(right.severity));
+  return [
+    `  - Aggregate confidence range: ${byConfidence[byConfidence.length - 1].confidence} to ${byConfidence[0].confidence} (maximum ${byConfidence[0].confidence})`,
+    `  - Aggregate severity range: ${bySeverity[bySeverity.length - 1].severity} to ${bySeverity[0].severity} (maximum ${bySeverity[0].severity})`
+  ];
 }
 
 function formatFindingCategory(category: string, count: number): string {
@@ -319,10 +336,10 @@ function appendAgentReviewLines(
       'Agent review:',
       agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${agentReview.warnings.join('; ')}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined,
+      agentReview.summary ? `  - Summary: ${redactSensitiveText(agentReview.summary)}` : undefined,
+      agentReview.rationale ? `  - Rationale: ${redactSensitiveText(agentReview.rationale)}` : undefined,
+      agentReview.warnings.length ? `  - Warnings: ${redactSensitiveText(agentReview.warnings.join('; '))}` : undefined,
+      agentReview.errors.length ? `  - Errors: ${redactSensitiveText(agentReview.errors.join('; '))}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
     );

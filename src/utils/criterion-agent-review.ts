@@ -10,6 +10,7 @@ import {
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
+import { prepareRepositoryBrowsing } from './agent-review-repository';
 import { isWithinRepo } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
@@ -26,11 +27,23 @@ export interface CriterionAgentReviewRequest {
   repositoryPath: string;
   instructions: string;
   files: CriterionAgentReviewFile[];
-  /** Browse intact source on disk instead of attaching its entire inventory to the prompt. */
-  repositoryBrowsing?: { maxFileBytes: number };
+  /** Browse eligible committed source by default; opt out for supplied evidence only. */
+  evidenceMode?: 'repository' | 'supplied-files';
+  /** Add criterion context that depends on the source actually available to the review. */
+  prepareAdditionalFiles?: (availableSourcePaths: ReadonlySet<string>) => CriterionAgentReviewFile[];
+  /** Apply criterion-specific semantic checks after shared normalization and citation validation. */
+  validateReview?: (
+    review: CriterionAgentReviewResult,
+    availableSourcePaths: ReadonlySet<string>
+  ) => string | undefined;
   /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
   coverageGapIds?: string[];
   schemaDescription: string;
+}
+
+export interface PreparedCriterionAgentReviewRequest extends CriterionAgentReviewRequest {
+  /** Set only by shared repository evidence preparation. */
+  repositoryBrowsing?: { maxFileBytes: number; startingFilePaths: string[] };
 }
 
 export interface PreparedCriterionReviewWorkspace {
@@ -119,65 +132,120 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [validationError] };
   }
 
-  if (config.adapter === 'fake') {
-    return validateRepositoryCitations(request, normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
-      available: true,
-      criterionId: request.criterionId,
-      recommendation: 'needs_reviewer_judgment',
-      confidence: 'medium',
-      summary: 'Fake criterion-agent review completed.',
-      rationale: 'Fake adapter was configured for deterministic tests.',
-      evidenceReferences: request.files.filter(file => !request.repositoryBrowsing || !file.repoRelativePath.startsWith('.criterion-agent/')).slice(0, 1).map(file => file.repoRelativePath),
-      metadata: {
-        adapter: 'fake',
-        modelLabel: config.modelLabel,
-        endpointFamily: config.endpointFamily,
-        reviewMode: 'read-only',
-        promptInputSanitized: true,
-        reviewWorkspaceSanitized: true
-      },
-      warnings: [],
-      errors: []
-    }));
+  let prepared: PreparedCriterionAgentReview;
+  try {
+    prepared = await prepareCriterionAgentReviewEvidence(request);
+  } catch (error) {
+    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${error instanceof Error ? error.message : String(error)}`)] };
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
   try {
-    workspace = prepareCriterionReviewWorkspace(request);
+    workspace = prepareCriterionReviewWorkspace(prepared.request);
   } catch (error) {
-    return { ...unavailable, errors: [`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`] };
+    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`)] };
   }
   try {
-    return validateRepositoryCitations(request, await runOpenCodeAgentReview(
-      request,
+    if (config.adapter === 'fake') {
+      return validatePreparedReview(prepared, normalizeFakeCriterionReviewResult(prepared.request, config, config.fakeResult ?? {
+        available: true,
+        criterionId: prepared.request.criterionId,
+        recommendation: 'needs_reviewer_judgment',
+        confidence: 'medium',
+        summary: 'Fake criterion-agent review completed.',
+        rationale: 'Fake adapter was configured for deterministic tests.',
+        evidenceReferences: [...prepared.availableSourcePaths].slice(0, 1),
+        metadata: {
+          adapter: 'fake',
+          modelLabel: config.modelLabel,
+          endpointFamily: config.endpointFamily,
+          reviewMode: 'read-only',
+          promptInputSanitized: true,
+          reviewWorkspaceSanitized: true
+        },
+        warnings: [],
+        errors: []
+      }));
+    }
+    return validatePreparedReview(prepared, await runOpenCodeAgentReview(
+      prepared.request,
       workspace,
       config,
       commandRunner ?? new LocalCommandRunner(false)
     ));
   } finally {
     removeOpenCodeRuntimeCredentials(workspace);
-    if (!config.debugRetainWorkspace) {
+    if (config.adapter !== 'opencode' || !config.debugRetainWorkspace) {
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
     }
   }
 }
 
-function validateRepositoryCitations(request: CriterionAgentReviewRequest, review: CriterionAgentReviewResult): CriterionAgentReviewResult {
+export interface PreparedCriterionAgentReview {
+  request: PreparedCriterionAgentReviewRequest;
+  availableSourcePaths: ReadonlySet<string>;
+}
+
+export async function prepareCriterionAgentReviewEvidence(
+  request: CriterionAgentReviewRequest
+): Promise<PreparedCriterionAgentReview> {
+  let preparedRequest: PreparedCriterionAgentReviewRequest;
+  let availableSourcePaths: ReadonlySet<string>;
+  if (request.evidenceMode === 'supplied-files') {
+    const { repositoryBrowsing: _ignored, ...suppliedRequest } = request as CriterionAgentReviewRequest & {
+      repositoryBrowsing?: unknown;
+    };
+    preparedRequest = suppliedRequest;
+    availableSourcePaths = new Set(request.files.map(file => file.repoRelativePath));
+  } else {
+    const preparedRepository = await prepareRepositoryBrowsing(request);
+    preparedRequest = preparedRepository.request;
+    availableSourcePaths = preparedRepository.sourcePaths;
+  }
+  const additionalFiles = request.prepareAdditionalFiles?.(availableSourcePaths) ?? [];
+  return {
+    request: additionalFiles.length
+      ? { ...preparedRequest, files: [...preparedRequest.files, ...additionalFiles] }
+      : preparedRequest,
+    availableSourcePaths
+  };
+}
+
+function validatePreparedReview(
+  prepared: PreparedCriterionAgentReview,
+  review: CriterionAgentReviewResult
+): CriterionAgentReviewResult {
+  const citationValidated = validateRepositoryCitations(
+    prepared.request,
+    review,
+    prepared.availableSourcePaths
+  );
+  if (!citationValidated.available || !prepared.request.validateReview) return citationValidated;
+  const validationError = prepared.request.validateReview(citationValidated, prepared.availableSourcePaths);
+  return validationError
+    ? { ...citationValidated, available: false, errors: [...citationValidated.errors, validationError] }
+    : citationValidated;
+}
+
+function validateRepositoryCitations(
+  request: PreparedCriterionAgentReviewRequest,
+  review: CriterionAgentReviewResult,
+  availableSourcePaths: ReadonlySet<string>
+): CriterionAgentReviewResult {
   if (!request.repositoryBrowsing || !review.available) return review;
-  const paths = new Set(request.files.filter(file => !file.repoRelativePath.startsWith('.criterion-agent/')).map(file => file.repoRelativePath));
   const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.criterionId === 'S006'
       && request.coverageGapIds?.includes(item.technologyId)
       && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
       && item.evidenceReferences.includes('.criterion-agent/S006/finding-summary.json'))).map(item => item.evidenceReferences),
     ...(review.assessments ?? []).flatMap(item => (item.failureBounds ?? []).map(bound => bound.evidenceReferences)),
     ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
-  if (references.some(citations => !citations.some(citation => paths.has(citation)))) {
+  if (references.some(citations => !citations.some(citation => availableSourcePaths.has(citation)))) {
     return { ...review, available: false, errors: [...review.errors, 'Agent review requires repository evidence for the review and every assessment and action; generated context alone is not evidence.'] };
   }
   return review;
 }
 
-export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewRequest): PreparedCriterionReviewWorkspace {
+export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentReviewRequest): PreparedCriterionReviewWorkspace {
   const rootPath = fs.mkdtempSync(path.join(os.tmpdir(), 'criterion-agent-review-'));
   try {
     fs.chmodSync(rootPath, 0o700);
@@ -210,6 +278,7 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
     if (request.repositoryBrowsing) {
       fs.writeFileSync(path.join(rootPath, 'repository-files.json'), JSON.stringify(entries, null, 2), { mode: 0o600 });
     }
+    const startingFilePaths = new Set(request.repositoryBrowsing?.startingFilePaths);
     const manifestPath = path.join(rootPath, 'manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify({
       criterionId: request.criterionId,
@@ -217,7 +286,8 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       schemaDescription: request.schemaDescription,
       ...(request.repositoryBrowsing ? { repositoryRoot: 'docs', fileIndex: 'repository-files.json' } : {}),
       files: request.repositoryBrowsing
-        ? entries.filter(entry => entry.repoRelativePath.startsWith('.criterion-agent/'))
+        ? entries.filter(entry => entry.repoRelativePath.startsWith('.criterion-agent/')
+          || startingFilePaths.has(entry.repoRelativePath))
         : entries
     }, null, 2), { mode: 0o600 });
 
@@ -236,6 +306,14 @@ export function validateAgentReviewConfig(
   config: CriterionAgentReviewConfig,
   repositoryPath: string
 ): string | undefined {
+  if (config.adapter === 'opencode') {
+    if (config.providerConfigError) return config.providerConfigError;
+    if (!config.modelLabel) return 'OpenCode model label is required';
+    if (!config.readOnlyAgentName) return 'OpenCode read-only agent name is required';
+    if (config.generatedProvider && !process.env[config.generatedProvider.apiKeyEnv]) {
+      return `${config.generatedProvider.apiKeyEnv} is required for ${config.generatedProvider.name} OpenCode review`;
+    }
+  }
   if (config.endpoint) {
     const endpointError = validateEndpointUrl(config.endpoint, config.endpointAllowlist);
     if (endpointError) {

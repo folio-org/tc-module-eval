@@ -122,7 +122,7 @@ const S005_EVIDENCE_CATEGORY_PATTERNS: ReadonlyArray<{
   { category: 'profile_picture', label: 'profile picture or avatar data', pattern: /\b(?:profilePicture|profile_picture|profileImage|profile_image|avatar|photoUrl|photo_url|pictureUrl|picture_url)\b/i },
   { category: 'ip_or_mac_address', label: 'IP or MAC address field', pattern: /\b(?:ipAddress|ip_address|clientIp|client_ip|remoteAddr|remote_addr|macAddress|mac_address)\b/i },
   { category: 'financial_information', label: 'financial or payment data', pattern: /\b(?:payment|creditCard|credit_card|cardNumber|card_number|bankAccount|bank_account|invoice|fee|fine|financial)\b/i },
-  { category: 'circulation_transactions', label: 'circulation transaction data', pattern: /\b(?:circulation|loan|checkout|checkin|check-in|checkin|renewal|holdRequest|hold_request|itemRequest|item_request)\b/i },
+  { category: 'circulation_transactions', label: 'circulation transaction data', pattern: /\b(?:circulation(?:Description|_description|-description)?|loan|checkout|checkin|check-in|checkin|renewal|holdRequest|hold_request|itemRequest|item_request)\b/i },
   { category: 'custom_fields', label: 'custom field data', pattern: /\b(?:customFields?|custom_fields?|customFieldValues?|custom_field_values?|userDefined|user_defined)\b/i },
   { category: 'logging', label: 'logging of user or personal data', pattern: /\b(?:log(?:ger|ging)?|log\.(?:info|warn|error|debug)|auditLog|audit_log|log4j|logback)\b/i },
   { category: 'transmission', label: 'queue, event, API, or external transmission', pattern: /\b(?:kafka|queue|eventProducer|event_producer|publish(?:er)?|producer|webhook|externalSystem|external_system|thirdParty|third_party|httpClient|http_client|okapi|export|import|searchIndex|search_index)\b/i },
@@ -238,13 +238,15 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
     }
 
     const rawLabel = boundS005Text(stripInlineMarkdown(checkboxMatch[2]), MAX_CHECKLIST_LABEL_BYTES);
+    const normalizedCategories = normalizeS005ChecklistCategories(checkboxMatch[2]);
     checklistItems.push({
       order: checklistItems.length + 1,
       lineNumber,
       sectionHeading,
       rawLabel,
       checked: checkboxMatch[1].toLowerCase() === 'x',
-      normalizedCategory: normalizeS005ChecklistCategory(checkboxMatch[2])
+      normalizedCategory: normalizedCategories[0],
+      normalizedCategories
     });
   }
 
@@ -279,9 +281,10 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
     };
   }
 
-  const checkedCategories = uniqueCategories(checklistItems.filter(item => item.checked).map(item => item.normalizedCategory));
-  const uncheckedCategories = uniqueCategories(checklistItems.filter(item => !item.checked).map(item => item.normalizedCategory));
-  const checkedMeaningfulAnswers = checklistItems.filter(item => item.checked && item.normalizedCategory !== 'other').length;
+  const checkedCategories = uniqueCategories(checklistItems.filter(item => item.checked).flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]));
+  const uncheckedCategories = uniqueCategories(checklistItems.filter(item => !item.checked).flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]));
+  // Completion is deliberately row-based: one combined row is one answered question.
+  const checkedMeaningfulAnswers = checklistItems.filter(item => item.checked && (item.normalizedCategories ?? [item.normalizedCategory]).some(category => category !== 'other')).length;
   const completed = checkedMeaningfulAnswers > 0;
   const contradictions = detectContradictions(checklistItems);
 
@@ -386,10 +389,21 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
       const retentionKey = `${signal.category}:${signal.sourceClass}`;
       const retainedCount = retentionCounts.get(retentionKey) ?? 0;
       if (retainedCount >= MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS) {
+        const retainedIndexes = signals
+          .map((retained, signalIndex) => ({ retained, signalIndex }))
+          .filter(({ retained }) => `${retained.category}:${retained.sourceClass}` === retentionKey);
+        const weakest = retainedIndexes.reduce((selected, candidate) =>
+          s005SignalStrengthRank(candidate.retained.strength) > s005SignalStrengthRank(selected.retained.strength)
+            ? candidate
+            : selected
+        );
+        if (s005SignalStrengthRank(signal.strength) < s005SignalStrengthRank(weakest.retained.strength)) {
+          signals[weakest.signalIndex] = signal;
+        }
         if (!retentionWarnings.has(retentionKey)) {
           retentionWarnings.add(retentionKey);
           warnings.push(
-            `S005 evidence retained first ${MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS} signals for category "${signal.category}" and source class "${signal.sourceClass}"; additional signals were truncated.`
+            `S005 evidence retained the strongest ${MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS} signals for category "${signal.category}" and source class "${signal.sourceClass}"; additional signals were truncated.`
           );
         }
         continue;
@@ -416,6 +430,10 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
     skippedFiles,
     warnings
   };
+}
+
+function s005SignalStrengthRank(strength: S005PersonalDataEvidenceStrength): number {
+  return strength === 'strong' ? 0 : strength === 'candidate' ? 1 : 2;
 }
 
 export function analyzeS005PersonalDataDisclosure(repoPath: string): S005PersonalDataDisclosureAnalysisResult {
@@ -729,72 +747,82 @@ function dedupeMismatches(mismatches: S005PersonalDataPossibleMismatch[]): S005P
 }
 
 export function normalizeS005ChecklistCategory(label: string): S005PersonalDataCategory {
+  return normalizeS005ChecklistCategories(label)[0];
+}
+
+export function normalizeS005ChecklistCategories(label: string): S005PersonalDataCategory[] {
   const normalized = label.toLowerCase();
 
-  // Checklist rows carry one category in reports; multi-category labels use the first specific match below.
   if (/\bdoes\s+not\b.*\b(?:store|process|collect|use|handle|contain|personal\s+data)\b/.test(normalized) ||
       /\bno\s+personal\s+data\b/.test(normalized)) {
-    return 'no_personal_data';
+    return ['no_personal_data'];
   }
-  if (/\b(e-?mail|email address)\b/.test(normalized)) {
-    return 'email';
+  // The canonical form combines these concepts in one row. Preserve both facts, while
+  // normalizedCategory remains the first value for consumers of the older shape.
+  if (/\b(?:username|login name|user name)\b/.test(normalized) &&
+      /\b(?:user id|user identifier|user uuid|uuid|identifier)\b/.test(normalized)) {
+    return ['username', 'user_identifier'];
   }
-  if (/\b(phone|telephone|mobile|fax)\b/.test(normalized)) {
-    return 'phone';
-  }
-  if (/\b(address|street|city|state|province|postal|zip|country|location)\b/.test(normalized)) {
-    return 'address';
-  }
-  if (/\b(first name|last name|middle name|preferred name|display name|full name|name)\b/.test(normalized)) {
-    return 'name';
-  }
+  // Specific login/network labels must win over their trailing generic "name"/"address".
   if (/\b(username|login name|user name)\b/.test(normalized)) {
-    return 'username';
-  }
-  if (/\b(user id|user uuid|uuid|identifier|barcode|external id|patron id)\b/.test(normalized)) {
-    return 'user_identifier';
-  }
-  if (/\b(date of birth|birth date|birthday|dob)\b/.test(normalized)) {
-    return 'birth_date';
-  }
-  if (/\b(patron|borrower|requester|proxy|sponsor)\b/.test(normalized)) {
-    return 'patron_data';
-  }
-  if (/\b(note|comment|description|free[- ]?form|message)\b/.test(normalized)) {
-    return 'free_form_notes';
-  }
-  if (/\b(profile picture|photo|avatar|image)\b/.test(normalized)) {
-    return 'profile_picture';
+    return ['username'];
   }
   if (/\b(ip address|mac address|network address)\b/.test(normalized)) {
-    return 'ip_or_mac_address';
+    return ['ip_or_mac_address'];
+  }
+  if (/\b(e-?mail|email address)\b/.test(normalized)) {
+    return ['email'];
+  }
+  if (/\b(phone|telephone|mobile|fax)\b/.test(normalized)) {
+    return ['phone'];
+  }
+  if (/\b(address|street|city|state|province|postal|zip|country|location)\b/.test(normalized)) {
+    return ['address'];
+  }
+  if (/\b(first name|last name|middle name|preferred name|display name|full name|name)\b/.test(normalized)) {
+    return ['name'];
+  }
+  if (/\b(user id|user uuid|uuid|identifier|barcode|external id|patron id)\b/.test(normalized)) {
+    return ['user_identifier'];
+  }
+  if (/\b(date of birth|birth date|birthday|dob)\b/.test(normalized)) {
+    return ['birth_date'];
+  }
+  if (/\b(patron|borrower|requester|proxy|sponsor)\b/.test(normalized)) {
+    return ['patron_data'];
+  }
+  if (/\b(note|comment|description|free[- ]?form|message)\b/.test(normalized)) {
+    return ['free_form_notes'];
+  }
+  if (/\b(profile picture|photo|avatar|image)\b/.test(normalized)) {
+    return ['profile_picture'];
   }
   if (/\b(payment|credit card|card details|financial|bank|invoice|fee|fine)\b/.test(normalized)) {
-    return 'financial_information';
+    return ['financial_information'];
   }
   if (/\b(circulation|loan|checkout|check-out|checkin|check-in|renewal|request|hold)\b/.test(normalized)) {
-    return 'circulation_transactions';
+    return ['circulation_transactions'];
   }
   if (/\b(custom field|custom field value|user-defined)\b/.test(normalized)) {
-    return 'custom_fields';
+    return ['custom_fields'];
   }
   if (/\b(cache|cached)\b/.test(normalized)) {
-    return 'cache';
+    return ['cache'];
   }
   if (/\b(log|logging|logged)\b/.test(normalized)) {
-    return 'logging';
+    return ['logging'];
   }
   if (/\b(transmit|transmission|send|sent|external system|third[- ]party|api|export|import)\b/.test(normalized)) {
-    return 'transmission';
+    return ['transmission'];
   }
   if (/\b(process|processing|use|display|read|write)\b/.test(normalized)) {
-    return 'processing';
+    return ['processing'];
   }
   if (/\b(store|storage|persist|database|saved)\b/.test(normalized)) {
-    return 'storage';
+    return ['storage'];
   }
 
-  return 'other';
+  return ['other'];
 }
 
 export function boundS005Text(input: string, maxBytes: number = MAX_CHECKLIST_LABEL_BYTES): string {
@@ -984,7 +1012,7 @@ function extractS005EvidenceSignals(
   sourceClass: S005PersonalDataEvidenceSourceClass
 ): S005PersonalDataEvidenceSignal[] {
   const signals: S005PersonalDataEvidenceSignal[] = [];
-  const strength = evidenceStrengthForSourceClass(sourceClass);
+  const sourceStrength = evidenceStrengthForSourceClass(sourceClass);
   const lines = text.split(/\r?\n/);
 
   for (let index = 0; index < lines.length; index++) {
@@ -1000,6 +1028,9 @@ function extractS005EvidenceSignals(
       }
 
       categoriesSeenOnLine.add(categoryPattern.category);
+      const strength = isContextOnlyS005Match(categoryPattern.category, line)
+        ? 'context'
+        : sourceStrength;
       signals.push({
         category: categoryPattern.category,
         label: categoryPattern.label,
@@ -1013,6 +1044,31 @@ function extractS005EvidenceSignals(
   }
 
   return signals;
+}
+
+function isContextOnlyS005Match(category: S005PersonalDataCategory, line: string): boolean {
+  const hasPersonContext = /\b(?:user|patron|borrower|requester|person|personal|customer|member|staff|employee|client)\w*\b/i.test(line);
+
+  if (category === 'user_identifier' && /\bbarcode\b/i.test(line) && !hasPersonContext) {
+    return true;
+  }
+  if (category === 'address' &&
+      (/\blocation\b/i.test(line) || /\b(?:electronic resource|resource|url|uri|href|endpoint)\s+address\b/i.test(line)) &&
+      !hasPersonContext) {
+    return true;
+  }
+  if (category === 'transmission' && /\bpublisher\b/i.test(line) && !hasPersonContext) {
+    return true;
+  }
+  if (category === 'circulation_transactions' && /\bcirculation(?:\s+|_|-)?description\b/i.test(line) && !hasPersonContext) {
+    return true;
+  }
+  // Infrastructure vocabulary alone says nothing about whether personal data flows through it.
+  if (['storage', 'transmission', 'cache', 'logging'].includes(category) && !hasPersonContext &&
+      !/\b(?:email|phone|username|user[_ -]?id|patron[_ -]?id|first[_ -]?name|last[_ -]?name|ip[_ -]?address|birth[_ -]?date)\b/i.test(line)) {
+    return true;
+  }
+  return false;
 }
 
 function readBoundedEvidenceText(
@@ -1137,7 +1193,7 @@ function detectContradictions(
     return [];
   }
 
-  const conflictingItems = checklistItems.filter(item => item.checked && PERSONAL_FIELD_CATEGORIES.has(item.normalizedCategory));
+  const conflictingItems = checklistItems.filter(item => item.checked && (item.normalizedCategories ?? [item.normalizedCategory]).some(category => PERSONAL_FIELD_CATEGORIES.has(category)));
   if (!conflictingItems.length) {
     return [];
   }
@@ -1147,7 +1203,7 @@ function detectContradictions(
       kind: 'no-personal-data-with-personal-fields',
       message: 'No-personal-data answer is checked alongside checked personal-data field answers.',
       lineNumbers: uniqueNumbers([...checkedNoPersonalData, ...conflictingItems].map(item => item.lineNumber)),
-      conflictingCategories: uniqueCategories(conflictingItems.map(item => item.normalizedCategory))
+      conflictingCategories: uniqueCategories(conflictingItems.flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]).filter(category => PERSONAL_FIELD_CATEGORIES.has(category)))
     }
   ];
 }

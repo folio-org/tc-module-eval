@@ -1,5 +1,6 @@
 import { EvaluationResult, S007AnalysisResult } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
+import { redactSensitiveText } from './redaction';
 
 const CRITERION_TITLES: Record<string, string> = {
   A001: 'Product Council approval',
@@ -40,6 +41,32 @@ function jsonForHtml(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
+function reportSafeValue<T>(value: T): T {
+  if (typeof value === 'string') return redactSensitiveText(value) as T;
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) return value.map(item => reportSafeValue(item)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item)])) as T;
+  }
+  return value;
+}
+
+function diagnosticLines(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values
+    .map(value => value.trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, ''))
+    .filter(value => value && !seen.has(value) && seen.add(value))
+    .map(value => value.length > 500 ? `${value.slice(0, 497)}...` : value);
+}
+
+function pinnedSourceBase(result: EvaluationResult): string | undefined {
+  const match = result.repositoryUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/#]+?)(?:\.git)?\/?$/i);
+  const commit = result.provenance?.repositoryCommit;
+  return match && commit && /^[0-9a-f]{40}$/i.test(commit)
+    ? `https://github.com/${match[1]}/${match[2]}/blob/${commit}/`
+    : undefined;
+}
+
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
 function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
   const original = criterion.details?.split('\n') ?? [];
@@ -59,12 +86,13 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
   const review = criterion.agentReview;
   if (!review && !hadReview) return original;
   if (!review?.available) {
-    const reason = [...(review?.errors ?? []), ...legacyReview].join(' ');
+    const diagnostics = diagnosticLines([...(review?.errors ?? []), ...(review?.warnings ?? []), ...legacyReview]);
+    const reason = diagnostics.join(' ');
     const skippedForEvidence = /no candidate evidence was available for agent review/i.test(reason);
     const skippedForCriterion = /agent review is not enabled for S\d+/i.test(reason);
     const skippedForConfiguration = /agent review is disabled|disabled or unconfigured/i.test(reason);
     const skipped = skippedForEvidence || skippedForCriterion || skippedForConfiguration;
-    const failed = review || /failed|failure|error|timed.out|timeout|incomplete|unavailable/i.test(reason);
+    const failed = review || /failed|failure|error|incomplete|unavailable/i.test(reason);
     const status = skipped ? 'Skipped' : failed ? 'Unavailable' : 'Not run';
     const explanation = skippedForEvidence
       ? 'Skipped because no candidate evidence was available for review.'
@@ -72,12 +100,17 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
         ? 'Skipped because agent review is not enabled for this criterion.'
         : skippedForConfiguration
           ? 'Skipped because agent review is disabled or unconfigured.'
-          : /timed.out|timeout/i.test(reason)
-            ? 'The review exceeded its time limit.'
-            : failed
-              ? 'No usable advisory review was returned. See the JSON report for diagnostic details.'
-              : 'Agent review was not run. See the JSON report for diagnostic details.';
-    return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...details];
+          : failed
+            ? 'No usable advisory review was returned.'
+            : 'Agent review was not run.';
+    const diagnosticDetails = skipped || !diagnostics.length ? [] : [
+      `  - Reason: ${diagnostics[0]}`,
+      ...(diagnostics.length > 1
+        ? ['  - Additional diagnostics:', ...diagnostics.slice(1, 6).map(value => `    - ${value}`)]
+        : []),
+      ...(diagnostics.length > 6 ? [`    - ... ${diagnostics.length - 6} more in the downloaded JSON report`] : [])
+    ];
+    return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails, ...details];
   }
   const names = criterion.criterionId === 'S007'
     ? Object.fromEntries(((criterion.criterionDetails as S007AnalysisResult | undefined)?.findings ?? [])
@@ -88,21 +121,39 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
 
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
+  const safeResult = reportSafeValue(result);
   const report = {
     meta: {
-      module: result.moduleName,
-      language: result.language,
-      repo: result.repositoryUrl,
-      evaluatedAt: result.evaluatedAt.toLocaleString(),
-      createdAt: new Date().toLocaleString()
+      module: safeResult.moduleName,
+      language: safeResult.language,
+      repo: safeResult.repositoryUrl,
+      evaluatedAt: safeResult.evaluatedAt.toLocaleString(),
+      createdAt: new Date().toLocaleString(),
+      commit: safeResult.provenance?.repositoryCommit,
+      evaluator: safeResult.provenance?.evaluator,
+      agentReviewModel: safeResult.provenance?.agentReviewModel,
+      sourceBase: pinnedSourceBase(result),
+      citedSourcePaths: safeResult.provenance?.citedSourcePaths ?? []
     },
-    items: result.criteria.map(criterion => ({
+    items: safeResult.criteria.map(criterion => ({
       id: criterion.criterionId,
       title: criterionTitle(criterion.criterionId, criterion.evidence),
       status: criterion.status,
       evidence: criterion.evidence,
       details: reportDetailLines(criterion),
       recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined
+    }))
+  };
+  const downloadableReport: EvaluationResult = {
+    ...safeResult,
+    criteria: safeResult.criteria.map(criterion => ({
+      ...criterion,
+      details: criterion.agentReview
+        ? reportDetailLines(criterion).join('\n')
+        : criterion.details,
+      agentReview: criterion.agentReview
+        ? { ...criterion.agentReview, metadata: undefined }
+        : undefined
     }))
   };
 
@@ -131,10 +182,12 @@ export function createHtmlReport(result: EvaluationResult): string {
 <body>
   <div id="report"></div>
   <script id="report-data" type="application/json">${jsonForHtml(report)}</script>
+  <script id="download-data" type="application/json">${jsonForHtml(downloadableReport)}</script>
   <script>
   (function () {
     'use strict';
     var data = JSON.parse(document.getElementById('report-data').textContent);
+    var downloadData = document.getElementById('download-data').textContent;
     var root = document.getElementById('report');
     var tone = {
       pass:{bg:'#E3F1E8',fg:'#1F6B43',dot:'#2E8B57',label:'Pass'},
@@ -322,7 +375,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     function renderSidebar(layout, groups) {
       var aside=h('aside','sidebar');
       var identity=h('div'); identity.append(h('div','eyebrow','FOLIO Module Evaluation'),h('div','module-name',data.meta.module)); aside.appendChild(identity);
-      var searchWrap=h('div','search-wrap'); var search=h('input','search'); search.type='search'; search.placeholder='Search criteria and evidence'; search.value=state.query; search.setAttribute('aria-label','Search criteria and evidence');
+      var searchWrap=h('div','search-wrap'); var search=h('input','search'); search.type='search'; search.placeholder='Search report'; search.value=state.query; search.setAttribute('aria-label','Search criteria and evidence');
       focusKey(search,'search');
       search.addEventListener('input',function (event) {
         state.query=event.target.value; clearTimeout(searchTimer);
@@ -351,9 +404,9 @@ export function createHtmlReport(result: EvaluationResult): string {
 
     function renderHeader(main) {
       var header=h('header','report-header'); var titleRow=h('div','title-row'); var titleBlock=h('div'); titleBlock.appendChild(h('h1','',data.meta.module));
-      var meta=h('div','meta'); meta.appendChild(h('span','',data.meta.language)); var repo=h('a','repo',data.meta.repo.replace(/^https?:\/\//,'')); repo.href=data.meta.repo; repo.target='_blank'; repo.rel='noopener noreferrer'; focusKey(repo,'repo'); meta.append(repo,h('span','','Evaluated '+data.meta.evaluatedAt)); titleBlock.appendChild(meta);
-      var actions=h('div','actions'); var expand=h('button','action','Expand all'); expand.type='button'; focusKey(expand,'expand-all'); expand.addEventListener('click',function () { items.forEach(function (item) { if(item.triage!=='human') state.cards[item.id]=true; }); state.groups={}; render(); });
-      var collapse=h('button','action','Collapse all'); collapse.type='button'; focusKey(collapse,'collapse-all'); collapse.addEventListener('click',function () { state.cards={}; state.nodes={}; render(); }); actions.append(expand,collapse); titleRow.append(titleBlock,actions); header.appendChild(titleRow);
+      var meta=h('div','meta'); meta.appendChild(h('span','',data.meta.language)); var repo=h('a','repo',data.meta.repo.replace(/^https?:\/\//,'')); repo.href=data.meta.repo; repo.target='_blank'; repo.rel='noopener noreferrer'; focusKey(repo,'repo'); meta.append(repo,h('span','','Evaluated '+data.meta.evaluatedAt));if(data.meta.commit)meta.appendChild(h('span','repo','Commit '+data.meta.commit.slice(0,12)));if(data.meta.evaluator)meta.appendChild(h('span','','Evaluator '+data.meta.evaluator.name+' '+data.meta.evaluator.version));if(data.meta.agentReviewModel)meta.appendChild(h('span','repo','Agent '+data.meta.agentReviewModel));titleBlock.appendChild(meta);
+      var actions=h('div','actions');var download=h('button','action','Download JSON');download.type='button';focusKey(download,'download-json');download.addEventListener('click',function(){var blob=new Blob([downloadData],{type:'application/json'});var url=URL.createObjectURL(blob);var link=document.createElement('a');link.href=url;link.download=data.meta.module+'-evaluation.json';link.click();setTimeout(function(){URL.revokeObjectURL(url);},0);});var expand=h('button','action','Expand criteria'); expand.type='button'; focusKey(expand,'expand-all'); expand.addEventListener('click',function () { items.forEach(function (item) { if(item.triage!=='human') state.cards[item.id]=true; }); state.groups={}; render(); });
+      var collapse=h('button','action','Collapse criteria'); collapse.type='button'; focusKey(collapse,'collapse-all'); collapse.addEventListener('click',function () { state.cards={}; state.nodes={}; render(); }); actions.append(download,expand,collapse); titleRow.append(titleBlock,actions); header.appendChild(titleRow);
       var summary=h('div','summary'); var bar=h('div','bar'); var counts=countsByStatus(); var total=items.length || 1;
       ['pass','fail','manual','not_applicable'].forEach(function (key) { if (!counts[key]) return; var segment=h('div'); segment.style.width=(counts[key]/total*100)+'%'; segment.style.background=tone[key].dot; bar.appendChild(segment); }); summary.appendChild(bar);
       var bottom=h('div','summary-bottom'); [['pass','Passed'],['fail','Failed'],['manual','Manual review'],['not_applicable','Not applicable']].forEach(function (entry) {
@@ -363,10 +416,16 @@ export function createHtmlReport(result: EvaluationResult): string {
 
     function segments(text) {
       var lead='',tag='',remaining=text,match;
-      match=remaining.match(/^([\w.\-]+:[\w.\-]+:[\w.\-]+)(\s+-\s+|$)/)||remaining.match(/^((?:[\w.\-/]*\.[A-Za-z]\w*|[\w.\-/]+)(?::\d+)?)(\s*\|\s*|\s+|$)/);
-      if(match&&((/[.\/]/.test(match[1])||/:\d+$/.test(match[1]))&&/[\/.:]/.test(match[1])&&!/^\w+\.$/.test(match[1])||/^\[[\w\/\-]+\]/.test(remaining.slice(match[0].length)))){lead=match[1];remaining=remaining.slice(match[0].length);}
+      match=remaining.match(/^([\w.\-]+:[\w.\-]+:[\w.\-]+)(\s+-\s+|$)/)||remaining.match(/^((?:[\w.\-/]*\.[A-Za-z]\w*|[\w.\-/]+)(?::\d+(?:-\d+)?)?)(\s*\|\s*|\s+|$)/);
+      if(match&&((/[.\/]/.test(match[1])||/:\d+(?:-\d+)?$/.test(match[1]))&&/[\/.:]/.test(match[1])&&!/^\w+\.$/.test(match[1])||/^\[[\w\/\-]+\]/.test(remaining.slice(match[0].length)))){lead=match[1];remaining=remaining.slice(match[0].length);}
       match=remaining.match(/^\[([\w\/\-]+)\]\s*/); if(match){tag=match[1];remaining=remaining.slice(match[0].length);} else if(!lead){match=remaining.match(/^([a-z_]+\/[a-z_]+):\s*/);if(match){tag=match[1];remaining=remaining.slice(match[0].length);}}
       return {lead:lead,tag:tag,text:remaining.replace(/\s\|\s/g,' · ')};
+    }
+    function sourceHref(reference) {
+      if(!data.meta.sourceBase)return null;
+      var match=reference.match(/^(.+?)(?::(\d+)(?:-(\d+))?)?$/),file=match&&match[1],line=match&&match[2],endLine=match&&match[3];
+      if(!file||file.charAt(0)==='/'||file.split('/').indexOf('..')>=0||data.meta.citedSourcePaths.indexOf(file)<0)return null;
+      return data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'');
     }
     function clampedText(container,text,key,showFullText) {
       if(showFullText){container.appendChild(document.createTextNode(text));return;}
@@ -379,7 +438,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection||!!node.openByDefault;
         if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')));if(!node.hideCount)section.appendChild(h('span','count-chip',String(node.countText||kids)));section.appendChild(h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
-        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead)copy.appendChild(h('span','lead',parts.lead));if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
+        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=sourceHref(parts.lead);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
         if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden);
       });
       if(hidden){var omitted=h('div','item-row');omitted.style.setProperty('--indent',Math.max(0,depth-1)*22+'px');omitted.append(h('span','leaf'),h('span','more-text',hidden+' more not included in the report'));parent.appendChild(omitted);}

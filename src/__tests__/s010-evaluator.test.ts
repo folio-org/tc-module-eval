@@ -233,11 +233,10 @@ describe('S010 human details', () => {
     const rows = renderS010HumanDetails(analysis).split('\n').filter(line => line.startsWith('  - '));
 
     expect(rows).toEqual([
-      '  - database (DB_HOST) / configuration-absent: unresolved',
-      '  - database (DB_PORT) / configuration-absent: unresolved',
-      '  - kafka (KAFKA_HOST) / configuration-absent: unresolved',
-      '  - kafka (KAFKA_PORT) / configuration-absent: unresolved',
+      '  - database (DB_HOST, DB_PORT) / configuration-absent: unresolved',
+      '  - kafka (KAFKA_HOST, KAFKA_PORT) / configuration-absent: unresolved',
       '  - okapi (OKAPI_URL) / configuration-absent: unresolved'
     ]);
+    expect(renderS010HumanDetails(analysis)).toContain('not confirmed defects');
   });
 });
