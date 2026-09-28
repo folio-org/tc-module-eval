@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import {
@@ -186,6 +187,9 @@ describe('S007 shared evaluator', () => {
   it('attaches an available advisory end to end without changing manual status', async () => {
     await writeJson('package.json', { dependencies: { vue: '^3.0.0' } });
     await write('yarn.lock', '"vue@^3.0.0":\n  version "3.4.0"\n');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
     const agentReview: CriterionAgentReviewConfig = {
       enabled: true,
       enabledCriteria: ['S007'],
@@ -227,9 +231,33 @@ describe('S007 shared evaluator', () => {
       evidenceReferences: ['package.json']
     });
     expect(result.details).toContain('Vue is explicitly declared.');
-    expect(result.details).toContain('Practical assessments:');
-    expect(result.details).toContain('Reviewer actions:');
+    expect(result.details).toContain('Findings:');
+    expect(result.details).toContain('What to verify:');
     expect(result.details).toContain('Deterministic result remains Manual.');
+  });
+
+  it.each(['quarkus', 'constructor'])('preserves deterministic findings when review discovers %s outside the analyzer inventory', async technologyId => {
+    await write('deployment/runtime.conf', 'runtime.framework=quarkus');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java', undefined, {
+      enabled: true, enabledCriteria: ['S007'], adapter: 'fake',
+      fakeResult: {
+        available: true, criterionId: 'S007', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+        summary: 'The configured framework needs a policy decision.', rationale: 'Deployment configuration identifies Quarkus.',
+        evidenceReferences: ['deployment/runtime.conf'],
+        assessments: [{ technologyId: `discovered:${technologyId}`, type: 'policy_question', summary: 'Confirm policy applicability.', evidenceReferences: ['deployment/runtime.conf'] }],
+        reviewerActions: [{ action: 'Obtain a TC decision on Quarkus support.', evidenceReferences: ['deployment/runtime.conf'] }],
+        warnings: [], errors: []
+      }
+    }));
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect((result.criterionDetails as S007AnalysisResult).findings.length).toBeGreaterThan(0);
+    expect((result.criterionDetails as S007AnalysisResult).findings.every(finding => finding.evidence.length === 0)).toBe(true);
+    expect(result.agentReview?.available).toBe(true);
+    expect(result.agentReview?.assessments?.[0].technologyId).toBe(`discovered:${technologyId}`);
+    expect(result.details).toContain(`${technologyId} — TC interpretation needed`);
   });
 
   it('preserves fail precedence and both contributions', async () => {

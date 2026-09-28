@@ -124,9 +124,19 @@ function evaluateObservation(
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
       `Conflicting declarations were found in ${observation.conflictPaths.join(', ')}.`);
   }
-  if (applicableRule.unresolved) {
+  const baseComparison = compareObservationToConstraint(observation, entry.constraint);
+  const exceptionOutcomeAgrees = applicableRule.unresolved
+    && (baseComparison === 'compliant' || baseComparison === 'noncompliant')
+    && [entry, ...(entry.exceptions ?? [])].every(rule =>
+      rule.strength === 'normative'
+      && compareObservationToConstraint(observation, rule.constraint) === baseComparison
+    );
+  if (applicableRule.unresolved && !exceptionOutcomeAgrees) {
     return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
       'The applicability of a policy exception could not be established from the available repository evidence.');
+  }
+  if (exceptionOutcomeAgrees) {
+    advisories.push('Exception applicability is unresolved, but the base rule and every possible exception give the same version-compliance outcome.');
   }
   if (applicableRule.strength === 'contested') {
     return finding(base, matchedPolicy, advisories, 'contested', 'manual',

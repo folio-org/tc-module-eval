@@ -3,13 +3,14 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   CommandRunner,
+  CriterionAgentFailureBound,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
   EvaluationRun,
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { isWithinRepo, realPath } from './repo-files';
+import { isWithinRepo } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
@@ -25,6 +26,10 @@ export interface CriterionAgentReviewRequest {
   repositoryPath: string;
   instructions: string;
   files: CriterionAgentReviewFile[];
+  /** Browse intact source on disk instead of attaching its entire inventory to the prompt. */
+  repositoryBrowsing?: { maxFileBytes: number };
+  /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
+  coverageGapIds?: string[];
   schemaDescription: string;
 }
 
@@ -115,14 +120,14 @@ export async function runCriterionAgentReview(
   }
 
   if (config.adapter === 'fake') {
-    return normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
+    return validateRepositoryCitations(request, normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
       available: true,
       criterionId: request.criterionId,
       recommendation: 'needs_reviewer_judgment',
       confidence: 'medium',
       summary: 'Fake criterion-agent review completed.',
       rationale: 'Fake adapter was configured for deterministic tests.',
-      evidenceReferences: request.files.slice(0, 1).map(file => file.repoRelativePath),
+      evidenceReferences: request.files.filter(file => !request.repositoryBrowsing || !file.repoRelativePath.startsWith('.criterion-agent/')).slice(0, 1).map(file => file.repoRelativePath),
       metadata: {
         adapter: 'fake',
         modelLabel: config.modelLabel,
@@ -133,7 +138,7 @@ export async function runCriterionAgentReview(
       },
       warnings: [],
       errors: []
-    });
+    }));
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
@@ -143,18 +148,33 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`] };
   }
   try {
-    return await runOpenCodeAgentReview(
+    return validateRepositoryCitations(request, await runOpenCodeAgentReview(
       request,
       workspace,
       config,
       commandRunner ?? new LocalCommandRunner(false)
-    );
+    ));
   } finally {
     removeOpenCodeRuntimeCredentials(workspace);
     if (!config.debugRetainWorkspace) {
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
     }
   }
+}
+
+function validateRepositoryCitations(request: CriterionAgentReviewRequest, review: CriterionAgentReviewResult): CriterionAgentReviewResult {
+  if (!request.repositoryBrowsing || !review.available) return review;
+  const paths = new Set(request.files.filter(file => !file.repoRelativePath.startsWith('.criterion-agent/')).map(file => file.repoRelativePath));
+  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.criterionId === 'S006'
+      && request.coverageGapIds?.includes(item.technologyId)
+      && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
+      && item.evidenceReferences.includes('.criterion-agent/S006/finding-summary.json'))).map(item => item.evidenceReferences),
+    ...(review.assessments ?? []).flatMap(item => (item.failureBounds ?? []).map(bound => bound.evidenceReferences)),
+    ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
+  if (references.some(citations => !citations.some(citation => paths.has(citation)))) {
+    return { ...review, available: false, errors: [...review.errors, 'Agent review requires repository evidence for the review and every assessment and action; generated context alone is not evidence.'] };
+  }
+  return review;
 }
 
 export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewRequest): PreparedCriterionReviewWorkspace {
@@ -174,7 +194,12 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       }
       usedWorkspacePaths.add(workspaceKey);
       fs.mkdirSync(path.dirname(workspacePath), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(workspacePath, truncateToByteBudget(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
+      if (request.repositoryBrowsing && Buffer.byteLength(file.content) > request.repositoryBrowsing.maxFileBytes) {
+        throw new Error(`Review file exceeds the ${request.repositoryBrowsing.maxFileBytes}-byte workspace limit: ${file.repoRelativePath}`);
+      }
+      fs.writeFileSync(workspacePath, request.repositoryBrowsing
+        ? file.content
+        : truncateToByteBudget(file.content, MAX_AGENT_REVIEW_FILE_BYTES), { mode: 0o600 });
       return {
         id: safeRelativePath,
         repoRelativePath: file.repoRelativePath,
@@ -182,12 +207,18 @@ export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewReq
       };
     });
 
+    if (request.repositoryBrowsing) {
+      fs.writeFileSync(path.join(rootPath, 'repository-files.json'), JSON.stringify(entries, null, 2), { mode: 0o600 });
+    }
     const manifestPath = path.join(rootPath, 'manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify({
       criterionId: request.criterionId,
       instructions: request.instructions,
       schemaDescription: request.schemaDescription,
-      files: entries
+      ...(request.repositoryBrowsing ? { repositoryRoot: 'docs', fileIndex: 'repository-files.json' } : {}),
+      files: request.repositoryBrowsing
+        ? entries.filter(entry => entry.repoRelativePath.startsWith('.criterion-agent/'))
+        : entries
     }, null, 2), { mode: 0o600 });
 
     return {
@@ -350,19 +381,25 @@ export function normalizeCriterionAgentAdvisoryPayload(
 ): NormalizedCriterionAgentAdvisoryPayload {
   const rawEvidenceReferences = Array.isArray(payload.evidenceReferences) ? payload.evidenceReferences : [];
   const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
-  const assessments = normalizeAssessments(payload.assessments, manifestEntries);
-  const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries);
+  const errors: string[] = [];
+  const assessments = normalizeAssessments(payload.assessments, manifestEntries, errors);
+  const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries, errors);
   const recommendation = parseAdvisoryRecommendation(payload.recommendation);
   const confidence = parseAdvisoryConfidence(payload.confidence);
   const summary = typeof payload.summary === 'string' ? redactSensitiveText(payload.summary).trim() : undefined;
   const rationale = typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale).trim() : undefined;
-  const errors: string[] = [];
   if (!recommendation) errors.push('recommendation must be a supported advisory recommendation');
   if (!confidence) errors.push('confidence must be low, medium, high, or a finite number between 0 and 1');
   if (!summary) errors.push('summary must be a nonblank string');
   if (!rationale) errors.push('rationale must be a nonblank string');
   if (!Array.isArray(payload.evidenceReferences)) errors.push('evidenceReferences must be an array');
   else if (!evidenceReferences.length) errors.push('evidenceReferences must include a manifest entry');
+  if (payload.assessments !== undefined && (!Array.isArray(payload.assessments) || assessments?.length !== payload.assessments.length)) {
+    errors.push('Invalid or uncited assessments; the complete review was rejected.');
+  }
+  if (payload.reviewerActions !== undefined && (!Array.isArray(payload.reviewerActions) || reviewerActions?.length !== payload.reviewerActions.length)) {
+    errors.push('Invalid or uncited reviewer action; actions may not be silently dropped.');
+  }
   return {
     recommendation,
     confidence,
@@ -375,12 +412,6 @@ export function normalizeCriterionAgentAdvisoryPayload(
     warnings: [
       ...(rawEvidenceReferences.length !== evidenceReferences.length
         ? ['Dropped uncited or unknown advisory evidence references']
-        : []),
-      ...(Array.isArray(payload.assessments) && assessments?.length !== payload.assessments.length
-        ? ['Dropped incomplete or uncited advisory assessments']
-        : []),
-      ...(Array.isArray(payload.reviewerActions) && reviewerActions?.length !== payload.reviewerActions.length
-        ? ['Dropped incomplete or uncited reviewer actions']
         : [])
     ]
   };
@@ -388,12 +419,17 @@ export function normalizeCriterionAgentAdvisoryPayload(
 
 function normalizeAssessments(
   value: unknown,
-  manifestEntries: string[]
+  manifestEntries: string[],
+  errors: string[]
 ): CriterionAgentReviewResult['assessments'] | undefined {
   if (!Array.isArray(value)) return undefined;
   const validTypes = new Set(['aligned_fact', 'substantive_concern', 'analyzer_limitation', 'evidence_gap', 'policy_question']);
-  return value.flatMap(entry => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+  return value.flatMap((entry, index) => {
+    const reject = (reason: string): [] => {
+      if (errors.length < 16) errors.push(`Assessment ${index + 1}: ${reason}.`);
+      return [];
+    };
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return reject('expected an object');
     const candidate = entry as Record<string, unknown>;
     const evidenceReferences = normalizeAdvisoryEvidenceReferences(
       Array.isArray(candidate.evidenceReferences) ? candidate.evidenceReferences : [],
@@ -402,29 +438,59 @@ function normalizeAssessments(
     const summary = typeof candidate.summary === 'string'
       ? redactSensitiveText(candidate.summary).trim()
       : '';
+    const coverageDisposition = candidate.coverageDisposition as NonNullable<CriterionAgentReviewResult['assessments']>[number]['coverageDisposition'];
+    if (coverageDisposition !== undefined && !['investigated', 'immaterial', 'unresolved'].includes(coverageDisposition)) return reject('invalid coverageDisposition');
+    const emptyBounds = Array.isArray(candidate.failureBounds) && candidate.failureBounds.length === 0;
+    const failureBounds = normalizeFailureBounds(candidate.failureBounds, manifestEntries);
+    if (candidate.failureBounds !== undefined && !emptyBounds && !failureBounds) return reject('invalid failureBounds fields or citations');
+    if (evidenceReferences.length === 0) return reject('no evidenceReferences match the source manifest');
     if (
       typeof candidate.technologyId !== 'string' ||
       typeof candidate.type !== 'string' ||
       !validTypes.has(candidate.type) ||
-      !summary ||
-      evidenceReferences.length === 0
-    ) return [];
+      !summary
+    ) return reject('missing technologyId, valid type, or nonblank summary');
     return [{
       technologyId: candidate.technologyId,
       type: candidate.type as NonNullable<CriterionAgentReviewResult['assessments']>[number]['type'],
       summary,
-      evidenceReferences
+      evidenceReferences,
+      ...(coverageDisposition !== undefined ? { coverageDisposition } : {}),
+      ...(failureBounds ? { failureBounds } : {})
     }];
   });
 }
 
+function normalizeFailureBounds(value: unknown, manifestEntries: string[]): CriterionAgentFailureBound[] | undefined {
+  if (!Array.isArray(value) || !value.length) return undefined;
+  const bounds: CriterionAgentFailureBound[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
+    if (!['startup', 'tenant_initialization', 'runtime'].includes(item.phase)
+      || !['required', 'optional', 'conditional', 'unknown'].includes(item.requirement)
+      || !['established', 'unverified', 'not_applicable'].includes(item.status)
+      || typeof item.explanation !== 'string' || !item.explanation.trim()
+      || !Array.isArray(item.evidenceReferences)) return undefined;
+    const evidenceReferences = normalizeAdvisoryEvidenceReferences(item.evidenceReferences, manifestEntries);
+    if (!evidenceReferences.length || evidenceReferences.length !== item.evidenceReferences.length) return undefined;
+    bounds.push({ phase: item.phase, requirement: item.requirement, status: item.status,
+      explanation: redactSensitiveText(item.explanation).trim(), evidenceReferences });
+  }
+  return bounds;
+}
+
 function normalizeReviewerActions(
   value: unknown,
-  manifestEntries: string[]
+  manifestEntries: string[],
+  errors: string[]
 ): CriterionAgentReviewResult['reviewerActions'] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.flatMap(entry => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+  return value.flatMap((entry, index) => {
+    const reject = (reason: string): [] => {
+      if (errors.length < 16) errors.push(`Reviewer action ${index + 1}: ${reason}.`);
+      return [];
+    };
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return reject('expected an object');
     const candidate = entry as Record<string, unknown>;
     const evidenceReferences = normalizeAdvisoryEvidenceReferences(
       Array.isArray(candidate.evidenceReferences) ? candidate.evidenceReferences : [],
@@ -433,7 +499,7 @@ function normalizeReviewerActions(
     const action = typeof candidate.action === 'string'
       ? redactSensitiveText(candidate.action).trim()
       : '';
-    if (!action || evidenceReferences.length === 0) return [];
+    if (!action || evidenceReferences.length === 0) return reject('missing nonblank action or source-manifest citation');
     return [{ action, evidenceReferences }];
   });
 }
@@ -519,34 +585,4 @@ export function safeWorkspaceRelativePath(repoRelativePath: string): string {
     throw new Error(`Agent review file path must stay inside the repository: ${repoRelativePath}`);
   }
   return normalized;
-}
-
-export function resolveReviewPathWithinRepo(
-  repoPath: string,
-  repoRelativePath: string,
-  criterionId: string
-): string {
-  const repoRoot = realPath(repoPath);
-  if (!repoRoot) {
-    throw new Error('Unable to resolve repository path');
-  }
-
-  let normalized: string;
-  try {
-    normalized = safeWorkspaceRelativePath(repoRelativePath);
-  } catch {
-    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const absolutePath = path.resolve(repoRoot, normalized);
-  if (!isWithinRepo(repoRoot, absolutePath)) {
-    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const stats = fs.lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    throw new Error(`${criterionId} review material path is not a regular file: ${repoRelativePath}`);
-  }
-
-  return absolutePath;
 }

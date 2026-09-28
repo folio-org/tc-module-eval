@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
@@ -155,14 +156,14 @@ describe('S006 shared evaluator', () => {
           '      POSTGRES_PASSWORD: postgres'
         ].join('\n')
       },
-      expectedReference: '.criterion-agent/S006/excerpts/local_docker_defaults.txt'
+      expectedReference: 'docker-compose.yml'
     },
     {
       name: 'documentation token snippets',
       files: {
         'docs/secrets.md': 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n'
       },
-      expectedReference: '.criterion-agent/S006/excerpts/documentation.txt'
+      expectedReference: 'docs/secrets.md'
     }
   ])('invokes fake agent review for $name when S006 is enabled', async ({ files, expectedReference }) => {
     for (const [relativePath, content] of Object.entries(files)) {
@@ -177,6 +178,9 @@ describe('S006 shared evaluator', () => {
       summary: 'S006 fake review summary.',
       rationale: 'S006 fake review rationale.',
       evidenceReferences: [expectedReference],
+      assessments: ['scope', 'finding:0'].map(technologyId => ({ technologyId, type: 'evidence_gap',
+        summary: 'Usage requires confirmation.', coverageDisposition: 'unresolved', evidenceReferences: [expectedReference] })),
+      reviewerActions: [{ action: 'Obtain deployment usage for this value.', evidenceReferences: [expectedReference] }],
       warnings: [],
       errors: []
     })));
@@ -187,7 +191,7 @@ describe('S006 shared evaluator', () => {
     expect(result.details).toContain('Agent review:');
     expect(result.details).toContain('Advisory recommendation: needs_reviewer_judgment');
     expect(result.details).not.toContain('Evidence references:');
-    expect(result.details).not.toContain(expectedReference);
+    expect(result.details).not.toContain('.criterion-agent/S006/excerpts/');
   });
 
   it.each([
@@ -297,13 +301,16 @@ describe('S006 shared evaluator', () => {
       summary: 'S006 fake review summary.',
       rationale: 'S006 fake review rationale.',
       evidenceReferences: ['.criterion-agent/S006/excerpts/documentation.txt', 'docs/secrets.md'],
+      assessments: ['scope', 'finding:0'].map(technologyId => ({ technologyId, type: 'evidence_gap',
+        summary: 'Usage requires confirmation.', coverageDisposition: 'unresolved', evidenceReferences: ['docs/secrets.md'] })),
+      reviewerActions: [{ action: 'Obtain deployment usage for this value.', evidenceReferences: ['docs/secrets.md'] }],
       warnings: [],
       errors: []
     })));
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
-    expect(result.agentReview?.evidenceReferences).toEqual(['.criterion-agent/S006/excerpts/documentation.txt']);
+    expect(result.agentReview?.evidenceReferences).toEqual(['docs/secrets.md']);
     expect(result.agentReview?.warnings.join('\n')).toContain('Dropped');
     expect(result.details).toContain('Dropped');
   });
@@ -338,10 +345,11 @@ describe('S006 shared evaluator', () => {
     }) }, 'evidenceReferences must include a manifest entry']
   ] as Array<[string, Partial<CommandExecutionResult>, string]>)('preserves deterministic findings after OpenCode %s', async (_name, response, error) => {
     writeRepoFile('docs/secrets.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
-    const baseline = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
-    const result = await evaluator.evaluateCriterion('S006', tempRoot, createRunWithAgent({
+    const run = createRunWithAgent({
       enabled: true, enabledCriteria: ['S006'], adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer'
-    }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner(response))));
+    }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner(response)));
+    const baseline = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
+    const result = await evaluator.evaluateCriterion('S006', tempRoot, run);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.status).toBe(baseline.status);
     expect(result.evidence).toBe(baseline.evidence);
@@ -390,6 +398,9 @@ describe('S006 shared evaluator', () => {
   }
 
   function createRunWithAgent(agentReview: CriterionAgentReviewConfig, commandRunner?: CommandRunner) {
+    execFileSync('git', ['init', '-q'], { cwd: tempRoot });
+    execFileSync('git', ['add', '.'], { cwd: tempRoot });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd: tempRoot });
     return EvaluationRunUtils.createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',

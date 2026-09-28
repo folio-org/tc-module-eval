@@ -111,6 +111,19 @@ export async function readCommittedSource(
       });
       continue;
     }
+    // A large binary is an omission, not an oversized source file. Probe only a
+    // bounded prefix and terminate cat-file instead of draining the entire blob.
+    if (entry.size > limits.maxFileBytes || totalBytes + entry.size > limits.maxTotalBytes) {
+      const prefix = await runGit(repoPath, ['cat-file', 'blob', entry.oid], 8192, true);
+      if (prefix.exitCode !== 0 && !prefix.exceeded) {
+        diagnostics.push(gitError(prefix, 'Unable to inspect committed content'));
+        continue;
+      }
+      if (prefix.stdout.includes(0)) {
+        diagnostics.push({ code: 'binary', message: 'Skipped binary committed content', material: true, path: entry.path });
+        continue;
+      }
+    }
     if (entry.size > limits.maxFileBytes) {
       diagnostics.push({
         code: 'file-size',
@@ -193,7 +206,7 @@ function parseTree(
   });
 }
 
-function runGit(repoPath: string, args: string[], maxBytes: number): Promise<ProcessOutput> {
+function runGit(repoPath: string, args: string[], maxBytes: number, stopAfterLimit = false): Promise<ProcessOutput> {
   return new Promise(resolve => {
     const child = spawn('git', ['-C', repoPath, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     const stdout: Buffer[] = [];
@@ -209,7 +222,10 @@ function runGit(repoPath: string, args: string[], maxBytes: number): Promise<Pro
         stdout.push(retained);
         stdoutBytes += retained.length;
       }
-      if (nextBytes > maxBytes) exceeded = true;
+      if (nextBytes > maxBytes) {
+        exceeded = true;
+        if (stopAfterLimit) child.kill();
+      }
     });
     child.stderr.on('data', (chunk: Buffer) => {
       if (stderrBytes < 4096) {

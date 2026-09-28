@@ -1,5 +1,5 @@
 import { LocalCommandRunner } from '../utils/command-runner';
-import { decodeOpenCodeOutput, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
+import { decodeOpenCodeOutput, openCodeEventTrace, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
 
 const advisory = {
   recommendation: 'needs_reviewer_judgment', confidence: 'medium',
@@ -9,17 +9,49 @@ const advisory = {
 const textEvent = (text: string) => ({ type: 'text', part: { type: 'text', text } });
 const wire = (...events: unknown[]) => events.map(event => JSON.stringify(event)).join('\n');
 
-async function capture(output: string, maxOutputBytes = 1024 * 1024) {
+async function capture(output: string, maxOutputBytes = 1024 * 1024, captureDebugTrace = false) {
   const request = {
     command: process.execPath,
     args: ['-e', 'process.stdout.write(process.env.TEST_WIRE ?? "")'],
-    cwd: process.cwd(), env: { TEST_WIRE: output }, maxOutputBytes,
+    cwd: process.cwd(), env: { TEST_WIRE: output }, maxOutputBytes, captureDebugTrace,
     stdoutFormat: 'opencode-json' as const
   };
   return new LocalCommandRunner().run(request);
 }
 
 describe('structured OpenCode capture', () => {
+  it('retains only allowlisted tool metadata through real capture', async () => {
+    const result = await capture(wire({ type: 'tool_use', timestamp: 1200, part: {
+      tool: 'grep', state: { status: 'completed', time: { start: 1000, end: 1150 },
+        input: { pattern: 'SYNTHETIC_SECRET' }, output: 'PRIVATE_SOURCE' }
+    } }, { type: 'reasoning', timestamp: 1300, part: { text: 'PRIVATE_REASONING' } }), 1024 * 1024, true);
+    const events = result.stdout.split('\n').map(line => JSON.parse(line).debugTrace);
+    expect(events).toEqual([
+      { type: 'tool_use', timestamp: 1200, tool: 'grep', status: 'completed', durationMs: 150 },
+      { type: 'reasoning', timestamp: 1300 }
+    ]);
+    expect(result.stdout).not.toMatch(/SYNTHETIC_SECRET|PRIVATE_SOURCE|PRIVATE_REASONING/);
+    expect(openCodeEventTrace({ type: 'tool_use', timestamp: 'SECRET', tool: 'SECRET', status: 'SECRET', durationMs: -5 }))
+      .toEqual({ type: 'tool_use', tool: 'other', status: 'unknown' });
+  });
+
+  it('keeps the final answer when optional trace overhead would exceed the capture budget', async () => {
+    const output = wire(
+      ...Array.from({ length: 200 }, () => ({ type: 'tool_use', part: { messageID: 'm', tool: 'read' } })),
+      { type: 'step_start', part: { messageID: 'final' } },
+      { type: 'text', part: { messageID: 'final', type: 'text', text: JSON.stringify(advisory) } },
+      { type: 'step_finish', part: { messageID: 'final', reason: 'stop' } }
+    );
+    const result = await capture(output, Buffer.byteLength(output));
+    expect(result.stdoutTruncated).toBe(false);
+    expect(result.stdout).not.toContain('debugTrace');
+    expect(decodeOpenCodeOutput(result.stdout).payload).toEqual(advisory);
+    expect(sanitizeStructuredOutput(output, 'opencode-json', Buffer.byteLength(output), true).truncated).toBe(true);
+    const runner = new LocalCommandRunner();
+    const request = { command: 'opencode', cwd: process.cwd(), stdoutFormat: 'opencode-json' as const };
+    expect(runner.normalize(request)).not.toBe(runner.normalize({ ...request, captureDebugTrace: true }));
+  });
+
   it.each(['summary', 'rationale'])('rejects an unsafe advisory %s rather than accepting a placeholder', async field => {
     const payload = { ...advisory, [field]: '"password": "SYNTHETIC_SECRET\\' };
     const result = await capture(wire(textEvent(JSON.stringify(payload))));

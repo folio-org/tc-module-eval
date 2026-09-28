@@ -140,6 +140,19 @@ describe('criterion agent review', () => {
     }
   );
 
+  it.each(['assessments', 'reviewerActions'])('rejects a malformed %s entry instead of keeping an unsupported synthesis', field => {
+    const valid = field === 'assessments'
+      ? { technologyId: 'java', type: 'aligned_fact', summary: 'Declared.', evidenceReferences: ['README.md'] }
+      : { action: 'Resolve applicability.', evidenceReferences: ['README.md'] };
+    const result = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'likely_sufficient', confidence: 'high', summary: 'Everything is sufficient.',
+      rationale: 'Reviewed.', evidenceReferences: ['README.md'], [field]: [valid, { ...valid, evidenceReferences: ['missing.md'] }]
+    }, ['README.md']);
+    expect(result.errors.join(' ')).toMatch(/Invalid or uncited/);
+    expect(result.errors.join(' ')).toContain(field === 'assessments' ? 'Assessment 2:' : 'Reviewer action 2:');
+    expect(result.errors.join(' ')).not.toContain('missing.md');
+  });
+
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await reviewCriterionWithAgent({
       criterionId: 'S005',
@@ -319,7 +332,18 @@ describe('criterion agent review', () => {
       '--file'
     ]));
     expect(runRequest?.args).not.toContain('--dir');
-    expect(runRequest?.args?.indexOf('review')).toBeLessThan(runRequest?.args?.indexOf('--file') ?? -1);
+    const prompt = runRequest!.args![runRequest!.args!.indexOf('--file') - 1];
+    expect(prompt).toMatch(/^review\n/);
+    expect(prompt).toContain('Technical Council decision-maker');
+    expect(prompt).toContain('targeting 45 words total');
+    expect(prompt).toContain('targeting 70 words total');
+    expect(prompt).toContain('Reviewer actions: one direct sentence');
+    expect(prompt).toContain('Consolidate repeated observations');
+    expect(prompt).toContain('check consistency across recommendation, summary, rationale, assessments, and reviewer actions');
+    expect(prompt).toContain('retain that uncertainty throughout');
+    expect(prompt).toContain('not limits on investigation or material findings');
+    expect(prompt).toContain('Preserve required citations, meaningful uncertainty');
+    expect(prompt).toContain('Keep the required JSON schema and enum values unchanged');
     expect(runRequest?.env?.HOME).toBeDefined();
     expect(runRequest?.env?.XDG_CONFIG_HOME).toBeDefined();
     expect(runRequest?.env?.OPENCODE_CONFIG_DIR).toBeDefined();
@@ -569,6 +593,38 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(false);
     expect(runner.requests).toHaveLength(stage);
     expect(result.errors.join('\n')).toContain('capture truncated');
+  });
+
+  it.each([1, 2, 3])('retains content-free debug records after timeout at stage %i', async stage => {
+    const output = sanitizeStructuredOutput(JSON.stringify({ type: 'tool_use', timestamp: 1500, part: {
+      tool: 'read', state: { status: 'completed', time: { start: 1200, end: 1400 },
+        input: { filePath: 'PRIVATE_PATH' }, output: 'PRIVATE_CONTENT' }
+    } }), 'opencode-json', 10000, true).text;
+    const runner = new FakeRunner(undefined, undefined, output, {
+      [stage]: { status: 'timed_out', durationMs: 180000, signal: 'SIGTERM', stdoutBytes: 900, stderr: 'PRIVATE_ERROR' }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S010', repositoryPath: repoPath,
+      instructions: 'PRIVATE_PROMPT', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), enabledCriteria: ['S010'], timeoutMs: 180000, debugRetainWorkspace: true }, runner);
+    const workspace = result.metadata!.retainedWorkspacePath!;
+    try {
+      const tracePath = path.join(workspace, 'agent-debug.json');
+      const text = fs.readFileSync(tracePath, 'utf8');
+      const trace = JSON.parse(text);
+      expect(result.available).toBe(false);
+      expect(trace.timeoutMs).toBe(180000);
+      if (stage === 3) expect(runner.requests[2].captureDebugTrace).toBe(true);
+      expect(trace.stages).toHaveLength(stage);
+      expect(trace.stages[stage - 1]).toMatchObject({ status: 'timed_out', durationMs: 180000, signal: 'SIGTERM', stdoutBytes: 900 });
+      if (stage === 3) expect(trace.stages[2].events).toEqual([
+        { record: 1, type: 'tool_use', timestamp: 1500, tool: 'read', status: 'completed', durationMs: 200 }
+      ]);
+      expect(text).not.toMatch(/PRIVATE_|README|apiKey|authorization|test-model/);
+      expect(fs.statSync(tracePath).mode & 0o777).toBe(0o600);
+      expect(fs.existsSync(path.dirname(runner.requests[0].env!.XDG_DATA_HOME!))).toBe(false);
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
   });
 
   it('retains allowlisted provider diagnostics from stdout on nonzero exit', async () => {

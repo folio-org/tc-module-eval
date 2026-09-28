@@ -4,6 +4,7 @@ import {
   S007FindingClassification,
   S007TechnologyFinding
 } from '../types';
+import { renderAgentReviewLines } from './agent-review-report';
 
 interface S007FindingGroup {
   technologyId: string;
@@ -61,31 +62,8 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    lines.push(
-      'Agent review:',
-      `  - Advisory recommendation: ${agentReview.recommendation}`,
-      `  - Confidence: ${agentReview.confidence}`,
-      `  - Summary: ${agentReview.summary}`,
-      `  - Rationale: ${agentReview.rationale}`
-    );
-    if (agentReview.assessments?.length) {
-      lines.push('  - Practical assessments:');
-      for (const assessment of agentReview.assessments) {
-        lines.push(
-          `    - ${assessment.technologyId} — ${assessment.type.replace(/_/g, ' ')}: ${assessment.summary}`,
-          `      - Evidence: ${assessment.evidenceReferences.join(', ')}`
-        );
-      }
-    }
-    if (agentReview.reviewerActions?.length) {
-      lines.push('  - Reviewer actions:');
-      for (const action of agentReview.reviewerActions) {
-        lines.push(
-          `    - ${action.action}`,
-          `      - Evidence: ${action.evidenceReferences.join(', ')}`
-        );
-      }
-    }
+    const subjectNames = Object.fromEntries(analysis.findings.map(finding => [finding.technologyId, finding.displayName]));
+    lines.push(...renderAgentReviewLines(agentReview, subjectNames));
     lines.push(`  - Deterministic result remains ${capitalize(analysis.status)}.`);
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);

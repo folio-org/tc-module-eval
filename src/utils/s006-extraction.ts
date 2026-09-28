@@ -443,6 +443,9 @@ function buildS006GitleaksFinding(
 }
 
 function getS006GitleaksDetector(source: S006GitleaksFinding): S006DetectorRegistryEntry {
+  if (source.RuleID === 'generic-api-key') {
+    return getS006DetectorById('password-secret-assignment');
+  }
   if (source.RuleID === 'provider-api-key') {
     return getS006DetectorById('provider-api-key');
   }

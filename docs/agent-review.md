@@ -6,7 +6,7 @@ Supported advisory criteria: `S004` installation documentation, `S005` personal 
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- Selected repository files are copied into a bounded review workspace. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports.
+- All five supported criteria browse an isolated snapshot of eligible committed repository source. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
 - Provider keys are read from environment variables, not CLI arguments.
 - The generated OpenCode agent is read-only and rejects mutating tools.
@@ -16,43 +16,104 @@ Agent review runs through reusable criterion-agent infrastructure:
 
 S005 checks the required top-level `PERSONAL_DATA_DISCLOSURE.md` for file mechanics, checklist answers, placeholders or contradictions, and bounded read-only source signals. It does not certify privacy or legal compliance; completed forms stay `manual`, deterministic `fail` covers only mechanics or completion defects, and explicit FOLIO libraries are `not_applicable`.
 
-Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs only for completed manual cases with candidate evidence or possible mismatches beyond the form. It receives the disclosure form, parsed summary, and bounded excerpts, then returns advisory recommendation, confidence, rationale, and manifest-scoped evidence references.
+Evidence gathering never mutates the repository or runs repository code, tests, builds, services, databases, or Okapi calls. When enabled, S005 agent review runs for manual cases even when the scanner found no evidence beyond the form. It compares the disclosure with schemas, APIs, storage, logging, and data flows in committed source. The parsed summary guides investigation but does not select the available files.
 
 If agent review is disabled, unavailable, malformed, or has no material, S005 still reports deterministic evidence; status remains deterministic/manual, not agent-driven.
 
 ## S007 Officially Supported Technologies Review
 
-S007 invokes agent review only when deterministic analysis is manual because of an
-unresolved declaration, conflict, unlisted framework, or incomplete coverage and a
-manifest contains useful repository evidence. Policy-load and policy-semantics-only
-manual results do not invoke it.
+S007 invokes agent review for manual results, including incomplete evidence and policy
+uncertainty. It follows committed manifests, parent configuration, version properties,
+lockfiles, containers, and CI. Raw source replaces the old selected declaration
+summaries. The full trusted policy is supplied separately so the agent can investigate
+technologies missed by the analyzer using `discovered:<normalized-id>` assessments.
+Missing policy or external parent contents remain unresolved; repository browsing
+does not authorize the agent to invent policy or retrieve external dependencies.
 
-The review workspace contains a bounded deterministic summary and selected
-declaration summaries rather than raw manifest contents. Absolute paths, traversal
-paths, symlinks, and duplicate files are excluded; each generated declaration summary
-has its own byte limit. Repository content is untrusted evidence: the agent is
-instructed not to follow repository-authored instructions, run commands, execute
-builds or tests, install dependencies, modify files, make network calls, or invent
-policy. Available advice must cite at least one validated path from the review manifest.
+If an otherwise cited assessment uses a bare canonical ID from the trusted S007
+policy that is absent from the deterministic inventory, the evaluator adds the
+`discovered:` prefix and records a warning. It does not guess aliases, repair
+arbitrary unknown names, or change the assessment's policy conclusion.
 
 Agent output may clarify an unresolved declaration, conflict, or unlisted framework,
 but it cannot change the deterministic status. Disabled, excluded, unavailable,
 failed, or malformed review leaves S007 manual and records the unavailable reason.
 
-## S010 Third-Party System Resilience Review
+## Repository browsing shared by all five criteria
 
-S010 invokes agent review only when deterministic committed-source analysis is manual.
-The agent receives a bounded, repository-wide cross-section of committed
-manifests, configuration, production source, tests, and documentation plus the
-deterministic scenarios and coverage diagnostics. Generated output, dependencies,
-binary files, symlinks, `.env` files, and uncommitted changes are excluded.
+Enabled reviews run only for deterministic manual results. An empty analyzer inventory
+does not prevent investigation; an empty or inaccessible committed snapshot makes
+review unavailable. OpenCode browses the eligible committed source tree with read,
+glob, grep, and list. There is no ranked 32-file
+selection: files outside conventional source directories are available too.
+Files are copied intact, with repository-relative paths preserved under `docs/`
+in an isolated workspace. The agent chooses what to search and read, follows
+cross-file references, and seeks evidence that contradicts or extends the
+deterministic summary. Repository contents are not all injected into the prompt.
+
+Generated output, vendored dependencies, binaries, non-regular entries (including
+symlinks and submodules), `.env` files, and uncommitted changes are excluded.
+Repository-authored `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `opencode.json`/`opencode.jsonc`,
+`.opencode/`, `.claude/`, `.agents/`, and `.criterion-agent/` are excluded as well.
+OpenCode can automatically load `CONTEXT.md` while reading nearby source; these
+instruction filenames are excluded at every depth. `.ignore`, `.rgignore`, and
+`.gitignore` are also excluded so repository rules cannot silently hide copied
+source from searches. Recheck automatic instruction and search configuration
+filenames when upgrading OpenCode.
+Commands, builds, tests, mutations, external-directory access, and web tools remain
+disabled. This enables source investigation, not runtime verification.
+
+Workspace preparation has safety ceilings of 50,000 tree entries/files, 16 MiB
+of tree metadata, 1 MiB per file, and 128 MiB of source. Oversized source files are
+omitted and their paths listed in the snapshot manifest; their contents remain
+unverified. Git errors and exceeded tree, count, or aggregate ceilings still make
+agent review unavailable. The reader probes at most 8 KiB for NUL bytes and stops
+oversized Git blob streams early. The coverage summary records the committed
+revision and binary, oversized, and unsafe-entry omissions. S006 and S007 generated
+summaries remain complete JSON rather than being byte-truncated; the 1 MiB workspace
+file limit still applies. The existing `--criterion-agent-timeout-ms`
+bounds the OpenCode run; there is no separate token or tool-call budget. A hard
+timeout makes review unavailable. The agent is instructed to report unfinished
+material traces as `needs_reviewer_judgment` when it can finish a response.
+
+The snapshot revision applies to browsable source. S004–S007 deterministic summaries
+can reflect the working tree, so use a clean checkout to avoid mixing revisions.
+
+S004 follows documentation links and checks instructions against build and runtime
+configuration. Source configuration can expose contradictions but cannot substitute
+for missing developer-facing documentation. Deterministic pass, fail, and
+not-applicable results remain outside agent review for every criterion.
+
+## S010 Third-Party System Resilience Review
 
 The review inventories runtime dependencies and traces configuration, operations,
 failure bounds, fallback behavior, startup coupling, and readiness effects. It may
 identify evidence missed by narrow deterministic recognizers, but it cannot change
 the deterministic status. Every assessment and reviewer action must cite committed
-repository source; generated summaries alone are not valid support. Disabled,
+repository source; generated summaries alone are not valid support. Citation paths
+are validated against the workspace; the agent is also instructed to include line
+numbers in assessment text and describe its actual investigation scope, but those
+claims are not independently verified. Disabled,
 excluded, unavailable, malformed, or uncited review leaves S010 manual.
+
+Each dependency assessment includes cited `failureBounds` for process startup,
+tenant initialization, and runtime. Records distinguish required, optional, and
+conditional dependencies and mark bounds established, unverified, or not applicable.
+An established bound needs an explanation connecting the mechanism to the complete
+operation, including retries; an exception or assumed library default is insufficient.
+Supported facts may accompany unverified bounds, but cannot justify a likely-sufficient
+recommendation. Unresolved bounds require reviewer judgment and a cited follow-up,
+unless a substantive concern already supports likely-insufficient. Required services
+need not work offline: clear bounded failure is
+acceptable. Optional deployment tuning does not invalidate an established bound.
+
+Deterministic dependency IDs are candidates: every candidate must be accounted for,
+but a cited internal component may use `analyzer_limitation` with
+`coverageDisposition: immaterial` without a phase matrix. Its relevant configuration
+still belongs in the actual service assessment. Investigation starts with startup
+I/O, then tenant/provisioning helpers, runtime callers, and effective client bounds.
+The agent summary labels exception propagation with unknown duration neutrally;
+this projection does not change deterministic analysis.
 
 ## S006 Sensitive Information Review
 
@@ -60,7 +121,19 @@ S006 scans bounded high-signal text, configuration, documentation, CI, Docker, a
 
 Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
 
-When enabled, S006 agent review runs only for manual findings or material scan-coverage uncertainty. It receives the finding summary and bounded matched excerpts only, never surrounding source windows or fingerprints. Agent review is advisory only and cannot pass or fail S006. If agent review is disabled, unavailable, malformed, or has no material, deterministic evidence remains and S006 records the unavailable reason when applicable.
+When enabled, S006 agent review investigates manual results using the finding summary and surrounding committed source, including files not flagged by the scanner. Fingerprints are omitted from the summary. It distinguishes production usage from examples, fixtures, and local defaults without testing credentials or contacting endpoints, and must not reproduce secret values in its response. Excluded files, including `.env` files, remain outside browsing scope even if the deterministic scanner inspected them; the agent cannot certify those files or a secret-free repository. Agent review cannot pass or fail S006. Unavailable review preserves deterministic evidence and records its reason.
+
+The review must give each retained finding and material coverage gap a cited
+`coverageDisposition`: investigated, immaterial to the scoped decision, or unresolved.
+It also describes the actual investigation scope. Extra discoveries use
+`discovered:<normalized-id>` assessments. Direct investigation of an unavailable
+path is rejected. Findings whose original source is unavailable must remain
+unresolved: related documentation cannot establish excluded committed contents.
+The input explicitly marks source availability; exclusion does not mean a file is
+absent from the repository. Incomplete scanner coverage can be resolved through additional
+investigation or justified as immaterial, but file availability alone is not proof
+of inspection. Unresolved obligations prevent a likely-sufficient recommendation;
+coverage gaps alone do not justify likely-insufficient advice.
 
 ## OpenRouter
 
@@ -112,9 +185,24 @@ Advanced options:
 - `--criterion-agent-proxy-env <names>` allowlists proxy environment variable names.
 - `--criterion-agent-endpoint <url>` configures a provider endpoint.
 - `--criterion-agent-endpoint-allowlist <urls>` permits non-HTTPS explicitly trusted endpoint URLs on the same parsed origin.
-- `--criterion-agent-debug-retain-workspace` retains the temporary review workspace for local debugging.
+- `--criterion-agent-debug-retain-workspace` retains the temporary review workspace and a content-free `agent-debug.json` run trace for local debugging.
 
-When `--criterion-agent-debug-retain-workspace` is used, the evaluator keeps the manifest and generated OpenCode config but removes copied/generated OpenCode auth data after the run.
+When this flag is used, the evaluator keeps the manifest and review inputs but still deletes the entire separate OpenCode runtime directory, including configuration, auth data, and session storage. The JSON report's `agentReview.metadata.retainedWorkspacePath` identifies the workspace. Treat retained inputs as private repository content; do not publish the whole workspace.
+
+`agent-debug.json` records each command's start/end time, duration, status, exit code/signal, output byte counts, and truncation flags, including failed and timed-out commands. For the review command it also retains up to 2,000 content-free events: event type, OpenCode-reported timestamp, allowlisted tool name/status, and tool duration when supplied. Unknown names are replaced with `other`. Prompts, environment variables, credentials, paths, tool inputs/outputs, assistant prose, and reasoning text are not included in the trace. The trace file is owner-readable/writable only.
+
+The trace is updated before and after each command, not continuously. Event timestamps are reported by OpenCode, not measured provider latency. Missing events, capture truncation, and `omittedEvents` limit what can be concluded; a quiet interval cannot distinguish model computation from provider waiting. A forcibly killed evaluator may leave only the last command's `running` entry. Debug mode does not increase timeouts, change permissions, or retry commands.
+
+For example, to investigate S010 with a seven-minute ceiling:
+
+```bash
+node dist/cli.js evaluate https://github.com/folio-org/mod-search \
+  --criteria S010 --criterion-agent-opencode --criterion-agent-criteria S010 \
+  --criterion-agent-model openrouter/deepseek/deepseek-v4-flash \
+  --criterion-agent-timeout-ms 420000 --criterion-agent-debug-retain-workspace
+```
+
+Remove the retained workspace when troubleshooting is finished. Without the flag, no trace file is written and the temporary review workspace is deleted as before.
 
 Explicit CLI model and auth-store values take precedence over environment-based generation.
 
@@ -122,7 +210,19 @@ Only include environment variable names that the OpenCode subprocess actually ne
 
 ## Output Acceptance and Troubleshooting
 
-Available advice must cite at least one entry from the review manifest. Generated evidence files in the manifest are valid citations; S005 and S006 do not require a direct repository-file citation. Unknown citations are discarded, and a response with no valid manifest citation is unavailable. This validation affects only optional advice: deterministic status and findings remain unchanged.
+Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. Unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
+
+Malformed or uncited assessment/action records reject the response; they are not
+silently dropped while preserving its overall conclusion. Nested failure-bound
+records are validated and require repository citations too. These checks enforce
+structural consistency, not the truth of model-authored explanations.
+
+The narrow exception is an unresolved S006 coverage-gap assessment whose ID was
+supplied by the evaluator: it may cite the scanner's generated coverage diagnostics.
+Those diagnostics establish a scan limitation, not repository contents. Resolved
+gaps, source findings, overall advice, and reviewer actions still require source
+citations. Invalid-record diagnostics identify record indexes and fixed failure
+categories without echoing rejected values.
 
 Agent-review failures are reported without exposing raw provider output or credentials:
 

@@ -467,6 +467,18 @@ describe('CLI Integration Tests', () => {
         const evaluator = new ModuleEvaluator(config);
         const result = await evaluator.evaluateModule(repoUrl);
 
+        // Normalization drops advisories; verify why Java passes before comparing the golden.
+        const s007 = result.criteria.find(criterion => criterion.criterionId === 'S007')!;
+        expect(s007.status).toBe(EvaluationStatus.MANUAL);
+        expect(s007.criterionDetails).toMatchObject({ findings: expect.arrayContaining([
+          expect.objectContaining({
+            technologyId: 'java', classification: 'compliant', contribution: 'pass', statusDetermining: false,
+            advisories: expect.arrayContaining([
+              'Exception applicability is unresolved, but the base rule and every possible exception give the same version-compliance outcome.'
+            ])
+          })
+        ]) });
+
         const reportGenerator = new ReportGenerator(testOutputDir);
         const reportPaths = await reportGenerator.generateReports(result, {
           outputHtml: false,

@@ -51,6 +51,20 @@ failure bound, fallback, startup coupling, and readiness outcome. Unsupported wr
 generated clients, dynamic configuration, incomplete discovery, or ambiguous linkage
 remain `manual`; missing visible handling alone never proves failure.
 
+Configuration optionality is not service optionality. A default address or an
+environment variable not marked required does not establish that the service can
+be absent. Configuration scenarios retain explicit required-input evidence;
+otherwise their requirement is unresolved rather than inferred optional.
+Agent review must establish service ownership from architecture and usage.
+
+For required services, graceful failure does not mean continued functionality:
+clear, bounded startup or tenant-initialization failure and controlled runtime
+failure with truthful loss of readiness are acceptable. Distinguish process
+startup, tenant initialization, and runtime operations, and liveness from readiness.
+Startup coupling or lack of a feature toggle alone is not a defect. Review failure
+bounds, diagnostics, readiness, and recovery rather than demanding a fallback;
+an exception or connect timeout alone does not prove a bounded failure path.
+
 - `pass`: every identified scenario has satisfactory linked evidence, or complete
   semantic coverage proves there are no external runtime dependencies. Missing required
   configuration may pass through clear startup fail-fast when no sensible default exists.
@@ -68,7 +82,9 @@ remain `manual`; missing visible handling alone never proves failure.
 Optional dependencies may use feature isolation or controlled module-wide degradation,
 but loss must remain bounded and must not make the module unready. Tests strengthen
 evidence but are not mandatory. For deterministic manual results, optional S010 agent
-review receives a broader bounded committed-source snapshot. Its cited advice
+review browses the eligible committed source tree and follows cross-file references,
+using deterministic findings as starting points rather than a file-selection boundary.
+Workspace safety ceilings and the review timeout still apply. Its cited advice
 helps human review but never changes criterion status.
 
 For Java databases, the evaluator groups JDBC, JPA, R2DBC, datasource, Liquibase, and
@@ -78,6 +94,15 @@ propagation. A finite database bound is proven only when committed configuration
 both a positive connection bound and a positive operation bound; framework defaults,
 transactions, and batch-to-row retries are not treated as resilience proof. Conditional
 or incompletely linked database behavior remains `manual` for agent and human review.
+
+OpenSearch Java client discovery recognizes qualified references to `RestHighLevelClient`,
+`RestClient`, `OpenSearchClient`, and `OpenSearchAsyncClient` in production sources.
+It groups their source locations into a `search/runtime-unavailable` scenario rather
+than an unsupported-client diagnostic. This is discovery support, not automatic
+call-chain analysis: requiredness, end-to-end failure bounds, readiness, and recovery
+remain unresolved for agent and human review. Nearby timeouts, catch blocks, or feature
+conditions do not establish resilience. Other unsupported datastore clients remain
+diagnosed even when they share a file with a recognized OpenSearch client.
 
 ## Advisory Agent Review
 

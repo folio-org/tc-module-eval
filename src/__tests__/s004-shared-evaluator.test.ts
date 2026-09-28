@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { EvaluationStatus } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { createEvaluationRun } from '../utils/evaluation-run';
@@ -111,6 +112,9 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling it for 
   });
 
   function createRunWithFakeAgent(enabledCriteria: string[]) {
+    execFileSync('git', ['init', '-q'], { cwd: tempRoot });
+    execFileSync('git', ['add', '.'], { cwd: tempRoot });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd: tempRoot });
     return createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',
