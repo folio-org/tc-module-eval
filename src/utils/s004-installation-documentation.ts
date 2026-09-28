@@ -23,7 +23,7 @@ const EXCERPT_RADIUS = 2;
 const MAX_HEADING_INSTRUCTION_DISTANCE = 12;
 const MAX_LINE_INSTRUCTION_DISTANCE = 4;
 const COMMAND_PATTERNS = [
-  /\bdocker\s+(?:compose(?:\s+(?:(?:-f|--file|-p|--project-name|--profile)\s+\S+))*\s+(?:up|down|build|pull|push|run|start|stop|restart|logs|ps)\b|(?:build|run|pull|push|start|stop|restart|exec|logs|inspect)\b)/i,
+  /\bdocker\s+(?:compose(?:\s+(?:(?:-f|--file|-p|--project-name|--profile)\s+\S+))*\s+(?:up|down|build|pull|push|run|start|stop|restart|logs|ps)(?=\s|$)|(?:build|run|pull|push|start|stop|restart|exec|logs|inspect)(?=\s|$))/i,
   /\bcurl\s+(?:-[A-Za-z]|https?:\/\/)/i,
   /\bmvn\s+(?:(?:clean|compile|test|package|verify|install|deploy|spring-boot:run)\b|[\w.-]+:[\w.-]+\b)/i,
   /(?:\bgradle|\.\/gradlew)\s+(?:build|assemble|check|test|clean|bootRun|tasks|[\w.-]+:[\w.-]+)\b/i,
@@ -35,7 +35,7 @@ const COMMAND_PATTERNS = [
   /\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)/i
 ];
 const INSTRUCTION_PATTERN = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
-const UPPERCASE_IDENTIFIER_PATTERN = /\b[A-Z][A-Z0-9_]{2,}\b/;
+const ENVIRONMENT_VARIABLE_PATTERN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b|(?:^|[\s`])(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/;
 const CONCRETE_TARGET_PATTERN = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
 
 interface QueuedDoc {
@@ -239,6 +239,7 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
 
 function extractSignals(relativePath: string, content: string): S004DocumentationSignal[] {
   const lines = content.split(/\r?\n/);
+  const fencedLines = markdownFenceMap(lines);
   const bestByGroup = new Map<S004SignalGroup, S004DocumentationSignal>();
 
   for (let index = 0; index < lines.length; index++) {
@@ -250,8 +251,8 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (rule.group === 'install_deploy_run' && isDevelopmentInstallLine(line)) {
         continue;
       }
-      const strength = contextualSignalStrength(lines, index, rule.strength);
-      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, index) : index;
+      const strength = contextualSignalStrength(lines, fencedLines, index, rule.strength);
+      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, fencedLines, index) : index;
       const signal = {
         group: rule.group,
         label: rule.label,
@@ -275,6 +276,7 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
 
 function contextualSignalStrength(
   lines: string[],
+  fencedLines: boolean[],
   index: number,
   configured: S004DocumentationSignal['strength']
 ): S004DocumentationSignal['strength'] {
@@ -282,18 +284,18 @@ function contextualSignalStrength(
   if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
     return 'insufficient';
   }
-  const context = localInstructionBlock(lines, index);
+  const context = localInstructionBlock(lines, fencedLines, index);
   if (isConcreteInstruction(context)) {
     return configured === 'candidate' ? 'candidate' : 'strong';
   }
   return configured === 'strong' ? 'candidate' : configured;
 }
 
-function localInstructionBlock(lines: string[], index: number): string {
+function localInstructionBlock(lines: string[], fencedLines: boolean[], index: number): string {
   const block = [lines[index]];
-  const distance = instructionBlockDistance(lines[index]);
+  const distance = instructionBlockDistance(lines[index], fencedLines[index]);
   for (let next = index + 1; next < lines.length && next <= index + distance; next++) {
-    if (startsNewInstructionSection(lines[index], lines[next])) {
+    if (startsNewInstructionSection(lines[index], fencedLines[index], lines[next], fencedLines[next])) {
       break;
     }
     block.push(lines[next]);
@@ -301,10 +303,10 @@ function localInstructionBlock(lines: string[], index: number): string {
   return block.join('\n');
 }
 
-function concreteInstructionIndex(lines: string[], index: number): number {
-  const distance = instructionBlockDistance(lines[index]);
+function concreteInstructionIndex(lines: string[], fencedLines: boolean[], index: number): number {
+  const distance = instructionBlockDistance(lines[index], fencedLines[index]);
   for (let candidate = index; candidate < lines.length && candidate <= index + distance; candidate++) {
-    if (candidate > index && startsNewInstructionSection(lines[index], lines[candidate])) {
+    if (candidate > index && startsNewInstructionSection(lines[index], fencedLines[index], lines[candidate], fencedLines[candidate])) {
       break;
     }
     if (isConcreteInstruction(lines[candidate])) {
@@ -314,26 +316,58 @@ function concreteInstructionIndex(lines: string[], index: number): number {
   return index;
 }
 
-function instructionBlockDistance(anchor: string): number {
-  return /^\s*#{1,6}\s+/.test(anchor)
+function instructionBlockDistance(anchor: string, fenced: boolean): number {
+  return !fenced && /^\s*#{1,6}\s+/.test(anchor)
     ? MAX_HEADING_INSTRUCTION_DISTANCE
     : MAX_LINE_INSTRUCTION_DISTANCE;
 }
 
-function startsNewInstructionSection(anchor: string, candidate: string): boolean {
+function startsNewInstructionSection(
+  anchor: string,
+  anchorFenced: boolean,
+  candidate: string,
+  candidateFenced: boolean
+): boolean {
+  if (candidateFenced) {
+    return false;
+  }
   const candidateLevel = candidate.match(/^\s*(#{1,6})\s+/)?.[1].length;
   if (!candidateLevel) {
     return false;
   }
-  const anchorLevel = anchor.match(/^\s*(#{1,6})\s+/)?.[1].length;
+  const anchorLevel = anchorFenced ? undefined : anchor.match(/^\s*(#{1,6})\s+/)?.[1].length;
   return anchorLevel === undefined || candidateLevel <= anchorLevel;
+}
+
+function markdownFenceMap(lines: string[]): boolean[] {
+  const fencedLines: boolean[] = [];
+  let marker: '`' | '~' | undefined;
+  let markerLength = 0;
+
+  for (const line of lines) {
+    fencedLines.push(marker !== undefined);
+    const fence = line.match(/^\s*(`{3,}|~{3,})/);
+    if (!fence) {
+      continue;
+    }
+    const candidateMarker = fence[1][0] as '`' | '~';
+    if (marker === undefined) {
+      marker = candidateMarker;
+      markerLength = fence[1].length;
+    } else if (candidateMarker === marker && fence[1].length >= markerLength) {
+      marker = undefined;
+      markerLength = 0;
+    }
+  }
+
+  return fencedLines;
 }
 
 function isConcreteInstruction(value: string): boolean {
   return value.split(/\r?\n/).some(line =>
     COMMAND_PATTERNS.some(pattern => pattern.test(line))
       || (INSTRUCTION_PATTERN.test(line)
-        && (UPPERCASE_IDENTIFIER_PATTERN.test(line) || CONCRETE_TARGET_PATTERN.test(line)))
+        && (ENVIRONMENT_VARIABLE_PATTERN.test(line) || CONCRETE_TARGET_PATTERN.test(line)))
   );
 }
 

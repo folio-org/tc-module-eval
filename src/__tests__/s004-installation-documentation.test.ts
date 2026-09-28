@@ -223,7 +223,9 @@ The module requires Java 17.
     'yarn workspaces are used by the frontend.',
     'helm charts are available for operators.',
     'curl requests can exercise the API.',
-    'kubectl access is required for the cluster.'
+    'kubectl access is required for the cluster.',
+    'This module uses the FOLIO API to run lookups.',
+    'Docker run-time dependencies include Postgres.'
   ])('does not mistake tool prose for a command: %s', prose => {
     writeFile('README.md', `
 ## Installing and deployment
@@ -256,6 +258,24 @@ ${prose}
     const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
     expect(installSignal).toMatchObject({ strength: 'strong', line: 3 });
+    expect(result.classification.reason).toContain('strong installation');
+  });
+
+  it('does not treat a shell comment inside a fenced block as a new Markdown heading', () => {
+    writeFile('README.md', `
+## Installation
+
+\`\`\`shell
+# Build the image
+docker build -t mod-example .
+\`\`\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 5 });
+    expect(installSignal?.excerpt).toContain('docker build');
     expect(result.classification.reason).toContain('strong installation');
   });
 

@@ -88,9 +88,12 @@ configuration. Headings are evaluated with a small following instruction block s
 commands immediately below an installation or deployment heading remain connected
 to that section. Table-of-contents and troubleshooting-only mentions are discarded,
 and tool or runtime requirements are not treated as commands unless they contain a
-recognized executable action. Source configuration can expose contradictions but
-cannot substitute for missing developer-facing documentation. Deterministic pass,
-fail, and not-applicable results remain outside agent review for every criterion.
+recognized executable action. Shell comments inside fenced code blocks are not
+treated as Markdown headings, and environment instructions require variable or
+assignment syntax rather than an uppercase product name. Source configuration can
+expose contradictions but cannot substitute for missing developer-facing
+documentation. Deterministic pass, fail, and not-applicable results remain outside
+agent review for every criterion.
 
 ## S010 Third-Party System Resilience Review
 
