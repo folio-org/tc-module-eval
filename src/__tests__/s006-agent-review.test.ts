@@ -60,7 +60,11 @@ describe('S006 agent review adapter', () => {
     const analysis = await analyzeRepo();
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
-      ...baseResult(), evidenceReferences: ['docs/token.md', 'unknown.txt']
+      ...baseResult(), evidenceReferences: ['docs/token.md', 'unknown.txt'],
+      assessments: [{ technologyId: 'scope', type: 'evidence_gap', summary: 'Usage needs verification.', coverageDisposition: 'unresolved', evidenceReferences: ['docs/token.md'] },
+        ...analysis.findings.map((finding, index) => ({ technologyId: `finding:${index}`, type: 'evidence_gap' as const,
+          summary: 'Usage needs verification.', coverageDisposition: 'unresolved' as const, evidenceReferences: [finding.path] }))],
+      reviewerActions: [{ action: 'Obtain evidence of how this example is deployed.', evidenceReferences: ['docs/token.md'] }]
     }));
     expect(result.available).toBe(true);
     expect(result.evidenceReferences).toEqual(['docs/token.md']);
@@ -103,6 +107,109 @@ describe('S006 agent review adapter', () => {
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({ ...baseResult(), recommendation: 'credential_is_live' as any }));
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
+  });
+
+  it.each([
+    ['investigated', 'likely_sufficient', true],
+    ['immaterial', 'likely_sufficient', true],
+    ['unresolved', 'likely_sufficient', false],
+    ['unresolved', 'needs_reviewer_judgment', true]
+  ] as const)('handles incomplete coverage as %s with %s', async (disposition, recommendation, available) => {
+    writeFile('README.md', 'Source scope');
+    writeFile('.github/CODEOWNERS', '* @maintainer');
+    commit();
+    const analysis = await analyzeRepo();
+    analysis.findings = [];
+    analysis.coverage.complete = false;
+    analysis.coverage.warnings = [{ kind: 'unsupported-high-signal-file', path: '.github/CODEOWNERS', message: 'Not scanned.', materialToCoverage: true }];
+    analysis.coverage.skippedFiles = [{ path: '.github/CODEOWNERS', reason: 'unsupported-file', materialToCoverage: true }];
+    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const context = JSON.parse(request.files.find(f => f.repoRelativePath.endsWith('review-obligations.json'))!.content);
+    expect(context.reviewObligations.map((item: any) => item.id)).toEqual(['scope', 'gap:.github/CODEOWNERS']);
+    const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), recommendation, evidenceReferences: ['README.md'],
+      assessments: [
+        { technologyId: 'scope', type: 'aligned_fact', summary: 'Reviewed ownership and documentation.', coverageDisposition: 'investigated', evidenceReferences: ['README.md'] },
+        { technologyId: 'gap:.github/CODEOWNERS', type: disposition === 'unresolved' ? 'evidence_gap' : 'analyzer_limitation',
+          summary: 'Only an ownership mapping; no runtime configuration.', coverageDisposition: disposition, evidenceReferences: ['.github/CODEOWNERS'] }
+      ], reviewerActions: [{ action: 'Inspect the ownership mapping to resolve remaining scan coverage.', evidenceReferences: ['README.md'] }]
+    }));
+    expect(result.available).toBe(available);
+  });
+
+  it('rejects missing gap dispositions and direct inspection of excluded source', async () => {
+    writeFile('README.md', 'Configuration usage');
+    writeFile('docker/.env', 'LOCAL_DEFAULT=value');
+    commit();
+    const analysis = await analyzeRepo();
+    analysis.findings = [];
+    analysis.coverage.complete = false;
+    analysis.coverage.warnings = [{ kind: 'candidate-limit', message: 'Only 300 of 1001 candidates scanned.', materialToCoverage: true }];
+    analysis.coverage.skippedFiles = [{ path: 'docker/.env', reason: 'unsupported-file', materialToCoverage: true }];
+    const scope = { technologyId: 'scope', type: 'aligned_fact' as const, summary: 'Scoped.', coverageDisposition: 'investigated' as const, evidenceReferences: ['README.md'] };
+    for (const assessments of [[scope], [scope,
+      { ...scope, technologyId: 'gap:candidate-limit' }, { ...scope, technologyId: 'gap:docker/.env' }]]) {
+      const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+        ...baseResult(), recommendation: 'likely_sufficient', evidenceReferences: ['README.md'], assessments
+      }));
+      expect(review.available).toBe(false);
+      expect(review.errors.join(' ')).toMatch(/every supplied|direct investigation/);
+    }
+  });
+
+  it('retains additional discoveries beyond scanner obligations', async () => {
+    writeFile('README.md', 'Configuration usage');
+    commit();
+    const analysis = await analyzeRepo();
+    expect(analysis.findings).toEqual([]);
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), recommendation: 'needs_reviewer_judgment', evidenceReferences: ['README.md'],
+      assessments: [
+        { technologyId: 'scope', type: 'aligned_fact', summary: 'Reviewed documentation.', coverageDisposition: 'investigated', evidenceReferences: ['README.md'] },
+        { technologyId: 'discovered:deployment-context', type: 'evidence_gap', summary: 'Deployment usage is unspecified.', coverageDisposition: 'unresolved', evidenceReferences: ['README.md'] }
+      ], reviewerActions: [{ action: 'Obtain deployment configuration to determine use.', evidenceReferences: ['README.md'] }]
+    }));
+    expect(review.available).toBe(true);
+    expect(review.assessments?.[1].technologyId).toBe('discovered:deployment-context');
+  });
+
+  it.each(['immaterial', 'unresolved'] as const)('keeps excluded findings unresolved rather than accepting %s from context', async disposition => {
+    writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
+    writeFile('docker/.env', 'LOCAL_DEFAULT=value');
+    commit();
+    const analysis = await analyzeRepo();
+    expect(analysis.findings.length).toBeGreaterThan(0);
+    analysis.findings = [{ ...analysis.findings[0], path: 'docker/.env' }];
+    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const context = JSON.parse(request.files.find(f => f.repoRelativePath.endsWith('review-obligations.json'))!.content);
+    expect(context.reviewObligations.find((item: any) => item.id === 'finding:0')).toMatchObject({ sourceAvailable: false });
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), assessments: [
+        { technologyId: 'scope', type: 'evidence_gap', summary: 'Excluded source needs review.', coverageDisposition: 'unresolved', evidenceReferences: ['docs/token.md'] },
+        { technologyId: 'finding:0', type: 'evidence_gap', summary: 'Documentation does not establish excluded contents.', coverageDisposition: disposition, evidenceReferences: ['docs/token.md'] }
+      ], reviewerActions: [{ action: 'Inspect excluded committed configuration to establish its usage.', evidenceReferences: ['docs/token.md'] }]
+    }));
+    expect(review.available).toBe(disposition === 'unresolved');
+  });
+
+  it.each(['unresolved-gap', 'resolved-gap', 'invented-gap', 'source-finding', 'action'])('limits scanner-context citations to unresolved trusted gaps: %s', async mode => {
+    writeFile('README.md', 'Source scope');
+    commit();
+    const analysis = await analyzeRepo();
+    analysis.coverage.complete = false;
+    analysis.coverage.warnings = [{ kind: 'candidate-limit', message: 'Scan cap reached.', materialToCoverage: true }];
+    const context = ['.criterion-agent/S006/finding-summary.json'];
+    const gap = { technologyId: mode === 'invented-gap' ? 'gap:invented' : mode === 'source-finding' ? 'discovered:source' : 'gap:candidate-limit',
+      type: mode === 'resolved-gap' ? 'aligned_fact' as const : 'evidence_gap' as const,
+      summary: 'Scanner coverage is incomplete.', coverageDisposition: mode === 'resolved-gap' ? 'immaterial' as const : 'unresolved' as const,
+      evidenceReferences: context };
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), evidenceReferences: ['README.md'], assessments: [
+        { technologyId: 'scope', type: 'evidence_gap', summary: 'Partial scope.', coverageDisposition: 'unresolved', evidenceReferences: ['README.md'] }, gap
+      ], reviewerActions: [{ action: 'Inspect additional source to address the scan cap.', evidenceReferences: mode === 'action' ? context : ['README.md'] }]
+    }));
+    expect(review.available).toBe(mode === 'unresolved-gap');
+    if (mode !== 'unresolved-gap') expect(review.errors.join(' ')).toContain('requires repository evidence');
   });
 
   function baseResult(): NonNullable<CriterionAgentReviewConfig['fakeResult']> {

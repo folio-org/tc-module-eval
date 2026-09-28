@@ -35,21 +35,39 @@ export function renderAgentReviewLines(
     `  - Summary: ${prose(review.summary)}`,
     `  - Rationale: ${prose(review.rationale)}`
   ];
+  if (review.criterionId === 'S006') {
+    lines.push('  - Scope: Advice covers the findings and source investigated below; it is not a repository-wide certification that secrets are absent.');
+  }
   if (review.assessments?.length) {
     lines.push('  - Findings:');
     for (const assessment of review.assessments) {
       const id = assessment.technologyId.replace(/^discovered:/, '');
       const name = Object.prototype.hasOwnProperty.call(subjectNames, id) ? subjectNames[id]
         : Object.prototype.hasOwnProperty.call(SUBJECT_NAMES, id) ? SUBJECT_NAMES[id]
-          : id.replace(/[-_]/g, ' ');
+          : id === 'scope' ? 'Review scope'
+            : /^finding:\d+$/.test(id) ? `Scanner finding ${Number(id.slice(8)) + 1}`
+              : id.startsWith('gap:') ? `Coverage: ${id.slice(4)}` : id.replace(/[-_]/g, ' ');
       const [label, explanation] = ASSESSMENT_LABELS[assessment.type];
       lines.push(
         `    - ${prose(name)} — ${label}:`,
         `      - ${explanation}`,
         `      - Finding: ${prose(assessment.summary)}`,
         '      - Sources:',
-        ...assessment.evidenceReferences.map(reference => `        - ${prose(reference)}`)
+        ...assessment.evidenceReferences.map(reference => `        - ${reference === '.criterion-agent/S006/finding-summary.json'
+          ? 'Automated scan coverage diagnostics' : prose(reference)}`)
       );
+      if (assessment.coverageDisposition) {
+        const labels = { investigated: 'Investigated directly', immaterial: 'Not material to this scoped decision', unresolved: 'Needs further verification' };
+        lines.push(`      - Coverage judgment: ${labels[assessment.coverageDisposition]}`);
+      }
+      for (const bound of assessment.failureBounds ?? []) {
+        const phases = { startup: 'Process startup', tenant_initialization: 'Tenant initialization', runtime: 'Runtime operations' };
+        const statuses = { established: 'Bound supported by evidence', unverified: 'Bound needs verification', not_applicable: 'Not used in this phase' };
+        lines.push(`      - ${phases[bound.phase]} — ${statuses[bound.status]}:`,
+          `        - Dependency role: ${bound.requirement}`,
+          `        - ${prose(bound.explanation)}`,
+          '        - Sources:', ...bound.evidenceReferences.map(reference => `          - ${prose(reference)}`));
+      }
     }
   }
   if (review.reviewerActions?.length) {

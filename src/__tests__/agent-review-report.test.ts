@@ -35,3 +35,20 @@ it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])('renders pro
   expect(renderAgentReviewLines(review)).toContain(`    - ${id.replace(/[-_]/g, ' ').trim()} — Supported by evidence:`);
   expect(renderAgentReviewLines(review, Object.fromEntries([[id, 'Explicit subject']]))).toContain('    - Explicit subject — Supported by evidence:');
 });
+
+it('renders scoped coverage and phase-level uncertainty without internal enum labels', () => {
+  const review: CriterionAgentReviewResult = {
+    available: true, criterionId: 'S006', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+    summary: 'More evidence needed.', rationale: 'Inspected source.', evidenceReferences: ['src/A.java'], warnings: [], errors: [],
+    assessments: [{ technologyId: 'scope', type: 'evidence_gap', summary: 'Partial review.',
+      coverageDisposition: 'unresolved', evidenceReferences: ['src/A.java'],
+      failureBounds: [{ phase: 'tenant_initialization', requirement: 'required', status: 'unverified',
+        explanation: 'Admin timeout is unknown.', evidenceReferences: ['src/A.java'] }] }]
+  };
+  const text = renderAgentReviewLines(review).join('\n');
+  expect(text).toContain('not a repository-wide certification');
+  expect(text).toContain('Coverage judgment: Needs further verification');
+  expect(text).toContain('Tenant initialization — Bound needs verification');
+  expect(text).toContain('Admin timeout is unknown.');
+  expect(text).not.toContain('tenant_initialization');
+});

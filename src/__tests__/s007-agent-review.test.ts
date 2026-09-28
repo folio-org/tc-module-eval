@@ -93,6 +93,34 @@ describe('S007 agent review', () => {
     expect(review.errors.join('\n')).toContain('unknown technology');
   });
 
+  it.each(['openapi', 'discovered:openapi'])('accepts trusted policy discovery %s without weakening known IDs', async id => {
+    await commit({ 'api.yaml': 'openapi: 3.0.0', 'pom.xml': '<project />' });
+    const loaded = await loadS007Policy();
+    if (!loaded.ok) throw new Error('Policy fixture unavailable');
+    const deterministic = analysis(finding('java', 'pom.xml'));
+    const review = await reviewS007WithAgent(repoPath, deterministic, fakeConfig({
+      evidenceReferences: ['api.yaml'], assessments: [
+        { technologyId: id, type: 'aligned_fact', summary: 'OpenAPI 3 declared.', evidenceReferences: ['api.yaml'] },
+        { technologyId: 'java', type: 'aligned_fact', summary: 'Java declared.', evidenceReferences: ['pom.xml'] }
+      ]
+    }), undefined, loaded.policy);
+    expect(review.available).toBe(true);
+    expect(review.assessments?.map(item => item.technologyId)).toEqual(['discovered:openapi', 'java']);
+    expect(review.warnings).toHaveLength(id === 'openapi' ? 1 : 0);
+    expect(deterministic.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('does not repair a bare ID without trusted policy', async () => {
+    await commit({ 'api.yaml': 'openapi: 3.0.0' });
+    const review = await reviewS007WithAgent(repoPath, analysis(finding('java', 'api.yaml')), fakeConfig({
+      evidenceReferences: ['api.yaml'], assessments: [
+        { technologyId: 'openapi', type: 'aligned_fact', summary: 'OpenAPI 3 declared.', evidenceReferences: ['api.yaml'] }
+      ]
+    }));
+    expect(review.available).toBe(false);
+    expect(review.errors.join(' ')).toContain('unknown technology');
+  });
+
   it.each([
     ['top-level', ['.criterion-agent/S007/deterministic-summary.json'], [{ technologyId: 'react', type: 'aligned_fact', summary: 'Claim.', evidenceReferences: ['package.json'] }], undefined],
     ['nested assessment', ['package.json'], [{ technologyId: 'react', type: 'aligned_fact', summary: 'Claim.', evidenceReferences: ['.criterion-agent/S007/policy-context.json'] }], undefined],
@@ -124,7 +152,7 @@ describe('S007 agent review', () => {
 
   it.each([
     ['likely_insufficient', 'evidence_gap', 'Missing version', [], 'substantive concern'],
-    ['likely_insufficient', 'substantive_concern', '   ', [], 'no cited practical assessments'],
+    ['likely_insufficient', 'substantive_concern', '   ', [], 'Invalid or uncited assessments'],
     ['needs_reviewer_judgment', 'policy_question', 'Policy uncertainty', [], 'reviewer action'],
     ['needs_reviewer_judgment', 'policy_question', 'Policy uncertainty', [{ action: '   ', evidenceReferences: ['pom.xml'] }], 'reviewer action']
   ])('rejects %s without substantive support or an actionable follow-up', async (recommendation, type, summary, reviewerActions, error) => {

@@ -185,9 +185,11 @@ describe('EvaluationReportRenderer', () => {
       expect(item.tree[0]).toMatchObject({ text: 'Agent review (advisory):', hideCount: true });
       expect(item.tree[0].children.map((node: any) => node.text)).toEqual([
         'Recommendation: Reviewer judgment needed', 'Confidence: medium', 'Summary: Current summary',
-        'Rationale: Current rationale', 'Sources:', 'Advisory only; the criterion status is unchanged.'
+        'Rationale: Current rationale',
+        ...(item.id === 'S006' ? ['Scope: Advice covers the findings and source investigated below; it is not a repository-wide certification that secrets are absent.'] : []),
+        'Sources:', 'Advisory only; the criterion status is unchanged.'
       ]);
-      expect(item.tree[0].children[4]).toMatchObject({ unit: 'sources', children: [{ text: 'pom.xml', children: [] }] });
+      expect(item.tree[0].children.find((node: any) => node.text === 'Sources:')).toMatchObject({ unit: 'sources', children: [{ text: 'pom.xml', children: [] }] });
       expect(item.tree.map((node: any) => node.text)).toEqual(['Agent review (advisory):', 'Evidence:', 'Diagnostics:']);
     }
     expect(JSON.stringify(report)).toBe(original);

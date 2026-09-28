@@ -201,6 +201,16 @@ export interface CriterionAgentAssessment {
   type: 'aligned_fact' | 'substantive_concern' | 'analyzer_limitation' | 'evidence_gap' | 'policy_question';
   summary: string;
   evidenceReferences: string[];
+  coverageDisposition?: 'investigated' | 'immaterial' | 'unresolved';
+  failureBounds?: CriterionAgentFailureBound[];
+}
+
+export interface CriterionAgentFailureBound {
+  phase: 'startup' | 'tenant_initialization' | 'runtime';
+  requirement: 'required' | 'optional' | 'conditional' | 'unknown';
+  status: 'established' | 'unverified' | 'not_applicable';
+  explanation: string;
+  evidenceReferences: string[];
 }
 
 export interface CriterionAgentReviewerAction {

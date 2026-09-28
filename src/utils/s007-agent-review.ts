@@ -13,6 +13,16 @@ export async function reviewS007WithAgent(
   const request = await buildS007AgentReviewRequest(repoPath, analysis, policy);
   const review = await runCriterionAgentReview(request, config, commandRunner);
   if (!review.available) return review;
+  const known = new Set(analysis.findings.map(finding => finding.technologyId));
+  const canonical = new Set(policy?.sections.filter(section => section.consumer === 's007')
+    .flatMap(section => section.entries.map(entry => entry.id)));
+  for (const assessment of review.assessments ?? []) {
+    const id = assessment.technologyId;
+    if (!known.has(id) && canonical.has(id) && /^[a-z0-9][a-z0-9._-]*$/.test(id)) {
+      assessment.technologyId = `discovered:${id}`;
+      review.warnings.push(`Normalized trusted policy identifier ${id} to discovered:${id}.`);
+    }
+  }
   const invalid = validateS007Review(analysis, review);
   return invalid ? { ...review, available: false, errors: [...review.errors, invalid] } : review;
 }

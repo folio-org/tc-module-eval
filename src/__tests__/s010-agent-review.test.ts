@@ -115,11 +115,11 @@ describe('S010 advisory agent review', () => {
     const request = await buildS010AgentReviewRequest(repo, analysis());
     const workspace = prepareCriterionReviewWorkspace(request);
     try {
-      expect(workspace.manifestEntries).toHaveLength(45);
+      expect(workspace.manifestEntries).toHaveLength(47);
       expect(workspace.manifestEntries).toEqual(expect.arrayContaining(['integrations/search.ts', 'transport/request.ts']));
       expect(await fs.readFile(path.join(workspace.rootPath, 'docs/transport/request.ts'), 'utf8')).toBe(handling);
       const manifest = await fs.readJson(workspace.manifestPath);
-      expect(manifest.files).toHaveLength(2);
+      expect(manifest.files).toHaveLength(4);
       expect(manifest.fileIndex).toBe('repository-files.json');
       const inventory = await fs.readJson(path.join(workspace.rootPath, manifest.fileIndex));
       expect(inventory).toContainEqual({
@@ -148,7 +148,7 @@ describe('S010 advisory agent review', () => {
     expect(manifest.includedFileCount).toBe(301);
     expect(manifest.mode).toBe('repository-browsing');
     expect(manifest.omissions.counts).toEqual({});
-    expect(request.files).toHaveLength(303);
+    expect(request.files).toHaveLength(305);
     expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThan(48 * 1024);
   }, 60_000);
 
@@ -194,7 +194,8 @@ describe('S010 advisory agent review', () => {
       evidenceReferences: ['src/client.ts'],
       assessments: [{
         technologyId: 'search', type: 'evidence_gap',
-        summary: 'The failure path is unresolved.', evidenceReferences: ['src/client.ts']
+        summary: 'The failure path is unresolved.', evidenceReferences: ['src/client.ts'],
+        failureBounds: bounds('unverified')
       }],
       reviewerActions: [{
         action: 'Determine whether the search request has a finite timeout and whether its failure preserves readiness.',
@@ -209,13 +210,15 @@ describe('S010 advisory agent review', () => {
   it('accepts a cited dependency discovery outside the deterministic evidence paths', async () => {
     await commit('transport/cache.js', 'export const lookup = () => fetch(process.env.CACHE_URL);');
     const deterministic = analysis();
+    deterministic.evidence.scenarios = [];
     const review = await reviewS010WithAgent(repo, deterministic, fakeConfig({
       recommendation: 'needs_reviewer_judgment',
       evidenceReferences: ['transport/cache.js'],
       assessments: [{
         technologyId: 'discovered:cache', type: 'evidence_gap',
         summary: 'transport/cache.js:1 exposes a dependency absent from the deterministic scenarios.',
-        evidenceReferences: ['transport/cache.js']
+        evidenceReferences: ['transport/cache.js'],
+        failureBounds: bounds('unverified', 'transport/cache.js')
       }],
       reviewerActions: [{
         action: 'Determine whether the caller bounds cache failures and preserves readiness.',
@@ -263,12 +266,85 @@ describe('S010 advisory agent review', () => {
     })).toBe(false);
   });
 
+  it.each([
+    ['established', 'likely_sufficient', 'aligned_fact', true],
+    ['unverified', 'likely_sufficient', 'aligned_fact', false],
+    ['unverified', 'likely_sufficient', 'evidence_gap', false],
+    ['unverified', 'needs_reviewer_judgment', 'aligned_fact', true],
+    ['unverified', 'likely_insufficient', 'substantive_concern', true],
+    ['unverified', 'needs_reviewer_judgment', 'evidence_gap', true]
+  ])('checks %s bounds against %s and %s', async (status, recommendation, type, available) => {
+    await commit('src/client.ts', 'export const deadlineMs = 2500;');
+    const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation, assessments: [{ technologyId: 'search', type, summary: 'Scoped finding.',
+        evidenceReferences: ['src/client.ts'], failureBounds: bounds(status as 'established' | 'unverified') }],
+      reviewerActions: [{ action: 'Obtain the effective complete request deadline; deployment tuning is optional if established.', evidenceReferences: ['src/client.ts'] }]
+    }));
+    expect(result.available).toBe(available);
+    if (recommendation === 'likely_sufficient' && status === 'unverified') {
+      expect(result.errors.join(' ')).toContain('dependency search, phase runtime: status=unverified, requirement=required');
+    }
+  });
+
+  it.each([
+    ['analyzer_limitation', 'immaterial', true],
+    ['aligned_fact', 'immaterial', false],
+    ['analyzer_limitation', 'unresolved', false]
+  ])('only exempts cited internal candidates with %s and %s', async (type, coverageDisposition, available) => {
+    await commit('src/client.ts', 'export const timeoutMs = 2500;');
+    const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation: 'likely_sufficient', assessments: [{ technologyId: 'search', type, coverageDisposition,
+        summary: 'src/client.ts:1 exports configuration only; the actual service uses this timeout.',
+        evidenceReferences: ['src/client.ts'] }]
+    }));
+    expect(result.available).toBe(available);
+  });
+
+  it('projects neutral propagation evidence without mutating deterministic analysis', async () => {
+    await commit('src/client.ts', 'throw new Error("startup failed");');
+    const deterministic = analysis();
+    deterministic.evidence.scenarios[0].proof = 'clear-fail-fast';
+    const original = JSON.stringify(deterministic);
+    const request = await buildS010AgentReviewRequest(repo, deterministic);
+    const summary = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content);
+    expect(summary.scenarios[0].proof).toBe('failure-propagation-observed-duration-unverified');
+    expect(JSON.stringify(deterministic)).toBe(original);
+    const candidates = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('candidate-dependencies.json'))!.content);
+    expect(candidates).toEqual({ candidateDependencyIds: ['search'] });
+    expect(request.instructions).toContain('Investigate in lifecycle order');
+  });
+
+  it.each(['missing-phase', 'duplicate-phase', 'unknown-citation', 'generated-citation', 'omitted-dependency'])('rejects %s in decision-bearing records', async mode => {
+    await commit('src/client.ts', 'export const deadlineMs = 2500;');
+    const records = bounds('established');
+    if (mode === 'missing-phase') records.pop();
+    if (mode === 'duplicate-phase') records[2].phase = 'startup';
+    if (mode === 'unknown-citation') records[2].evidenceReferences = ['missing.ts'];
+    if (mode === 'generated-citation') records[2].evidenceReferences = ['.criterion-agent/S010/deterministic-summary.json'];
+    const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation: 'likely_sufficient', assessments: [{ technologyId: mode === 'omitted-dependency' ? 'discovered:other' : 'search',
+        type: 'aligned_fact', summary: 'Bounded.', evidenceReferences: ['src/client.ts'], failureBounds: records }]
+    }));
+    expect(result.available).toBe(false);
+  });
+
   async function commit(relativePath: string, content: string): Promise<void> {
     await fs.outputFile(path.join(repo, relativePath), content);
     execFileSync('git', ['add', '.'], { cwd: repo });
     execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
   }
 });
+
+function bounds(status: 'established' | 'unverified', source = 'src/client.ts'): import('../types').CriterionAgentFailureBound[] {
+  return ['startup', 'tenant_initialization', 'runtime'].map(phase => ({
+    phase: phase as import('../types').CriterionAgentFailureBound['phase'], requirement: 'required',
+    status: phase === 'runtime' ? status : 'not_applicable',
+    explanation: phase !== 'runtime' ? 'No connection is made in this phase.' : status === 'established'
+      ? 'The caller applies a 2500ms deadline around the entire request including retries.'
+      : 'The underlying client defaults and complete operation bound are outside this snapshot.',
+    evidenceReferences: [source]
+  }));
+}
 
 function analysis(): S010Analysis {
   return {

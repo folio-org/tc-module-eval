@@ -178,6 +178,9 @@ describe('S006 shared evaluator', () => {
       summary: 'S006 fake review summary.',
       rationale: 'S006 fake review rationale.',
       evidenceReferences: [expectedReference],
+      assessments: ['scope', 'finding:0'].map(technologyId => ({ technologyId, type: 'evidence_gap',
+        summary: 'Usage requires confirmation.', coverageDisposition: 'unresolved', evidenceReferences: [expectedReference] })),
+      reviewerActions: [{ action: 'Obtain deployment usage for this value.', evidenceReferences: [expectedReference] }],
       warnings: [],
       errors: []
     })));
@@ -298,6 +301,9 @@ describe('S006 shared evaluator', () => {
       summary: 'S006 fake review summary.',
       rationale: 'S006 fake review rationale.',
       evidenceReferences: ['.criterion-agent/S006/excerpts/documentation.txt', 'docs/secrets.md'],
+      assessments: ['scope', 'finding:0'].map(technologyId => ({ technologyId, type: 'evidence_gap',
+        summary: 'Usage requires confirmation.', coverageDisposition: 'unresolved', evidenceReferences: ['docs/secrets.md'] })),
+      reviewerActions: [{ action: 'Obtain deployment usage for this value.', evidenceReferences: ['docs/secrets.md'] }],
       warnings: [],
       errors: []
     })));

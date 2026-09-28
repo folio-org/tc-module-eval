@@ -140,6 +140,19 @@ describe('criterion agent review', () => {
     }
   );
 
+  it.each(['assessments', 'reviewerActions'])('rejects a malformed %s entry instead of keeping an unsupported synthesis', field => {
+    const valid = field === 'assessments'
+      ? { technologyId: 'java', type: 'aligned_fact', summary: 'Declared.', evidenceReferences: ['README.md'] }
+      : { action: 'Resolve applicability.', evidenceReferences: ['README.md'] };
+    const result = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'likely_sufficient', confidence: 'high', summary: 'Everything is sufficient.',
+      rationale: 'Reviewed.', evidenceReferences: ['README.md'], [field]: [valid, { ...valid, evidenceReferences: ['missing.md'] }]
+    }, ['README.md']);
+    expect(result.errors.join(' ')).toMatch(/Invalid or uncited/);
+    expect(result.errors.join(' ')).toContain(field === 'assessments' ? 'Assessment 2:' : 'Reviewer action 2:');
+    expect(result.errors.join(' ')).not.toContain('missing.md');
+  });
+
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await reviewCriterionWithAgent({
       criterionId: 'S005',

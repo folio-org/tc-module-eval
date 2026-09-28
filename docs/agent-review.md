@@ -30,6 +30,11 @@ technologies missed by the analyzer using `discovered:<normalized-id>` assessmen
 Missing policy or external parent contents remain unresolved; repository browsing
 does not authorize the agent to invent policy or retrieve external dependencies.
 
+If an otherwise cited assessment uses a bare canonical ID from the trusted S007
+policy that is absent from the deterministic inventory, the evaluator adds the
+`discovered:` prefix and records a warning. It does not guess aliases, repair
+arbitrary unknown names, or change the assessment's policy conclusion.
+
 Agent output may clarify an unresolved declaration, conflict, or unlisted framework,
 but it cannot change the deterministic status. Disabled, excluded, unavailable,
 failed, or malformed review leaves S007 manual and records the unavailable reason.
@@ -90,6 +95,25 @@ numbers in assessment text and describe its actual investigation scope, but thos
 claims are not independently verified. Disabled,
 excluded, unavailable, malformed, or uncited review leaves S010 manual.
 
+Each dependency assessment includes cited `failureBounds` for process startup,
+tenant initialization, and runtime. Records distinguish required, optional, and
+conditional dependencies and mark bounds established, unverified, or not applicable.
+An established bound needs an explanation connecting the mechanism to the complete
+operation, including retries; an exception or assumed library default is insufficient.
+Supported facts may accompany unverified bounds, but cannot justify a likely-sufficient
+recommendation. Unresolved bounds require reviewer judgment and a cited follow-up,
+unless a substantive concern already supports likely-insufficient. Required services
+need not work offline: clear bounded failure is
+acceptable. Optional deployment tuning does not invalidate an established bound.
+
+Deterministic dependency IDs are candidates: every candidate must be accounted for,
+but a cited internal component may use `analyzer_limitation` with
+`coverageDisposition: immaterial` without a phase matrix. Its relevant configuration
+still belongs in the actual service assessment. Investigation starts with startup
+I/O, then tenant/provisioning helpers, runtime callers, and effective client bounds.
+The agent summary labels exception propagation with unknown duration neutrally;
+this projection does not change deterministic analysis.
+
 ## S006 Sensitive Information Review
 
 S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports show the matched value as a bounded excerpt so reviewers can judge it directly; value fingerprints are not reported.
@@ -97,6 +121,18 @@ S006 scans bounded high-signal text, configuration, documentation, CI, Docker, a
 Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
 
 When enabled, S006 agent review investigates manual results using the finding summary and surrounding committed source, including files not flagged by the scanner. Fingerprints are omitted from the summary. It distinguishes production usage from examples, fixtures, and local defaults without testing credentials or contacting endpoints, and must not reproduce secret values in its response. Excluded files, including `.env` files, remain outside browsing scope even if the deterministic scanner inspected them; the agent cannot certify those files or a secret-free repository. Agent review cannot pass or fail S006. Unavailable review preserves deterministic evidence and records its reason.
+
+The review must give each retained finding and material coverage gap a cited
+`coverageDisposition`: investigated, immaterial to the scoped decision, or unresolved.
+It also describes the actual investigation scope. Extra discoveries use
+`discovered:<normalized-id>` assessments. Direct investigation of an unavailable
+path is rejected. Findings whose original source is unavailable must remain
+unresolved: related documentation cannot establish excluded committed contents.
+The input explicitly marks source availability; exclusion does not mean a file is
+absent from the repository. Incomplete scanner coverage can be resolved through additional
+investigation or justified as immaterial, but file availability alone is not proof
+of inspection. Unresolved obligations prevent a likely-sufficient recommendation;
+coverage gaps alone do not justify likely-insufficient advice.
 
 ## OpenRouter
 
@@ -174,6 +210,18 @@ Only include environment variable names that the OpenCode subprocess actually ne
 ## Output Acceptance and Troubleshooting
 
 Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. Unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
+
+Malformed or uncited assessment/action records reject the response; they are not
+silently dropped while preserving its overall conclusion. Nested failure-bound
+records are validated and require repository citations too. These checks enforce
+structural consistency, not the truth of model-authored explanations.
+
+The narrow exception is an unresolved S006 coverage-gap assessment whose ID was
+supplied by the evaluator: it may cite the scanner's generated coverage diagnostics.
+Those diagnostics establish a scan limitation, not repository contents. Resolved
+gaps, source findings, overall advice, and reviewer actions still require source
+citations. Invalid-record diagnostics identify record indexes and fixed failure
+categories without echoing rejected values.
 
 Agent-review failures are reported without exposing raw provider output or credentials:
 
