@@ -374,9 +374,9 @@
           },
           {
             "technologyId": "java",
-            "classification": "unresolved",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "compliant",
+            "contribution": "pass",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "java"
             }
