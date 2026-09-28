@@ -110,7 +110,8 @@ describe('S006 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.evidence).toContain('S006 fail: 1 deterministic failure finding');
     expect(result.details).toContain('src/main/resources/application.yml:1');
-    expect(result.details).toContain(rawKey);
+    expect(result.details).toContain('[REDACTED_PROVIDER_API_KEY]');
+    expect(result.details).not.toContain(rawKey);
   });
 
   it.each([

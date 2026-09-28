@@ -108,7 +108,7 @@ function renderFindingGroup(group: S007FindingGroup): string[] {
   const summary = groupSummary(group);
   const lines = [`- ${heading}: ${summary}.${impact ? ` ${impact}.` : ''}`];
 
-  group.findings.forEach((finding, index) => {
+  consolidateConclusions(group.findings).forEach((finding, index) => {
     const observationLabel = findingLabel(finding, index, isCoverage);
     lines.push(
       `  - ${observationLabel} — ${CLASSIFICATION_SUMMARIES[finding.classification]}`,
@@ -142,6 +142,24 @@ function renderFindingGroup(group: S007FindingGroup): string[] {
     }
   });
   return lines;
+}
+
+function consolidateConclusions(findings: S007TechnologyFinding[]): S007TechnologyFinding[] {
+  const conclusions = new Map<string, S007TechnologyFinding>();
+  for (const finding of findings) {
+    const policy = finding.matchedPolicy;
+    const key = JSON.stringify([
+      finding.classification, finding.contribution, finding.rationale, finding.statusDetermining,
+      policy?.sectionId, policy?.entryId, policy?.strength, policy?.sourceStatement, finding.advisories
+    ]);
+    const existing = conclusions.get(key);
+    if (existing) {
+      existing.evidence.push(...finding.evidence);
+    } else {
+      conclusions.set(key, { ...finding, evidence: [...finding.evidence], advisories: [...finding.advisories] });
+    }
+  }
+  return [...conclusions.values()];
 }
 
 function findingLabel(finding: S007TechnologyFinding, index: number, isCoverage: boolean): string {

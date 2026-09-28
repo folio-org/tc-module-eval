@@ -5,8 +5,12 @@ import { execFileSync } from 'child_process';
 import { CriterionAgentReviewConfig, EvaluationStatus, S006SensitiveInformationAnalysisResult } from '../types';
 import { analyzeS006SensitiveInformation } from '../utils/s006-sensitive-information';
 import { buildS006AgentReviewRequest, reviewS006WithAgent } from '../utils/s006-agent-review';
-import { prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
+import { prepareCriterionAgentReviewEvidence, prepareCriterionReviewWorkspace } from '../utils/criterion-agent-review';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
+
+async function prepared(request: Awaited<ReturnType<typeof buildS006AgentReviewRequest>>) {
+  return (await prepareCriterionAgentReviewEvidence(request)).request;
+}
 
 describe('S006 agent review adapter', () => {
   let repoPath: string;
@@ -27,7 +31,7 @@ describe('S006 agent review adapter', () => {
     commit();
     const analysis = await analyzeRepo();
     expect(analysis.findings.some(finding => finding.path === 'src/not-in-findings.ts')).toBe(false);
-    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
     const source = request.files.find(file => file.repoRelativePath === 'src/not-in-findings.ts');
 
     expect(source?.content).toBe(large);
@@ -42,7 +46,7 @@ describe('S006 agent review adapter', () => {
     const analysis = await analyzeRepo();
     expect(analysis.findings.length).toBeGreaterThan(0);
     analysis.findings = Array.from({ length: 120 }, (_, index) => ({ ...analysis.findings[0], line: index + 1 }));
-    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
     const summary = request.files.find(file => file.repoRelativePath.endsWith('finding-summary.json'))!;
     expect(Buffer.byteLength(summary.content)).toBeGreaterThan(24 * 1024);
     const workspace = prepareCriterionReviewWorkspace(request);
@@ -65,17 +69,19 @@ describe('S006 agent review adapter', () => {
     commit();
     writeFile('src/config.ts', 'export const mode = "edited";');
     writeFile('src/untracked.ts', 'untracked secret source');
-    const request = await buildS006AgentReviewRequest(repoPath, await analyzeRepo());
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, await analyzeRepo()));
     expect(request.files.find(file => file.repoRelativePath === 'src/config.ts')?.content).toContain('committed');
     expect(request.files.map(file => file.repoRelativePath)).not.toContain('src/untracked.ts');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('export const mode = "edited"');
   });
 
-  it('lets direct-adapter preparation errors throw', async () => {
+  it('reports preparation errors as unavailable from the shared runner', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
     const analysis = await analyzeRepo();
-    await expect(buildS006AgentReviewRequest(repoPath, analysis)).rejects.toThrow('Repository browsing workspace is incomplete');
-    await expect(reviewS006WithAgent(repoPath, analysis, fakeConfig(baseResult()))).rejects.toThrow('Repository browsing workspace is incomplete');
+    await expect(buildS006AgentReviewRequest(repoPath, analysis)).resolves.toBeDefined();
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig(baseResult()));
+    expect(review.available).toBe(false);
+    expect(review.errors.join(' ')).toContain('Repository browsing workspace is incomplete');
   });
 
   it('accepts repository citations, drops unknown citations, and preserves deterministic status', async () => {
@@ -147,7 +153,7 @@ describe('S006 agent review adapter', () => {
     analysis.coverage.complete = false;
     analysis.coverage.warnings = [{ kind: 'unsupported-high-signal-file', path: '.github/CODEOWNERS', message: 'Not scanned.', materialToCoverage: true }];
     analysis.coverage.skippedFiles = [{ path: '.github/CODEOWNERS', reason: 'unsupported-file', materialToCoverage: true }];
-    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
     const context = JSON.parse(request.files.find(f => f.repoRelativePath.endsWith('review-obligations.json'))!.content);
     expect(context.reviewObligations.map((item: any) => item.id)).toEqual(['scope', 'gap:.github/CODEOWNERS']);
     const result = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
@@ -204,7 +210,7 @@ describe('S006 agent review adapter', () => {
     const analysis = await analyzeRepo();
     expect(analysis.findings.length).toBeGreaterThan(0);
     analysis.findings = [{ ...analysis.findings[0], path: 'docker/.env' }];
-    const request = await buildS006AgentReviewRequest(repoPath, analysis);
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
     const context = JSON.parse(request.files.find(f => f.repoRelativePath.endsWith('review-obligations.json'))!.content);
     expect(context.reviewObligations.find((item: any) => item.id === 'finding:0')).toMatchObject({ sourceAvailable: false });
     const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
@@ -212,6 +218,28 @@ describe('S006 agent review adapter', () => {
         { technologyId: 'scope', type: 'evidence_gap', summary: 'Excluded source needs review.', coverageDisposition: 'unresolved', evidenceReferences: ['docs/token.md'] },
         { technologyId: 'finding:0', type: 'evidence_gap', summary: 'Documentation does not establish excluded contents.', coverageDisposition: disposition, evidenceReferences: ['docs/token.md'] }
       ], reviewerActions: [{ action: 'Inspect excluded committed configuration to establish its usage.', evidenceReferences: ['docs/token.md'] }]
+    }));
+    expect(review.available).toBe(disposition === 'unresolved');
+  });
+
+  it.each(['immaterial', 'unresolved'] as const)('keeps oversized findings unavailable and accepts only %s handling', async disposition => {
+    writeFile('README.md', 'Related deployment context');
+    writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
+    writeFile('src/oversized.conf', 'x'.repeat(1024 * 1024 + 1));
+    commit();
+    const analysis = await analyzeRepo();
+    expect(analysis.findings.length).toBeGreaterThan(0);
+    analysis.findings = [{ ...analysis.findings[0], path: 'src/oversized.conf' }];
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
+    const context = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('review-obligations.json'))!.content);
+    expect(request.files.map(file => file.repoRelativePath)).not.toContain('src/oversized.conf');
+    expect(context.reviewObligations.find((item: any) => item.id === 'finding:0')).toMatchObject({ sourceAvailable: false });
+
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), evidenceReferences: ['README.md'], assessments: [
+        { technologyId: 'scope', type: 'evidence_gap', summary: 'Oversized source remains unavailable.', coverageDisposition: 'unresolved', evidenceReferences: ['README.md'] },
+        { technologyId: 'finding:0', type: 'evidence_gap', summary: 'The omitted source needs direct inspection.', coverageDisposition: disposition, evidenceReferences: ['README.md'] }
+      ], reviewerActions: [{ action: 'Inspect the oversized committed source outside the agent workspace.', evidenceReferences: ['README.md'] }]
     }));
     expect(review.available).toBe(disposition === 'unresolved');
   });

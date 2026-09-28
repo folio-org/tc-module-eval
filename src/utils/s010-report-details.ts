@@ -16,14 +16,16 @@ export function renderS010HumanDetails(
     || left.dependencyId.localeCompare(right.dependencyId)
     || left.id.localeCompare(right.id)
   );
-  if (ordered.length) lines.push('Dependency scenarios:');
-  for (const finding of ordered) {
+  if (ordered.length) lines.push('Dependency observations (unresolved outcomes are scenarios requiring review, not confirmed defects):');
+  for (const group of groupFindings(ordered)) {
+    const finding = group[0];
+    const subjects = [...new Set(group.map(item => findingSubject(item)).filter(Boolean))];
     lines.push(
-      `  - ${finding.dependencyId}${findingSubject(finding)}${finding.scenario ? ` / ${finding.scenario}` : ''}: ${finding.outcome}`,
+      `  - ${finding.dependencyId}${subjects.length ? ` (${subjects.join(', ')})` : ''}${finding.scenario ? ` / ${finding.scenario}` : ''}: ${finding.outcome}`,
       `    - ${finding.rationale}`,
       `    - Status determining: ${finding.statusDetermining ? 'yes' : 'no'}`
     );
-    for (const evidence of finding.evidence) {
+    for (const evidence of group.flatMap(item => item.evidence)) {
       lines.push(`    - Evidence: ${evidence.path}${evidence.line ? `:${evidence.line}` : ''} — ${evidence.detail}`);
     }
   }
@@ -44,7 +46,20 @@ export function renderS010HumanDetails(
 // interface) is what tells otherwise identical scenario rows apart.
 function findingSubject(finding: S010Finding): string {
   const subject = finding.id.match(/^[^:/]+:(.+)\/[^/]+$/)?.[1];
-  return subject ? ` (${subject})` : '';
+  return subject ?? '';
+}
+
+function groupFindings(findings: S010Finding[]): S010Finding[][] {
+  const groups = new Map<string, S010Finding[]>();
+  for (const finding of findings) {
+    const key = JSON.stringify([
+      finding.dependencyId, finding.scenario, finding.outcome, finding.rationale, finding.statusDetermining
+    ]);
+    const group = groups.get(key);
+    if (group) group.push(finding);
+    else groups.set(key, [finding]);
+  }
+  return [...groups.values()];
 }
 
 function findingPriority(finding: S010Finding): number {

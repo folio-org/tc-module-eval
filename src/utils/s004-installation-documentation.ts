@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { truncateToByteBudget } from './redaction';
+import { evidenceStrengthRank } from './evidence-strength';
 
 const ROOT_DOC_NAMES = ['README.md', 'README.MD', 'readme.md'];
 const CONVENTIONAL_DOC_NAMES = ['INSTALL.md', 'INSTALLATION.md', 'DEPLOYMENT.md', 'RUNNING.md'];
@@ -19,6 +20,23 @@ const MAX_DOC_FILES = 40;
 export const MAX_DOC_BYTES = 96 * 1024;
 const MAX_LINK_DEPTH = 2;
 const EXCERPT_RADIUS = 2;
+const MAX_HEADING_INSTRUCTION_DISTANCE = 12;
+const MAX_LINE_INSTRUCTION_DISTANCE = 4;
+const COMMAND_PATTERNS = [
+  /\bdocker\s+(?:compose(?:\s+(?:(?:-f|--file|-p|--project-name|--profile)\s+\S+))*\s+(?:up|down|build|pull|push|run|start|stop|restart|logs|ps)(?=\s|$)|(?:build|run|pull|push|start|stop|restart|exec|logs|inspect)(?=\s|$))/i,
+  /\bcurl\s+(?:-[A-Za-z]|https?:\/\/)/i,
+  /\bmvn\s+(?:(?:clean|compile|test|package|verify|install|deploy|spring-boot:run)\b|[\w.-]+:[\w.-]+\b)/i,
+  /(?:\bgradle|\.\/gradlew)\s+(?:build|assemble|check|test|clean|bootRun|tasks|[\w.-]+:[\w.-]+)\b/i,
+  /\bnpm\s+(?:install|ci|run\s+\S+|test|start|exec|publish|pack)\b/i,
+  /\byarn\s+(?:install|run\s+\S+|test|start|build|add|remove|workspace\s+\S+\s+(?:run\s+\S+|test|build)|workspaces\s+(?:foreach|focus|list|info))\b/i,
+  /\bpnpm\s+(?:install|run\s+\S+|test|start|build|add|remove|exec|deploy)\b/i,
+  /\bkubectl\s+(?:apply|create|delete|get|describe|logs|exec|run|set|rollout|scale|wait|port-forward|config)\b/i,
+  /\bhelm\s+(?:install|upgrade|uninstall|template|repo|dependency|lint|package|pull|push|list|status|test)\b/i,
+  /\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)/i
+];
+const INSTRUCTION_PATTERN = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
+const ENVIRONMENT_VARIABLE_PATTERN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b|(?:^|[\s`])(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/;
+const CONCRETE_TARGET_PATTERN = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
 
 interface QueuedDoc {
   absolutePath: string;
@@ -221,8 +239,8 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
 
 function extractSignals(relativePath: string, content: string): S004DocumentationSignal[] {
   const lines = content.split(/\r?\n/);
-  const signals: S004DocumentationSignal[] = [];
-  const seen = new Set<string>();
+  const fencedLines = markdownFenceMap(lines);
+  const bestByGroup = new Map<S004SignalGroup, S004DocumentationSignal>();
 
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
@@ -233,43 +251,138 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (rule.group === 'install_deploy_run' && isDevelopmentInstallLine(line)) {
         continue;
       }
-      const key = `${rule.group}:${rule.label}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      signals.push({
+      const strength = contextualSignalStrength(lines, fencedLines, index, rule.strength);
+      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, fencedLines, index) : index;
+      const signal = {
         group: rule.group,
         label: rule.label,
         path: relativePath,
-        line: index + 1,
-        excerpt: excerptAround(lines, index),
-        strength: rule.strength
-      });
+        line: evidenceIndex + 1,
+        excerpt: excerptAround(lines, evidenceIndex),
+        strength
+      };
+      if (signal.strength === 'insufficient') {
+        continue;
+      }
+      const previous = bestByGroup.get(rule.group);
+      if (!previous || evidenceStrengthRank(signal.strength) < evidenceStrengthRank(previous.strength)) {
+        bestByGroup.set(rule.group, signal);
+      }
     }
   }
 
-  return signals;
+  return [...bestByGroup.values()];
+}
+
+function contextualSignalStrength(
+  lines: string[],
+  fencedLines: boolean[],
+  index: number,
+  configured: S004DocumentationSignal['strength']
+): S004DocumentationSignal['strength'] {
+  const line = lines[index].trim();
+  if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
+    return 'insufficient';
+  }
+  const context = localInstructionBlock(lines, fencedLines, index);
+  if (isConcreteInstruction(context)) {
+    return configured === 'candidate' ? 'candidate' : 'strong';
+  }
+  return configured === 'strong' ? 'candidate' : configured;
+}
+
+function localInstructionBlock(lines: string[], fencedLines: boolean[], index: number): string {
+  const block = [lines[index]];
+  const distance = instructionBlockDistance(lines[index], fencedLines[index]);
+  for (let next = index + 1; next < lines.length && next <= index + distance; next++) {
+    if (startsNewInstructionSection(lines[index], fencedLines[index], lines[next], fencedLines[next])) {
+      break;
+    }
+    block.push(lines[next]);
+  }
+  return block.join('\n');
+}
+
+function concreteInstructionIndex(lines: string[], fencedLines: boolean[], index: number): number {
+  const distance = instructionBlockDistance(lines[index], fencedLines[index]);
+  for (let candidate = index; candidate < lines.length && candidate <= index + distance; candidate++) {
+    if (candidate > index && startsNewInstructionSection(lines[index], fencedLines[index], lines[candidate], fencedLines[candidate])) {
+      break;
+    }
+    if (isConcreteInstruction(lines[candidate])) {
+      return candidate;
+    }
+  }
+  return index;
+}
+
+function instructionBlockDistance(anchor: string, fenced: boolean): number {
+  return !fenced && /^\s*#{1,6}\s+/.test(anchor)
+    ? MAX_HEADING_INSTRUCTION_DISTANCE
+    : MAX_LINE_INSTRUCTION_DISTANCE;
+}
+
+function startsNewInstructionSection(
+  anchor: string,
+  anchorFenced: boolean,
+  candidate: string,
+  candidateFenced: boolean
+): boolean {
+  if (candidateFenced) {
+    return false;
+  }
+  const candidateLevel = candidate.match(/^\s*(#{1,6})\s+/)?.[1].length;
+  if (!candidateLevel) {
+    return false;
+  }
+  const anchorLevel = anchorFenced ? undefined : anchor.match(/^\s*(#{1,6})\s+/)?.[1].length;
+  return anchorLevel === undefined || candidateLevel <= anchorLevel;
+}
+
+function markdownFenceMap(lines: string[]): boolean[] {
+  const fencedLines: boolean[] = [];
+  let marker: '`' | '~' | undefined;
+  let markerLength = 0;
+
+  for (const line of lines) {
+    fencedLines.push(marker !== undefined);
+    const fence = line.match(/^\s*(`{3,}|~{3,})/);
+    if (!fence) {
+      continue;
+    }
+    const candidateMarker = fence[1][0] as '`' | '~';
+    if (marker === undefined) {
+      marker = candidateMarker;
+      markerLength = fence[1].length;
+    } else if (candidateMarker === marker && fence[1].length >= markerLength) {
+      marker = undefined;
+      markerLength = 0;
+    }
+  }
+
+  return fencedLines;
+}
+
+function isConcreteInstruction(value: string): boolean {
+  return value.split(/\r?\n/).some(line =>
+    COMMAND_PATTERNS.some(pattern => pattern.test(line))
+      || (INSTRUCTION_PATTERN.test(line)
+        && (ENVIRONMENT_VARIABLE_PATTERN.test(line) || CONCRETE_TARGET_PATTERN.test(line)))
+  );
+}
+
+function isTableOfContentsLine(line: string): boolean {
+  return /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]\(#[^)]+\)\s*$/i.test(line);
 }
 
 function strongestSignals(signals: S004DocumentationSignal[]): S004DocumentationSignal[] {
-  const rank = (strength: S004DocumentationSignal['strength']): number => {
-    if (strength === 'strong') {
-      return 0;
-    }
-    if (strength === 'candidate') {
-      return 1;
-    }
-    return 2;
-  };
-
   return [...signals]
-    .sort((left, right) => rank(left.strength) - rank(right.strength))
+    .sort((left, right) => evidenceStrengthRank(left.strength) - evidenceStrengthRank(right.strength))
     .slice(0, 6);
 }
 
 function hasActionableExcerpt(signals: S004DocumentationSignal[]): boolean {
-  return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|mvn|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
+  return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|pnpm|mvn|gradle|helm|kubectl|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
 }
 
 function isDevelopmentInstallLine(line: string): boolean {

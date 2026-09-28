@@ -5,6 +5,7 @@ import { execFileSync } from 'child_process';
 import { CriterionAgentReviewConfig, EvaluationStatus } from '../types';
 import { analyzeS005PersonalDataDisclosure } from '../utils/s005-personal-data-disclosure';
 import { buildS005AgentReviewRequest, reviewS005WithAgent } from '../utils/s005-agent-review';
+import { prepareCriterionAgentReviewEvidence } from '../utils/criterion-agent-review';
 
 describe('S005 agent review adapter', () => {
   let repoPath: string;
@@ -27,7 +28,9 @@ describe('S005 agent review adapter', () => {
 
     const analysis = analyzeS005PersonalDataDisclosure(repoPath);
     expect(analysis.evidenceScan?.signals.some(signal => signal.path === 'src/unreported-flow.ts')).toBe(false);
-    const request = await buildS005AgentReviewRequest(repoPath, analysis);
+    const request = (await prepareCriterionAgentReviewEvidence(
+      await buildS005AgentReviewRequest(repoPath, analysis)
+    )).request;
     const source = request.files.find(file => file.repoRelativePath === 'src/unreported-flow.ts');
 
     expect(source?.content).toBe(large);
@@ -45,17 +48,34 @@ describe('S005 agent review adapter', () => {
     writeFile('src/committed.ts', 'export const state = "worktree-edit";');
     writeFile('src/untracked.ts', 'export const untracked = true;');
 
-    const request = await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath));
+    const request = (await prepareCriterionAgentReviewEvidence(
+      await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath))
+    )).request;
     expect(request.files.find(file => file.repoRelativePath === 'src/committed.ts')?.content).toContain('committed');
     expect(request.files.map(file => file.repoRelativePath)).not.toContain('src/untracked.ts');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('worktree-edit');
   });
 
-  it('lets direct-adapter preparation errors throw', async () => {
+  it('reports preparation errors as unavailable from the shared runner', async () => {
     writeCompletedDisclosure();
     const analysis = analyzeS005PersonalDataDisclosure(repoPath);
-    await expect(buildS005AgentReviewRequest(repoPath, analysis)).rejects.toThrow('Repository browsing workspace is incomplete');
-    await expect(reviewS005WithAgent(repoPath, analysis, fakeConfig(baseResult()))).rejects.toThrow('Repository browsing workspace is incomplete');
+    await expect(buildS005AgentReviewRequest(repoPath, analysis)).resolves.toBeDefined();
+    const review = await reviewS005WithAgent(repoPath, analysis, fakeConfig(baseResult()));
+    expect(review.available).toBe(false);
+    expect(review.errors.join(' ')).toContain('Repository browsing workspace is incomplete');
+  });
+
+  it('supplies checklist facts and distinguishes unchecked boxes from affirmative denial', async () => {
+    writeFile('PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] Username / User Identifier (UUID)\n- [ ] Email address');
+    const request = await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath));
+    const summary = request.files.find(file => file.repoRelativePath.endsWith('parsed-disclosure-summary.json'))?.content ?? '';
+
+    expect(request.instructions).toContain('unchecked box as unanswered/not selected');
+    expect(summary).toContain('"categories": [');
+    expect(summary).toContain('"username"');
+    expect(summary).toContain('"user_identifier"');
+    expect(summary).toContain('"includedRows": 2');
+    expect(summary).toContain('"omittedRows": 0');
   });
 
   it('accepts repository-cited output, drops unknown citations, and preserves manual status', async () => {

@@ -6,7 +6,9 @@ Supported advisory criteria: `S004` installation documentation, `S005` personal 
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- All five supported criteria browse an isolated snapshot of eligible committed repository source. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all five currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Criterion-supplied files are starting context and do not limit the browsable source inventory. A criterion may explicitly set `evidenceMode: 'supplied-files'` when it must restrict review to those files; repository browsing remains the default when the option is omitted.
+- If starting context names a path also present in the committed snapshot, the committed content is authoritative while the path remains listed as starting material.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
 - Provider keys are read from environment variables, not CLI arguments.
 - The generated OpenCode agent is read-only and rejects mutating tools.
@@ -39,7 +41,7 @@ Agent output may clarify an unresolved declaration, conflict, or unlisted framew
 but it cannot change the deterministic status. Disabled, excluded, unavailable,
 failed, or malformed review leaves S007 manual and records the unavailable reason.
 
-## Repository browsing shared by all five criteria
+## Repository browsing shared by criterion reviews
 
 Enabled reviews run only for deterministic manual results. An empty analyzer inventory
 does not prevent investigation; an empty or inaccessible committed snapshot makes
@@ -50,6 +52,8 @@ Files are copied intact, with repository-relative paths preserved under `docs/`
 in an isolated workspace. The agent chooses what to search and read, follows
 cross-file references, and seeks evidence that contradicts or extends the
 deterministic summary. Repository contents are not all injected into the prompt.
+The fake adapter follows the same snapshot, workspace-safety, citation, and
+criterion-semantic validation path; it replaces inference only.
 
 Generated output, vendored dependencies, binaries, non-regular entries (including
 symlinks and submodules), `.env` files, and uncommitted changes are excluded.
@@ -80,9 +84,16 @@ The snapshot revision applies to browsable source. S004–S007 deterministic sum
 can reflect the working tree, so use a clean checkout to avoid mixing revisions.
 
 S004 follows documentation links and checks instructions against build and runtime
-configuration. Source configuration can expose contradictions but cannot substitute
-for missing developer-facing documentation. Deterministic pass, fail, and
-not-applicable results remain outside agent review for every criterion.
+configuration. Headings are evaluated with a small following instruction block so
+commands immediately below an installation or deployment heading remain connected
+to that section. Table-of-contents and troubleshooting-only mentions are discarded,
+and tool or runtime requirements are not treated as commands unless they contain a
+recognized executable action. Shell comments inside fenced code blocks are not
+treated as Markdown headings, and environment instructions require variable or
+assignment syntax rather than an uppercase product name. Source configuration can
+expose contradictions but cannot substitute for missing developer-facing
+documentation. Deterministic pass, fail, and not-applicable results remain outside
+agent review for every criterion.
 
 ## S010 Third-Party System Resilience Review
 
@@ -232,6 +243,20 @@ Agent-review failures are reported without exposing raw provider output or crede
 - **Malformed, invalid, or incomplete response:** inspect the evaluator's sanitized diagnosis and, if useful, rerun the OpenCode command manually in a trusted environment.
 
 These categories diagnose the observed command or response; they do not make claims about provider reliability. In every failure category, evaluation continues with the deterministic result and evidence.
+
+New evaluation results include optional provenance with the resolved target commit,
+evaluator package/version, configured agent model, and committed source paths cited
+by explicit structured criterion evidence or agent-review references. Incidental path
+text in narrative evidence and diagnostics does not add a source citation. HTML
+reports use that inventory for commit-pinned GitHub links and offer a report-safe
+JSON download with the standard `EvaluationResult` shape. Repository-controlled free
+text and agent diagnostics are redacted before either HTML payload is embedded;
+validated repository and cited-path identities are preserved so their links remain
+stable. Any credentials in the repository URL are removed before that identity is
+preserved or embedded in the download. OpenCode runtime metadata is omitted from the
+embedded download. Historical results without provenance remain renderable. Failed
+and timed-out reviews are shown as unavailable; configuration and no-evidence skips
+remain distinct.
 
 Malformed-response reports distinguish invalid transport records, sanitization rejection, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed before its decoded values are redacted.
 

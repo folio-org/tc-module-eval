@@ -5,7 +5,6 @@ import {
   S004InstallationDocumentationResult
 } from '../types';
 import { runCriterionAgentReview } from './criterion-agent-review';
-import { withRepositoryBrowsing } from './agent-review-repository';
 
 export async function reviewS004WithAgent(
   repoPath: string,
@@ -13,7 +12,7 @@ export async function reviewS004WithAgent(
   config: CriterionAgentReviewConfig | undefined,
   commandRunner?: CommandRunner
 ): Promise<CriterionAgentReviewResult> {
-  const request = await withRepositoryBrowsing({
+  const request = {
     criterionId: 'S004',
     repositoryPath: repoPath,
     instructions: [
@@ -28,6 +27,6 @@ export async function reviewS004WithAgent(
     ].join('\n'),
     files: [{ repoRelativePath: '.criterion-agent/S004/deterministic-summary.json', content: JSON.stringify(result, null, 2) }],
     schemaDescription: 'JSON object with recommendation enum, confidence enum, summary string, rationale string, evidenceReferences string[]'
-  });
+  };
   return runCriterionAgentReview(request, config, commandRunner);
 }

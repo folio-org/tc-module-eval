@@ -6,6 +6,32 @@ import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitio
 import { getLogger } from './utils/logger';
 import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
 import { LocalCommandRunner } from './utils/command-runner';
+import packageMetadata from '../package.json';
+
+export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
+  const explicitReferences = new Set<string>();
+  const collect = (value: unknown, key?: string): void => {
+    if (typeof value === 'string') {
+      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences') {
+        explicitReferences.add(value);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(item => collect(item, key));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([childKey, child]) => collect(child, childKey));
+    }
+  };
+
+  criteria.forEach(result => {
+    collect(result.criterionDetails);
+    collect(result.agentReview);
+  });
+  return trackedFiles.filter(file => explicitReferences.has(file));
+}
 
 /**
  * Main orchestrator for module evaluation
@@ -87,6 +113,15 @@ export class ModuleEvaluator {
         moduleName: repoInfo.name,
         language: evaluator.getLanguage(),
         evaluatedAt: new Date(),
+        provenance: {
+          repositoryCommit: repoInfo.commit,
+          evaluator: {
+            name: packageMetadata.name,
+            version: packageMetadata.version
+          },
+          agentReviewModel: this.config.agentReview?.modelLabel,
+          citedSourcePaths: citedTrackedFiles(criterionResults, repoInfo.trackedFiles)
+        },
         criteria: criterionResults
       };
       

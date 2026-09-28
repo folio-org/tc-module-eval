@@ -33,6 +33,8 @@ export interface S005PersonalDataDisclosureChecklistItem {
   sectionHeading?: string;
   rawLabel: string;
   checked: boolean;
+  /** All categories represented by this checklist row. The singular field is retained for compatibility. */
+  normalizedCategories?: S005PersonalDataCategory[];
   normalizedCategory: S005PersonalDataCategory;
 }
 

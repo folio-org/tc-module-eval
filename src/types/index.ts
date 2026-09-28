@@ -45,7 +45,20 @@ export interface EvaluationResult {
   moduleName: string;
   language: string;
   evaluatedAt: Date;
+  provenance?: EvaluationProvenance;
   criteria: CriterionResult[];
+}
+
+/** Reproducibility metadata captured before repository-controlled commands run. */
+export interface EvaluationProvenance {
+  repositoryCommit: string;
+  evaluator: {
+    name: string;
+    version: string;
+  };
+  agentReviewModel?: string;
+  /** Committed target paths cited by this report; used for safe source links. */
+  citedSourcePaths?: string[];
 }
 
 export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence';

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import {
   CommandExecutionRequest,
   CommandExecutionResult,
@@ -11,11 +12,13 @@ import {
 } from '../types';
 import {
   normalizeCriterionAgentAdvisoryPayload,
+  prepareCriterionAgentReviewEvidence,
   prepareCriterionReviewWorkspace,
   reviewCriterionWithAgent,
-  runCriterionAgentReview,
+  runCriterionAgentReview as runCriterionAgentReviewImpl,
   validateEndpointUrl
 } from '../utils/criterion-agent-review';
+import * as committedSource from '../utils/committed-source';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
 import { sanitizeStructuredOutput } from '../utils/opencode-output';
 
@@ -87,6 +90,14 @@ class FakeRunner implements CommandRunner {
   }
 }
 
+function runCriterionAgentReview(...args: Parameters<typeof runCriterionAgentReviewImpl>) {
+  const [request, ...rest] = args;
+  return runCriterionAgentReviewImpl({
+    ...request,
+    evidenceMode: request.evidenceMode ?? 'supplied-files'
+  }, ...rest);
+}
+
 describe('criterion agent review', () => {
   let repoPath: string;
   const originalEnv = process.env;
@@ -101,11 +112,13 @@ describe('criterion agent review', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     fs.rmSync(repoPath, { recursive: true, force: true });
     process.env = originalEnv;
   });
 
   it('returns disabled evidence by default', async () => {
+    const snapshot = jest.spyOn(committedSource, 'readCommittedSource');
     const result = await runCriterionAgentReview({
       criterionId: 'S004',
       repositoryPath: repoPath,
@@ -116,6 +129,116 @@ describe('criterion agent review', () => {
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('disabled');
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['disabled', { enabled: false, adapter: 'fake' } as CriterionAgentReviewConfig],
+    ['criterion-disabled', { enabled: true, enabledCriteria: ['S006'], adapter: 'fake' } as CriterionAgentReviewConfig]
+  ])('does not prepare repository evidence when review is %s', async (_label, config) => {
+    const snapshot = jest.spyOn(committedSource, 'readCommittedSource');
+    await runCriterionAgentReviewImpl({
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review', files: [], schemaDescription: 'schema'
+    }, config);
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it('browses committed source by default while supplied-files mode cannot cite absent source', async () => {
+    fs.writeFileSync(path.join(repoPath, 'starting.txt'), 'starting evidence');
+    fs.writeFileSync(path.join(repoPath, 'src.ts'), 'committed source outside starting evidence');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    const request = {
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: '.criterion-agent/S999/starting.json', content: '{}' }],
+      schemaDescription: 'schema'
+    };
+    const config: CriterionAgentReviewConfig = {
+      enabled: true, adapter: 'fake', fakeResult: {
+        available: true, criterionId: 'S999', recommendation: 'likely_sufficient', confidence: 'high',
+        summary: 'Source reviewed.', rationale: 'The committed source provides evidence.',
+        evidenceReferences: ['src.ts'], warnings: [], errors: []
+      }
+    };
+
+    const repository = await runCriterionAgentReviewImpl(request, config);
+    const supplied = await runCriterionAgentReviewImpl({ ...request, evidenceMode: 'supplied-files' }, config);
+
+    expect(repository).toMatchObject({ available: true, evidenceReferences: ['src.ts'] });
+    expect(supplied.available).toBe(false);
+    expect(supplied.errors.join(' ')).toContain('incomplete advisory JSON');
+  });
+
+  it('does not let excluded, oversized, or untracked starting files bypass repository snapshot policy', async () => {
+    fs.writeFileSync(path.join(repoPath, 'README.md'), 'eligible source');
+    fs.writeFileSync(path.join(repoPath, '.env'), 'PASSWORD=committed-secret');
+    fs.writeFileSync(path.join(repoPath, 'oversized.txt'), 'x'.repeat(1024 * 1024 + 1));
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    fs.writeFileSync(path.join(repoPath, 'untracked.txt'), 'untracked source');
+
+    const prepared = await prepareCriterionAgentReviewEvidence({
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review', schemaDescription: 'schema',
+      files: [
+        { repoRelativePath: '.env', content: 'PASSWORD=supplied-secret' },
+        { repoRelativePath: 'oversized.txt', content: 'supplied oversized content' },
+        { repoRelativePath: 'untracked.txt', content: 'supplied untracked content' },
+        { repoRelativePath: '.criterion-agent/S999/context.json', content: '{}' }
+      ]
+    });
+    const paths = prepared.request.files.map(file => file.repoRelativePath);
+    const manifest = JSON.parse(prepared.request.files.find(file => file.repoRelativePath.endsWith('/snapshot-manifest.json'))!.content);
+
+    expect(paths).toEqual(expect.arrayContaining(['README.md', '.criterion-agent/S999/context.json']));
+    expect(paths).not.toEqual(expect.arrayContaining(['.env', 'oversized.txt', 'untracked.txt']));
+    expect([...prepared.availableSourcePaths]).toEqual(['README.md']);
+    expect(manifest.omissions.oversizedPaths).toContain('oversized.txt');
+    expect(manifest.omissions.unavailableStartingPaths).toEqual(expect.arrayContaining(['.env', 'oversized.txt', 'untracked.txt']));
+  });
+
+  it('keeps committed snapshot content authoritative when starting evidence names the same path', async () => {
+    fs.writeFileSync(path.join(repoPath, 'README.md'), 'committed README');
+    fs.writeFileSync(path.join(repoPath, 'src.ts'), 'additional committed evidence');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    const request = {
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'supplied replacement must not win' }],
+      schemaDescription: 'schema'
+    };
+
+    const prepared = await prepareCriterionAgentReviewEvidence(request);
+    const readme = prepared.request.files.filter(file => file.repoRelativePath === 'README.md');
+    const workspace = prepareCriterionReviewWorkspace(prepared.request);
+    try {
+      const manifest = JSON.parse(fs.readFileSync(workspace.manifestPath, 'utf8'));
+      expect(readme).toEqual([{ repoRelativePath: 'README.md', content: 'committed README' }]);
+      expect(manifest.files).toContainEqual(expect.objectContaining({ repoRelativePath: 'README.md' }));
+    } finally {
+      fs.rmSync(workspace.rootPath, { recursive: true, force: true });
+    }
+
+    const result = await runCriterionAgentReviewImpl(request, {
+      enabled: true, adapter: 'fake', fakeResult: {
+        available: true, criterionId: 'S999', recommendation: 'likely_sufficient', confidence: 'high',
+        summary: 'Additional source reviewed.', rationale: 'The repository snapshot was available.',
+        evidenceReferences: ['src.ts'], warnings: [], errors: []
+      }
+    });
+    expect(result).toMatchObject({ available: true, evidenceReferences: ['src.ts'] });
+  });
+
+  it('checks invalid OpenCode configuration before preparing repository evidence', async () => {
+    const snapshot = jest.spyOn(committedSource, 'readCommittedSource');
+    const result = await runCriterionAgentReviewImpl({
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review', files: [], schemaDescription: 'schema'
+    }, { enabled: true, adapter: 'opencode' });
+
+    expect(result.errors).toContain('OpenCode model label is required');
+    expect(snapshot).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -293,6 +416,22 @@ describe('criterion agent review', () => {
     expect(unsafe.errors.join('\n')).toContain('must stay inside the repository');
     expect(colliding.available).toBe(false);
     expect(colliding.errors.join('\n')).toContain('Duplicate agent review workspace path');
+  });
+
+  it('applies repository workspace size validation to the fake adapter', async () => {
+    fs.writeFileSync(path.join(repoPath, 'source.ts'), 'export const value = true;');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+
+    const result = await runCriterionAgentReviewImpl({
+      criterionId: 'S999', repositoryPath: repoPath, instructions: 'review',
+      files: [{ repoRelativePath: '.criterion-agent/S999/summary.json', content: 'x'.repeat(1024 * 1024 + 1) }],
+      schemaDescription: 'schema'
+    }, { enabled: true, adapter: 'fake' });
+
+    expect(result.available).toBe(false);
+    expect(result.errors.join(' ')).toContain('workspace limit');
   });
 
   it('rejects non-HTTPS endpoints unless local or allowlisted', () => {

@@ -164,6 +164,151 @@ DB_HOST, DB_PORT, DB_DATABASE, KAFKA_HOST, and KAFKA_PORT configure local develo
     expect(groups).toContain('build_test');
   });
 
+  it('retains a later concrete instruction instead of an earlier TOC or error mention', () => {
+    writeFile('README.md', `
+# Contents
+- [Running](#running)
+
+The module cannot run when its configuration is invalid.
+
+## Running
+Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'strong', line: 7 });
+    expect(runSignal?.excerpt).toContain('docker compose');
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('combines an installation heading with a nearby command', () => {
+    writeFile('README.md', `
+## Installing and deployment
+
+Prerequisites must be available before startup.
+
+### Compiling
+
+Build the module before launching it.
+
+\`java -jar target/mod-example.jar\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 9 });
+    expect(result.classification.reason).toContain('strong installation');
+  });
+
+  it('does not mistake a Java runtime requirement for a command', () => {
+    writeFile('README.md', `
+## Running
+
+The module requires Java 17.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'candidate' });
+    expect(result.classification.reason).toContain('evidence is too thin');
+  });
+
+  it.each([
+    'Docker and Postgres are required.',
+    'npm packages provide the development tooling.',
+    'yarn workspaces are used by the frontend.',
+    'helm charts are available for operators.',
+    'curl requests can exercise the API.',
+    'kubectl access is required for the cluster.',
+    'This module uses the FOLIO API to run lookups.',
+    'Docker run-time dependencies include Postgres.'
+  ])('does not mistake tool prose for a command: %s', prose => {
+    writeFile('README.md', `
+## Installing and deployment
+
+${prose}
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'candidate' });
+    expect(result.classification.reason).toContain('evidence is too thin');
+  });
+
+  it.each([
+    'docker compose -f docker/app.yml up -d',
+    'npm run build',
+    'yarn start',
+    'helm install mod-search charts/mod-search',
+    'curl -X POST https://example.invalid/_/tenant',
+    'kubectl apply -f deployment.yml'
+  ])('recognizes a concrete tool command: %s', command => {
+    writeFile('README.md', `
+## Installing and deployment
+
+\`${command}\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 3 });
+    expect(result.classification.reason).toContain('strong installation');
+  });
+
+  it('does not treat a shell comment inside a fenced block as a new Markdown heading', () => {
+    writeFile('README.md', `
+## Installation
+
+\`\`\`shell
+# Build the image
+docker build -t mod-example .
+\`\`\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 5 });
+    expect(installSignal?.excerpt).toContain('docker build');
+    expect(result.classification.reason).toContain('strong installation');
+  });
+
+  it('does not count table-of-contents and troubleshooting lines as candidate documentation', () => {
+    writeFile('README.md', `
+# Contents
+- [Running](#running)
+
+## Troubleshooting installation
+Installation cannot run when local configuration is invalid.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].signals).toEqual([]);
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.classification.reason).toContain('No plausible developer build');
+  });
+
+  it('does not treat ordinary prose as a concrete target before a real command', () => {
+    writeFile('README.md', `
+# Running
+Run locally using the configuration described below.
+Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'strong', line: 3 });
+    expect(runSignal?.excerpt).toContain('docker compose');
+  });
+
   it('fails test-only documentation', () => {
     writeFile('README.md', `
 # mod-tests-only

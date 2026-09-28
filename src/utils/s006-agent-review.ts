@@ -1,6 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S006SensitiveInformationAnalysisResult } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { withRepositoryBrowsing } from './agent-review-repository';
 
 export async function reviewS006WithAgent(
   repoPath: string,
@@ -9,11 +8,15 @@ export async function reviewS006WithAgent(
   commandRunner?: CommandRunner
 ): Promise<CriterionAgentReviewResult> {
   const request = await buildS006AgentReviewRequest(repoPath, analysis);
-  const review = await runCriterionAgentReview(request, config, commandRunner);
-  if (!review.available) return review;
-  const obligations = reviewObligations(analysis);
+  return runCriterionAgentReview(request, config, commandRunner);
+}
+
+function validateS006Review(
+  obligations: ReturnType<typeof reviewObligations>,
+  review: CriterionAgentReviewResult,
+  availableSourcePaths: ReadonlySet<string>
+): string | undefined {
   const assessments = review.assessments ?? [];
-  const paths = new Set(request.files.map(file => file.repoRelativePath));
   let invalid: string | undefined;
   if (obligations.some(item => assessments.filter(a => a.technologyId === item.id).length !== 1)
     || new Set(assessments.map(a => a.technologyId)).size !== assessments.length
@@ -21,9 +24,9 @@ export async function reviewS006WithAgent(
       && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(a.technologyId)) || !a.coverageDisposition)) {
     invalid = 'S006 requires exactly one coverage disposition for every supplied review obligation.';
   } else if (obligations.some(item => item.path && assessments.some(a => a.technologyId === item.id
-    && a.coverageDisposition === 'investigated' && (!paths.has(item.path!) || !a.evidenceReferences.includes(item.path!))))) {
+    && a.coverageDisposition === 'investigated' && (!availableSourcePaths.has(item.path!) || !a.evidenceReferences.includes(item.path!))))) {
     invalid = 'S006 cannot claim direct investigation of an unavailable or uncited finding or coverage path.';
-  } else if (obligations.some(item => item.path && item.id.startsWith('finding:') && !paths.has(item.path)
+  } else if (obligations.some(item => item.path && item.id.startsWith('finding:') && !availableSourcePaths.has(item.path)
     && assessments.some(a => a.technologyId === item.id && a.coverageDisposition !== 'unresolved'))) {
     invalid = 'S006 findings whose source is excluded must remain unresolved; contextual documentation cannot establish their committed contents.';
   } else if (assessments.some(a => a.coverageDisposition === 'unresolved' && a.type === 'aligned_fact')) {
@@ -36,7 +39,7 @@ export async function reviewS006WithAgent(
   } else if (review.recommendation === 'needs_reviewer_judgment' && !review.reviewerActions?.length) {
     invalid = 'S006 needs_reviewer_judgment requires a cited action identifying the missing fact.';
   }
-  return invalid ? { ...review, available: false, errors: [...review.errors, invalid] } : review;
+  return invalid;
 }
 
 function reviewObligations(analysis: S006SensitiveInformationAnalysisResult): Array<{ id: string; description: string; path?: string }> {
@@ -63,10 +66,11 @@ export async function buildS006AgentReviewRequest(
   repoPath: string,
   analysis: S006SensitiveInformationAnalysisResult
 ): Promise<CriterionAgentReviewRequest> {
-  const request = await withRepositoryBrowsing({
+  const obligations = reviewObligations(analysis);
+  return {
     criterionId: 'S006',
     repositoryPath: repoPath,
-    coverageGapIds: reviewObligations(analysis).filter(item => item.id.startsWith('gap:')).map(item => item.id),
+    coverageGapIds: obligations.filter(item => item.id.startsWith('gap:')).map(item => item.id),
     instructions: [
       'Evaluate whether committed sensitive or environment-specific information needs reviewer attention. Investigate surrounding source, configuration, CI, documentation, fixtures, and usage paths, including files absent from the scanner findings. Distinguish production usage from examples, synthetic fixtures, and local defaults using cited context.',
       'Scan coverage uncertainty is not itself proof of a leaked secret. Report exclusions and unresolved usage honestly; do not claim the repository is secret-free.',
@@ -90,14 +94,13 @@ export async function buildS006AgentReviewRequest(
         coverage: analysis.coverage
       }, null, 2)
     }],
+    prepareAdditionalFiles: availableSourcePaths => [{
+      repoRelativePath: '.criterion-agent/S006/review-obligations.json',
+      content: JSON.stringify({ reviewObligations: obligations.map(item => ({
+        ...item, ...(item.path ? { sourceAvailable: availableSourcePaths.has(item.path) } : {})
+      })) }, null, 2)
+    }],
+    validateReview: (review, availableSourcePaths) => validateS006Review(obligations, review, availableSourcePaths),
     schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty repository evidenceReferences string[], assessments for every reviewObligations ID including coverageDisposition (investigated|immaterial|unresolved), and cited reviewerActions[]'
-  });
-  const paths = new Set(request.files.map(file => file.repoRelativePath));
-  request.files.push({
-    repoRelativePath: '.criterion-agent/S006/review-obligations.json',
-    content: JSON.stringify({ reviewObligations: reviewObligations(analysis).map(item => ({
-      ...item, ...(item.path ? { sourceAvailable: paths.has(item.path) } : {})
-    })) }, null, 2)
-  });
-  return request;
+  };
 }
