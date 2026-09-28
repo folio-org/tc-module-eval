@@ -22,19 +22,19 @@ import {
   buildS005CriterionDetails,
   formatS005Evidence
 } from '../../utils/s005-personal-data-disclosure';
-import { hasS005AgentReviewMaterial, reviewS005WithAgent } from '../../utils/s005-agent-review';
+import { reviewS005WithAgent } from '../../utils/s005-agent-review';
 import {
   analyzeS006SensitiveInformation,
   buildS006CriterionDetails,
   formatS006Evidence
 } from '../../utils/s006-sensitive-information';
-import { hasS006AgentReviewMaterial, reviewS006WithAgent } from '../../utils/s006-agent-review';
+import { reviewS006WithAgent } from '../../utils/s006-agent-review';
 import { loadS007Policy } from '../../utils/s007-policy';
 import { collectS007TechnologyEvidence } from '../../utils/s007-technology-evidence';
 import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effective-evidence';
 import { evaluateS007 } from '../../utils/s007-evaluator';
 import { buildS007CriterionDetails, renderS007HumanDetails } from '../../utils/s007-report-details';
-import { hasS007AgentReviewMaterial, reviewS007WithAgent } from '../../utils/s007-agent-review';
+import { reviewS007WithAgent } from '../../utils/s007-agent-review';
 import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
 import { loadS008Catalog } from '../../utils/s008-catalog';
 import { collectS008Declarations } from '../../utils/s008-interface-declarations';
@@ -161,7 +161,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S004',
       status: documentation.classification.status,
-      hasReviewMaterial: documentation.candidates.length > 0,
+      hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS004WithAgent(repoPath, documentation, config, commandRunner)
     });
@@ -205,7 +205,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S005',
       status: analysis.classification.status,
-      hasReviewMaterial: hasS005AgentReviewMaterial(analysis),
+      hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS005WithAgent(repoPath, analysis, config, commandRunner)
     });
@@ -237,7 +237,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S006',
       status: analysis.classification.status,
-      hasReviewMaterial: hasS006AgentReviewMaterial(analysis),
+      hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS006WithAgent(repoPath, analysis, config, commandRunner)
     });
@@ -275,7 +275,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S007',
       status: analysis.status as EvaluationStatus,
-      hasReviewMaterial: hasS007AgentReviewMaterial(repoPath, analysis),
+      hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS007WithAgent(
         repoPath,

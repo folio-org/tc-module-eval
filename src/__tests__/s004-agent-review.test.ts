@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import {
   CommandExecutionRequest,
   CommandExecutionResult,
@@ -76,10 +77,15 @@ describe('S004 agent review', () => {
     fs.rmSync(repoPath, { recursive: true, force: true });
   });
 
-  it('sends bounded candidate documentation to the review workspace', async () => {
+  it('browses committed documentation and build files even with no analyzer candidates', async () => {
     fs.writeFileSync(path.join(repoPath, 'README.md'), 'x'.repeat(MAX_DOC_BYTES + 4096));
+    fs.writeFileSync(path.join(repoPath, 'pom.xml'), '<project>committed build configuration</project>');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    fs.writeFileSync(path.join(repoPath, 'pom.xml'), 'uncommitted change');
 
-    const result = await reviewS004WithAgent(repoPath, documentationResult(), agentConfig(), new CapturingRunner());
+    const result = await reviewS004WithAgent(repoPath, { ...documentationResult(), candidates: [] }, agentConfig(), new CapturingRunner());
     const retainedWorkspace = result.metadata?.retainedWorkspacePath;
 
     expect(result.available).toBe(true);
@@ -87,7 +93,11 @@ describe('S004 agent review', () => {
 
     try {
       const copied = fs.readFileSync(path.join(retainedWorkspace!, 'docs', 'README.md'));
-      expect(copied.length).toBeLessThanOrEqual(MAX_DOC_BYTES);
+      expect(copied.length).toBe(MAX_DOC_BYTES + 4096);
+      expect(fs.readFileSync(path.join(retainedWorkspace!, 'docs', 'pom.xml'), 'utf8')).toBe('<project>committed build configuration</project>');
+      const manifest = JSON.parse(fs.readFileSync(path.join(retainedWorkspace!, 'manifest.json'), 'utf8'));
+      expect(manifest.fileIndex).toBe('repository-files.json');
+      expect(manifest.instructions).toContain('cannot substitute for developer-facing documentation');
     } finally {
       fs.rmSync(retainedWorkspace!, { recursive: true, force: true });
     }

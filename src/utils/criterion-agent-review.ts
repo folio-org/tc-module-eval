@@ -9,7 +9,7 @@ import {
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { isWithinRepo, realPath } from './repo-files';
+import { isWithinRepo } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
@@ -117,14 +117,14 @@ export async function runCriterionAgentReview(
   }
 
   if (config.adapter === 'fake') {
-    return normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
+    return validateRepositoryCitations(request, normalizeFakeCriterionReviewResult(request, config, config.fakeResult ?? {
       available: true,
       criterionId: request.criterionId,
       recommendation: 'needs_reviewer_judgment',
       confidence: 'medium',
       summary: 'Fake criterion-agent review completed.',
       rationale: 'Fake adapter was configured for deterministic tests.',
-      evidenceReferences: request.files.slice(0, 1).map(file => file.repoRelativePath),
+      evidenceReferences: request.files.filter(file => !request.repositoryBrowsing || !file.repoRelativePath.startsWith('.criterion-agent/')).slice(0, 1).map(file => file.repoRelativePath),
       metadata: {
         adapter: 'fake',
         modelLabel: config.modelLabel,
@@ -135,7 +135,7 @@ export async function runCriterionAgentReview(
       },
       warnings: [],
       errors: []
-    });
+    }));
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
@@ -145,18 +145,29 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`] };
   }
   try {
-    return await runOpenCodeAgentReview(
+    return validateRepositoryCitations(request, await runOpenCodeAgentReview(
       request,
       workspace,
       config,
       commandRunner ?? new LocalCommandRunner(false)
-    );
+    ));
   } finally {
     removeOpenCodeRuntimeCredentials(workspace);
     if (!config.debugRetainWorkspace) {
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
     }
   }
+}
+
+function validateRepositoryCitations(request: CriterionAgentReviewRequest, review: CriterionAgentReviewResult): CriterionAgentReviewResult {
+  if (!request.repositoryBrowsing || !review.available) return review;
+  const paths = new Set(request.files.filter(file => !file.repoRelativePath.startsWith('.criterion-agent/')).map(file => file.repoRelativePath));
+  const references = [review.evidenceReferences, ...(review.assessments ?? []).map(item => item.evidenceReferences),
+    ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
+  if (references.some(citations => !citations.some(citation => paths.has(citation)))) {
+    return { ...review, available: false, errors: [...review.errors, 'Agent review requires repository evidence for the review and every assessment and action; generated context alone is not evidence.'] };
+  }
+  return review;
 }
 
 export function prepareCriterionReviewWorkspace(request: CriterionAgentReviewRequest): PreparedCriterionReviewWorkspace {
@@ -532,34 +543,4 @@ export function safeWorkspaceRelativePath(repoRelativePath: string): string {
     throw new Error(`Agent review file path must stay inside the repository: ${repoRelativePath}`);
   }
   return normalized;
-}
-
-export function resolveReviewPathWithinRepo(
-  repoPath: string,
-  repoRelativePath: string,
-  criterionId: string
-): string {
-  const repoRoot = realPath(repoPath);
-  if (!repoRoot) {
-    throw new Error('Unable to resolve repository path');
-  }
-
-  let normalized: string;
-  try {
-    normalized = safeWorkspaceRelativePath(repoRelativePath);
-  } catch {
-    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const absolutePath = path.resolve(repoRoot, normalized);
-  if (!isWithinRepo(repoRoot, absolutePath)) {
-    throw new Error(`${criterionId} review material path must stay inside the repository: ${repoRelativePath}`);
-  }
-
-  const stats = fs.lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    throw new Error(`${criterionId} review material path is not a regular file: ${repoRelativePath}`);
-  }
-
-  return absolutePath;
 }

@@ -59,6 +59,21 @@ describe('committed source reader', () => {
     ]));
   });
 
+  it('classifies binary omissions before byte-budget failures and fails closed beyond the probe', async () => {
+    const root = repository({
+      'a.bin': Buffer.alloc(16 * 1024),
+      'b.txt': 'valid source',
+      'c.dat': Buffer.concat([Buffer.alloc(8192, 'x'), Buffer.from([0])])
+    });
+    const snapshot = await readCommittedSource(root, { maxFileBytes: 8192, maxTotalBytes: 12 });
+    expect(snapshot.files.map(file => file.path)).toEqual(['b.txt']);
+    expect(snapshot.diagnostics).toEqual([
+      expect.objectContaining({ code: 'binary', path: 'a.bin' }),
+      expect.objectContaining({ code: 'file-size', path: 'c.dat' })
+    ]);
+    expect(snapshot.complete).toBe(false);
+  });
+
   it('applies deterministic file and total-byte limits', async () => {
     const root = repository({
       'a.txt': '1234',

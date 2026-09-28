@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { CriterionAgentReviewResult, EvaluationStatus, S005PersonalDataDisclosureAnalysisResult } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { createEvaluationRun } from '../utils/evaluation-run';
@@ -159,7 +160,7 @@ Last Reviewed: 2026-06-12
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.recommendation).toBe('likely_insufficient');
-    expect(result.agentReview?.evidenceReferences).toEqual(['.criterion-agent/S005/evidence/evidence-001.txt']);
+    expect(result.agentReview?.evidenceReferences).toEqual(['PERSONAL_DATA_DISCLOSURE.md']);
     expect(result.details).toContain('Agent review');
     expect(result.details).toContain('Advisory recommendation: likely_insufficient');
     expect(result.details).not.toContain('Evidence references:');
@@ -192,16 +193,16 @@ Last Reviewed: 2026-06-12
     expect(result.details).toContain('agent review is not enabled for S005');
   });
 
-  it('records a no-candidate-material reason for completed form-only manual results', async () => {
+  it('reviews completed forms even when the analyzer found no other candidate evidence', async () => {
     writeCompletedDisclosure();
 
     const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
     const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.agentReview).toBeUndefined();
-    expect(details.agentReviewUnavailableReason).toContain('no candidate evidence');
-    expect(result.details).toContain('no candidate evidence was available for agent review');
+    expect(result.agentReview?.available).toBe(true);
+    expect(details.agentReviewUnavailableReason).toBeUndefined();
+    expect(result.agentReview?.evidenceReferences).toEqual(['PERSONAL_DATA_DISCLOSURE.md']);
   });
 
   it.each([
@@ -270,6 +271,9 @@ Last Reviewed: YYYY-MM-DD
     fakeResult?: CriterionAgentReviewResult,
     config?: { endpoint?: string }
   ) {
+    execFileSync('git', ['init', '-q'], { cwd: tempRoot });
+    execFileSync('git', ['add', '.'], { cwd: tempRoot });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd: tempRoot });
     return createEvaluationRun({
       repositoryPath: tempRoot,
       language: 'java',
@@ -287,7 +291,7 @@ Last Reviewed: YYYY-MM-DD
           confidence: 'medium',
           summary: 'S005 fake review summary.',
           rationale: 'S005 fake review rationale.',
-          evidenceReferences: ['.criterion-agent/S005/evidence/evidence-001.txt'],
+          evidenceReferences: ['PERSONAL_DATA_DISCLOSURE.md'],
           warnings: [],
           errors: []
         }

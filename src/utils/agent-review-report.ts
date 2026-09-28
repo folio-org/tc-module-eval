@@ -39,7 +39,9 @@ export function renderAgentReviewLines(
     lines.push('  - Findings:');
     for (const assessment of review.assessments) {
       const id = assessment.technologyId.replace(/^discovered:/, '');
-      const name = subjectNames[id] ?? SUBJECT_NAMES[id] ?? id.replace(/[-_]/g, ' ');
+      const name = Object.prototype.hasOwnProperty.call(subjectNames, id) ? subjectNames[id]
+        : Object.prototype.hasOwnProperty.call(SUBJECT_NAMES, id) ? SUBJECT_NAMES[id]
+          : id.replace(/[-_]/g, ' ');
       const [label, explanation] = ASSESSMENT_LABELS[assessment.type];
       lines.push(
         `    - ${prose(name)} — ${label}:`,

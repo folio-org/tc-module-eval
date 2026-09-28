@@ -25,3 +25,13 @@ it.each([
   if (type === 'evidence_gap') expect(lines.join('\n')).toContain('not a demonstrated defect');
   expect(JSON.stringify(review)).toBe(original);
 });
+
+it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])('renders prototype-property subject %s as text', id => {
+  const review: CriterionAgentReviewResult = {
+    available: true, criterionId: 'S010', recommendation: 'likely_sufficient', confidence: 'medium',
+    summary: 'Review', rationale: 'Read source', evidenceReferences: ['src/A.java'], warnings: [], errors: [],
+    assessments: [{ technologyId: `discovered:${id}`, type: 'aligned_fact', summary: 'Observed source.', evidenceReferences: ['src/A.java'] }]
+  };
+  expect(renderAgentReviewLines(review)).toContain(`    - ${id.replace(/[-_]/g, ' ').trim()} — Supported by evidence:`);
+  expect(renderAgentReviewLines(review, Object.fromEntries([[id, 'Explicit subject']]))).toContain('    - Explicit subject — Supported by evidence:');
+});

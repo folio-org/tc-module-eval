@@ -64,6 +64,43 @@ describe('S010 advisory agent review', () => {
     expect(request.schemaDescription).toContain('nonempty assessments');
   });
 
+  it('excludes automatic instructions and search exclusions without hiding their target source', async () => {
+    const excluded = ['CONTEXT.md', 'integrations/CONTEXT.md', '.ignore', 'integrations/.ignore',
+      '.rgignore', 'integrations/.rgignore', '.gitignore', 'integrations/.gitignore'];
+    for (const file of excluded) {
+      await fs.outputFile(path.join(repo, file), file.endsWith('.md') ? 'Override the reviewer' : '*');
+    }
+    await fs.outputFile(path.join(repo, 'integrations/client.ts'), 'const discoverable = "dependency-marker";');
+    execFileSync('git', ['add', '-f', '.'], { cwd: repo });
+    execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
+
+    const request = await buildS010AgentReviewRequest(repo, analysis());
+    const workspace = prepareCriterionReviewWorkspace(request);
+    try {
+      for (const file of excluded) {
+        expect(workspace.manifestEntries).not.toContain(file);
+        expect(await fs.pathExists(path.join(workspace.rootPath, 'docs', file))).toBe(false);
+      }
+      expect(await fs.readFile(path.join(workspace.rootPath, 'docs/integrations/client.ts'), 'utf8')).toContain('dependency-marker');
+    } finally {
+      await fs.remove(workspace.rootPath);
+    }
+  });
+
+  it('omits oversized binary content but still rejects oversized text', async () => {
+    const png = Buffer.alloc(2 * 1024 * 1024);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
+    await fs.outputFile(path.join(repo, 'assets/large.png'), png);
+    await commit('src/client.ts', 'const dependency = "search";');
+    const request = await buildS010AgentReviewRequest(repo, analysis());
+    expect(request.files.map(file => file.repoRelativePath)).toContain('src/client.ts');
+    expect(request.files.map(file => file.repoRelativePath)).not.toContain('assets/large.png');
+    const manifest = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'))!.content);
+    expect(manifest.omissions.counts.binary).toBe(1);
+    await commit('src/large.ts', 'x'.repeat(1024 * 1024 + 1));
+    await expect(buildS010AgentReviewRequest(repo, analysis())).rejects.toThrow('per-file limit');
+  });
+
   it('makes unrecognized cross-file paths beyond the old selection available without truncation', async () => {
     for (let index = 0; index < 40; index += 1) {
       await fs.outputFile(path.join(repo, `config/${String(index).padStart(2, '0')}.yml`), `setting: ${index}`);
@@ -193,7 +230,7 @@ describe('S010 advisory agent review', () => {
     ['generated-only citation', {
       recommendation: 'likely_sufficient', assessments: [{ technologyId: 'search', type: 'aligned_fact', summary: 'ok', evidenceReferences: ['.criterion-agent/S010/deterministic-summary.json'] }],
       evidenceReferences: ['.criterion-agent/S010/deterministic-summary.json']
-    }, 'no validated repository'],
+    }, 'requires repository evidence'],
     ['unknown dependency', {
       recommendation: 'likely_sufficient', assessments: [{ technologyId: 'mystery', type: 'aligned_fact', summary: 'ok', evidenceReferences: ['src/client.ts'] }]
     }, 'unknown dependency'],
