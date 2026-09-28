@@ -87,10 +87,10 @@ S004 follows documentation links and checks instructions against build and runti
 configuration. Headings are evaluated with a small following instruction block so
 commands immediately below an installation or deployment heading remain connected
 to that section. Table-of-contents and troubleshooting-only mentions are discarded,
-and runtime requirements such as a Java version are not treated as commands. Source
-configuration can expose contradictions but cannot substitute for missing
-developer-facing documentation. Deterministic pass, fail, and not-applicable results
-remain outside agent review for every criterion.
+and tool or runtime requirements are not treated as commands unless they contain a
+recognized executable action. Source configuration can expose contradictions but
+cannot substitute for missing developer-facing documentation. Deterministic pass,
+fail, and not-applicable results remain outside agent review for every criterion.
 
 ## S010 Third-Party System Resilience Review
 
@@ -249,9 +249,11 @@ reports use that inventory for commit-pinned GitHub links and offer a report-saf
 JSON download with the standard `EvaluationResult` shape. Repository-controlled free
 text and agent diagnostics are redacted before either HTML payload is embedded;
 validated repository and cited-path identities are preserved so their links remain
-stable. OpenCode runtime metadata is omitted from the embedded download. Historical
-results without provenance remain renderable. Failed and timed-out reviews are shown
-as unavailable; configuration and no-evidence skips remain distinct.
+stable. Any credentials in the repository URL are removed before that identity is
+preserved or embedded in the download. OpenCode runtime metadata is omitted from the
+embedded download. Historical results without provenance remain renderable. Failed
+and timed-out reviews are shown as unavailable; configuration and no-evidence skips
+remain distinct.
 
 Malformed-response reports distinguish invalid transport records, sanitization rejection, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed before its decoded values are redacted.
 

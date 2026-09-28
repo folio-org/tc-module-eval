@@ -187,14 +187,19 @@ Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
     writeFile('README.md', `
 ## Installing and deployment
 
+Prerequisites must be available before startup.
+
 ### Compiling
+
+Build the module before launching it.
+
 \`java -jar target/mod-example.jar\`
 `);
 
     const result = analyzeS004Documentation(tempRoot);
     const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
-    expect(installSignal).toMatchObject({ strength: 'strong', line: 4 });
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 9 });
     expect(result.classification.reason).toContain('strong installation');
   });
 
@@ -210,6 +215,48 @@ The module requires Java 17.
 
     expect(runSignal).toMatchObject({ strength: 'candidate' });
     expect(result.classification.reason).toContain('evidence is too thin');
+  });
+
+  it.each([
+    'Docker and Postgres are required.',
+    'npm packages provide the development tooling.',
+    'yarn workspaces are used by the frontend.',
+    'helm charts are available for operators.',
+    'curl requests can exercise the API.',
+    'kubectl access is required for the cluster.'
+  ])('does not mistake tool prose for a command: %s', prose => {
+    writeFile('README.md', `
+## Installing and deployment
+
+${prose}
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'candidate' });
+    expect(result.classification.reason).toContain('evidence is too thin');
+  });
+
+  it.each([
+    'docker compose -f docker/app.yml up -d',
+    'npm run build',
+    'yarn start',
+    'helm install mod-search charts/mod-search',
+    'curl -X POST https://example.invalid/_/tenant',
+    'kubectl apply -f deployment.yml'
+  ])('recognizes a concrete tool command: %s', command => {
+    writeFile('README.md', `
+## Installing and deployment
+
+\`${command}\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 3 });
+    expect(result.classification.reason).toContain('strong installation');
   });
 
   it('does not count table-of-contents and troubleshooting lines as candidate documentation', () => {

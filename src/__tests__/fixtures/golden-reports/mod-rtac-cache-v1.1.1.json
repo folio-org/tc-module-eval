@@ -79,7 +79,7 @@
       "criterionId": "S004",
       "status": "manual",
       "evidence": "S004 manual: Repository documentation includes strong installation, deployment, running, or Okapi enablement evidence, but S004 requires reviewer judgment.",
-      "details": "Documentation files considered:\n  - README.md\n\nStrongest signals:\n  - README.md:48 [install_deploy_run] Installation or deployment guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:48 [docker_runtime] Docker or runtime dependency guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:12 [external_reference] External documentation reference: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build_test] Developer build instructions: ### Compiling Compile with ```shell mvn clean install\n  - README.md:63 [okapi_tenant_enablement] Okapi, tenant, or module enablement guidance: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "details": "Documentation files considered:\n  - README.md\n\nStrongest signals:\n  - README.md:28 [install_deploy_run] Installation or deployment guidance: Compile with ```shell mvn clean install ```\n  - README.md:52 [docker_runtime] Docker or runtime dependency guidance: ```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```\n  - README.md:12 [external_reference] External documentation reference: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build_test] Developer build instructions: ### Compiling Compile with ```shell mvn clean install\n  - README.md:63 [okapi_tenant_enablement] Okapi, tenant, or module enablement guidance: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "candidates": [
           {
@@ -99,8 +99,8 @@
                 "group": "install_deploy_run",
                 "label": "Installation or deployment guidance",
                 "path": "README.md",
-                "line": 48,
-                "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+                "line": 28,
+                "excerpt": "Compile with ```shell mvn clean install ```",
                 "strength": "strong"
               },
               {
@@ -115,8 +115,8 @@
                 "group": "docker_runtime",
                 "label": "Docker or runtime dependency guidance",
                 "path": "README.md",
-                "line": 48,
-                "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+                "line": 52,
+                "excerpt": "```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```",
                 "strength": "strong"
               },
               {
@@ -138,16 +138,16 @@
               "group": "install_deploy_run",
               "label": "Installation or deployment guidance",
               "path": "README.md",
-              "line": 48,
-              "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+              "line": 28,
+              "excerpt": "Compile with ```shell mvn clean install ```",
               "strength": "strong"
             },
             {
               "group": "docker_runtime",
               "label": "Docker or runtime dependency guidance",
               "path": "README.md",
-              "line": 48,
-              "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+              "line": 52,
+              "excerpt": "```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```",
               "strength": "strong"
             },
             {

@@ -372,6 +372,29 @@ describe('EvaluationReportRenderer', () => {
     expect(data.meta.sourceBase).toBe(`${repositoryUrl}/blob/${commit}/`);
   });
 
+  it('removes repository URL credentials before preserving report links', () => {
+    const commit = '0123456789abcdef0123456789abcdef01234567';
+    const credentials = ['report-user', 'credential-value'].join(':');
+    const repositoryUrl = `https://${credentials}@github.com/folio-org/test-module`;
+    const cleanRepositoryUrl = 'https://github.com/folio-org/test-module';
+    const html = new EvaluationReportRenderer().renderHtml({
+      ...result,
+      repositoryUrl,
+      provenance: {
+        repositoryCommit: commit,
+        evaluator: { name: 'folio-module-evaluator', version: '1.2.3' },
+        citedSourcePaths: ['README.md']
+      }
+    });
+    const data = reportData(html);
+    const downloaded = downloadData(html);
+
+    expect(data.meta.repo).toBe(cleanRepositoryUrl);
+    expect(data.meta.sourceBase).toBe(`${cleanRepositoryUrl}/blob/${commit}/`);
+    expect(downloaded.repositoryUrl).toBe(cleanRepositoryUrl);
+    expect(html).not.toContain(credentials);
+  });
+
   it('uses a stable S008 title while retaining the evaluation summary as evidence', () => {
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml({

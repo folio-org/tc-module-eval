@@ -41,28 +41,44 @@ function jsonForHtml(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
-function reportSafeValue<T>(value: T, protectedStrings: string[] = []): T {
-  if (typeof value === 'string') return redactReportText(value, protectedStrings) as T;
+function reportSafeValue<T>(value: T, redactText: (value: string) => string): T {
+  if (typeof value === 'string') return redactText(value) as T;
   if (value instanceof Date) return value;
-  if (Array.isArray(value)) return value.map(item => reportSafeValue(item, protectedStrings)) as T;
+  if (Array.isArray(value)) return value.map(item => reportSafeValue(item, redactText)) as T;
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item, protectedStrings)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item, redactText)])) as T;
   }
   return value;
 }
 
-function redactReportText(value: string, protectedStrings: string[]): string {
+function createReportRedactor(protectedStrings: string[]): (value: string) => string {
   const identities = [...new Set(protectedStrings.filter(Boolean))].sort((left, right) => right.length - left.length);
   const placeholders = identities.map((identity, index) => ({ identity, placeholder: `[REPORT_IDENTITY_${index}]` }));
-  let protectedValue = value;
-  for (const { identity, placeholder } of placeholders) {
-    protectedValue = protectedValue.split(identity).join(placeholder);
+  return value => {
+    let protectedValue = value;
+    for (const { identity, placeholder } of placeholders) {
+      protectedValue = protectedValue.split(identity).join(placeholder);
+    }
+    let redacted = redactSensitiveText(protectedValue);
+    for (const { identity, placeholder } of placeholders) {
+      redacted = redacted.split(placeholder).join(identity);
+    }
+    return redacted;
+  };
+}
+
+function repositoryUrlWithoutCredentials(repositoryUrl: string): string {
+  try {
+    const parsed = new URL(repositoryUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol) || (!parsed.username && !parsed.password)) {
+      return repositoryUrl;
+    }
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return redactSensitiveText(repositoryUrl);
   }
-  let redacted = redactSensitiveText(protectedValue);
-  for (const { identity, placeholder } of placeholders) {
-    redacted = redacted.split(placeholder).join(identity);
-  }
-  return redacted;
 }
 
 function diagnosticLines(values: string[]): string[] {
@@ -135,8 +151,10 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
 
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
-  const protectedStrings = [result.repositoryUrl, ...(result.provenance?.citedSourcePaths ?? [])];
-  const safeResult = reportSafeValue(result, protectedStrings);
+  const repositoryUrl = repositoryUrlWithoutCredentials(result.repositoryUrl);
+  const reportInput = { ...result, repositoryUrl };
+  const redactText = createReportRedactor([repositoryUrl, ...(result.provenance?.citedSourcePaths ?? [])]);
+  const safeResult = reportSafeValue(reportInput, redactText);
   const report = {
     meta: {
       module: safeResult.moduleName,
@@ -147,7 +165,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       commit: safeResult.provenance?.repositoryCommit,
       evaluator: safeResult.provenance?.evaluator,
       agentReviewModel: safeResult.provenance?.agentReviewModel,
-      sourceBase: pinnedSourceBase(result),
+      sourceBase: pinnedSourceBase(reportInput),
       citedSourcePaths: safeResult.provenance?.citedSourcePaths ?? []
     },
     items: safeResult.criteria.map(criterion => ({

@@ -20,7 +20,20 @@ const MAX_DOC_FILES = 40;
 export const MAX_DOC_BYTES = 96 * 1024;
 const MAX_LINK_DEPTH = 2;
 const EXCERPT_RADIUS = 2;
-const COMMAND_PATTERN = /(?:\b(?:docker(?:\s+compose)?|curl|mvn|gradle|npm|yarn|pnpm|kubectl|helm)\s+[^\s]|\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)|\.\/gradlew\s+[^\s])/i;
+const MAX_HEADING_INSTRUCTION_DISTANCE = 12;
+const MAX_LINE_INSTRUCTION_DISTANCE = 4;
+const COMMAND_PATTERNS = [
+  /\bdocker\s+(?:compose(?:\s+(?:(?:-f|--file|-p|--project-name|--profile)\s+\S+))*\s+(?:up|down|build|pull|push|run|start|stop|restart|logs|ps)\b|(?:build|run|pull|push|start|stop|restart|exec|logs|inspect)\b)/i,
+  /\bcurl\s+(?:-[A-Za-z]|https?:\/\/)/i,
+  /\bmvn\s+(?:(?:clean|compile|test|package|verify|install|deploy|spring-boot:run)\b|[\w.-]+:[\w.-]+\b)/i,
+  /(?:\bgradle|\.\/gradlew)\s+(?:build|assemble|check|test|clean|bootRun|tasks|[\w.-]+:[\w.-]+)\b/i,
+  /\bnpm\s+(?:install|ci|run\s+\S+|test|start|exec|publish|pack)\b/i,
+  /\byarn\s+(?:install|run\s+\S+|test|start|build|add|remove|workspace\s+\S+\s+(?:run\s+\S+|test|build)|workspaces\s+(?:foreach|focus|list|info))\b/i,
+  /\bpnpm\s+(?:install|run\s+\S+|test|start|build|add|remove|exec|deploy)\b/i,
+  /\bkubectl\s+(?:apply|create|delete|get|describe|logs|exec|run|set|rollout|scale|wait|port-forward|config)\b/i,
+  /\bhelm\s+(?:install|upgrade|uninstall|template|repo|dependency|lint|package|pull|push|list|status|test)\b/i,
+  /\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)/i
+];
 const INSTRUCTION_PATTERN = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
 const UPPERCASE_IDENTIFIER_PATTERN = /\b[A-Z][A-Z0-9_]{2,}\b/;
 const CONCRETE_TARGET_PATTERN = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
@@ -278,7 +291,8 @@ function contextualSignalStrength(
 
 function localInstructionBlock(lines: string[], index: number): string {
   const block = [lines[index]];
-  for (let next = index + 1; next < lines.length && next <= index + 4; next++) {
+  const distance = instructionBlockDistance(lines[index]);
+  for (let next = index + 1; next < lines.length && next <= index + distance; next++) {
     if (startsNewInstructionSection(lines[index], lines[next])) {
       break;
     }
@@ -288,7 +302,8 @@ function localInstructionBlock(lines: string[], index: number): string {
 }
 
 function concreteInstructionIndex(lines: string[], index: number): number {
-  for (let candidate = index; candidate < lines.length && candidate <= index + 4; candidate++) {
+  const distance = instructionBlockDistance(lines[index]);
+  for (let candidate = index; candidate < lines.length && candidate <= index + distance; candidate++) {
     if (candidate > index && startsNewInstructionSection(lines[index], lines[candidate])) {
       break;
     }
@@ -297,6 +312,12 @@ function concreteInstructionIndex(lines: string[], index: number): number {
     }
   }
   return index;
+}
+
+function instructionBlockDistance(anchor: string): number {
+  return /^\s*#{1,6}\s+/.test(anchor)
+    ? MAX_HEADING_INSTRUCTION_DISTANCE
+    : MAX_LINE_INSTRUCTION_DISTANCE;
 }
 
 function startsNewInstructionSection(anchor: string, candidate: string): boolean {
@@ -309,9 +330,11 @@ function startsNewInstructionSection(anchor: string, candidate: string): boolean
 }
 
 function isConcreteInstruction(value: string): boolean {
-  return COMMAND_PATTERN.test(value)
-    || (INSTRUCTION_PATTERN.test(value)
-      && (UPPERCASE_IDENTIFIER_PATTERN.test(value) || CONCRETE_TARGET_PATTERN.test(value)));
+  return value.split(/\r?\n/).some(line =>
+    COMMAND_PATTERNS.some(pattern => pattern.test(line))
+      || (INSTRUCTION_PATTERN.test(line)
+        && (UPPERCASE_IDENTIFIER_PATTERN.test(line) || CONCRETE_TARGET_PATTERN.test(line)))
+  );
 }
 
 function isTableOfContentsLine(line: string): boolean {
@@ -325,7 +348,7 @@ function strongestSignals(signals: S004DocumentationSignal[]): S004Documentation
 }
 
 function hasActionableExcerpt(signals: S004DocumentationSignal[]): boolean {
-  return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|mvn|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
+  return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|pnpm|mvn|gradle|helm|kubectl|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
 }
 
 function isDevelopmentInstallLine(line: string): boolean {
