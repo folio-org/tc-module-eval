@@ -183,6 +183,51 @@ Run \`docker compose -f deployment/docker-compose.yml up\` to start the module.
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
   });
 
+  it('combines an installation heading with a nearby command', () => {
+    writeFile('README.md', `
+## Installing and deployment
+
+### Compiling
+\`java -jar target/mod-example.jar\`
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'strong', line: 4 });
+    expect(result.classification.reason).toContain('strong installation');
+  });
+
+  it('does not mistake a Java runtime requirement for a command', () => {
+    writeFile('README.md', `
+## Running
+
+The module requires Java 17.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+    const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(runSignal).toMatchObject({ strength: 'candidate' });
+    expect(result.classification.reason).toContain('evidence is too thin');
+  });
+
+  it('does not count table-of-contents and troubleshooting lines as candidate documentation', () => {
+    writeFile('README.md', `
+# Contents
+- [Running](#running)
+
+## Troubleshooting installation
+Installation cannot run when local configuration is invalid.
+`);
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].signals).toEqual([]);
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.classification.reason).toContain('No plausible developer build');
+  });
+
   it('does not treat ordinary prose as a concrete target before a real command', () => {
     writeFile('README.md', `
 # Running

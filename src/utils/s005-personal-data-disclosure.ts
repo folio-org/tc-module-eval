@@ -20,6 +20,7 @@ import {
   S005PersonalDataPossibleMismatch
 } from '../types';
 import { GENERATED_REPORT_DIRECTORY_PATTERN, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { evidenceStrengthRank } from './evidence-strength';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 const MAX_CHECKLIST_LABEL_BYTES = 300;
@@ -337,7 +338,7 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
   }
 
   const signals: S005PersonalDataEvidenceSignal[] = [];
-  const retentionCounts = new Map<string, number>();
+  const retainedIndexesByKey = new Map<string, number[]>();
   const retentionWarnings = new Set<string>();
   const scannedFiles: string[] = [];
   let totalTextBytes = 0;
@@ -387,18 +388,15 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
     const sourceClass = classifyS005EvidenceSourceClass(relativePath);
     for (const signal of extractS005EvidenceSignals(relativePath, readResult.text, sourceClass)) {
       const retentionKey = `${signal.category}:${signal.sourceClass}`;
-      const retainedCount = retentionCounts.get(retentionKey) ?? 0;
-      if (retainedCount >= MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS) {
-        const retainedIndexes = signals
-          .map((retained, signalIndex) => ({ retained, signalIndex }))
-          .filter(({ retained }) => `${retained.category}:${retained.sourceClass}` === retentionKey);
-        const weakest = retainedIndexes.reduce((selected, candidate) =>
-          s005SignalStrengthRank(candidate.retained.strength) > s005SignalStrengthRank(selected.retained.strength)
+      const retainedIndexes = retainedIndexesByKey.get(retentionKey) ?? [];
+      if (retainedIndexes.length >= MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS) {
+        const weakestIndex = retainedIndexes.reduce((selected, candidate) =>
+          evidenceStrengthRank(signals[candidate].strength) > evidenceStrengthRank(signals[selected].strength)
             ? candidate
             : selected
         );
-        if (s005SignalStrengthRank(signal.strength) < s005SignalStrengthRank(weakest.retained.strength)) {
-          signals[weakest.signalIndex] = signal;
+        if (evidenceStrengthRank(signal.strength) < evidenceStrengthRank(signals[weakestIndex].strength)) {
+          signals[weakestIndex] = signal;
         }
         if (!retentionWarnings.has(retentionKey)) {
           retentionWarnings.add(retentionKey);
@@ -409,8 +407,9 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
         continue;
       }
 
-      retentionCounts.set(retentionKey, retainedCount + 1);
       signals.push(signal);
+      retainedIndexes.push(signals.length - 1);
+      retainedIndexesByKey.set(retentionKey, retainedIndexes);
     }
 
     if (totalCapReached) {
@@ -430,10 +429,6 @@ export function gatherS005PersonalDataEvidence(repoPath: string): S005PersonalDa
     skippedFiles,
     warnings
   };
-}
-
-function s005SignalStrengthRank(strength: S005PersonalDataEvidenceStrength): number {
-  return strength === 'strong' ? 0 : strength === 'candidate' ? 1 : 2;
 }
 
 export function analyzeS005PersonalDataDisclosure(repoPath: string): S005PersonalDataDisclosureAnalysisResult {

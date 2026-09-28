@@ -41,14 +41,28 @@ function jsonForHtml(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
-function reportSafeValue<T>(value: T): T {
-  if (typeof value === 'string') return redactSensitiveText(value) as T;
+function reportSafeValue<T>(value: T, protectedStrings: string[] = []): T {
+  if (typeof value === 'string') return redactReportText(value, protectedStrings) as T;
   if (value instanceof Date) return value;
-  if (Array.isArray(value)) return value.map(item => reportSafeValue(item)) as T;
+  if (Array.isArray(value)) return value.map(item => reportSafeValue(item, protectedStrings)) as T;
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item, protectedStrings)])) as T;
   }
   return value;
+}
+
+function redactReportText(value: string, protectedStrings: string[]): string {
+  const identities = [...new Set(protectedStrings.filter(Boolean))].sort((left, right) => right.length - left.length);
+  const placeholders = identities.map((identity, index) => ({ identity, placeholder: `[REPORT_IDENTITY_${index}]` }));
+  let protectedValue = value;
+  for (const { identity, placeholder } of placeholders) {
+    protectedValue = protectedValue.split(identity).join(placeholder);
+  }
+  let redacted = redactSensitiveText(protectedValue);
+  for (const { identity, placeholder } of placeholders) {
+    redacted = redacted.split(placeholder).join(identity);
+  }
+  return redacted;
 }
 
 function diagnosticLines(values: string[]): string[] {
@@ -92,7 +106,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
     const skippedForCriterion = /agent review is not enabled for S\d+/i.test(reason);
     const skippedForConfiguration = /agent review is disabled|disabled or unconfigured/i.test(reason);
     const skipped = skippedForEvidence || skippedForCriterion || skippedForConfiguration;
-    const failed = review || /failed|failure|error|incomplete|unavailable/i.test(reason);
+    const failed = review || /failed|failure|error|incomplete|unavailable|timed out|exceeded (?:its )?time limit/i.test(reason);
     const status = skipped ? 'Skipped' : failed ? 'Unavailable' : 'Not run';
     const explanation = skippedForEvidence
       ? 'Skipped because no candidate evidence was available for review.'
@@ -121,7 +135,8 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
 
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
-  const safeResult = reportSafeValue(result);
+  const protectedStrings = [result.repositoryUrl, ...(result.provenance?.citedSourcePaths ?? [])];
+  const safeResult = reportSafeValue(result, protectedStrings);
   const report = {
     meta: {
       module: safeResult.moduleName,

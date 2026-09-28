@@ -8,19 +8,29 @@ import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluati
 import { LocalCommandRunner } from './utils/command-runner';
 import packageMetadata from '../package.json';
 
-function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
-  const reportText = criteria.map(result => {
-    const reviewReferences = result.agentReview ? [
-      ...result.agentReview.evidenceReferences,
-      ...(result.agentReview.assessments ?? []).flatMap(assessment => [
-        ...assessment.evidenceReferences,
-        ...(assessment.failureBounds ?? []).flatMap(bound => bound.evidenceReferences)
-      ]),
-      ...(result.agentReview.reviewerActions ?? []).flatMap(action => action.evidenceReferences)
-    ] : [];
-    return `${result.evidence}\n${result.details ?? ''}\n${reviewReferences.join('\n')}`;
-  }).join('\n');
-  return trackedFiles.filter(file => reportText.includes(file));
+export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
+  const explicitReferences = new Set<string>();
+  const collect = (value: unknown, key?: string): void => {
+    if (typeof value === 'string') {
+      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences') {
+        explicitReferences.add(value);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(item => collect(item, key));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([childKey, child]) => collect(child, childKey));
+    }
+  };
+
+  criteria.forEach(result => {
+    collect(result.criterionDetails);
+    collect(result.agentReview);
+  });
+  return trackedFiles.filter(file => explicitReferences.has(file));
 }
 
 /**

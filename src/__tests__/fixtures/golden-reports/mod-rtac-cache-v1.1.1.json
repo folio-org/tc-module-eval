@@ -10,22 +10,44 @@
       "version": "1.0.0"
     },
     "citedSourcePaths": [
-      "LICENSE",
       "PERSONAL_DATA_DISCLOSURE.md",
       "README.md",
       "descriptors/ModuleDescriptor-template.json",
       "pom.xml",
+      "src/main/java/org/folio/rtaccache/client/CirculationClient.java",
+      "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java",
+      "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+      "src/main/java/org/folio/rtaccache/client/OrdersClient.java",
+      "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+      "src/main/java/org/folio/rtaccache/client/SettingsClient.java",
+      "src/main/java/org/folio/rtaccache/client/UserClient.java",
+      "src/main/java/org/folio/rtaccache/config/HttpClientConfiguration.java",
       "src/main/java/org/folio/rtaccache/config/KafkaConfiguration.java",
       "src/main/java/org/folio/rtaccache/domain/RtacHoldingEntity.java",
       "src/main/java/org/folio/rtaccache/domain/RtacHoldingId.java",
+      "src/main/java/org/folio/rtaccache/domain/exception/RtacDataProcessingException.java",
+      "src/main/java/org/folio/rtaccache/domain/exception/RtacKafkaUpdateException.java",
       "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java",
       "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java",
       "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java",
       "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+      "src/main/java/org/folio/rtaccache/service/RtacHoldingMappingService.java",
       "src/main/resources/application.yml",
       "src/main/resources/swagger.api/examples/error.sample",
       "src/main/resources/swagger.api/examples/errors.sample",
-      "src/main/resources/swagger.api/schemas/circulation/loan.json"
+      "src/main/resources/swagger.api/schemas/circulation/loan.json",
+      "src/main/resources/swagger.api/schemas/circulation/request.json",
+      "src/main/resources/swagger.api/schemas/error.json",
+      "src/main/resources/swagger.api/schemas/inventory/electronicAccessItem.json",
+      "src/main/resources/swagger.api/schemas/metadata.json",
+      "src/main/resources/swagger.api/schemas/users/userTenants.json",
+      "src/test/java/org/folio/rtaccache/BaseEcsIntegrationTest.java",
+      "src/test/java/org/folio/rtaccache/BaseIntegrationTest.java",
+      "src/test/java/org/folio/rtaccache/configuration/KafkaIntegrationTestConfig.java",
+      "src/test/java/org/folio/rtaccache/integration/KafkaMessageListenerIT.java",
+      "src/test/java/org/folio/rtaccache/perf/EcsLoadedDataRepositoryPerfTest.java",
+      "src/test/java/org/folio/rtaccache/perf/RtacPerfTenantSeeder.java",
+      "src/test/java/org/folio/rtaccache/repository/RtacHoldingBulkRepositoryTest.java"
     ]
   },
   "criteria": [
@@ -56,8 +78,8 @@
     {
       "criterionId": "S004",
       "status": "manual",
-      "evidence": "S004 manual: Candidate installation or operational documentation exists, but deterministic evidence is too thin to decide adequacy.",
-      "details": "Documentation files considered:\n  - README.md\n\nStrongest signals:\n  - README.md:48 [docker_runtime] Docker or runtime dependency guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:12 [external_reference] External documentation reference: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:22 [install_deploy_run] Installation or deployment guidance: There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling\n  - README.md:26 [build_test] Developer build instructions: ### Compiling Compile with ```shell mvn clean install\n  - README.md:63 [okapi_tenant_enablement] Okapi, tenant, or module enablement guidance: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "evidence": "S004 manual: Repository documentation includes strong installation, deployment, running, or Okapi enablement evidence, but S004 requires reviewer judgment.",
+      "details": "Documentation files considered:\n  - README.md\n\nStrongest signals:\n  - README.md:48 [install_deploy_run] Installation or deployment guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:48 [docker_runtime] Docker or runtime dependency guidance: Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell\n  - README.md:12 [external_reference] External documentation reference: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build_test] Developer build instructions: ### Compiling Compile with ```shell mvn clean install\n  - README.md:63 [okapi_tenant_enablement] Okapi, tenant, or module enablement guidance: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "candidates": [
           {
@@ -77,9 +99,9 @@
                 "group": "install_deploy_run",
                 "label": "Installation or deployment guidance",
                 "path": "README.md",
-                "line": 22,
-                "excerpt": "There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling",
-                "strength": "candidate"
+                "line": 48,
+                "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+                "strength": "strong"
               },
               {
                 "group": "build_test",
@@ -110,8 +132,16 @@
         ],
         "classification": {
           "status": "manual",
-          "reason": "Candidate installation or operational documentation exists, but deterministic evidence is too thin to decide adequacy.",
+          "reason": "Repository documentation includes strong installation, deployment, running, or Okapi enablement evidence, but S004 requires reviewer judgment.",
           "strongestSignals": [
+            {
+              "group": "install_deploy_run",
+              "label": "Installation or deployment guidance",
+              "path": "README.md",
+              "line": 48,
+              "excerpt": "Run locally on listening port 8081 (default listening port): Using Docker to run the local stand-alone instance: ```shell",
+              "strength": "strong"
+            },
             {
               "group": "docker_runtime",
               "label": "Docker or runtime dependency guidance",
@@ -126,14 +156,6 @@
               "path": "README.md",
               "line": 12,
               "excerpt": "## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation",
-              "strength": "candidate"
-            },
-            {
-              "group": "install_deploy_run",
-              "label": "Installation or deployment guidance",
-              "path": "README.md",
-              "line": 22,
-              "excerpt": "There is also a JIRA for this project [here](https://folio-org.atlassian.net/browse/MODRTACHCE). ## Installing and deployment ### Compiling",
               "strength": "candidate"
             },
             {

@@ -95,7 +95,7 @@ function reportSafeExcerpt(finding: S006SensitiveInformationFinding): string {
   return `[REDACTED_${finding.category.toUpperCase()}]`;
 }
 
-function buildFindingSummary(
+export function buildFindingSummary(
   findings: Array<Pick<S006ReportFinding, 'confidence' | 'severity'>>
 ): S006ReportDetails['findingSummary'] {
   if (!findings.length) {

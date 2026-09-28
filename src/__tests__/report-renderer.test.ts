@@ -236,6 +236,17 @@ describe('EvaluationReportRenderer', () => {
     expect(details.join('\n')).not.toContain('No usable advisory review was returned');
   });
 
+  it('labels a legacy timed-out review as unavailable', () => {
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+      details: 'Agent review:\n  - OpenCode timed out after 420000ms'
+    }] };
+    const details = reportData(new EvaluationReportRenderer().renderHtml(report)).items[0].details;
+    expect(details).toContain('  - Status: Unavailable');
+    expect(details).toContain('  - Summary: No usable advisory review was returned.');
+    expect(details).not.toContain('  - Status: Not run');
+  });
+
   it('keeps provider and runtime failures unavailable rather than skipped', () => {
     const report: EvaluationResult = { ...result, criteria: [{
       criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
@@ -332,6 +343,33 @@ describe('EvaluationReportRenderer', () => {
     expect(downloaded.criteria[0]).toMatchObject({ criterionId: 'S004', status: 'manual' });
     expect(html).toContain("data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'')");
     expect(html).toContain("data.meta.citedSourcePaths.indexOf(file)<0");
+  });
+
+  it('preserves validated repository and citation identities while redacting free text', () => {
+    const commit = '0123456789abcdef0123456789abcdef01234567';
+    const repositoryUrl = 'https://github.com/folio-org/password=public-repository';
+    const citedPath = 'docs/api_key=public-path.md';
+    const html = new EvaluationReportRenderer().renderHtml({
+      ...result,
+      repositoryUrl,
+      provenance: {
+        repositoryCommit: commit,
+        evaluator: { name: 'folio-module-evaluator', version: '1.2.3' },
+        citedSourcePaths: [citedPath]
+      },
+      criteria: [{
+        criterionId: 'S004', status: EvaluationStatus.MANUAL,
+        evidence: 'token=private-value',
+        details: `Sources:\n  - ${citedPath}:12 setup`
+      }]
+    });
+    const data = reportData(html);
+
+    expect(data.meta.repo).toBe(repositoryUrl);
+    expect(data.meta.citedSourcePaths).toEqual([citedPath]);
+    expect(data.items[0].details.join('\n')).toContain(`${citedPath}:12`);
+    expect(data.items[0].evidence).toBe('token=[REDACTED]');
+    expect(data.meta.sourceBase).toBe(`${repositoryUrl}/blob/${commit}/`);
   });
 
   it('uses a stable S008 title while retaining the evaluation summary as evidence', () => {

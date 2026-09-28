@@ -21,6 +21,7 @@ import {
   REQUIRED_DISCLOSURE_FILENAME,
   boundS005Text
 } from './s005-personal-data-disclosure';
+import { evidenceStrengthRank } from './evidence-strength';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_CRITERION_DETAIL_REFERENCES = 16;
@@ -423,11 +424,6 @@ function appendAgentReviewLines(
 }
 
 function strongestS005Signals(signals: S005PersonalDataEvidenceSignal[]): S005PersonalDataEvidenceSignal[] {
-  const strengthRank: Record<S005PersonalDataEvidenceStrength, number> = {
-    strong: 0,
-    candidate: 1,
-    context: 2
-  };
   const sourceRank: Record<S005PersonalDataEvidenceSourceClass, number> = {
     direct_contract: 0,
     implementation: 1,
@@ -438,7 +434,7 @@ function strongestS005Signals(signals: S005PersonalDataEvidenceSignal[]): S005Pe
 
   return [...signals]
     .sort((a, b) =>
-      strengthRank[a.strength] - strengthRank[b.strength] ||
+      evidenceStrengthRank(a.strength) - evidenceStrengthRank(b.strength) ||
       sourceRank[a.sourceClass] - sourceRank[b.sourceClass] ||
       a.path.localeCompare(b.path) ||
       (a.line ?? 0) - (b.line ?? 0)

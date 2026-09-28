@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { truncateToByteBudget } from './redaction';
+import { evidenceStrengthRank } from './evidence-strength';
 
 const ROOT_DOC_NAMES = ['README.md', 'README.MD', 'readme.md'];
 const CONVENTIONAL_DOC_NAMES = ['INSTALL.md', 'INSTALLATION.md', 'DEPLOYMENT.md', 'RUNNING.md'];
@@ -19,6 +20,10 @@ const MAX_DOC_FILES = 40;
 export const MAX_DOC_BYTES = 96 * 1024;
 const MAX_LINK_DEPTH = 2;
 const EXCERPT_RADIUS = 2;
+const COMMAND_PATTERN = /(?:\b(?:docker(?:\s+compose)?|curl|mvn|gradle|npm|yarn|pnpm|kubectl|helm)\s+[^\s]|\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)|\.\/gradlew\s+[^\s])/i;
+const INSTRUCTION_PATTERN = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
+const UPPERCASE_IDENTIFIER_PATTERN = /\b[A-Z][A-Z0-9_]{2,}\b/;
+const CONCRETE_TARGET_PATTERN = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
 
 interface QueuedDoc {
   absolutePath: string;
@@ -232,16 +237,21 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (rule.group === 'install_deploy_run' && isDevelopmentInstallLine(line)) {
         continue;
       }
+      const strength = contextualSignalStrength(lines, index, rule.strength);
+      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, index) : index;
       const signal = {
         group: rule.group,
         label: rule.label,
         path: relativePath,
-        line: index + 1,
-        excerpt: excerptAround(lines, index),
-        strength: contextualSignalStrength(lines, index, rule.strength)
+        line: evidenceIndex + 1,
+        excerpt: excerptAround(lines, evidenceIndex),
+        strength
       };
+      if (signal.strength === 'insufficient') {
+        continue;
+      }
       const previous = bestByGroup.get(rule.group);
-      if (!previous || signalRank(signal.strength) < signalRank(previous.strength)) {
+      if (!previous || evidenceStrengthRank(signal.strength) < evidenceStrengthRank(previous.strength)) {
         bestByGroup.set(rule.group, signal);
       }
     }
@@ -259,27 +269,58 @@ function contextualSignalStrength(
   if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
     return 'insufficient';
   }
-  const command = /\b(docker(?:\s+compose)?|curl|java|mvn|gradle|npm|yarn|pnpm|kubectl|helm)\s+[^\s]|\.\/gradlew\s+[^\s]/i;
-  const instruction = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
-  const uppercaseIdentifier = /\b[A-Z][A-Z0-9_]{2,}\b/;
-  const concreteTarget = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
-  if (command.test(line) || (instruction.test(line) && (uppercaseIdentifier.test(line) || concreteTarget.test(line)))) {
+  const context = localInstructionBlock(lines, index);
+  if (isConcreteInstruction(context)) {
     return configured === 'candidate' ? 'candidate' : 'strong';
   }
   return configured === 'strong' ? 'candidate' : configured;
+}
+
+function localInstructionBlock(lines: string[], index: number): string {
+  const block = [lines[index]];
+  for (let next = index + 1; next < lines.length && next <= index + 4; next++) {
+    if (startsNewInstructionSection(lines[index], lines[next])) {
+      break;
+    }
+    block.push(lines[next]);
+  }
+  return block.join('\n');
+}
+
+function concreteInstructionIndex(lines: string[], index: number): number {
+  for (let candidate = index; candidate < lines.length && candidate <= index + 4; candidate++) {
+    if (candidate > index && startsNewInstructionSection(lines[index], lines[candidate])) {
+      break;
+    }
+    if (isConcreteInstruction(lines[candidate])) {
+      return candidate;
+    }
+  }
+  return index;
+}
+
+function startsNewInstructionSection(anchor: string, candidate: string): boolean {
+  const candidateLevel = candidate.match(/^\s*(#{1,6})\s+/)?.[1].length;
+  if (!candidateLevel) {
+    return false;
+  }
+  const anchorLevel = anchor.match(/^\s*(#{1,6})\s+/)?.[1].length;
+  return anchorLevel === undefined || candidateLevel <= anchorLevel;
+}
+
+function isConcreteInstruction(value: string): boolean {
+  return COMMAND_PATTERN.test(value)
+    || (INSTRUCTION_PATTERN.test(value)
+      && (UPPERCASE_IDENTIFIER_PATTERN.test(value) || CONCRETE_TARGET_PATTERN.test(value)));
 }
 
 function isTableOfContentsLine(line: string): boolean {
   return /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]\(#[^)]+\)\s*$/i.test(line);
 }
 
-function signalRank(strength: S004DocumentationSignal['strength']): number {
-  return strength === 'strong' ? 0 : strength === 'candidate' ? 1 : 2;
-}
-
 function strongestSignals(signals: S004DocumentationSignal[]): S004DocumentationSignal[] {
   return [...signals]
-    .sort((left, right) => signalRank(left.strength) - signalRank(right.strength))
+    .sort((left, right) => evidenceStrengthRank(left.strength) - evidenceStrengthRank(right.strength))
     .slice(0, 6);
 }
 

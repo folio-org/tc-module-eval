@@ -17,7 +17,7 @@ import {
   strongestS006ReportFindings
 } from './s006-ranking';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
-import { projectS006ReportFinding } from './s006-report-details';
+import { buildFindingSummary, projectS006ReportFinding } from './s006-report-details';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 
@@ -274,14 +274,13 @@ function formatConfidenceSeverity(confidence: S006FindingConfidence, severity: S
 }
 
 function formatAggregateRangeLines(findings: S006SensitiveInformationFinding[]): string[] {
-  if (!findings.length) {
+  const summary = buildFindingSummary(findings);
+  if (!summary.confidenceRange || !summary.severityRange) {
     return [];
   }
-  const byConfidence = [...findings].sort((left, right) => rankS006Confidence(left.confidence) - rankS006Confidence(right.confidence));
-  const bySeverity = [...findings].sort((left, right) => rankS006Severity(left.severity) - rankS006Severity(right.severity));
   return [
-    `  - Aggregate confidence range: ${byConfidence[byConfidence.length - 1].confidence} to ${byConfidence[0].confidence} (maximum ${byConfidence[0].confidence})`,
-    `  - Aggregate severity range: ${bySeverity[bySeverity.length - 1].severity} to ${bySeverity[0].severity} (maximum ${bySeverity[0].severity})`
+    `  - Aggregate confidence range: ${summary.confidenceRange.minimum} to ${summary.confidenceRange.maximum} (maximum ${summary.confidenceRange.maximum})`,
+    `  - Aggregate severity range: ${summary.severityRange.minimum} to ${summary.severityRange.maximum} (maximum ${summary.severityRange.maximum})`
   ];
 }
 
