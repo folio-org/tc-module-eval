@@ -1,7 +1,6 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S006SensitiveInformationAnalysisResult } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
 import { withRepositoryBrowsing } from './agent-review-repository';
-import { truncateToByteBudget } from './redaction';
 
 export async function reviewS006WithAgent(
   repoPath: string,
@@ -84,12 +83,12 @@ export async function buildS006AgentReviewRequest(
     ].join('\n'),
     files: [{
       repoRelativePath: '.criterion-agent/S006/finding-summary.json',
-      content: truncateToByteBudget(JSON.stringify({
+      content: JSON.stringify({
         criterionId: analysis.criterionId,
         classification: analysis.classification,
         findings: analysis.findings.map(({ valueFingerprint: _fingerprint, ...finding }) => finding),
         coverage: analysis.coverage
-      }, null, 2), 24 * 1024)
+      }, null, 2)
     }],
     schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty repository evidenceReferences string[], assessments for every reviewObligations ID including coverageDisposition (investigated|immaterial|unresolved), and cited reviewerActions[]'
   });

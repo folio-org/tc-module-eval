@@ -9,7 +9,7 @@ import {
   S007TechnologyFinding
 } from '../types';
 import * as committedSource from '../utils/committed-source';
-import { reviewCriterionWithAgent } from '../utils/criterion-agent-review';
+import { prepareCriterionReviewWorkspace, reviewCriterionWithAgent } from '../utils/criterion-agent-review';
 import { buildS007AgentReviewRequest, reviewS007WithAgent } from '../utils/s007-agent-review';
 import { loadS007Policy } from '../utils/s007-policy';
 
@@ -65,6 +65,23 @@ describe('S007 agent review', () => {
     expect(summary.policyContext).toBeUndefined();
     expect(policy).toEqual(policyLoad.policy);
     expect(policy.sections.length).toBeGreaterThan(1);
+  });
+
+  it('keeps late findings in valid workspace JSON beyond the old 24 KiB cap', async () => {
+    await commit({ 'pom.xml': '<project />' });
+    const deterministic = analysis(finding('java', 'pom.xml'));
+    deterministic.findings = Array.from({ length: 150 }, (_, index) => finding(`technology-${index}`, 'pom.xml'));
+    const request = await buildS007AgentReviewRequest(repoPath, deterministic);
+    const summary = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!;
+    expect(Buffer.byteLength(summary.content)).toBeGreaterThan(24 * 1024);
+    const workspace = prepareCriterionReviewWorkspace(request);
+    try {
+      const parsed = JSON.parse(await fs.readFile(path.join(workspace.rootPath, 'docs', summary.repoRelativePath), 'utf8'));
+      expect(parsed).toEqual(deterministic);
+      expect(parsed.findings[149].technologyId).toBe('technology-149');
+    } finally {
+      await fs.remove(workspace.rootPath);
+    }
   });
 
   it('accepts an empty deterministic inventory when a technology is discovered in committed source', async () => {

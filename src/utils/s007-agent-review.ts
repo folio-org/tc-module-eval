@@ -1,7 +1,6 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S007AnalysisResult, S007OfficiallySupportedTechnologiesPolicy } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
 import { withRepositoryBrowsing } from './agent-review-repository';
-import { truncateToByteBudget } from './redaction';
 
 export async function reviewS007WithAgent(
   repoPath: string,
@@ -53,7 +52,7 @@ export async function buildS007AgentReviewRequest(
     ].join('\n'),
     files: [{
       repoRelativePath: '.criterion-agent/S007/deterministic-summary.json',
-      content: truncateToByteBudget(JSON.stringify(analysis, null, 2), 24 * 1024)
+      content: JSON.stringify(analysis, null, 2)
     }, {
       repoRelativePath: '.criterion-agent/S007/policy-context.json',
       content: JSON.stringify(policy ?? { unavailable: true, diagnostics: analysis.policyDiagnostics }, null, 2)

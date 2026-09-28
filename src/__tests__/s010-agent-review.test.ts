@@ -87,7 +87,7 @@ describe('S010 advisory agent review', () => {
     }
   });
 
-  it('omits oversized binary content but still rejects oversized text', async () => {
+  it('lists oversized binary and text omissions without disabling review', async () => {
     const png = Buffer.alloc(2 * 1024 * 1024);
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
     await fs.outputFile(path.join(repo, 'assets/large.png'), png);
@@ -98,7 +98,17 @@ describe('S010 advisory agent review', () => {
     const manifest = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'))!.content);
     expect(manifest.omissions.counts.binary).toBe(1);
     await commit('src/large.ts', 'x'.repeat(1024 * 1024 + 1));
-    await expect(buildS010AgentReviewRequest(repo, analysis())).rejects.toThrow('per-file limit');
+    const limited = await buildS010AgentReviewRequest(repo, analysis());
+    expect(limited.files.map(file => file.repoRelativePath)).not.toContain('src/large.ts');
+    const omissions = JSON.parse(limited.files.find(file => file.repoRelativePath.endsWith('snapshot-manifest.json'))!.content).omissions;
+    expect(omissions.counts).toEqual({ binary: 1, 'file-size': 1 });
+    expect(omissions.oversizedPaths).toEqual(['src/large.ts']);
+    const review = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation: 'needs_reviewer_judgment', assessments: [{ technologyId: 'search', type: 'evidence_gap',
+        summary: 'Verify the omitted configuration.', evidenceReferences: ['src/client.ts'], failureBounds: bounds('unverified') }],
+      reviewerActions: [{ action: 'Inspect src/large.ts for effective bounds.', evidenceReferences: ['src/client.ts'] }]
+    }));
+    expect(review.available).toBe(true);
   });
 
   it('makes unrecognized cross-file paths beyond the old selection available without truncation', async () => {
@@ -152,7 +162,7 @@ describe('S010 advisory agent review', () => {
     expect(Buffer.byteLength(manifestFile?.content ?? '')).toBeLessThan(48 * 1024);
   }, 60_000);
 
-  it.each(['tree-limit', 'entry-limit', 'file-limit', 'file-size', 'total-size', 'git-error'] as const)(
+  it.each(['tree-limit', 'entry-limit', 'file-limit', 'total-size', 'git-error'] as const)(
     'makes review unavailable on %s instead of reviewing a silently selected subset', async code => {
       jest.spyOn(committedSource, 'readCommittedSource').mockResolvedValue({
         revision: 'a'.repeat(40),
@@ -166,8 +176,9 @@ describe('S010 advisory agent review', () => {
       expect(review.errors.join('\n')).toContain('Repository browsing workspace is incomplete');
     });
 
-  it('preserves files at the source byte ceiling and refuses larger files', async () => {
+  it('preserves files at the source byte ceiling and omits larger files', async () => {
     const content = 'x'.repeat(1024 * 1024);
+    await commit('src/client.ts', 'source');
     await commit('transport/large.ts', content);
     const request = await buildS010AgentReviewRequest(repo, analysis());
     const workspace = prepareCriterionReviewWorkspace(request);
@@ -180,7 +191,8 @@ describe('S010 advisory agent review', () => {
       await fs.remove(workspace.rootPath);
     }
     await commit('transport/large.ts', `${content}x`);
-    await expect(buildS010AgentReviewRequest(repo, analysis())).rejects.toThrow('incomplete');
+    const limited = await buildS010AgentReviewRequest(repo, analysis());
+    expect(limited.files.map(file => file.repoRelativePath)).not.toContain('transport/large.ts');
   });
 
   it('accepts cited repository assessments without changing deterministic status', async () => {
@@ -287,13 +299,16 @@ describe('S010 advisory agent review', () => {
   });
 
   it.each([
-    ['analyzer_limitation', 'immaterial', true],
-    ['aligned_fact', 'immaterial', false],
-    ['analyzer_limitation', 'unresolved', false]
-  ])('only exempts cited internal candidates with %s and %s', async (type, coverageDisposition, available) => {
+    ['analyzer_limitation', 'immaterial', undefined, true],
+    ['analyzer_limitation', 'immaterial', [], true],
+    ['aligned_fact', 'immaterial', [], false],
+    ['analyzer_limitation', 'unresolved', [], false],
+    ['analyzer_limitation', 'immaterial', [{}], false],
+    ['analyzer_limitation', 'immaterial', null, false]
+  ])('only exempts cited internal candidates with %s, %s, and %j bounds', async (type, coverageDisposition, failureBounds, available) => {
     await commit('src/client.ts', 'export const timeoutMs = 2500;');
     const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
-      recommendation: 'likely_sufficient', assessments: [{ technologyId: 'search', type, coverageDisposition,
+      recommendation: 'likely_sufficient', assessments: [{ technologyId: 'search', type, coverageDisposition, failureBounds,
         summary: 'src/client.ts:1 exports configuration only; the actual service uses this timeout.',
         evidenceReferences: ['src/client.ts'] }]
     }));

@@ -599,7 +599,7 @@ describe('criterion agent review', () => {
     const output = sanitizeStructuredOutput(JSON.stringify({ type: 'tool_use', timestamp: 1500, part: {
       tool: 'read', state: { status: 'completed', time: { start: 1200, end: 1400 },
         input: { filePath: 'PRIVATE_PATH' }, output: 'PRIVATE_CONTENT' }
-    } }), 'opencode-json', 10000).text;
+    } }), 'opencode-json', 10000, true).text;
     const runner = new FakeRunner(undefined, undefined, output, {
       [stage]: { status: 'timed_out', durationMs: 180000, signal: 'SIGTERM', stdoutBytes: 900, stderr: 'PRIVATE_ERROR' }
     });
@@ -613,6 +613,7 @@ describe('criterion agent review', () => {
       const trace = JSON.parse(text);
       expect(result.available).toBe(false);
       expect(trace.timeoutMs).toBe(180000);
+      if (stage === 3) expect(runner.requests[2].captureDebugTrace).toBe(true);
       expect(trace.stages).toHaveLength(stage);
       expect(trace.stages[stage - 1]).toMatchObject({ status: 'timed_out', durationMs: 180000, signal: 'SIGTERM', stdoutBytes: 900 });
       if (stage === 3) expect(trace.stages[2].events).toEqual([

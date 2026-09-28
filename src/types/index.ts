@@ -58,6 +58,7 @@ export interface CommandExecutionRequest {
   timeoutMs?: number;
   maxOutputBytes?: number;
   stdoutFormat?: 'text' | 'json' | 'opencode-json';
+  captureDebugTrace?: boolean;
   env?: Record<string, string | undefined>;
   requiresIsolation?: boolean;
   networkPolicy?: CommandNetworkPolicy;

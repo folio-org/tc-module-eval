@@ -39,6 +39,7 @@ export function normalizeCommandRequest(
     timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxOutputBytes: request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     stdoutFormat: request.stdoutFormat ?? 'text',
+    captureDebugTrace: request.captureDebugTrace === true,
     envHash,
     requiresIsolation: request.requiresIsolation === true,
     allowLocalCommands,
@@ -182,7 +183,7 @@ export class LocalCommandRunner implements CommandRunner {
       child.on('close', (code, signal) => {
         clearTimeout(timeout);
         const structured = request.stdoutFormat && request.stdoutFormat !== 'text'
-          ? sanitizeStructuredOutput(Buffer.concat(stdoutChunks).toString('utf-8'), request.stdoutFormat, maxOutputBytes)
+          ? sanitizeStructuredOutput(Buffer.concat(stdoutChunks).toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace)
           : undefined;
         const stdout = structured?.text ?? this.formatCapturedOutput(stdoutChunks, stdoutBytes, maxOutputBytes);
         const stderr = this.formatCapturedOutput(stderrChunks, stderrBytes, maxOutputBytes);

@@ -29,7 +29,8 @@ export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
 export function sanitizeStructuredOutput(
   output: string,
   format: 'json' | 'opencode-json',
-  maxBytes: number
+  maxBytes: number,
+  captureDebugTrace = false
 ): { text: string; truncated: boolean; diagnostics: string[] } {
   const records: string[] = [];
   const diagnostics: string[] = [];
@@ -79,7 +80,7 @@ export function sanitizeStructuredOutput(
       const type = ['text', 'tool_use', 'reasoning', 'step_start', 'step_finish', 'error'].includes(String(parsed?.type)) ? parsed!.type : 'other';
       note(`record ${index + 1}: ${type}; ${reason}`);
     }
-    if (format === 'opencode-json' && typeof parsed?.type === 'string') {
+    if (captureDebugTrace && format === 'opencode-json' && typeof parsed?.type === 'string') {
       record = JSON.stringify({ ...JSON.parse(record), debugTrace: openCodeEventTrace(parsed) });
     }
     const size = Buffer.byteLength(record) + (records.length ? 1 : 0);

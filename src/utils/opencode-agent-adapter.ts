@@ -44,6 +44,7 @@ export async function runOpenCodeAgentReview(
   };
   const runStage = async (stage: string, command: CommandExecutionRequest): Promise<CommandExecutionResult> => {
     if (!config.debugRetainWorkspace) return commandRunner.run(command);
+    command = { ...command, captureDebugTrace: command.stdoutFormat === 'opencode-json' };
     const entry: Record<string, unknown> = { stage, startedAt: new Date().toISOString(), status: 'running' };
     stages.push(entry);
     saveTrace();

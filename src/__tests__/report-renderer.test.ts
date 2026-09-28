@@ -210,6 +210,34 @@ describe('EvaluationReportRenderer', () => {
     expect(renderer.renderJson(report)).toContain('model hidden-model timed_out');
   });
 
+  it.each([
+    ['agent review is not enabled for S005', 'Skipped because agent review is not enabled for this criterion.'],
+    ['no candidate evidence was available for agent review', 'Skipped because no candidate evidence was available for review.'],
+    ['agent review is disabled or unconfigured', 'Skipped because agent review is disabled or unconfigured.']
+  ])('labels a review that did not run as skipped: %s', (reason, summary) => {
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+      details: `Agent review:\n  - Not applied: ${reason}`
+    }] };
+    const details = reportData(new EvaluationReportRenderer().renderHtml(report)).items[0].details;
+    expect(details).toContain('  - Status: Skipped');
+    expect(details).toContain(`  - Summary: ${summary}`);
+    expect(details.join('\n')).not.toContain('No usable advisory review was returned');
+  });
+
+  it('keeps provider and runtime failures unavailable rather than skipped', () => {
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+      details: 'Evidence remains.',
+      agentReview: { available: false, criterionId: 'S005', evidenceReferences: [], warnings: [],
+        errors: ['Provider returned incomplete response'] }
+    }] };
+    const details = reportData(new EvaluationReportRenderer().renderHtml(report)).items[0].details;
+    expect(details).toContain('  - Status: Unavailable');
+    expect(details).toContain('  - Summary: No usable advisory review was returned. See the JSON report for diagnostic details.');
+    expect(details).not.toContain('  - Status: Skipped');
+  });
+
   it('should render JSON with stable indentation', () => {
     const renderer = new EvaluationReportRenderer();
     const json = renderer.renderJson(result);

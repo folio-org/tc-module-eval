@@ -440,8 +440,9 @@ function normalizeAssessments(
       : '';
     const coverageDisposition = candidate.coverageDisposition as NonNullable<CriterionAgentReviewResult['assessments']>[number]['coverageDisposition'];
     if (coverageDisposition !== undefined && !['investigated', 'immaterial', 'unresolved'].includes(coverageDisposition)) return reject('invalid coverageDisposition');
+    const emptyBounds = Array.isArray(candidate.failureBounds) && candidate.failureBounds.length === 0;
     const failureBounds = normalizeFailureBounds(candidate.failureBounds, manifestEntries);
-    if (candidate.failureBounds !== undefined && !failureBounds) return reject('invalid failureBounds fields or citations');
+    if (candidate.failureBounds !== undefined && !emptyBounds && !failureBounds) return reject('invalid failureBounds fields or citations');
     if (evidenceReferences.length === 0) return reject('no evidenceReferences match the source manifest');
     if (
       typeof candidate.technologyId !== 'string' ||

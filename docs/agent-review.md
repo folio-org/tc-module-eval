@@ -64,13 +64,14 @@ Commands, builds, tests, mutations, external-directory access, and web tools rem
 disabled. This enables source investigation, not runtime verification.
 
 Workspace preparation has safety ceilings of 50,000 tree entries/files, 16 MiB
-of tree metadata, 1 MiB per file, and 128 MiB of source. Git errors or exceeded
-ceilings make agent review unavailable instead of silently selecting a subset or
-truncating source. Before reporting a byte-limit failure, the reader probes at most
-8 KiB for NUL bytes and stops the Git blob stream early. Recognized binary content
-is recorded as an omission; oversized content not identified as binary within that
-prefix still fails closed. The coverage summary records the committed revision and
-non-text/unsafe-entry omissions. The existing `--criterion-agent-timeout-ms`
+of tree metadata, 1 MiB per file, and 128 MiB of source. Oversized source files are
+omitted and their paths listed in the snapshot manifest; their contents remain
+unverified. Git errors and exceeded tree, count, or aggregate ceilings still make
+agent review unavailable. The reader probes at most 8 KiB for NUL bytes and stops
+oversized Git blob streams early. The coverage summary records the committed
+revision and binary, oversized, and unsafe-entry omissions. S006 and S007 generated
+summaries remain complete JSON rather than being byte-truncated; the 1 MiB workspace
+file limit still applies. The existing `--criterion-agent-timeout-ms`
 bounds the OpenCode run; there is no separate token or tool-call budget. A hard
 timeout makes review unavailable. The agent is instructed to report unfinished
 material traces as `needs_reviewer_judgment` when it can finish a response.

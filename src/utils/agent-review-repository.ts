@@ -16,7 +16,7 @@ export async function withRepositoryBrowsing(request: CriterionAgentReviewReques
     maxFileBytes: MAX_FILE_BYTES,
     maxTotalBytes: MAX_TOTAL_BYTES
   });
-  const blocking = snapshot.diagnostics.find(diagnostic => diagnostic.code !== 'binary' && diagnostic.code !== 'unsafe-entry');
+  const blocking = snapshot.diagnostics.find(diagnostic => !['binary', 'unsafe-entry', 'file-size'].includes(diagnostic.code));
   if (blocking) throw new Error(`Repository browsing workspace is incomplete: ${blocking.message}`);
   if (!snapshot.files.length) throw new Error('No committed repository source was available for agent review.');
 
@@ -48,8 +48,8 @@ export async function withRepositoryBrowsing(request: CriterionAgentReviewReques
           revision: snapshot.revision,
           mode: 'repository-browsing',
           includedFileCount: snapshot.files.length,
-          exclusions: 'Generated output, vendored dependencies, binaries, non-regular entries, .env files, agent instructions/configuration, and search ignore files are excluded.',
-          omissions: { counts, examples },
+          exclusions: 'Generated output, vendored dependencies, binaries, oversized files, non-regular entries, .env files, agent instructions/configuration, and search ignore files are excluded.',
+          omissions: { counts, examples, oversizedPaths: snapshot.diagnostics.filter(item => item.code === 'file-size').map(item => item.path) },
           limits: { maxFiles: MAX_FILES, maxFileBytes: MAX_FILE_BYTES, maxTotalBytes: MAX_TOTAL_BYTES }
         }, null, 2)
       },

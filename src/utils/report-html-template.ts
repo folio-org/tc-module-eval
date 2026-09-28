@@ -60,12 +60,23 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
   if (!review && !hadReview) return original;
   if (!review?.available) {
     const reason = [...(review?.errors ?? []), ...legacyReview].join(' ');
-    const status = review ? 'Unavailable' : 'Not run';
-    const explanation = /timed.out|timeout/i.test(reason)
-      ? 'The review exceeded its time limit.'
-      : /disabled|unconfigured/i.test(reason)
-        ? 'Agent review is disabled or unconfigured.'
-        : 'No usable advisory review was returned. See the JSON report for diagnostic details.';
+    const skippedForEvidence = /no candidate evidence was available for agent review/i.test(reason);
+    const skippedForCriterion = /agent review is not enabled for S\d+/i.test(reason);
+    const skippedForConfiguration = /agent review is disabled|disabled or unconfigured/i.test(reason);
+    const skipped = skippedForEvidence || skippedForCriterion || skippedForConfiguration;
+    const failed = review || /failed|failure|error|timed.out|timeout|incomplete|unavailable/i.test(reason);
+    const status = skipped ? 'Skipped' : failed ? 'Unavailable' : 'Not run';
+    const explanation = skippedForEvidence
+      ? 'Skipped because no candidate evidence was available for review.'
+      : skippedForCriterion
+        ? 'Skipped because agent review is not enabled for this criterion.'
+        : skippedForConfiguration
+          ? 'Skipped because agent review is disabled or unconfigured.'
+          : /timed.out|timeout/i.test(reason)
+            ? 'The review exceeded its time limit.'
+            : failed
+              ? 'No usable advisory review was returned. See the JSON report for diagnostic details.'
+              : 'Agent review was not run. See the JSON report for diagnostic details.';
     return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...details];
   }
   const names = criterion.criterionId === 'S007'
