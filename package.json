@@ -44,7 +44,7 @@
     "fs-extra": "^11.0.0",
     "marked": "^9.0.0",
     "semver": "^7.7.2",
-    "simple-git": "^3.19.0",
+    "simple-git": "^4.0.2",
     "xml2js": "^0.6.2"
   }
 }
