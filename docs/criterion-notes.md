@@ -115,7 +115,7 @@ S008 checks every interface the module requires or optionally uses against the c
 S009 checks that every direct production dependency on a FOLIO library (Maven `org.folio:*`, npm `@folio/*`) is on the Technical Council's approved list, the `libraryCoordinates` in `config/acceptance-ledger.json`. [S009 library acceptance](s009-library-acceptance.md) describes the rules. The report lists each library under "Not approved", "Also built in this repository (needs review)", or "Approved", with the reason and where it is declared.
 
 - Maven: a POM whose parent path holds a different POM (another groupId, artifactId, or version) is read like a POM whose parent is published outside the repository. The report notes it, but it does not make the evidence incomplete. An unresolved property in a dependency's scope or name matters only when its group is, or may be, `org.folio`.
-- Gradle: a dependency written without parentheses ends at the end of the line, a `;`, or a `}` that closes the enclosing block, so `dependencies { implementation 'org.folio:lib:1.0' }` on one line is read.
+- Gradle: a dependency written without parentheses ends at the end of the line, a `;`, or a `}` that closes the enclosing block, so `dependencies { implementation 'org.folio:lib:1.0' }` on one line is read. A coordinate must be a single string literal (single, double, or triple quotes); a concatenation such as `'org' + '.folio:lib:1.0'` is reported as unreadable.
 - npm and Yarn: only `package.json` files matched by the root `workspaces` patterns are read, at most 128; other `package.json` files, such as test fixtures, are ignored.
 
 ## S010 Third-Party System Resilience

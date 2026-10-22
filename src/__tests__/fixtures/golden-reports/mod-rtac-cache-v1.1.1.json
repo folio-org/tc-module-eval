@@ -1779,8 +1779,8 @@
     {
       "criterionId": "S009",
       "status": "pass",
-      "evidence": "The module depends on 3 FOLIO libraries, and all are approved.",
-      "details": "The module depends on 3 FOLIO libraries, and all are approved.",
+      "evidence": "The module declares 3 FOLIO libraries as production dependencies, and all are approved.",
+      "details": "The module declares 3 FOLIO libraries as production dependencies, and all are approved.",
       "criterionDetails": {
         "projectFileCount": 1,
         "observationCount": 3,

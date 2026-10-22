@@ -429,6 +429,23 @@ describe('S009 dependency evidence', () => {
     ]);
   });
 
+  it('reads triple-quoted Gradle coordinates and does not treat concatenated strings as one literal', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `
+      dependencies { implementation \'\'\'org.folio:triple-one-line:1.0.0\'\'\' }
+      dependencies {
+        runtimeOnly """org.folio:triple:2.0.0"""
+        implementation 'org' + '.folio:concatenated:1.0.0'
+      }
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations.map(item => item.coordinate).sort()).toEqual(['org.folio:triple', 'org.folio:triple-one-line']);
+    expect(evidence.diagnostics).toEqual([
+      expect.objectContaining({ code: 'gradle_dependency_unresolved', path: 'build.gradle:5' })
+    ]);
+  });
+
   it('ignores unresolved Maven scopes and names only when the resolved group is outside FOLIO', async () => {
     await fs.outputFile(path.join(repo, 'pom.xml'), `
       <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version>

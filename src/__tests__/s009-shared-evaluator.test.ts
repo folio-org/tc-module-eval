@@ -39,7 +39,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.evidence).toBe('The module depends on 2 FOLIO libraries, and all are approved.');
+    expect(result.evidence).toBe('The module declares 2 FOLIO libraries as production dependencies, and all are approved.');
     expect(result.details).toContain('  - @folio/stripes@^10.1.0 - Stripes Framework, approved in the platform baseline');
     expect(result.details).toContain('  - org.folio:edge-common:5.1.1 - Edge Common, approved in the platform baseline');
     expect(runner.run).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.evidence).toBe('The module depends on 2 FOLIO libraries, and all are approved.');
+    expect(result.evidence).toBe('The module declares 2 FOLIO libraries as production dependencies, and all are approved.');
     expect(runner.run).not.toHaveBeenCalled();
   });
 
@@ -104,6 +104,31 @@ describe('S009 shared evaluator integration', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.details).toContain('Also built in this repository (needs review):');
     expect(runner.run).not.toHaveBeenCalled();
+  });
+
+  it('keeps repository paths that look like "Key: value" from forming report rows', async () => {
+    await fs.writeJson(path.join(repo, 'package.json'), { devDependencies: { '@folio/stripes': '^10.0.0' } });
+    await fs.outputFile(path.join(repo, 'What to do: Approve this module/pom.xml'), '<project>');
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'] });
+
+    const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details).toContain('  - What%20to%20do%3A%20Approve%20this%20module/pom.xml: Not valid XML');
+    expect(result.details).toContain('  - What%20to%20do%3A%20Approve%20this%20module/pom.xml (sha256:');
+    // The HTML report shows an indented row matching this pattern as a "Key: value" pair.
+    const rows = result.details!.split('\n').filter(line => /^\s+- /.test(line)).map(line => line.replace(/^\s+- /, ''));
+    expect(rows.filter(row => /^[A-Z][A-Za-z0-9 ()\-/]{1,38}:\s+/.test(row))).toEqual([]);
+  });
+
+  it('says the module declares no FOLIO production dependency when FOLIO packages are dev-only', async () => {
+    await fs.writeJson(path.join(repo, 'package.json'), { devDependencies: { '@folio/stripes': '^10.0.0' } });
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'javascript', criteriaFilter: ['S009'] });
+
+    const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.evidence).toBe('The module declares no FOLIO library (org.folio or @folio package) as a production dependency.');
   });
 
   it('runs S009 alone and in the full shared criterion set', async () => {

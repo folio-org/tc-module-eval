@@ -587,10 +587,15 @@ function splitGradleArguments(value: string): string[] {
   return parts;
 }
 
+// The whole value must be one string literal: 'a' + 'b' or an unterminated quote is not a literal.
 function quotedLiteral(value: string): string | undefined {
   const trimmed = value.trim();
-  if (trimmed.length < 2 || !['"', "'"].includes(trimmed[0]) || trimmed[trimmed.length - 1] !== trimmed[0]) return undefined;
-  return trimmed.slice(1, -1);
+  if (!['"', "'"].includes(trimmed[0])) return undefined;
+  const quote = trimmed.startsWith(trimmed[0].repeat(3)) ? trimmed[0].repeat(3) : trimmed[0];
+  if (trimmed.length < quote.length * 2 || !trimmed.endsWith(quote)
+    || isEscapedCharacter(trimmed, trimmed.length - quote.length)
+    || skipGradleQuoted(trimmed, 0) !== trimmed.length) return undefined;
+  return trimmed.slice(quote.length, -quote.length);
 }
 
 function isIgnoredGradleExpression(value: string): boolean {

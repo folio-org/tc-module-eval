@@ -58,9 +58,9 @@ export function evaluateS009(
       ? 'No unapproved FOLIO library was found, but some dependency declarations could not be read, so a reviewer needs to check them.'
       : coordinateCount
         ? coordinateCount === 1
-          ? 'The module depends on 1 FOLIO library, and it is approved.'
-          : `The module depends on ${coordinateCount} FOLIO libraries, and all are approved.`
-        : 'The module does not depend on any FOLIO library (org.folio or @folio package).';
+          ? 'The module declares 1 FOLIO library as a production dependency, and it is approved.'
+          : `The module declares ${coordinateCount} FOLIO libraries as production dependencies, and all are approved.`
+        : 'The module declares no FOLIO library (org.folio or @folio package) as a production dependency.';
 
   return {
     ...base,
@@ -241,7 +241,7 @@ function appendDiagnostics(lines: string[], heading: string, diagnostics: S009De
   for (const [message, paths] of groups) {
     const shown = paths.slice(0, MAX_WARNING_PATHS).join(', ');
     const more = paths.length > MAX_WARNING_PATHS ? ` and ${paths.length - MAX_WARNING_PATHS} more` : '';
-    lines.push(`  - ${shown ? `${shown}${more} - ` : ''}${message}`);
+    lines.push(`  - ${shown ? `${shown}${more}: ` : ''}${message}`);
   }
 }
 
