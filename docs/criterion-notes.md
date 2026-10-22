@@ -35,6 +35,12 @@ S003 checks the dependencies the module distributes against the [ASF 3rd Party L
 - Only distributed dependencies are checked, including their transitive dependencies. Maven excludes `test` (and `system`) scope. Gradle uses only the license report's `runtimeClasspath`. npm installs and checks production dependencies only. UI modules are published as source and bundled by a platform that installs only their `dependencies`, so `devDependencies` are never shipped.
 - A Category X license fails. A Category B license, or an LGPL library on the special-exception list, needs a README label: the README must name the dependency itself (its full name or artifactId, as a whole name: `rhino.engine` does not name `rhino`), not just the license family. Only the first 1 MiB of a README inside the repository is read; a README or `pom.xml` that links outside the repository is ignored. An unnamed one, an unknown license, a missing license, or an unsplit license expression requires manual review.
 
+## S004 Installation Documentation
+
+S004 reads the README, conventional install files, Markdown in `docs/`, `doc/`, and `deployment/`, and linked local docs. It fails only when they contain no build, run, configuration, or setup evidence, not even a link to other documentation; everything else needs manual review. The top tier ("concrete steps to install, deploy, or run") needs a recognized install, deploy, or run command. Okapi or tenant steps add context but never reach that tier alone, because S004 asks for developer build and run instructions.
+
+Okapi/tenant evidence must be a step: an Okapi admin endpoint (`/_/proxy`, `/_/discovery`, `/_/tenant`), `--okapi` or `--tenant` flags, posting or deploying to Okapi, or enabling the module for a tenant. Mentions of Okapi or tenants in prose, API examples (including curl calls with an `X-Okapi-Tenant` header), and configuration tables do not count. Neither an Okapi or tenant admin step (unless it also runs a build or run tool, such as `yarn start --okapi …`) nor a developer build such as `mvn clean install` counts as the install or run example, even under an "Installation" heading. The report shows at most one example per paragraph, with code fences and table pipes removed.
+
 ## S005 Personal Data Disclosure Review
 
 S005 checks `PERSONAL_DATA_DISCLOSURE.md` mechanics and completion, plus bounded source-inspection evidence. Completed forms still require manual review; S005 does not certify legal or privacy compliance.

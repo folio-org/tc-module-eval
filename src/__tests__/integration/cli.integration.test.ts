@@ -701,7 +701,7 @@ describe('CLI Integration Tests', () => {
           criterionId: 'S004',
           status: EvaluationStatus.MANUAL,
           evidence: 'S004 manual: Candidate documentation exists',
-          details: 'Strongest signals:\n  - README.md [env_configuration] <script>alert("x")</script> token=abc123'
+          details: 'Strongest examples:\n  - README.md [config] <script>alert("x")</script> token=abc123'
         }]
       };
 
