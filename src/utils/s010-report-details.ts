@@ -13,6 +13,7 @@ import { renderAgentReviewLines } from './agent-review-report';
 import { S010_SOURCE_LIMITS } from './s010-evidence';
 
 const MAX_SUBJECTS = 8;
+const MAX_NAME_CHARS = 100;
 const MAX_REFERENCES = 8;
 const MAX_WARNING_PATHS = 5;
 
@@ -92,8 +93,8 @@ export function s010ServiceName(finding: S010Finding): string | undefined {
   if (META_IDS.has(finding.dependencyId)) return undefined;
   if (groupKey(finding) === 'folio-interface') return 'FOLIO interfaces';
   if (SERVICE_NAMES[finding.dependencyId]) return SERVICE_NAMES[finding.dependencyId];
-  if (finding.scenario === 'configuration-absent') return findingSubject(finding) || finding.dependencyId;
-  return isClientFinding(finding) ? 'other service clients' : finding.dependencyId;
+  if (finding.scenario === 'configuration-absent') return shorten(findingSubject(finding) || finding.dependencyId);
+  return isClientFinding(finding) ? 'other service clients' : shorten(finding.dependencyId);
 }
 
 function serviceName(dependencyId: string): string {
@@ -166,8 +167,13 @@ export function s010FindingTitle(group: S010Finding[]): string {
     : `${name}, if it goes down while the module runs`;
 }
 
+// Names come from the repository (environment variables, hosts); keep a crafted one from filling the report.
+function shorten(value: string): string {
+  return value.length > MAX_NAME_CHARS ? `${value.slice(0, MAX_NAME_CHARS)}…` : value;
+}
+
 function list(values: string[]): string {
-  const shown = values.slice(0, MAX_SUBJECTS).join(', ');
+  const shown = values.slice(0, MAX_SUBJECTS).map(shorten).join(', ');
   return values.length > MAX_SUBJECTS ? `${shown} +${values.length - MAX_SUBJECTS} more` : shown;
 }
 
@@ -248,8 +254,8 @@ function sourceWarningText(diagnostic: S010Diagnostic): string | undefined {
 }
 
 function agentReviewNames(analysis: S010Analysis): Record<string, string> {
-  return Object.fromEntries(analysis.evidence.scenarios.map(scenario =>
-    [scenario.dependencyId, scenario.dependencyId.startsWith('folio-interface:')
-      ? `FOLIO interface ${scenario.dependencyId.slice('folio-interface:'.length)}`
-      : serviceName(scenario.dependencyId)]));
+  return Object.fromEntries([
+    ['folio-interfaces', 'FOLIO interfaces'],
+    ...analysis.evidence.scenarios.map(scenario => [scenario.dependencyId, serviceName(scenario.dependencyId)])
+  ]);
 }

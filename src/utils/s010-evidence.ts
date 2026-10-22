@@ -29,7 +29,7 @@ export const S010_SOURCE_LIMITS = {
 const MAX_SCENARIOS = 1_000;
 
 const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md)$/i;
-const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
+const EXTERNAL_CONFIG_PATTERN = /^AWS_|(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
 const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
 // A browser fetch call whose URL starts with a literal absolute address; the host is captured. The host
@@ -178,8 +178,10 @@ export async function collectS010Evidence(
     if (!hasJavaClientOperation(file.content)) continue;
     const dependencyId = dependencyFromFile(file.path);
     const conditional = /@ConditionalOnProperty\b|@Profile\b/.test(file.content);
-    const bounded = /\.timeout\s*\(|TimeLimiter|connectTimeout|readTimeout|responseTimeout/.test(file.content);
-    const handled = /onErrorResume\s*\(|onErrorReturn\s*\(|fallbackMethod\s*=|catch\s*\(/.test(file.content);
+    const { complete, calls } = javaClientCalls(file.content);
+    // Every call through the client needs its own time limit and error handling; signals elsewhere in the file do not count.
+    const bounded = complete && calls.length > 0 && calls.every(call => call.bounded);
+    const handled = complete && calls.length > 0 && calls.every(call => call.handled);
     const startupCoupled = /@PostConstruct\b|ApplicationReadyEvent|HealthIndicator|ReadinessState/.test(file.content);
     const controlled = conditional && bounded && handled && !startupCoupled;
     scenarios.push({
@@ -197,6 +199,7 @@ export async function collectS010Evidence(
   }
 
   if (runtimeKind === 'stripes-react') {
+    const optionalInterfaces = packageStripesInterfaces(packageJson, ['optionalOkapiInterfaces']).length > 0;
     for (const file of snapshot.files.filter(isJavaScriptProductionSource)) {
       const matches = [...file.content.matchAll(LITERAL_FETCH_PATTERN)];
       if (!matches.length) continue;
@@ -206,7 +209,10 @@ export async function collectS010Evidence(
       const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
       const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
         || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
-      const controlled = bounded && handled && !bootstrap;
+      // Optional only with evidence that the feature can be turned off: a setting, or a check that an
+      // interface is present. A timeout and catch alone do not show that the service is optional.
+      const switchable = optionalInterfaces || /\bhasInterface\s*\(|\bstripes\.config\.\w/.test(maskJavaScriptSource(file.content));
+      const controlled = bounded && handled && !bootstrap && switchable;
       for (const match of matches) {
         const dependencyId = match[1].toLowerCase();
         const operationLine = lineAt(match.index ?? 0);
@@ -219,7 +225,11 @@ export async function collectS010Evidence(
           sourceReferences: [{ path: file.path, line: operationLine, detail: 'Sends a request to this host' }],
           boundedFailure: bounded ? 'proven' : 'unknown',
           readiness: controlled ? 'preserved' : 'unknown',
-          ...(!controlled ? { rationale: 'The tool could not confirm that this request has a time limit and error handling and only affects the feature that sends it.' } : {})
+          ...(!controlled ? {
+            rationale: bounded && handled && !bootstrap
+              ? 'The request has a time limit and error handling, but the tool found no setting or interface check that turns the feature off, so it cannot tell whether the service is optional.'
+              : 'The tool could not confirm that this request has a time limit and error handling and only affects the feature that sends it.'
+          } : {})
         });
         if (!controlled) semanticIncomplete = true;
       }
@@ -557,7 +567,8 @@ function jsonNameLines(content: string): Map<string, number> {
 function dependencyFromConfig(name: string): string {
   const upper = name.toUpperCase();
   if (/^(?:DB_|DATABASE)/.test(upper)) return 'database';
-  if (/^S3_|BUCKET/.test(upper)) return 'object-storage';
+  // AWS_* and S3_* settings configure the same object storage (AWS_* names are being renamed to S3_*).
+  if (/^(?:S3|AWS)_|BUCKET/.test(upper)) return 'object-storage';
   if (/KAFKA|BROKER/.test(upper)) return 'kafka';
   if (/ELASTIC|OPENSEARCH/.test(upper)) return 'search';
   if (/OKAPI/.test(upper)) return 'okapi';
@@ -573,16 +584,302 @@ function hasJavaClientOperation(content: string): boolean {
   return /\bWebClient\b|\bHttpClient\b|\bRestTemplate\b|\bKafkaTemplate\b|\bS3Client\b/.test(content);
 }
 
+const JAVA_CLIENT_TYPES = String.raw`(?:WebClient|HttpClient|RestTemplate|KafkaTemplate|S3Client)`;
+const TIMEOUT_METHODS = new Set(['timeout', 'orTimeout', 'completeOnTimeout', 'setTimeout']);
+const ERROR_METHODS = new Set(['onErrorResume', 'onErrorReturn', 'onErrorComplete', 'exceptionally', 'handle', 'recover', 'otherwise']);
+const BLOCKING_METHODS = new Set(['block', 'blockOptional', 'blockFirst', 'blockLast', 'get', 'join']);
+const MAX_JAVA_CALLS = 200;
+const MAX_CLIENT_NAMES = 50;
+const MAX_STATEMENT_CHARS = 4_000;
+const MAX_BLOCK_CHARS = 20_000;
+
+interface JavaClientCalls {
+  // False when some use of a client could not be analysed; the file then proves nothing.
+  complete: boolean;
+  calls: Array<{ bounded: boolean; handled: boolean }>;
+}
+
+// Calls through a client: a method call on a variable declared with a client type, or a client
+// created and used in one statement. A call is bounded when its own call chain sets a timeout, and
+// handled when that chain handles errors, or when it waits for the result inside a try block with
+// a catch directly around it. Arguments and lambdas are not part of the chain, and comments and
+// strings are ignored.
+function javaClientCalls(source: string): JavaClientCalls {
+  const content = maskJavaSource(source);
+  const incomplete = { complete: false, calls: [] };
+  const types = new Map<string, string>();
+  const accounted = new Set<number>();
+  for (const match of content.matchAll(new RegExp(String.raw`\b(${JAVA_CLIENT_TYPES})(?:<[^<>;{}]{0,200}>)?\s+(\w+)\s*[;=,)]`, 'g'))) {
+    // `HttpClient a, b;` or `WebClient a = x, b = y;` declares b as well.
+    if (declaresMore(content, (match.index ?? 0) + match[0].length - 1)) return incomplete;
+    types.set(match[2], match[1]);
+    accounted.add(match.index ?? 0);
+    if (types.size > MAX_CLIENT_NAMES) return incomplete;
+  }
+  const factories = [...content.matchAll(new RegExp(String.raw`\b(${JAVA_CLIENT_TYPES})\s*\.\s*(?:create|builder|newHttpClient|newBuilder)\s*\(`, 'g'))];
+  if (factories.length > MAX_JAVA_CALLS) return incomplete;
+  for (const match of content.matchAll(new RegExp(String.raw`\b${JAVA_CLIENT_TYPES}\b`, 'g'))) {
+    const offset = match.index ?? 0;
+    if (accounted.has(offset)) continue;
+    const before = content.slice(Math.max(0, offset - 100), offset);
+    const after = content.slice(offset + match[0].length, offset + match[0].length + 100);
+    // Imports, `new RestTemplate(...)` and static members such as WebClient.builder() are not uses.
+    if (/\bimport\s+(?:static\s+)?[\w.]*$/.test(before) || /\bnew\s+$/.test(before) || /^\s*\./.test(after)) continue;
+    return incomplete; // a client type in a generic, cast, return type or other place the tool cannot follow
+  }
+
+  const calls: JavaClientCalls['calls'] = [];
+  const analyse = (start: number, type: string): boolean => {
+    if (calls.length >= MAX_JAVA_CALLS) return false;
+    const chain = callChain(content, start);
+    const methods = chain.map(call => call.name);
+    const timedGet = chain.some(call => call.name === 'get' && /,\s*(?:TimeUnit|ChronoUnit)\.|^\s*Duration\./.test(call.args));
+    // A catch handles only failures that happen while the try block runs: the result must be awaited there.
+    // The first method starts the request (WebClient's get() only builds it); waits come after it.
+    const awaited = methods.slice(1).some(name => BLOCKING_METHODS.has(name))
+      || type === 'RestTemplate' || type === 'S3Client' || (type === 'HttpClient' && methods[0] === 'send');
+    calls.push({
+      bounded: timedGet || methods.some(name => TIMEOUT_METHODS.has(name)),
+      handled: methods.some(name => ERROR_METHODS.has(name)) || (awaited && insideTryWithCatch(content, start))
+    });
+    return true;
+  };
+  for (const [name, type] of types) {
+    const declaration = new RegExp(String.raw`\b${type}(?:<[^<>;{}]{0,200}>)?\s*$`);
+    const fieldAssignment = new RegExp(String.raw`\bthis\s*\.\s*${name}\s*=\s*$`);
+    for (const use of content.matchAll(new RegExp(String.raw`\b${name}\b`, 'g'))) {
+      const offset = use.index ?? 0;
+      const before = content.slice(Math.max(0, offset - 300), offset);
+      const after = content.slice(offset + name.length, offset + name.length + 300);
+      if (/\.\s*$/.test(before) && !/\bthis\s*\.\s*$/.test(before)) continue; // another object's member
+      if (declaration.test(before) || /^\s*=(?!=)/.test(after)) continue; // declaration or assignment target
+      if (fieldAssignment.test(before) && /^\s*;/.test(after)) continue; // constructor injection: this.client = client;
+      if (!/^\s*\.\s*(?:<[^<>;(){}]{0,200}>\s*)?\w+\s*\(/.test(after) || !analyse(offset, type)) return incomplete;
+    }
+  }
+  for (const match of factories) {
+    const start = match.index ?? 0;
+    if (callChain(content, start).some(call => /^(?:get|post|put|patch|delete|head|method|send|sendAsync|retrieve|exchange\w*)$/.test(call.name))) {
+      if (!analyse(start, match[1])) return incomplete;
+    } else if (!/(?:^|[^=!<>])=\s*$/.test(content.slice(Math.max(0, start - 100), start))) {
+      // A client that is only built is configuration when it is assigned to a variable; built and handed
+      // to other code or returned (a @Bean, say), its calls happen where the tool cannot follow them.
+      return incomplete;
+    }
+  }
+  return { complete: true, calls };
+}
+
+// The method calls chained directly on the identifier at `start` (`client.a(..).<T>b(..)`), with
+// their argument text. The chain ends at the first token that is not `.name(`; calls inside
+// arguments, lambda bodies and later expressions are not part of it.
+function callChain(content: string, start: number): Array<{ name: string; args: string }> {
+  const chain: Array<{ name: string; args: string }> = [];
+  const end = Math.min(content.length, start + MAX_STATEMENT_CHARS);
+  const link = /\s*\.\s*(?:<[^<>;(){}]{0,200}>\s*)?(\w+)\s*\(/y;
+  let index = /^\w+/.exec(content.slice(start, start + 200))?.[0].length ?? 0;
+  index += start;
+  while (index < end) {
+    link.lastIndex = index;
+    const match = link.exec(content);
+    if (!match) break;
+    let depth = 0;
+    let position = link.lastIndex;
+    for (; position < end; position++) {
+      const character = content[position];
+      if (character === '(' || character === '{' || character === '[') depth++;
+      else if (character === ')' || character === '}' || character === ']') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    if (position >= end || content[position] !== ')') break;
+    chain.push({ name: match[1], args: content.slice(link.lastIndex, position) });
+    index = position + 1;
+  }
+  return chain;
+}
+
+// Whether the declaration whose name is followed by `content[end]` (`;`, `=`, `,` or `)`) declares
+// another variable before its `;`. A parameter list ends at an unmatched `)` instead. Generic commas
+// (`Map<A, B>`) also count, which only makes the file manual.
+function declaresMore(content: string, end: number): boolean {
+  if (content[end] === ';' || content[end] === ')') return false;
+  let depth = 0;
+  for (let index = end + 1; index < Math.min(content.length, end + MAX_STATEMENT_CHARS); index++) {
+    const character = content[index];
+    if (character === '(' || character === '{' || character === '[') depth++;
+    else if (character === ')' || character === '}' || character === ']') {
+      if (depth === 0) return false;
+      depth--;
+    } else if (depth === 0 && character === ';') return content[end] === ',';
+    else if (depth === 0 && character === ',' && content[end] === '=') return true;
+  }
+  return true;
+}
+
+// Replaces comments, string, text-block and character literals with spaces, keeping offsets.
+function maskJavaSource(content: string): string {
+  const out = content.split('');
+  let index = 0;
+  const blank = (from: number, to: number): void => {
+    for (let position = from; position < to && position < out.length; position++) if (out[position] !== '\n') out[position] = ' ';
+  };
+  while (index < content.length) {
+    const rest2 = content.slice(index, index + 2);
+    if (rest2 === '//') {
+      const end = content.indexOf('\n', index);
+      const stop = end < 0 ? content.length : end;
+      blank(index, stop);
+      index = stop;
+    } else if (rest2 === '/*') {
+      const end = content.indexOf('*/', index + 2);
+      const stop = end < 0 ? content.length : end + 2;
+      blank(index, stop);
+      index = stop;
+    } else if (content.startsWith('"""', index)) {
+      const end = content.indexOf('"""', index + 3);
+      const stop = end < 0 ? content.length : end + 3;
+      blank(index + 1, stop - 1);
+      index = stop;
+    } else if (content[index] === '"' || content[index] === '\'') {
+      const quote = content[index];
+      let position = index + 1;
+      while (position < content.length && content[position] !== quote && content[position] !== '\n') {
+        position += content[position] === '\\' ? 2 : 1;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+    } else {
+      index++;
+    }
+  }
+  return out.join('');
+}
+
+// Replaces comments and the contents of string, template and regular expression literals with
+// spaces, keeping offsets. Template substitutions stay code. A `/` starts a regular expression
+// when it cannot be division, judged from the previous code character, as JavaScript tokenizers do.
+function maskJavaScriptSource(content: string): string {
+  const out = content.split('');
+  const blank = (from: number, to: number): void => {
+    for (let position = from; position < to && position < out.length; position++) if (out[position] !== '\n') out[position] = ' ';
+  };
+  // Brace depth inside each open template substitution, innermost last.
+  const substitutions: number[] = [];
+  let previous = '';
+  let index = 0;
+  const readTemplate = (from: number): number => {
+    let position = from;
+    while (position < content.length && content[position] !== '`') {
+      if (content[position] === '\\') position += 2;
+      else if (content[position] === '$' && content[position + 1] === '{') {
+        blank(from, position);
+        substitutions.push(0);
+        return position + 2;
+      } else position++;
+    }
+    blank(from, position);
+    return position + 1;
+  };
+  while (index < content.length) {
+    const character = content[index];
+    const next = content[index + 1];
+    if (/\s/.test(character)) {
+      index++;
+      continue;
+    }
+    if (character === '/' && next === '/') {
+      const end = content.indexOf('\n', index);
+      const stop = end < 0 ? content.length : end;
+      blank(index, stop);
+      index = stop;
+    } else if (character === '/' && next === '*') {
+      const end = content.indexOf('*/', index + 2);
+      const stop = end < 0 ? content.length : end + 2;
+      blank(index, stop);
+      index = stop;
+    } else if (character === '"' || character === '\'') {
+      let position = index + 1;
+      while (position < content.length && content[position] !== character && content[position] !== '\n') {
+        position += content[position] === '\\' ? 2 : 1;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+      previous = character;
+    } else if (character === '`') {
+      index = readTemplate(index + 1);
+      previous = '`';
+    } else if (character === '}' && substitutions.length && substitutions[substitutions.length - 1] === 0) {
+      substitutions.pop();
+      index = readTemplate(index + 1);
+      previous = '`';
+    } else if (character === '/' && (!previous || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous)
+      || /\b(?:return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(content.slice(Math.max(0, index - 12), index).trimEnd()))) {
+      let position = index + 1;
+      let inClass = false;
+      while (position < content.length && content[position] !== '\n' && (inClass || content[position] !== '/')) {
+        if (content[position] === '\\') position++;
+        else if (content[position] === '[') inClass = true;
+        else if (content[position] === ']') inClass = false;
+        position++;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+      previous = '/';
+    } else {
+      if (substitutions.length) {
+        if (character === '{') substitutions[substitutions.length - 1]++;
+        else if (character === '}') substitutions[substitutions.length - 1]--;
+      }
+      previous = character;
+      index++;
+    }
+  }
+  return out.join('');
+}
+
+// Whether the innermost block around `offset` is a try block followed by a catch.
+function insideTryWithCatch(content: string, offset: number): boolean {
+  let depth = 0;
+  let open = -1;
+  for (let index = offset - 1; index >= Math.max(0, offset - MAX_BLOCK_CHARS); index--) {
+    const character = content[index];
+    if (character === '}') depth++;
+    else if (character === '{') {
+      if (depth === 0) {
+        open = index;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (open < 0 || !/\btry\s*(?:\([^{}]{0,500}\))?\s*$/.test(content.slice(Math.max(0, open - 600), open))) return false;
+  depth = 0;
+  for (let index = open + 1; index < Math.min(content.length, open + MAX_BLOCK_CHARS); index++) {
+    const character = content[index];
+    if (character === '{') depth++;
+    else if (character === '}') {
+      if (depth === 0) return /^\s*catch\s*\(/.test(content.slice(index + 1, index + 200));
+      depth--;
+    }
+  }
+  return false;
+}
+
 function clientLine(content: string): number {
   const match = /\b(?:WebClient|HttpClient|RestTemplate|KafkaTemplate|S3Client)\b/.exec(content);
   return lineAtOffset(content, match?.index ?? 0);
 }
 
-function packageStripesInterfaces(packageJson: PackageJson | undefined): string[] {
+function packageStripesInterfaces(
+  packageJson: PackageJson | undefined,
+  keys = ['okapiInterfaces', 'optionalOkapiInterfaces']
+): string[] {
   const stripes = packageJson?.stripes;
   if (!stripes) return [];
   // Stripes declares interfaces as an object of interface → version; older packages use a list of "id version".
-  const values = [stripes.okapiInterfaces, stripes.optionalOkapiInterfaces];
+  const values = keys.map(key => stripes[key]);
   return values.flatMap(value => Array.isArray(value) ? value : value && typeof value === 'object' ? Object.keys(value) : [])
     .flatMap(value => typeof value === 'string' ? [value] : [])
     .map(value => value.trim().split(/\s+/)[0])

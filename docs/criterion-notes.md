@@ -196,6 +196,31 @@ to their host; `fetch` with a computed or relative URL, `XMLHttpRequest`, `WebSo
 `EventSource` are reported as requests the tool cannot follow. Co-located tests (`*.test.js`,
 `*.spec.ts`) and `__mocks__` are not production code.
 
+A browser request counts as an optional service only when it has a time limit and error handling
+and there is evidence that the feature can be turned off: a setting read in the same file
+(`stripes.config.<key>`), an interface check in the same file (`hasInterface(...)`), or
+`optionalOkapiInterfaces` in `package.json`. A timeout and a catch alone leave it `manual`.
+
+A Java client call counts as handled only when its own call path has a time limit and error
+handling: a timeout operator on the call's own method chain (`.timeout(...)`, `.orTimeout(...)`,
+`Future.get(n, TimeUnit...)`, ...), and an error operator on that chain (`onErrorResume`,
+`exceptionally`, ...) or a `try` block with a `catch` directly around a call whose result is
+awaited there. Operators inside arguments, lambdas, comments and strings do not count, and an
+asynchronous result returned from a `try` block is not handled by its `catch`. Every call through
+the client must qualify; if the tool cannot follow every use of the client (it is passed to other
+code, built and returned or passed on instead of assigned, declared together with another
+variable, or used in more than 200 calls), the file stays `manual`. Settings and interface checks
+named only in comments, strings, templates or regular expressions do not make a browser request
+optional.
+
+Agent review receives the analysis as JSON of at most 48 KB: each scenario lists up to five
+references, and when the whole still does not fit, the scenarios and findings that decide the
+status are kept and the rest are counted as omitted. The FOLIO interfaces of a UI module are one
+dependency for the agent (`folio-interfaces`), not one per interface.
+
+Environment variables named `AWS_*` or `S3_*`, or containing `BUCKET`, all configure one
+object-storage service.
+
 Java clients the tool recognizes but does not trace are reported as warnings and keep the result
 `manual`, so a module using only them cannot pass as having no dependencies: Spring HTTP interfaces
 (`@HttpExchange`, `@GetExchange`, ...), `RestClient`, Feign, Retrofit, OkHttp, Apache HttpClient,

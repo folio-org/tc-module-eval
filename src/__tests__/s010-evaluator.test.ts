@@ -248,6 +248,20 @@ describe('S010 human details', () => {
     ));
   });
 
+  it('shortens repository-made names in the summary and the row titles', () => {
+    const name = `${'Q'.repeat(5_000)}_URL`;
+    const analysis = evaluateS010(evidence({
+      semanticCoverage: 'incomplete',
+      scenarios: [scenario({ id: `qqq:${name}/configuration-absent`, dependencyId: 'qqq', scenario: 'configuration-absent', requirement: 'unresolved' })]
+    }));
+
+    const details = renderS010HumanDetails(analysis);
+
+    expect(analysis.summary.length).toBeLessThan(500);
+    expect(analysis.summary).toContain(`${'Q'.repeat(100)}…`);
+    expect(details.split('\n').every(line => line.length < 1_000)).toBe(true);
+  });
+
   it('merges repeated source-reading warnings into one row per kind', () => {
     const skipped = (code: string, filePath: string) => ({ code, message: 'raw', material: true, path: filePath });
     const analysis = evaluateS010(evidence({

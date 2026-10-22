@@ -234,6 +234,149 @@ describe('S010 evidence collection', () => {
     })]);
   });
 
+  it.each([
+    ['a timeout and error handler on another call', [
+      '  Mono<String> lookup() { return WebClient.create().get().retrieve().bodyToMono(String.class); }',
+      '  Mono<String> other(Mono<String> value) { return value.timeout(Duration.ofSeconds(2)).onErrorResume(error -> Mono.empty()); }'
+    ]],
+    ['a second call without a timeout', [
+      '  private final WebClient client;',
+      '  Mono<String> lookup() { return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).onErrorResume(e -> Mono.empty()); }',
+      '  Mono<String> refresh() { return client.post().retrieve().bodyToMono(String.class).onErrorResume(e -> Mono.empty()); }'
+    ]],
+    ['a catch block around a different statement', [
+      '  private final WebClient client;',
+      '  String lookup() { String value = client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).block();',
+      '    try { log(); } catch (Exception e) { } return value; }'
+    ]],
+    ['an unchecked call with explicit type arguments', [
+      '  HttpClient client;',
+      '  Object safe(HttpRequest r) { return client.sendAsync(r, BodyHandlers.ofString()).orTimeout(2, TimeUnit.SECONDS).exceptionally(e -> null); }',
+      '  Object unsafe(HttpRequest r) { return client.<String>sendAsync(r, BodyHandlers.ofString()); }'
+    ]],
+    ['a second client in the same declaration', [
+      '  HttpClient safe, unsafe;',
+      '  Object one(HttpRequest r) { return safe.sendAsync(r, BodyHandlers.ofString()).orTimeout(2, TimeUnit.SECONDS).exceptionally(e -> null); }',
+      '  Object two(HttpRequest r) { return unsafe.sendAsync(r, BodyHandlers.ofString()); }'
+    ]],
+    ['an unchecked call after 200 checked ones', [
+      '  WebClient client;',
+      ...Array(200).fill('  String a() { return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).onErrorReturn("").block(); }'),
+      '  String b() { return client.get().retrieve().bodyToMono(String.class).block(); }'
+    ]],
+    ['a timeout and error handler on an argument, not the request', [
+      '  WebClient client;',
+      '  Mono<String> lookup(Mono<String> payload) {',
+      '    return client.post().uri("/x").bodyValue(payload.timeout(Duration.ofSeconds(1)).onErrorReturn("fallback").block())',
+      '      .retrieve().bodyToMono(String.class);',
+      '  }'
+    ]],
+    ['a timeout and error handler in a comment', [
+      '  WebClient client;',
+      '  Mono<String> lookup() { return client.get().retrieve().bodyToMono(String.class)',
+      '    /* .timeout(Duration.ofSeconds(2)).onErrorResume(e -> Mono.empty()) */; }'
+    ]],
+    ['an asynchronous result returned from a try block', [
+      '  HttpClient client;',
+      '  Object lookup(HttpRequest r) {',
+      '    try { return client.sendAsync(r, BodyHandlers.ofString()).orTimeout(2, TimeUnit.SECONDS); }',
+      '    catch (Exception error) { return CompletableFuture.completedFuture(null); }',
+      '  }'
+    ]],
+    ['a second client declared with an initializer', [
+      '  WebClient safeClient = WebClient.create(),',
+      '            unsafeClient = WebClient.create();',
+      '  Mono<String> lookup() { return safeClient.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).onErrorReturn(""); }',
+      '  Mono<String> unchecked() { return unsafeClient.get().retrieve().bodyToMono(String.class); }'
+    ]],
+    ['a new client handed straight to other code', [
+      '  WebClient client;',
+      '  Mono<String> lookup() { return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).onErrorReturn(""); }',
+      '  Mono<String> unchecked() { return Helper.call(WebClient.create()); }'
+    ]],
+    ['an error handler on another expression after the request', [
+      '  WebClient client;',
+      '  String lookup(Mono<String> fallback) {',
+      '    return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).block()',
+      '      + fallback.onErrorReturn("").block();',
+      '  }'
+    ]],
+    ['a reactive request returned from a try block', [
+      '  WebClient client;',
+      '  Mono<String> lookup() {',
+      '    try { return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)); }',
+      '    catch (Exception error) { return Mono.empty(); }',
+      '  }'
+    ]],
+    ['a client handed to code the tool does not follow', [
+      '  WebClient client;',
+      '  Mono<String> lookup() { return client.get().retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(2)).onErrorResume(e -> Mono.empty()); }',
+      '  Mono<String> other() { return Helper.call(client); }'
+    ]]
+  ])('keeps an optional Java client manual with %s', async (_name, body) => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-optional-search</artifactId></project>',
+      'src/main/java/org/folio/SearchClient.java': [
+        '@ConditionalOnProperty(name="SEARCH_ENABLED", havingValue="true")',
+        'class SearchClient {',
+        ...body,
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({ dependencyId: 'search', proof: 'unresolved' })]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('accepts an asynchronous Java client call with a timeout and error handler on its own chain', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-optional-search</artifactId></project>',
+      'src/main/java/org/folio/SearchClient.java': [
+        'import java.net.http.HttpClient;',
+        '@ConditionalOnProperty(name="SEARCH_ENABLED", havingValue="true")',
+        'class SearchClient {',
+        '  private final HttpClient client;',
+        '  SearchClient(HttpClient client, Config config) { this.client = client; }',
+        '  Object lookup(HttpRequest request) {',
+        '    return client.<String>sendAsync(request, BodyHandlers.ofString())',
+        '      .orTimeout(2, TimeUnit.SECONDS).exceptionally(error -> null);',
+        '  }',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({ proof: 'controlled-degradation', boundedFailure: 'proven' })]);
+  });
+
+  it('accepts a Java client call bounded on its own statement and caught by its own try block', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-optional-search</artifactId></project>',
+      'src/main/java/org/folio/SearchClient.java': [
+        '@ConditionalOnProperty(name="SEARCH_ENABLED", havingValue="true")',
+        'class SearchClient {',
+        '  private final KafkaTemplate<String, String> template;',
+        '  void send(String event) {',
+        '    try {',
+        '      template.send("topic", event).get(2, TimeUnit.SECONDS);',
+        '    } catch (Exception error) {',
+        '      log.warn("Search events are unavailable", error);',
+        '    }',
+        '  }',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      dependencyId: 'search', proof: 'controlled-degradation', boundedFailure: 'proven', readiness: 'preserved'
+    })]);
+  });
+
   it('keeps unlinked Java resilience signals unresolved', async () => {
     const root = repository({
       'pom.xml': '<project><artifactId>mod-wrapper</artifactId></project>',
@@ -475,33 +618,68 @@ describe('S010 evidence collection', () => {
     expect(result.semanticCoverage).toBe('incomplete');
   });
 
-  it('recognizes a bounded feature-local Stripes lookup fallback', async () => {
+  const lookupFile = (gate = '') => [
+    'export async function lookup(stripes, term) {',
+    gate,
+    '  const controller = new AbortController();',
+    '  const timer = setTimeout(() => controller.abort(), 2000);',
+    '  try { return await fetch("https://id.example.org/search?q=" + term, { signal: controller.signal }); }',
+    '  catch (error) { return []; }',
+    '  finally { clearTimeout(timer); }',
+    '}'
+  ].join('\n');
+  it.each([
+    ['an interface check', {}, "  if (!stripes.hasInterface('id-lookup')) return [];"],
+    ['a setting', {}, '  if (!stripes.config.idLookupEnabled) return [];'],
+    ['optional interfaces in package.json', { optionalOkapiInterfaces: { 'id-lookup': '1.0' } }, '']
+  ])('recognizes a bounded Stripes lookup that %s can turn off', async (_name, stripes, gate) => {
     const root = repository({
       'package.json': JSON.stringify({
         name: '@folio/ui-external-lookup',
         dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' },
-        stripes: {}
+        stripes
       }),
-      'src/lookup.ts': [
-        'export async function lookup(term) {',
-        '  const controller = new AbortController();',
-        '  const timer = setTimeout(() => controller.abort(), 2000);',
-        '  try { return await fetch("https://id.example.org/search?q=" + term, { signal: controller.signal }); }',
-        '  catch (error) { return []; }',
-        '  finally { clearTimeout(timer); }',
-        '}'
-      ].join('\n')
+      'src/lookup.ts': lookupFile(gate)
     });
 
     const result = await collectS010Evidence(root, 'javascript');
 
     expect(result.runtimeKind).toBe('stripes-react');
-    expect(result.scenarios).toEqual([expect.objectContaining({
+    expect(result.scenarios).toEqual(expect.arrayContaining([expect.objectContaining({
       dependencyId: 'id.example.org',
+      requirement: 'optional',
       proof: 'controlled-degradation',
       boundedFailure: 'proven',
       readiness: 'preserved'
+    })]));
+  });
+
+  it.each([
+    ['nothing', ''],
+    ['a setting named only in a comment', '  // TODO: read stripes.config.idLookupEnabled'],
+    ['an interface check named only in a string', "  const help = 'call stripes.hasInterface(\"id-lookup\") first';"],
+    ['a setting named only in a nested template', '  const help = `Documentation: ${`stripes.config.idLookupEnabled`}`;'],
+    ['a setting named only in a regular expression', '  const pattern = /stripes.config.idLookupEnabled/;']
+  ])('does not treat a bounded, handled Stripes request as optional when %s can turn it off', async (_name, gate) => {
+    const root = repository({
+      'package.json': JSON.stringify({
+        name: '@folio/ui-external-lookup',
+        dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' },
+        stripes: { okapiInterfaces: {} }
+      }),
+      'src/lookup.ts': lookupFile(gate)
+    });
+
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.scenarios).toEqual([expect.objectContaining({
+      dependencyId: 'id.example.org',
+      requirement: 'unresolved',
+      proof: 'unresolved',
+      boundedFailure: 'proven',
+      rationale: expect.stringContaining('no setting or interface check that turns the feature off')
     })]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
   });
 
   it('does not treat a ui-like Node package as a supported Stripes runtime', async () => {
@@ -644,7 +822,7 @@ describe('S010 evidence collection', () => {
   });
 
   it('classifies a fetch address the same way with or without spaces, and treats a computed host as unknown', async () => {
-    const request = (call: string) => `export const load = domain => ${call}, { signal: AbortSignal.timeout(1000) }).catch(() => null);`;
+    const request = (call: string) => `export const load = (stripes, domain) => stripes.hasInterface('lookup') && ${call}, { signal: AbortSignal.timeout(1000) }).catch(() => null);`;
     const root = repository(uiModule({
       'src/spaced.js': request('fetch( "https://api.example.org/v1"'),
       'src/unspaced.js': request('fetch("https://api.example.org/v1"'),
@@ -674,6 +852,26 @@ describe('S010 evidence collection', () => {
     const result = await collectS010Evidence(root, 'java');
 
     expect(result.diagnostics.map(item => item.message.replace(/ \(.*/, ''))).toEqual(['Uses HTTP clients', 'Uses datastore clients']);
+  });
+
+  it('treats AWS_* and S3_* settings as one object storage service', async () => {
+    const root = repository(javaModule({
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({ launchDescriptor: { env: [
+        { name: 'AWS_URL' }, { name: 'AWS_BUCKET' }, { name: 'AWS_REGION' }, { name: 'AWS_ACCESS_KEY_ID' }, { name: 'S3_URL' }, { name: 'LAWS_URL' }
+      ] } })
+    }));
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios.filter(scenario => scenario.scenario === 'configuration-absent')
+      .map(scenario => scenario.id)).toEqual([
+      'object-storage:AWS_URL/configuration-absent',
+      'object-storage:AWS_BUCKET/configuration-absent',
+      'object-storage:AWS_REGION/configuration-absent',
+      'object-storage:AWS_ACCESS_KEY_ID/configuration-absent',
+      'object-storage:S3_URL/configuration-absent',
+      'laws:LAWS_URL/configuration-absent'
+    ]);
   });
 
   it('cites no descriptor line when the variable name appears more than once', async () => {
@@ -721,8 +919,8 @@ describe('S010 evidence collection', () => {
     }), 'javascript'],
     // Reading 300 files takes about a second of git calls; merging the declarations took far longer.
     ['one environment variable declared many times', javaModule(Object.fromEntries(Array.from({ length: 300 }, (_, index) => [
-      `descriptors/ModuleDescriptor-${index}.json`, JSON.stringify({ launchDescriptor: { env: Array(200).fill({ name: 'DB_URL' }) } })
-    ]))), 'java', 4_000]
+      `descriptors/ModuleDescriptor-${index}.json`, JSON.stringify({ launchDescriptor: { env: Array(400).fill({ name: 'DB_URL' }) } })
+    ]))), 'java', 5_000]
   ])('stays fast on %s', async (_name, files, language, limit = 1_000) => {
     const root = repository(files);
 

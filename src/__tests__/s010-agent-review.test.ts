@@ -347,6 +347,70 @@ describe('S010 advisory agent review', () => {
     expect(result.available).toBe(false);
   });
 
+  it('gives the agent valid JSON when the analysis is larger than the summary budget', async () => {
+    await commit('src/client.ts', 'export const client = 1;');
+    const large = analysis();
+    large.evidence.scenarios = Array.from({ length: 400 }, (_, index) => ({
+      ...large.evidence.scenarios[0], id: `client-${index}:src/Client${index}.java/runtime-unavailable`, dependencyId: `client-${index}`,
+      rationale: 'The tool could not confirm that calls through the client have a time limit and error handling.'.repeat(3),
+      sourceReferences: Array.from({ length: 20 }, (_unused, line) => ({ path: `src/Client${index}.java`, line: line + 1, detail: 'Uses an HTTP, Kafka or S3 client' }))
+    }));
+    large.findings = large.evidence.scenarios.map(scenario => ({
+      ...large.findings[0], id: scenario.id, dependencyId: scenario.dependencyId, rationale: scenario.rationale!, evidence: scenario.sourceReferences
+    }));
+
+    const request = await buildS010AgentReviewRequest(repo, large);
+    const content = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content;
+    const summary = JSON.parse(content);
+
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(48 * 1024);
+    expect(summary.scenarios.length + summary.omittedScenarios).toBe(400);
+    expect(summary.scenarios[0].sourceReferences).toHaveLength(5);
+    expect(summary.scenarios[0].omittedSourceReferences).toBe(15);
+  });
+
+  it('asks for one assessment covering all FOLIO interfaces', async () => {
+    await commit('package.json', '{}');
+    const ui = analysis();
+    ui.evidence.scenarios = ['users', 'circulation', 'notes'].map(id => ({
+      ...ui.evidence.scenarios[0], id: `folio-interface:${id}/runtime-unavailable`, dependencyId: `folio-interface:${id}`,
+      sourceReferences: [{ path: 'package.json', detail: 'Lists the interfaces the UI needs' }]
+    }));
+    const assessment = (technologyId: string) => ({ technologyId, type: 'evidence_gap', summary: 'Unverified.',
+      evidenceReferences: ['package.json'], failureBounds: bounds('unverified', 'package.json') });
+    const action = [{ action: 'Check the UI without the users module.', evidenceReferences: ['package.json'] }];
+
+    const request = await buildS010AgentReviewRequest(repo, ui);
+    const candidates = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('candidate-dependencies.json'))!.content);
+    const together = await reviewS010WithAgent(repo, ui, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: ['package.json'], assessments: [assessment('folio-interfaces')], reviewerActions: action
+    }));
+    const separately = await reviewS010WithAgent(repo, ui, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: ['package.json'],
+      assessments: ['users', 'circulation', 'notes'].map(id => assessment(`folio-interface:${id}`)), reviewerActions: action
+    }));
+
+    expect(candidates).toEqual({ candidateDependencyIds: ['folio-interfaces'] });
+    expect(together.available).toBe(true);
+    expect(separately.available).toBe(false);
+  });
+
+  it('keeps the summary within its budget when a repository-made name is huge', async () => {
+    await commit('src/client.ts', 'export const client = 1;');
+    const huge = analysis();
+    const name = `${'Q'.repeat(60_000)}_URL`;
+    huge.summary = `S010 manual: The tool found services the module depends on (${name})`;
+    huge.evidence.diagnostics = huge.diagnostics = Array.from({ length: 60 }, () => ({
+      code: 'unsupported-runtime-pattern', message: 'x'.repeat(5_000), material: true, path: `src/${'p'.repeat(5_000)}.java`
+    }));
+
+    const request = await buildS010AgentReviewRequest(repo, huge);
+    const content = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content;
+
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(48 * 1024);
+    expect(JSON.parse(content).omittedDiagnostics).toBe(40);
+  });
+
   async function commit(relativePath: string, content: string): Promise<void> {
     await fs.outputFile(path.join(repo, relativePath), content);
     execFileSync('git', ['add', '.'], { cwd: repo });
