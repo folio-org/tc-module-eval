@@ -32,8 +32,10 @@ const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:p
 const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
 const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
-// A browser fetch call whose URL is a literal absolute address; the host is captured.
-const LITERAL_FETCH_PATTERN = /(?<![\w$])fetch\s*\(\s*['"`]https?:\/\/([^/'"`?#$\s]+)/g;
+// A browser fetch call whose URL starts with a literal absolute address; the host is captured. The host
+// must end at a delimiter, so `https://api.${domain}` is a computed address, not host "api.".
+const LITERAL_HOST = String.raw`['"\x60]https?:\/\/([^/'"\x60?#$\s:\\]+)(?=[/'"\x60?#:])`;
+const LITERAL_FETCH_PATTERN = new RegExp(String.raw`(?<![\w$])fetch\s*\(\s*` + LITERAL_HOST, 'g');
 // Each entry lists patterns any of which marks a file; `searchFilePatterns` replace them in files with a
 // recognized OpenSearch client, whose RestClient and elasticsearchClient names are already covered.
 // Quantifiers stay bounded so repository content cannot make matching slow.
@@ -49,14 +51,19 @@ const UNSUPPORTED_PATTERNS: Array<{
   {
     category: 'HTTP clients (Spring HTTP interfaces, RestClient, Feign, Retrofit, OkHttp, Apache HttpClient or URLConnection)',
     patterns: [/URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i, /\bRestClient\b/],
-    searchFilePatterns: [/URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i]
+    // Beside an OpenSearch client, a bare RestClient is OpenSearch's; Spring's is recognized by its import.
+    searchFilePatterns: [
+      /URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i,
+      /\borg\.springframework\.web\.client\.RestClient\b/
+    ]
   },
   {
     category: 'datastore clients (JDBC, Redis, MongoDB or Elasticsearch)',
     // Plain DataSource is the database recognizer's; here only type names such as HikariDataSource count, not
     // dataSource props, MetadataSource or DataSourceResolver.
     patterns: [/JdbcTemplate|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i, /\b[A-Z][A-Za-z0-9]*DataSource\b/],
-    searchFilePatterns: [/\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/],
+    // Beside an OpenSearch client, elasticsearchClient and openSearchClient names are that client's.
+    searchFilePatterns: [/\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/, /\b[A-Z][A-Za-z0-9]*DataSource\b/],
     excludeDatabaseFiles: true
   },
   { category: 'object storage clients (AWS S3, MinIO or the FOLIO S3 client)', patterns: [/\b(?:AmazonS3|S3AsyncClient|MinioClient|MinioAsyncClient|FolioS3Client)\b/] },
@@ -71,7 +78,8 @@ const UNSUPPORTED_PATTERNS: Array<{
   },
   {
     category: 'browser requests the tool cannot follow (fetch with a computed or relative URL, XMLHttpRequest, WebSocket or EventSource)',
-    patterns: [/(?<![\w$])fetch\s*\(\s*(?!['"`]https?:\/\/[^/'"`?#$\s])|\bXMLHttpRequest\b|\bnew\s+(?:WebSocket|EventSource)\s*\(|\bsendBeacon\s*\(/],
+    // The lookahead holds the whitespace so it cannot be backtracked to dodge the literal-address check.
+    patterns: [new RegExp(String.raw`(?<![\w$])fetch\s*\((?!\s*` + LITERAL_HOST + String.raw`)|\bXMLHttpRequest\b|\bnew\s+(?:WebSocket|EventSource)\s*\(|\bsendBeacon\s*\(`)],
     javascriptOnly: true
   }
 ];
@@ -190,15 +198,18 @@ export async function collectS010Evidence(
 
   if (runtimeKind === 'stripes-react') {
     for (const file of snapshot.files.filter(isJavaScriptProductionSource)) {
+      const matches = [...file.content.matchAll(LITERAL_FETCH_PATTERN)];
+      if (!matches.length) continue;
       const lineAt = lineLookup(file.content);
-      for (const match of file.content.matchAll(LITERAL_FETCH_PATTERN)) {
+      // File-wide signals, checked once per file rather than once per request.
+      const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
+      const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
+      const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
+        || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
+      const controlled = bounded && handled && !bootstrap;
+      for (const match of matches) {
         const dependencyId = match[1].toLowerCase();
         const operationLine = lineAt(match.index ?? 0);
-        const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
-        const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
-        const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
-          || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
-        const controlled = bounded && handled && !bootstrap;
         scenarios.push({
           id: `${dependencyId}:${file.path}:${operationLine}/runtime-unavailable`,
           dependencyId,
@@ -382,12 +393,13 @@ function databaseConfiguration(file: CommittedSourceFile): string {
     }
     if (!line.trim() || /^\s*#/.test(line)) continue;
 
-    const mapping = /^(\s*)([^\s:#][^:]*):(?:\s*(.*))?$/.exec(line);
+    // Split at the first colon instead of matching the value with overlapping whitespace quantifiers.
+    const mapping = /^\s*([^\s:#][^:]*):/.exec(line);
     if (!mapping) continue;
     while (parents.length > 0 && parents[parents.length - 1].indentation >= indentation) parents.pop();
 
-    const key = mapping[2].trim().replace(/^['"]|['"]$/g, '');
-    const value = (mapping[3] ?? '').replace(/(?<!\s)\s+#.*$/, '').trim();
+    const key = mapping[1].trim().replace(/^['"]|['"]$/g, '');
+    const value = line.slice(mapping[0].length).replace(/(?<!\s)\s+#.*$/, '').trim();
     const path = [...parents.map(parent => parent.key), key].join('.');
     if (/^(?:(?:[&!]\S+)\s+)*[>|](?:[1-9][+-]?|[+-][1-9]?)?$/.test(value)) {
       scalarIndentation = indentation;
@@ -522,17 +534,23 @@ function springBindings(files: CommittedSourceFile[]): Map<string, SpringBinding
   return bindings;
 }
 
-// Line of the last `"name": "<value>"` member for each value; env entries follow the descriptor's other names.
+// Line of each `"name": "<value>"` member whose value appears only once in the file. A value named
+// more than once may belong to another member or a duplicate entry, so it is cited without a line.
 function jsonNameLines(content: string): Map<string, number> {
   const lines = new Map<string, number>();
+  const repeated = new Set<string>();
   const lineAt = lineLookup(content);
   for (const match of content.matchAll(/"name"\s*:\s*("(?:[^"\\\n]|\\.){0,1024}")/g)) {
+    let name: string;
     try {
-      lines.set(JSON.parse(match[1]) as string, lineAt(match.index ?? 0));
+      name = JSON.parse(match[1]) as string;
     } catch {
-      // Not a JSON string; the declaration is cited without a line.
+      continue;
     }
+    if (lines.has(name)) repeated.add(name);
+    else lines.set(name, lineAt(match.index ?? 0));
   }
+  for (const name of repeated) lines.delete(name);
   return lines;
 }
 
@@ -571,13 +589,24 @@ function packageStripesInterfaces(packageJson: PackageJson | undefined): string[
     .filter(Boolean);
 }
 
+// Merges scenarios with the same id, keeping each distinct source reference once. References are
+// tracked in a set so that many repeated declarations cost linear, not quadratic, time.
 function deduplicateScenarios(scenarios: S010ScenarioEvidence[]): S010ScenarioEvidence[] {
-  const unique = new Map<string, S010ScenarioEvidence>();
+  const unique = new Map<string, { scenario: S010ScenarioEvidence; referenceKeys: Set<string> }>();
   for (const scenario of scenarios) {
     const existing = unique.get(scenario.id);
-    unique.set(scenario.id, existing ? mergeScenarios(existing, scenario) : scenario);
+    const entry = existing
+      ? { scenario: { ...mergeScenarios(existing.scenario, scenario), sourceReferences: existing.scenario.sourceReferences }, referenceKeys: existing.referenceKeys }
+      : { scenario: { ...scenario, sourceReferences: [] as S010ScenarioEvidence['sourceReferences'] }, referenceKeys: new Set<string>() };
+    for (const reference of scenario.sourceReferences) {
+      const key = JSON.stringify([reference.path, reference.line, reference.detail]);
+      if (entry.referenceKeys.has(key)) continue;
+      entry.referenceKeys.add(key);
+      entry.scenario.sourceReferences.push(reference);
+    }
+    unique.set(scenario.id, entry);
   }
-  return [...unique.values()];
+  return [...unique.values()].map(entry => entry.scenario);
 }
 
 function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence): S010ScenarioEvidence {
@@ -591,18 +620,12 @@ function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence)
     : left.readiness === right.readiness
       ? left.readiness
       : 'unknown';
-  const sourceReferences = [...left.sourceReferences, ...right.sourceReferences].filter((reference, index, all) =>
-    all.findIndex(candidate => candidate.path === reference.path
-      && candidate.line === reference.line
-      && candidate.detail === reference.detail) === index
-  );
   return {
     ...left,
     requirement: left.requirement === right.requirement ? left.requirement : 'unresolved',
     proof,
     boundedFailure: left.boundedFailure === right.boundedFailure ? left.boundedFailure : 'unknown',
     readiness,
-    sourceReferences,
     ...(proof === 'unresolved' ? {
       rationale: left.rationale ?? right.rationale ?? 'The code gives conflicting evidence for this service.'
     } : {})

@@ -643,34 +643,103 @@ describe('S010 evidence collection', () => {
     expect(result.scenarios[1].proof).toBe('clear-fail-fast');
   });
 
-  it('stays fast on repository content built to make pattern matching slow', async () => {
-    const root = repository({
-      'pom.xml': '<project><artifactId>mod-example</artifactId></project>',
-      'descriptors/ModuleDescriptor-template.json': JSON.stringify({
-        id: 'mod-example-1.0.0',
-        launchDescriptor: { env: Array(3).fill({ name: 'DB_URL', required: true }) }
-      }),
-      'src/main/java/Config.java': '@Value("${DB_URL:'.repeat(11_000),
-      'src/main/java/Migrations.java': `class Migrations implements InitializingBean { Flyway flyway; ${'run('.repeat(45_000)} }`,
-      'src/main/resources/application.yml': [
-        'spring:',
-        '  datasource:',
-        `    url: jdbc${' '.repeat(40_000)}x`,
-        `${' '.repeat(60_000)}x`
-      ].join('\n'),
-      'src/main/js/env.js': 'process.env['.repeat(16_000)
-    });
+  it('classifies a fetch address the same way with or without spaces, and treats a computed host as unknown', async () => {
+    const request = (call: string) => `export const load = domain => ${call}, { signal: AbortSignal.timeout(1000) }).catch(() => null);`;
+    const root = repository(uiModule({
+      'src/spaced.js': request('fetch( "https://api.example.org/v1"'),
+      'src/unspaced.js': request('fetch("https://api.example.org/v1"'),
+      'src/computed.js': request('fetch(`https://api.${domain}/v1`')
+    }));
 
-    const started = Date.now();
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.scenarios.map(scenario => [scenario.sourceReferences[0].path, scenario.dependencyId, scenario.proof])).toEqual([
+      ['src/spaced.js', 'api.example.org', 'controlled-degradation'],
+      ['src/unspaced.js', 'api.example.org', 'controlled-degradation']
+    ]);
+    expect(result.diagnostics).toEqual([expect.objectContaining({
+      path: 'src/computed.js', message: expect.stringContaining('browser requests the tool cannot follow')
+    })]);
+  });
+
+  it('still diagnoses other clients in a file with a recognized OpenSearch client', async () => {
+    const root = repository(javaModule({
+      'src/main/java/Search.java': [
+        'import org.opensearch.client.RestClient;',
+        'import org.springframework.web.client.RestClient;',
+        'class Search { org.opensearch.client.opensearch.OpenSearchClient search; RestClient low; HikariDataSource pool; }'
+      ].join('\n')
+    }));
+
     const result = await collectS010Evidence(root, 'java');
 
-    expect(Date.now() - started).toBeLessThan(2_000);
-    expect(result.scenarios.map(scenario => scenario.id)).toContain('database/startup-unavailable');
+    expect(result.diagnostics.map(item => item.message.replace(/ \(.*/, ''))).toEqual(['Uses HTTP clients', 'Uses datastore clients']);
+  });
+
+  it('cites no descriptor line when the variable name appears more than once', async () => {
+    const root = repository(javaModule({
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({
+        metadata: { name: 'DB_HOST' },
+        launchDescriptor: { env: [{ name: 'DB_HOST' }, { name: 'DB_PORT' }] }
+      }, null, 2)
+    }));
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios.filter(scenario => scenario.scenario === 'configuration-absent')
+      .map(scenario => [scenario.id, scenario.sourceReferences[0].line])).toEqual([
+      ['database:DB_HOST/configuration-absent', undefined],
+      ['database:DB_PORT/configuration-absent', 11]
+    ]);
+  });
+
+  const javaModule = (files: Record<string, string>) => ({
+    'pom.xml': '<project><artifactId>mod-example</artifactId></project>',
+    'src/main/java/Migrations.java': 'class Migrations implements InitializingBean { Flyway flyway; }',
+    ...files
+  });
+  const uiModule = (files: Record<string, string>) => ({
+    'package.json': JSON.stringify({ name: '@folio/x', dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' }, stripes: {} }),
+    ...files
+  });
+  const databaseYaml = (line: string) => ({ 'src/main/resources/application.yml': `spring:\n  datasource:\n${line}` });
+  // Each input took seconds before its fix and takes milliseconds after it.
+  it.each<[string, Record<string, string>, 'java' | 'javascript', number?]>([
+    ['a Spring @Value default that never closes', javaModule({
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({ launchDescriptor: { env: Array(3).fill({ name: 'DB_URL', required: true }) } }),
+      'src/main/java/Config.java': '@Value("${DB_URL:'.repeat(11_000)
+    }), 'java'],
+    ['a startup method signature that never closes', javaModule({
+      'src/main/java/Migrations.java': `class Migrations implements InitializingBean { Flyway flyway; ${'run('.repeat(45_000)} }`
+    }), 'java'],
+    ['a long run of YAML indentation', javaModule(databaseYaml(`${' '.repeat(60_000)}x`)), 'java'],
+    ['a long run of spaces inside a YAML value', javaModule(databaseYaml(`    url: jdbc${' '.repeat(60_000)}x`)), 'java'],
+    ['a long run of spaces before a carriage return in a YAML value', javaModule(databaseYaml(`    url: ${' '.repeat(35_000)}x\ry`)), 'java'],
+    ['an unclosed process.env lookup', javaModule({ 'src/main/js/env.js': 'process.env['.repeat(16_000) }), 'java'],
+    ['many browser requests in one file', uiModule({
+      'src/requests.js': 'fetch("https://a.b/");\n'.repeat(8_000)
+    }), 'javascript'],
+    // Reading 300 files takes about a second of git calls; merging the declarations took far longer.
+    ['one environment variable declared many times', javaModule(Object.fromEntries(Array.from({ length: 300 }, (_, index) => [
+      `descriptors/ModuleDescriptor-${index}.json`, JSON.stringify({ launchDescriptor: { env: Array(200).fill({ name: 'DB_URL' }) } })
+    ]))), 'java', 4_000]
+  ])('stays fast on %s', async (_name, files, language, limit = 1_000) => {
+    const root = repository(files);
+
+    const started = Date.now();
+    await collectS010Evidence(root, language);
+
+    expect(Date.now() - started).toBeLessThan(limit);
   }, 120_000);
+
   it('lists at most 1,000 dependency checks and says the list was cut', async () => {
     const root = repository({
       'package.json': JSON.stringify({ name: '@folio/x', dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' }, stripes: {} }),
-      'src/hosts.js': Array.from({ length: 1_100 }, (_, index) => `fetch("https://host${index}.example.org/");`).join('\n')
+      // Each request is bounded and handled, so without the limit the module would pass.
+      'src/hosts.js': [
+        'const signal = AbortSignal.timeout(1000);',
+        ...Array.from({ length: 1_100 }, (_, index) => `fetch("https://host${index}.example.org/", { signal }).catch(() => null);`)
+      ].join('\n')
     });
 
     const result = await collectS010Evidence(root, 'javascript');

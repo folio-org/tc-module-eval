@@ -153,7 +153,7 @@ describe('S010 deterministic evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings[0]).toMatchObject({ outcome: 'violation', statusDetermining: true });
     expect(result.summary).toBe('S010 fail: OpenSearch or Elasticsearch settings (SEARCH_URL), if missing at startup: '
-      + 'The module keeps starting without this required setting and fails later. Make startup stop with a clear error when the setting is missing.');
+      + 'Missing this required setting leads to an uncontrolled failure instead of a clear error at startup. Make startup stop with a clear error when the setting is missing.');
   });
 
   it('passes linked optional degradation with a bound and preserved readiness', () => {

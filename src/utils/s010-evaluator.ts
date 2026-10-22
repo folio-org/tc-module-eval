@@ -74,7 +74,7 @@ function classifyScenario(scenario: S010ScenarioEvidence): S010Finding {
       return finding(scenario, 'satisfactory', 'The setting is required and has no default, so the module stops at startup with an error when it is missing.');
     }
     if (scenario.proof === 'uncontrolled-failure') {
-      return finding(scenario, 'violation', 'The module keeps starting without this required setting and fails later. Make startup stop with a clear error when the setting is missing.');
+      return finding(scenario, 'violation', 'Missing this required setting leads to an uncontrolled failure instead of a clear error at startup. Make startup stop with a clear error when the setting is missing.');
     }
     return finding(scenario, 'unresolved', 'The setting is required, but the code does not show that startup stops with a clear error when it is missing.');
   }
@@ -192,7 +192,7 @@ function summary(status: EvaluationStatus, findings: S010Finding[]): string {
     case EvaluationStatus.PASS:
       return findings.some(finding => finding.dependencyId === 'dependency-scope')
         ? 'S010 pass: The tool read all of the relevant code and found no external services that the module depends on.'
-        : 'S010 pass: Every external service and setting the tool found either stops startup with a clear error or fails in a controlled way.';
+        : 'S010 pass: When a service or setting the tool found is missing or unavailable, the module either stops at startup with a clear error or handles the failure in a controlled way.';
     default:
       if (!services.length) {
         return 'S010 manual: The tool found no problems, but it could not read or analyse all of the code, so a reviewer needs to check for services it did not find.';
