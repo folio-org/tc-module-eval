@@ -145,7 +145,7 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
+      expect(result.issues[0].reason).toContain('the README does not name this dependency');
     });
 
     it('should pass when the README names the Category B dependency', () => {
@@ -179,7 +179,7 @@ describe('Dependency Utils', () => {
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
-      expect(result.issues[0].reason).toContain('mentioned in the README');
+      expect(result.issues[0].reason).toMatch(/README (does not name this dependency|names it, and it does not)/);
     });
 
     it('should handle special exceptions for CQL Java library', () => {
@@ -197,7 +197,7 @@ describe('Dependency Utils', () => {
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
-      expect(result.issues[0].reason).toContain('mentioned in the README');
+      expect(result.issues[0].reason).toMatch(/README (does not name this dependency|names it, and it does not)/);
     });
 
     // Comprehensive Category B license tests
@@ -238,10 +238,15 @@ describe('Dependency Utils', () => {
 
       it('should not count a longer name that only contains the artifactId', () => {
         const dependencies: Dependency[] = [{ name: 'org.mozilla:rhino', version: '1.7.14', licenses: ['MPL-2.0'] }];
-        const result = checkLicenseCompliance(dependencies, 'Uses rhino-engine and myrhino.');
+        const result = checkLicenseCompliance(dependencies, 'Uses rhino-engine, myrhino and rhino.engine.');
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(1);
+      });
+
+      it('should accept a name at the end of a sentence', () => {
+        const dependencies: Dependency[] = [{ name: 'org.mozilla:rhino', version: '1.7.14', licenses: ['MPL-2.0'] }];
+        expect(checkLicenseCompliance(dependencies, 'This module bundles rhino.').compliant).toBe(true);
       });
 
       it('should fail with undocumented Category B dependencies', () => {
@@ -249,7 +254,7 @@ describe('Dependency Utils', () => {
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(3);
-        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
+        expect(result.issues[0].reason).toContain('the README does not name this dependency');
       });
     });
 

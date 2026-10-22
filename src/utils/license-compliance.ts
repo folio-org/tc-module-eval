@@ -80,7 +80,7 @@ function isDocumentedInReadme(dependency: Dependency, readmeContent: string): bo
 
   const names = new Set([dependency.name, dependency.name.split(':').pop()!].filter(isNonEmptyString));
   return [...names].some(name =>
-    new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-])`, 'i').test(readmeContent)
+    new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-]|\\.\\w)`, 'i').test(readmeContent)
   );
 }
 
@@ -139,14 +139,14 @@ function evaluateMultipleLicenses(
           license,
           category,
           status: EvaluationStatus.PASS,
-          reason: `'${license}' (Category B) is mentioned in the README.`
+          reason: `'${license}' (Category B) and the README names this dependency.`
         });
       } else {
         evaluations.push({
           license,
           category,
           status: EvaluationStatus.FAIL,
-          reason: `'${license}' is a Category B license, and neither it nor this dependency is mentioned in the README.`,
+          reason: `'${license}' is a Category B license, and the README does not name this dependency.`,
           issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
         });
       }
@@ -158,14 +158,14 @@ function evaluateMultipleLicenses(
             license,
             category,
             status: EvaluationStatus.PASS,
-            reason: `'${license}' is allowed for this library because the README mentions it.`
+            reason: `'${license}' is allowed for this library because the README names it.`
           });
         } else {
           evaluations.push({
             license,
             category,
             status: EvaluationStatus.FAIL,
-            reason: `'${license}' is allowed for this library only if the README mentions it, and it does not.`,
+            reason: `'${license}' is allowed for this library only if the README names it, and it does not.`,
             issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
           });
         }
@@ -331,7 +331,7 @@ export function checkLicenseCompliance(
           if (!isDocumentedInReadme(dependency, readmeContent)) {
             issues.push({
               dependency,
-              reason: `'${license}' is allowed for this library only if the README mentions it, and it does not.`,
+              reason: `'${license}' is allowed for this library only if the README names it, and it does not.`,
               issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
             });
           }
@@ -349,7 +349,7 @@ export function checkLicenseCompliance(
         if (!isDocumentedInReadme(dependency, readmeContent)) {
           issues.push({
             dependency,
-            reason: `'${license}' is a Category B license, and neither it nor this dependency is mentioned in the README.`,
+            reason: `'${license}' is a Category B license, and the README does not name this dependency.`,
             issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
           });
         }

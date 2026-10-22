@@ -346,11 +346,12 @@ export function createHtmlReport(result: EvaluationResult): string {
       }
       if (agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
       var licenses = evidence.match(/^(Found (\d+) dependenc(?:y|ies)\.)\s*Licenses:\s*(.+)$/s);
-      if (licenses) {
+      // Group only when every listed entry parses and the entries match the count; otherwise keep the raw evidence.
+      var entries = licenses ? licenses[3].split(/;\s+/).map(function (entry) { return entry.match(/^(.+?)\s+\((.+)\)$/); }) : [];
+      if (licenses && entries.length === Number(licenses[2]) && entries.every(Boolean)) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';
         var licenseGroups = Object.create(null);
-        licenses[3].split(/;\s+/).forEach(function (entry) {
-          var match = entry.match(/^(.+?)\s+\((.+)\)$/); if (!match) return;
+        entries.forEach(function (match) {
           var name = match[2];
           if (/apache/i.test(name)) name = 'Apache 2.0';
           else if (/^mit\b/i.test(name) || /mit license/i.test(name)) name = 'MIT';

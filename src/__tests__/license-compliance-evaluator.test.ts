@@ -3,7 +3,9 @@ import {
   formatExtractionErrors,
   determineComplianceStatus,
   ThirdPartyLicenseEvaluator,
-  ThirdPartyLicenseEvaluatorAdapters
+  ThirdPartyLicenseEvaluatorAdapters,
+  evaluateS003ThirdPartyLicenses,
+  findReadmeContent
 } from '../utils/license-compliance-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import { createEvaluationRun } from '../utils/evaluation-run';
@@ -162,10 +164,10 @@ describe('determineComplianceStatus', () => {
     // Sections follow severity order, not input order; each row keeps "name:version - reason" for the HTML report.
     expect(result.details).toBe(
       'No prohibited licenses were found, but some dependencies need a reviewer to check their licenses.\n' +
-      'What to do: List LGPL and Category B dependencies or their licenses in the README. ' +
+      'What to do: Name these dependencies in the README by full name or artifactId. ' +
       'Check unknown licenses against the ASF policy. ' +
       'Check combined license expressions by hand.\n\n' +
-      'Must be mentioned in the README:\n  - lib-c:2.0 - Not in the README\n\n' +
+      'Must be named in the README:\n  - lib-c:2.0 - Not in the README\n\n' +
       'Licenses the evaluator does not know:\n  - lib-a:1.0 - Unknown license\n\n' +
       'License text that could not be read:\n  - lib-b:1.0 - Parser error'
     );
@@ -350,6 +352,87 @@ describe('ThirdPartyLicenseEvaluator', () => {
     }
   });
 
+  it.each([
+    ['pom.xml', '<project><packaging>jar</packaging></project>'],
+    ['build.gradle', "plugins { id 'java' }"],
+    ['package.json', '{"name":"ui-x","dependencies":{}}']
+  ])('should give the build-commands-off advice for %s without an evaluation run', async (file, content) => {
+    // Without an EvaluationRun no command observations are recorded, so the parsers must report it.
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-norun-'));
+    try {
+      fs.writeFileSync(path.join(repo, file), content);
+      fs.writeFileSync(path.join(repo, '.npmrc'), '');
+
+      const result = await evaluateS003ThirdPartyLicenses(repo);
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toBe('Dependency licenses were not checked because build commands are turned off for this evaluation.');
+      expect(result.details).toContain('--allow-local-commands');
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  describe('repository-controlled symlinks', () => {
+    let repo: string;
+    let outside: string;
+    beforeEach(() => {
+      repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-repo-'));
+      outside = fs.mkdtempSync(path.join(os.tmpdir(), 's003-outside-'));
+    });
+    afterEach(() => {
+      fs.rmSync(repo, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+
+    it('should not create a file outside the repository through a dangling .npmrc symlink', async () => {
+      fs.writeFileSync(path.join(repo, 'package.json'), '{"name":"ui-x"}');
+      const target = path.join(outside, 'planted');
+      fs.symlinkSync(target, path.join(repo, '.npmrc'));
+
+      await evaluateS003ThirdPartyLicenses(repo);
+
+      expect(fs.existsSync(target)).toBe(false);
+    });
+
+    it('should still create .npmrc for a repository without one', async () => {
+      fs.writeFileSync(path.join(repo, 'package.json'), '{"name":"ui-x"}');
+
+      await evaluateS003ThirdPartyLicenses(repo);
+
+      expect(fs.readFileSync(path.join(repo, '.npmrc'), 'utf-8')).toContain('@folio:registry=');
+    });
+
+    it('should not read a README that links outside the repository', () => {
+      fs.writeFileSync(path.join(outside, 'secret.md'), 'org.mozilla:rhino');
+      fs.symlinkSync(path.join(outside, 'secret.md'), path.join(repo, 'README.md'));
+
+      expect(findReadmeContent(repo)).toBe('');
+    });
+
+    it('should read a README that links to a file inside the repository, up to a size limit', () => {
+      fs.mkdirSync(path.join(repo, 'docs'));
+      fs.writeFileSync(path.join(repo, 'docs', 'README.md'), 'Uses rhino. ' + 'x'.repeat(2 * 1024 * 1024));
+      fs.symlinkSync(path.join('docs', 'README.md'), path.join(repo, 'README.md'));
+
+      const content = findReadmeContent(repo);
+      expect(content.startsWith('Uses rhino.')).toBe(true);
+      expect(content.length).toBe(1024 * 1024);
+    });
+
+    it('should not read a pom.xml that links outside the repository', async () => {
+      fs.writeFileSync(path.join(outside, 'pom.xml'), '<project><packaging>pom</packaging></project>');
+      fs.symlinkSync(path.join(outside, 'pom.xml'), path.join(repo, 'pom.xml'));
+      const evaluationRun = createEvaluationRun({ repositoryPath: repo, language: 'java', commandRunner: new LocalCommandRunner(false) });
+
+      await new ThirdPartyLicenseEvaluator().evaluate(repo, 'S003', evaluationRun);
+
+      // The outside <packaging>pom</packaging> would select the aggregate goal if it had been read.
+      const [maven] = Array.from(evaluationRun.commandObservations.values());
+      expect(maven.args[0]).toBe('license:add-third-party');
+    });
+  });
+
   it('should limit the Gradle license report to the runtime classpath', async () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-gradle-'));
     try {
@@ -376,6 +459,9 @@ describe('ThirdPartyLicenseEvaluator', () => {
       const initScript = gradle.args[gradle.args.indexOf('--init-script') + 1];
       expect(path.relative(repo, initScript).startsWith('..')).toBe(true);
       expect(scriptWhileRunning).toContain("licenseReport.configurations = ['runtimeClasspath']");
+      // Must run after the build's own afterEvaluate callbacks, which could otherwise add test configurations back.
+      expect(scriptWhileRunning).toMatch(/^gradle\.projectsEvaluated \{/);
+      expect(scriptWhileRunning).not.toContain('afterEvaluate');
       // Each run gets its own private directory, removed once Gradle finishes.
       expect(path.basename(path.dirname(initScript))).toMatch(/^tc-module-eval-s003-gradle-/);
       expect(fs.existsSync(path.dirname(initScript))).toBe(false);

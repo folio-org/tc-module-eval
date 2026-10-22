@@ -35,7 +35,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { commandFailureReason, safeReadFile, validateRepoPath } from './common';
+import { commandError, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
@@ -45,11 +45,13 @@ const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
 
 // ASF policy covers what the module distributes. This init script limits the project's license report
-// to the runtime classpath, so test configurations are not checked. It runs after the build script so
-// it overrides any configurations the project sets itself.
-const RUNTIME_CLASSPATH_INIT_SCRIPT = `allprojects { project ->
-  project.plugins.withId('com.github.jk1.dependency-license-report') {
-    project.afterEvaluate { project.licenseReport.configurations = ['runtimeClasspath'] as String[] }
+// to the runtime classpath, so test configurations are not checked. projectsEvaluated runs after every
+// project's own afterEvaluate callbacks, so it overrides configurations the build sets, even late ones.
+const RUNTIME_CLASSPATH_INIT_SCRIPT = `gradle.projectsEvaluated {
+  gradle.rootProject.allprojects { project ->
+    project.plugins.withId('com.github.jk1.dependency-license-report') {
+      project.licenseReport.configurations = ['runtimeClasspath'] as String[]
+    }
   }
 }
 `;
@@ -189,11 +191,7 @@ export async function getGradleDependencies(
     getLogger().info('Gradle license plugin output:', licenseCommand.stdout);
 
     if (licenseCommand.status !== 'success') {
-      errors.push({
-        source: 'gradle-parser',
-        message: `Gradle could not list the dependencies: ${commandFailureReason(licenseCommand)}`,
-        error: new Error(licenseCommand.stderr || commandFailureReason(licenseCommand))
-      });
+      errors.push(commandError('gradle-parser', 'Gradle', licenseCommand));
       return { dependencies: [], errors, warnings };
     }
 

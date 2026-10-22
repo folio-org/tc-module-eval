@@ -1,15 +1,47 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { CommandExecutionResult } from '../../types';
+import { CommandExecutionResult, DependencyExtractionError } from '../../types';
 import { isNonEmptyString } from '../type-guards';
 import { getLogger } from '../logger';
+import { isWithinRepo, readBoundedFileBytes } from '../repo-files';
 
 /** Plain-English reason a dependency-listing command did not succeed, for the S003 report. */
 export function commandFailureReason(result: CommandExecutionResult): string {
-  if (result.status === 'blocked' && !result.localCommandsAllowed) {
-    return 'build commands are turned off for this evaluation';
+  return commandsDisabled(result)
+    ? 'build commands are turned off for this evaluation'
+    : result.errorMessage || result.stderr || result.status;
+}
+
+function commandsDisabled(result: CommandExecutionResult): boolean {
+  return result.status === 'blocked' && !result.localCommandsAllowed;
+}
+
+/** Extraction error for a dependency-listing command that did not succeed. */
+export function commandError(source: string, tool: string, result: CommandExecutionResult): DependencyExtractionError {
+  const reason = commandFailureReason(result);
+  return {
+    source,
+    message: `${tool} could not list the dependencies: ${reason}`,
+    error: new Error(result.stderr || reason),
+    commandsDisabled: commandsDisabled(result)
+  };
+}
+
+/**
+ * Reads a repository file without leaving the repository: the path, after following any symlinks,
+ * must be a regular file inside the repository, and at most `maxBytes` are read.
+ * @returns File contents, or null if the file is missing, outside the repository, or not a regular file
+ */
+export function readRepoTextFile(repoPath: string, relativePath: string, maxBytes: number): string | null {
+  const filePath = path.join(repoPath, relativePath);
+  try {
+    if (!isWithinRepo(repoPath, filePath) || !fs.statSync(filePath).isFile()) {
+      return null;
+    }
+    return readBoundedFileBytes(filePath, maxBytes).toString('utf-8');
+  } catch {
+    return null;
   }
-  return result.errorMessage || result.stderr || result.status;
 }
 
 /**

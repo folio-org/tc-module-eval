@@ -46,7 +46,7 @@ import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { commandFailureReason, validateRepoPath } from './common';
+import { commandError, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { NPM_NETWORK_POLICY } from '../build-tool-policies';
@@ -254,11 +254,13 @@ export async function getNpmDependencies(
     const npmrcPath = path.join(validatedPath, '.npmrc');
     if (!fs.existsSync(npmrcPath)) {
       getLogger().info('Creating .npmrc with FOLIO registry configuration...');
-      fs.writeFileSync(
-        npmrcPath,
-        `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`,
-        'utf-8'
-      );
+      try {
+        // 'wx' never follows an existing path, so a dangling symlink cannot redirect this write outside the repository.
+        fs.writeFileSync(npmrcPath, `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`, { encoding: 'utf-8', flag: 'wx' });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        getLogger().warn('.npmrc is a symlink to a missing file; leaving it unchanged');
+      }
     }
 
     // Step 1: Run yarn install to get all dependencies including transitives
@@ -277,7 +279,7 @@ export async function getNpmDependencies(
     }, evaluationRun);
 
     if (installResult.status !== 'success') {
-      throw new Error(commandFailureReason(installResult));
+      return { dependencies: [], errors: [commandError('npm-parser', 'npm', installResult)], warnings };
     }
 
     // Step 2: Run license-checker-rseidelsohn to extract license information
@@ -295,7 +297,7 @@ export async function getNpmDependencies(
     }, evaluationRun);
 
     if (checkerResult.status !== 'success') {
-      throw new Error(commandFailureReason(checkerResult));
+      return { dependencies: [], errors: [commandError('npm-parser', 'npm', checkerResult)], warnings };
     }
 
     // Step 3: Parse the JSON output

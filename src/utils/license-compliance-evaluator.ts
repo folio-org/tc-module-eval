@@ -10,8 +10,7 @@ import {
 } from '../types';
 import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
-import * as fs from 'fs';
-import * as path from 'path';
+import { readRepoTextFile } from './parsers/common';
 import { getLogger } from './logger';
 
 export interface ThirdPartyLicenseEvaluatorAdapters {
@@ -23,6 +22,8 @@ export interface ThirdPartyLicenseEvaluatorAdapters {
   readReadmeContent(repoPath: string): string;
   checkCompliance(dependencies: Dependency[], readmeContent: string): ComplianceResult;
 }
+
+const MAX_README_BYTES = 1024 * 1024;
 
 const TOOL_TAGS: Record<string, string> = {
   'maven-parser': 'maven',
@@ -70,8 +71,8 @@ const ISSUE_GROUPS: Array<{ type: LicenseIssueType; title: string; action: strin
   },
   {
     type: LicenseIssueType.UNDOCUMENTED_CATEGORY_B,
-    title: 'Must be mentioned in the README',
-    action: 'List LGPL and Category B dependencies or their licenses in the README.'
+    title: 'Must be named in the README',
+    action: 'Name these dependencies in the README by full name or artifactId.'
   },
   {
     type: LicenseIssueType.UNKNOWN_LICENSE,
@@ -97,9 +98,9 @@ export function findReadmeContent(repoPath: string): string {
   const readmeFiles = ['README.md', 'README.txt', 'README', 'readme.md', 'readme.txt'];
 
   for (const readmeFile of readmeFiles) {
-    const readmePath = path.join(repoPath, readmeFile);
-    if (fs.existsSync(readmePath)) {
-      return fs.readFileSync(readmePath, 'utf-8');
+    const content = readRepoTextFile(repoPath, readmeFile, MAX_README_BYTES);
+    if (content !== null) {
+      return content;
     }
   }
   return '';
@@ -134,7 +135,7 @@ export function determineComplianceStatus(
       criterionId,
       status: EvaluationStatus.PASS,
       evidence,
-      details: `Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every license that must be mentioned in the README (Category B) is mentioned.${warningInfo}`
+      details: `Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every dependency that must be named in the README (Category B) is named.${warningInfo}`
     };
   }
 
@@ -192,7 +193,7 @@ export class ThirdPartyLicenseEvaluator {
       const commandObservations = this.getNewCommandObservations(evaluationRun, previousCommandIdentities);
 
       if (errors.length > 0) {
-        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors, commandObservations), commandObservations);
+        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors), commandObservations);
       }
 
       if (dependencies.length === 0) {
@@ -222,10 +223,9 @@ export class ThirdPartyLicenseEvaluator {
 
   private createExtractionErrorResult(
     criterionId: string,
-    errors: DependencyExtractionError[],
-    commandObservations: CommandExecutionResult[]
+    errors: DependencyExtractionError[]
   ): CriterionResult {
-    const blocked = commandObservations.some(command => command.status === 'blocked' && !command.localCommandsAllowed);
+    const blocked = errors.some(error => error.commandsDisabled);
     return {
       criterionId,
       status: EvaluationStatus.MANUAL,

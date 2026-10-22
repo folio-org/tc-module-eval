@@ -506,6 +506,21 @@ describe('EvaluationReportRenderer', () => {
     ]);
   });
 
+  it('keeps the raw S003 evidence when the license list cannot be grouped exactly', () => {
+    const renderer = new EvaluationReportRenderer();
+    const evidence = buildEvidenceSummary([
+      { name: 'org.example:a', version: '1.0', licenses: ['Custom; License'] },
+      { name: 'org.example:b', version: '1.0', licenses: ['MIT'] }
+    ]);
+    const prepared = preparedItems(renderer.renderHtml({
+      ...result,
+      criteria: [{ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' }]
+    }))[0];
+
+    expect(prepared.summary).toBe(evidence);
+    expect(prepared.tree.find((node: any) => node.text === 'Dependency licenses')).toBeUndefined();
+  });
+
   it('turns "... N more" overflow markers into hidden counts instead of list entries', () => {
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml({

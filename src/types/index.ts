@@ -375,6 +375,7 @@ export interface DependencyExtractionError {
   source: string;      // e.g., "maven-parser", "gradle-parser", "path-validation"
   message: string;     // Human-readable error message
   error?: Error;       // Original error for debugging/logging
+  commandsDisabled?: boolean; // True when the build command was not run because local commands are off
 }
 
 /**
