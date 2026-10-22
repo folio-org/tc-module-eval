@@ -1,6 +1,6 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S005PersonalDataDisclosureAnalysisResult } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { boundS005Text, MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE } from './s005-personal-data-disclosure';
+import { boundS005Text, MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE, REQUIRED_DISCLOSURE_FILENAME } from './s005-personal-data-disclosure';
 
 export async function reviewS005WithAgent(
   repoPath: string,
@@ -16,21 +16,27 @@ export async function buildS005AgentReviewRequest(
   repoPath: string,
   analysis: S005PersonalDataDisclosureAnalysisResult
 ): Promise<CriterionAgentReviewRequest> {
+  const disclosurePath = analysis.discovery.artifact?.path ?? REQUIRED_DISCLOSURE_FILENAME;
+  const misnamed = disclosurePath !== REQUIRED_DISCLOSURE_FILENAME;
   return {
     criterionId: 'S005',
     repositoryPath: repoPath,
     instructions: [
-      'Evaluate whether PERSONAL_DATA_DISCLOSURE.md is consistent with the repository. Investigate schemas, API contracts, storage, logging, and data flows, including paths missed by the deterministic scan. Distinguish personal data actually handled from incidental examples and field-name matches.',
+      ...(misnamed ? [
+        `The required ${REQUIRED_DISCLOSURE_FILENAME} is missing; the disclosure form was found at ${disclosurePath} instead. S005 already fails for that, so do not judge the file name or location. Review ${disclosurePath} as the module's disclosure.`
+      ] : []),
+      `Evaluate whether ${disclosurePath} is consistent with the repository. Investigate schemas, API contracts, storage, logging, and data flows, including paths missed by the deterministic scan. Distinguish personal data actually handled from incidental examples and field-name matches.`,
       'Compare declared categories with cited source behavior. An unchecked category is not a defect unless repository evidence supports a mismatch. Do not infer complete absence of personal data from a search with no matches.',
       'Treat an unchecked box as unanswered/not selected, not as an affirmative denial. Only checked wording that explicitly says the module does not handle personal data is an affirmative no-personal-data declaration.',
       'Do not claim legal compliance, GDPR compliance, CCPA compliance, institutional privacy approval, certification, or that the disclosure is definitively accurate.',
       'This review is advisory only for Technical Council reviewer judgment. Agent advice must not decide the final S005 status.',
-      'Return exactly one JSON object, without prose or Markdown fences: {"recommendation":"needs_reviewer_judgment","confidence":"medium","summary":"...","rationale":"...","evidenceReferences":["PERSONAL_DATA_DISCLOSURE.md","schemas/user.json"]}.',
+      `Return exactly one JSON object, without prose or Markdown fences: {"recommendation":"needs_reviewer_judgment","confidence":"medium","summary":"...","rationale":"...","evidenceReferences":["${disclosurePath}","schemas/user.json"]}.`,
       'recommendation must be likely_sufficient, likely_insufficient, or needs_reviewer_judgment; confidence must be low, medium, or high. Cite actual inspected repository files.'
     ].join('\n'),
     files: [{
       repoRelativePath: '.criterion-agent/S005/parsed-disclosure-summary.json',
       content: boundS005Text(JSON.stringify({
+        disclosurePath,
         parseState: analysis.classification.parseState,
         classificationReason: analysis.classification.reason,
         metadata: analysis.parseResult?.metadata,

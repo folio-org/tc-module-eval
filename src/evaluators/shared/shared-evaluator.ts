@@ -204,7 +204,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     analysis.warnings.push(...moduleKind.warnings);
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S005',
-      status: analysis.classification.status,
+      // A complete form that fails only because it is misnamed or misplaced still gets advisory review.
+      status: analysis.nearMatchStatus ?? analysis.classification.status,
       hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS005WithAgent(repoPath, analysis, config, commandRunner)

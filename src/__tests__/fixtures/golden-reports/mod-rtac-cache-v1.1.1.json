@@ -187,8 +187,8 @@
     {
       "criterionId": "S005",
       "status": "manual",
-      "evidence": "S005 manual: Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches.",
-      "details": "Artifact mechanics:\n  - Repository kind: backend-module\n  - Required file: PERSONAL_DATA_DISCLOSURE.md\n  - Discovery status: found\nParsed disclosure fields:\n  - Parse state: completed\nDeterministic evidence:\n  - Evidence files scanned: 200\n  - Evidence signals found: 184\nPossible mismatches:\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "evidence": "S005 manual: The disclosure form is complete and needs a reviewer to judge whether it is accurate. The automated checks only flag missing or unfinished forms and possible mismatches with the code.",
+      "details": "Artifact mechanics:\n  - Repository kind: backend-module\n  - Required file: PERSONAL_DATA_DISCLOSURE.md\n  - Discovery status: found\nDisclosure form:\n  - Form status: complete\nEvidence from the code:\n  - Files scanned: 200\n  - Matches found: 184\nPossible mismatches:\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "discovery": {
           "status": "found",
@@ -207,9 +207,12 @@
             "no_personal_data"
           ],
           "uncheckedCategories": [
-            "other",
+            "custom_fields",
             "free_form_notes",
+            "cache",
             "logging",
+            "transmission",
+            "other",
             "financial_information",
             "name",
             "birth_date",
@@ -229,9 +232,12 @@
               "no_personal_data"
             ],
             "uncheckedCategories": [
-              "other",
+              "custom_fields",
               "free_form_notes",
+              "cache",
               "logging",
+              "transmission",
+              "other",
               "financial_information",
               "name",
               "birth_date",
@@ -253,12 +259,12 @@
           "signalCount": 184,
           "scannedFileCount": 200,
           "skippedFileCount": 0,
-          "warningCount": 22
+          "warningCount": 2
         },
         "classification": {
           "status": "manual",
           "parseState": "completed",
-          "reason": "Completed S005 personal data disclosure form requires reviewer judgment; deterministic checks only classify mechanics, completion, and possible mismatches."
+          "reason": "The disclosure form is complete and needs a reviewer to judge whether it is accurate. The automated checks only flag missing or unfinished forms and possible mismatches with the code."
         },
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured",
         "possibleMismatchCount": 11,
@@ -267,7 +273,7 @@
         "uncheckedAnswerCount": 31,
         "placeholderCount": 0,
         "contradictionCount": 0,
-        "warningCount": 22
+        "warningCount": 2
       }
     },
     {
