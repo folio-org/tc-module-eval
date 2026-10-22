@@ -199,16 +199,16 @@ function normalizeS005DetailsText(details: string | undefined): string | undefin
     .split('\n')
     .filter(line =>
       line.startsWith('Artifact mechanics:') ||
-      line.startsWith('Parsed disclosure fields:') ||
-      line.startsWith('Deterministic evidence:') ||
+      line.startsWith('Disclosure form:') ||
+      line.startsWith('Evidence from the code:') ||
       line.startsWith('Possible mismatches:') ||
       line.startsWith('Agent review:') ||
       line.includes('Repository kind:') ||
       line.includes('Required file:') ||
       line.includes('Discovery status:') ||
-      line.includes('Parse state:') ||
-      line.includes('Evidence files scanned:') ||
-      line.includes('Evidence signals found:') ||
+      line.includes('Form status:') ||
+      line.includes('Files scanned:') ||
+      line.includes('Matches found:') ||
       line.includes('Not applied:')
     )
     .join('\n');

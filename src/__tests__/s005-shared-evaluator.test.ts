@@ -30,6 +30,7 @@ describe('S005 shared evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.evidence).toContain('Required top-level PERSONAL_DATA_DISCLOSURE.md was not found');
+    expect(result.evidence).not.toContain('Near match');
     expect(result.evidence).not.toContain('evaluation logic not yet implemented');
     expect(result.evidence).not.toContain('Version control and branching strategy');
   });
@@ -56,20 +57,120 @@ describe('S005 shared evaluator', () => {
     expect(result.criterionDetails).toBeDefined();
   });
 
-  it('returns fail through SharedEvaluator when the exact disclosure file is missing', async () => {
+  it('fails when the exact disclosure file is missing but still analyzes a misnamed near match', async () => {
     writeFile('PERSONAL_DATA_DISCOSURE.md', completedDisclosure());
+    writeFile('schemas/user.json', JSON.stringify({ email: 'string', firstName: 'string' }));
 
-    const result = await evaluator.evaluateCriterion('S005', tempRoot);
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005'], fakeReviewCiting('PERSONAL_DATA_DISCOSURE.md')));
     const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.evidence).toContain('Required top-level PERSONAL_DATA_DISCLOSURE.md was not found');
+    expect(result.evidence).toBe(
+      'S005 fail: Required top-level PERSONAL_DATA_DISCLOSURE.md was not found. Near match found: PERSONAL_DATA_DISCOSURE.md (missing "L" in "DISCLOSURE"). Analyzed it anyway; rename or move it to fix this failure.'
+    );
     expect(details.discovery.status).toBe('missing');
     expect(details.discovery.attempts).toEqual([
       { path: 'PERSONAL_DATA_DISCOSURE.md', reason: 'root-near-match' }
     ]);
+    expect(details.classification.parseState).toBe('completed');
+    expect(details.parseResult?.checkedCategories).toContain('no_personal_data');
+    expect(details.possibleMismatches.some(mismatch => mismatch.category === 'email')).toBe(true);
+    expect(details.nearMatchStatus).toBe(EvaluationStatus.MANUAL);
+    expect(result.agentReview).toMatchObject({ available: true, recommendation: 'likely_insufficient' });
+    expect(result.details).toContain('Agent review:\n  - Advisory recommendation: likely_insufficient');
     expect(result.details).toContain('Missing exact file: PERSONAL_DATA_DISCLOSURE.md');
+    expect(result.details).toContain('Analyzed near match: PERSONAL_DATA_DISCOSURE.md');
     expect(result.details).toContain('PERSONAL_DATA_DISCOSURE.md (root-near-match)');
+    expect(result.details).toContain([
+      '  - Checked answers:',
+      '    - Does not store personal data (line 7)',
+      '  - Unchecked answers:',
+      '    - Email address (line 8)',
+      '    - First name (line 9)'
+    ].join('\n'));
+    expect(result.details).toContain("    - Email addresses: Not marked on the form, but found in the module's schemas or code. (evidence: schemas/user.json:1 [schema])");
+  });
+
+  it('does not count an analyzed near match as source evidence for its own answers', async () => {
+    writeFile('docs/personal_data_disclosure.md', completedDisclosure());
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot);
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+
+    expect(details.discovery.attempts).toEqual([
+      { path: 'docs/personal_data_disclosure.md', reason: 'bounded-nested-near-match' }
+    ]);
+    expect(details.classification.parseState).toBe('completed');
+    expect(details.evidenceScan?.scannedFiles).toEqual([]);
+    expect(details.possibleMismatches).toEqual([]);
+  });
+
+  it('cites the analyzed near match, not the missing required file, for contradictions', async () => {
+    writeFile('docs/personal_data_disclosure.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: 2026-06-12
+Last Reviewed: 2026-06-12
+
+## Personal Data
+- [x] Does not store personal data
+- [x] Email address
+`);
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot);
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+    const contradiction = details.possibleMismatches.find(mismatch => mismatch.kind === 'contradiction');
+
+    expect(contradiction?.evidenceReferences).toEqual(['docs/personal_data_disclosure.md:7', 'docs/personal_data_disclosure.md:8']);
+    expect(result.details).not.toContain('PERSONAL_DATA_DISCLOSURE.md:');
+  });
+
+  it('keeps the near match failure reason when the analyzed near match is incomplete', async () => {
+    writeFile('PERSONAL_DATA_DISCOSURE.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: 2026-06-12
+
+## Personal Data
+- [ ] Does not store personal data
+- [ ] Email address
+`);
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005'], fakeReviewCiting('PERSONAL_DATA_DISCOSURE.md')));
+    const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.agentReview).toBeUndefined();
+    expect(result.details).not.toContain('Agent review:');
+    expect(details.classification.parseState).toBe('incomplete');
+    expect(result.evidence).toContain('Analyzed it anyway');
+    expect(result.evidence).toContain('It also fails on its own: No checked disclosure answers');
+  });
+
+  it('treats an unchecked "does not store any PD" row as disclosing storage', async () => {
+    writeFile('src/main/java/org/folio/UserStore.java', 'userRepository.persist(userEmail);');
+    writeTemplateDisclosure('- [ ] This module does not store any PD.');
+
+    const stores = (await evaluator.evaluateCriterion('S005', tempRoot)).criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+    expect(stores.possibleMismatches.map(mismatch => mismatch.category)).not.toContain('storage');
+    expect(stores.matchingEvidence.map(assessment => assessment.category)).toContain('storage');
+
+    writeTemplateDisclosure('- [x] This module does not store any PD.');
+    const doesNotStore = (await evaluator.evaluateCriterion('S005', tempRoot)).criterionDetails as S005PersonalDataDisclosureAnalysisResult;
+    expect(doesNotStore.matchingEvidence.map(assessment => assessment.category)).not.toContain('storage');
+  });
+
+  it('picks strongest examples across categories, mismatched categories first', async () => {
+    writeFile('ramls/addresstype.json', Array.from({ length: 10 }, (_, index) => `"addressLine${index}": "string",`).join('\n'));
+    writeFile('src/main/java/org/folio/Profile.java', 'String profilePicture = user.getProfilePicture();');
+    writeTemplateDisclosure('- [x] Address');
+
+    const result = await evaluator.evaluateCriterion('S005', tempRoot);
+    const examples = (result.details ?? '').split('  - Strongest examples:\n')[1].split('\n\n')[0].split('\n');
+
+    expect(examples[0]).toContain('src/main/java/org/folio/Profile.java:1 [code] profile picture');
+    expect(examples[1]).toContain('ramls/addresstype.json:1 [schema] address');
+    expect(examples).toHaveLength(8);
   });
 
   it('returns manual for completed forms with structured criterionDetails', async () => {
@@ -84,10 +185,10 @@ describe('S005 shared evaluator', () => {
     expect(details.parseResult?.checkedCategories).toContain('no_personal_data');
     expect(details.evidenceScan?.signals.some(signal => signal.category === 'email')).toBe(true);
     expect(details.possibleMismatches.length).toBeGreaterThan(0);
-    expect(result.details).toContain('Parsed disclosure fields:');
-    expect(result.details).toContain('Deterministic evidence:');
+    expect(result.details).toContain('Disclosure form:');
+    expect(result.details).toContain('Evidence from the code:');
     expect(result.details).toContain('Possible mismatches:');
-    expect(result.details).toContain('Supporting deterministic evidence:');
+    expect(result.details).toContain('Other evidence:');
     expect(JSON.stringify(result.criterionDetails)).not.toContain('# Personal Data Disclosure');
     expect(JSON.stringify(result.criterionDetails)).not.toContain(tempRoot);
     expect(JSON.stringify(result.criterionDetails)).toContain('"sizeBytes"');
@@ -111,7 +212,7 @@ This long template instruction should not be dumped as whole-file report content
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.details).toContain('Placeholder/incomplete evidence:');
-    expect(result.details).toContain('Unchecked answer evidence:');
+    expect(result.details).toContain('Unchecked answers:\n    - Does not store personal data (line 7)\n    - Email address (line 8)');
     expect(result.details).toContain('Last updated: YYYY-MM-DD');
     expect(result.details).not.toContain('This long template instruction should not be dumped as whole-file report content.');
   });
@@ -299,8 +400,36 @@ Last Reviewed: YYYY-MM-DD
     });
   }
 
+  function fakeReviewCiting(reference: string): CriterionAgentReviewResult {
+    return {
+      available: true,
+      criterionId: 'S005',
+      recommendation: 'likely_insufficient',
+      confidence: 'medium',
+      summary: 'S005 fake review summary.',
+      rationale: 'S005 fake review rationale.',
+      evidenceReferences: [reference],
+      warnings: [],
+      errors: []
+    };
+  }
+
   function writeCompletedDisclosure(): void {
     writeFile('PERSONAL_DATA_DISCLOSURE.md', completedDisclosure());
+  }
+
+  function writeTemplateDisclosure(row: string): void {
+    writeFile('PERSONAL_DATA_DISCLOSURE.md', `
+# Personal Data Disclosure
+Form Version: v1.1
+Last Updated: 2026-06-12
+Last Reviewed: 2026-06-12
+
+## Personal Data processed by this Module
+${row}
+- [ ] This module does not process any PD.
+- [x] Email address
+`);
   }
 
   function completedDisclosure(): string {
