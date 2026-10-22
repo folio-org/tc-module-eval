@@ -8,9 +8,9 @@ S001 reads top-level license files: `LICENSE`, `LICENCE` and `COPYING` in any ca
 
 - `pass`: every license file is Apache 2.0. Without a license file, pass when `pom.xml` or the `package.json` `license` field declares only Apache 2.0.
 - `fail`: the license files are not Apache 2.0; or there is no license file and the declared licenses are not Apache 2.0, or nothing declares a license.
-- `manual`: license files disagree; declarations list Apache 2.0 with another license (including SPDX `OR` expressions); there is no license file and `pom.xml` declares no license but has a `<parent>` that may supply one; or the check cannot read the repository.
+- `manual`: license files disagree; a license file links outside the repository; declarations list Apache 2.0 with another license (including SPDX `OR` expressions); there is no license file and `pom.xml` declares no license but has a `<parent>` that may supply one; or the check cannot read the repository.
 
-When a license file exists, `pom.xml` and `package.json` declarations are not consulted. Parent POMs are never resolved.
+When a license file exists, `pom.xml` and `package.json` declarations are not consulted. Parent POMs are never resolved. Files that link outside the repository (or to nothing) are never read; such a license file makes the result `manual`, and such a `pom.xml` or `package.json` is ignored.
 
 ## S002 Descriptor Generation
 

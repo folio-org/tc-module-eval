@@ -192,6 +192,52 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
     });
   });
 
+  describe('links', () => {
+    let outsideDir: string;
+
+    beforeEach(() => {
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 's001-outside-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    });
+
+    function linkOutside(name: string, content: string): void {
+      const target = path.join(outsideDir, `${name}.target`);
+      fs.writeFileSync(target, content);
+      fs.symlinkSync(target, path.join(repoPath, name));
+    }
+
+    it('does not read a license file that links outside the repository', async () => {
+      linkOutside('LICENSE', 'evaluator-secret-token-123\n');
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.details).toBe('License file: LICENSE (not read: it links outside the repository)');
+      expect(`${result.evidence}\n${result.details}`).not.toContain('evaluator-secret-token-123');
+    });
+
+    it('does not read pom.xml or package.json that link outside the repository', async () => {
+      linkOutside('pom.xml', pom(`<licenses>${pomLicense('Apache License, Version 2.0')}</licenses>`));
+      linkOutside('package.json', '{"license": "Apache-2.0"}');
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.details).toContain('Build file: pom.xml was not read (it links outside the repository)');
+      expect(result.details).toContain('Build file: package.json was not read (it links outside the repository)');
+    });
+
+    it('reads a license file that links to a file inside the repository', async () => {
+      write({ 'LICENSE.txt': APACHE_LICENSE });
+      fs.symlinkSync(path.join(repoPath, 'LICENSE.txt'), path.join(repoPath, 'LICENSE'));
+
+      expect((await check()).status).toBe(EvaluationStatus.PASS);
+    });
+  });
+
   it('fails a repository with no license anywhere without mentioning pom.xml', async () => {
     write({ 'README.md': '# Example' });
 

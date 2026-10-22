@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
+import { isWithinRepo, realPath } from './repo-files';
 
 // Top-level LICENSE, LICENCE or COPYING files in any case, with or without a suffix (LICENSE.md, LICENSE-2.0.txt).
 const LICENSE_FILE_PATTERN = /^(licen[cs]e|copying)([-._].*)?$/i;
@@ -17,6 +18,8 @@ export interface LicenseFileFinding {
   name: string;
   isApache2: boolean;
   firstLine: string;
+  // Why the file was not read; set for links that resolve outside the repository or nowhere.
+  notRead?: string;
 }
 
 export interface DeclaredLicense {
@@ -28,6 +31,7 @@ export interface DeclaredLicense {
 export type BuildFileFinding =
   | { file: 'pom.xml' | 'package.json'; status: 'missing' }
   | { file: 'pom.xml' | 'package.json'; status: 'unparseable'; error: string }
+  | { file: 'pom.xml' | 'package.json'; status: 'not_read'; reason: string }
   | { file: 'pom.xml' | 'package.json'; status: 'no_license'; parent?: string }
   | { file: 'pom.xml' | 'package.json'; status: 'declared'; licenses: DeclaredLicense[] };
 
@@ -60,9 +64,13 @@ export class LicenseUtils {
 
     const findings: LicenseFileFinding[] = [];
     for (const name of names) {
-      const filePath = path.join(repoPath, name);
-      if (!(await fs.stat(filePath)).isFile()) continue;
-      const content = await fs.readFile(filePath, 'utf-8');
+      const file = await readRepoFile(repoPath, name);
+      if (file.status === 'missing') continue;
+      if (file.status === 'not_read') {
+        findings.push({ name, isApache2: false, firstLine: '', notRead: file.reason });
+        continue;
+      }
+      const content = file.content;
       const firstLine = content.split('\n').map(line => line.trim()).find(Boolean) ?? '';
       findings.push({ name, isApache2: this.isApache2License(content), firstLine: bound(firstLine, MAX_FIRST_LINE_LENGTH) });
     }
@@ -70,10 +78,11 @@ export class LicenseUtils {
   }
 
   static async checkMavenLicense(repoPath: string): Promise<BuildFileFinding> {
-    const content = await readIfExists(path.join(repoPath, 'pom.xml'));
-    if (content === undefined) {
-      return { file: 'pom.xml', status: 'missing' };
+    const file = await readRepoFile(repoPath, 'pom.xml');
+    if (file.status !== 'read') {
+      return { file: 'pom.xml', ...file };
     }
+    const content = file.content;
 
     let project: any;
     try {
@@ -102,10 +111,11 @@ export class LicenseUtils {
   }
 
   static async checkPackageJsonLicense(repoPath: string): Promise<BuildFileFinding> {
-    const content = await readIfExists(path.join(repoPath, 'package.json'));
-    if (content === undefined) {
-      return { file: 'package.json', status: 'missing' };
+    const file = await readRepoFile(repoPath, 'package.json');
+    if (file.status !== 'read') {
+      return { file: 'package.json', ...file };
     }
+    const content = file.content;
 
     let packageJson: any;
     try {
@@ -158,12 +168,25 @@ export class LicenseUtils {
   }
 
   private static licenseFileResult(criterionId: string, files: LicenseFileFinding[]): CriterionResult {
-    const details = files.map(file => file.isApache2
-      ? `License file: ${file.name} (Apache License 2.0)`
-      : `License file: ${file.name} (not Apache 2.0; starts with "${file.firstLine || '(empty file)'}")`
+    const details = files.map(file => file.notRead
+      ? `License file: ${file.name} (not read: ${file.notRead})`
+      : file.isApache2
+        ? `License file: ${file.name} (Apache License 2.0)`
+        : `License file: ${file.name} (not Apache 2.0; starts with "${file.firstLine || '(empty file)'}")`
     ).join('\n');
     const apache = files.filter(file => file.isApache2).map(file => file.name);
-    const other = files.filter(file => !file.isApache2).map(file => file.name);
+    const other = files.filter(file => !file.isApache2 && !file.notRead).map(file => file.name);
+    const unread = files.filter(file => file.notRead).map(file => file.name);
+
+    // An unread file could hold any license, so the result cannot be decided automatically.
+    if (unread.length) {
+      return {
+        criterionId,
+        status: EvaluationStatus.MANUAL,
+        evidence: `The license ${unread.length === 1 ? 'file' : 'files'} ${joinNames(unread)} ${unread.length === 1 ? 'was' : 'were'} not read because ${unread.length === 1 ? 'it links' : 'they link'} outside the repository or to a missing file. A reviewer must check the license; replace ${unread.length === 1 ? 'the link' : 'the links'} with a top-level LICENSE file containing the Apache License 2.0 text.`,
+        details
+      };
+    }
 
     if (!other.length) {
       return {
@@ -268,6 +291,8 @@ function describeBuildFile(finding: BuildFileFinding): string {
       return `${finding.file} not found`;
     case 'unparseable':
       return `${finding.file} could not be parsed (${finding.error})`;
+    case 'not_read':
+      return `${finding.file} was not read (${finding.reason})`;
     case 'no_license':
       if (finding.file === 'package.json') return 'package.json has no license field';
       return finding.parent
@@ -280,13 +305,21 @@ function describeBuildFile(finding: BuildFileFinding): string {
   }
 }
 
-async function readIfExists(filePath: string): Promise<string | undefined> {
+type RepoFile = { status: 'read'; content: string } | { status: 'missing' } | { status: 'not_read'; reason: string };
+
+// The evaluated repository is untrusted: never follow a link out of it, or its target's text could reach the report.
+async function readRepoFile(repoPath: string, name: string): Promise<RepoFile> {
+  const filePath = path.join(repoPath, name);
   try {
-    return await fs.readFile(filePath, 'utf-8');
+    await fs.lstat(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing' };
     throw error;
   }
+  if (!realPath(filePath)) return { status: 'not_read', reason: 'it is a broken link' };
+  if (!isWithinRepo(repoPath, filePath)) return { status: 'not_read', reason: 'it links outside the repository' };
+  if (!(await fs.stat(filePath)).isFile()) return { status: 'missing' };
+  return { status: 'read', content: await fs.readFile(filePath, 'utf-8') };
 }
 
 function textOf(value: unknown): string {
