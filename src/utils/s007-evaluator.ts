@@ -425,7 +425,7 @@ function summaryFor(status: EvaluationStatus, findings: S007TechnologyFinding[])
         : `${finding.displayName} (${REVIEW_REASONS[finding.classification]})`);
     }
   }
-  return `S007 manual: No technology breaks a policy rule, but a reviewer needs to check ${listText([...reviewItems.values()])}.`;
+  return `S007 manual: No definite policy violation was found, but a reviewer needs to check ${listText([...reviewItems.values()])}.`;
 }
 
 function listText(items: string[]): string {

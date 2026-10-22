@@ -78,15 +78,17 @@ export async function enrichS007WithMavenEffectivePom(
       if (!matchJavaIdentity(groupId, artifactId)) continue;
       if (representedKeys.has(dependency.key)) continue;
       const subject = `${dependency.coordinates}${dependency.key === `${dependency.coordinates}:jar:` ? '' : ` (${dependency.key})`} ${dependency.version}`;
-      const message = `Maven's effective POM adds ${subject} from a parent POM outside the repository; the tool did not check it.`;
-      if (!diagnostics.some(diagnostic => diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message)) {
+      const message = `Maven's effective POM includes ${subject}, which is not declared in the repository's own build files, so the tool did not check it.`;
+      if (!diagnostics.some(diagnostic =>
+        diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message && diagnostic.path === sourcePath
+      )) {
         diagnostics = [...diagnostics, {
           code: 'effective_model_unrepresented',
           message,
           material: true,
           path: sourcePath,
           subject,
-          listHeading: 'Added by a parent POM outside the repository and not checked'
+          listHeading: 'In the Maven effective POM but not declared in the repository, so not checked'
         }];
         changed = true;
       }
@@ -137,7 +139,6 @@ function unresolvedMavenObservations(
     if (
       observation.ecosystem !== 'java' ||
       observation.evidenceKind !== 'dependency-declaration' ||
-      !observation.sourcePath.endsWith('pom.xml') ||
       observation.declaredVersion ||
       observation.resolvedVersion ||
       observation.versionResolutionEligible === false ||
@@ -156,16 +157,21 @@ async function produceEffectivePom(
 ): Promise<{ versions: Map<string, Set<string>>; dependencies: EffectiveMavenDependency[] } | undefined> {
   const pomPath = path.resolve(repoPath, sourcePath);
   if (!pomPath.startsWith(`${path.resolve(repoPath)}${path.sep}`) && pomPath !== path.resolve(repoPath)) return undefined;
-  if (
-    !fs.existsSync(pomPath) ||
-    fs.lstatSync(pomPath).isSymbolicLink() ||
-    !fs.statSync(pomPath).isFile() ||
-    fs.statSync(pomPath).size > MAX_EFFECTIVE_POM_BYTES ||
-    !isWithinRepo(repoPath, pomPath)
-  ) return undefined;
   // Read the project identity before Maven runs: the build can rewrite repository files, for example replace
-  // pom.xml with a link to a file outside the repository.
-  const sourceProject = await parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true).catch(() => undefined);
+  // pom.xml with a link to a file outside the repository. A file that cannot be read skips enrichment only.
+  let sourceProject: Awaited<ReturnType<typeof parseMavenProject>>;
+  try {
+    if (
+      !fs.existsSync(pomPath) ||
+      fs.lstatSync(pomPath).isSymbolicLink() ||
+      !fs.statSync(pomPath).isFile() ||
+      fs.statSync(pomPath).size > MAX_EFFECTIVE_POM_BYTES ||
+      !isWithinRepo(repoPath, pomPath)
+    ) return undefined;
+    sourceProject = await parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true);
+  } catch {
+    return undefined;
+  }
   if (!sourceProject) return undefined;
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 's007-effective-pom-'));

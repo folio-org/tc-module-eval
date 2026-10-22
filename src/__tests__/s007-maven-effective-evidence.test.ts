@@ -157,7 +157,7 @@ describe('S007 Maven effective-POM evidence', () => {
       expect.objectContaining({
         code: 'effective_model_unrepresented',
         material: true,
-        message: expect.stringContaining('adds io.vertx:vertx-core 4.5.0 from a parent POM outside the repository')
+        message: expect.stringContaining('includes io.vertx:vertx-core 4.5.0, which is not declared in the repository')
       })
     ]));
     expect(enriched.complete).toBe(false);
@@ -197,6 +197,52 @@ describe('S007 Maven effective-POM evidence', () => {
     ]));
     expect(enriched.diagnostics).toEqual([]);
     expect(enriched.complete).toBe(true);
+  });
+
+  it('enriches a module POM with a non-standard file name', async () => {
+    await fs.outputFile(path.join(repoPath, 'tools/pom-tools.xml'), await fs.readFile(path.join(repoPath, 'pom.xml'), 'utf8'));
+    const runner = new EffectivePomRunner(effectivePom([dependency('org.projectlombok', 'lombok', '1.18.42')]));
+
+    const enriched = await enrichS007WithMavenEffectivePom(
+      repoPath, unresolvedEvidence(['org.projectlombok:lombok'], 'tools/pom-tools.xml'), run(runner), runner
+    );
+
+    expect(runner.requests).toHaveLength(1);
+    expect(enriched.observations[0]).toMatchObject({ resolvedVersion: '1.18.42' });
+  });
+
+  it('reports an unchecked effective-model dependency for each POM that has it', async () => {
+    const pom = await fs.readFile(path.join(repoPath, 'pom.xml'), 'utf8');
+    await fs.outputFile(path.join(repoPath, 'a/pom.xml'), pom);
+    await fs.outputFile(path.join(repoPath, 'b/pom.xml'), pom);
+    const runner = new EffectivePomRunner(effectivePom([
+      dependency('org.projectlombok', 'lombok', '1.18.42'),
+      dependency('io.vertx', 'vertx-core', '4.5.0')
+    ]));
+    const a = unresolvedEvidence(['org.projectlombok:lombok'], 'a/pom.xml');
+    const b = unresolvedEvidence(['org.projectlombok:lombok'], 'b/pom.xml');
+    const evidence = { ...a, observations: [...a.observations, ...b.observations], diagnostics: [...a.diagnostics, ...b.diagnostics] };
+
+    const enriched = await enrichS007WithMavenEffectivePom(repoPath, evidence, run(runner), runner);
+
+    expect(enriched.diagnostics
+      .filter(diagnostic => diagnostic.code === 'effective_model_unrepresented')
+      .map(diagnostic => diagnostic.path)).toEqual(['a/pom.xml', 'b/pom.xml']);
+  });
+
+  (process.getuid?.() === 0 ? it.skip : it)('skips enrichment, keeping the evidence, when a POM cannot be read', async () => {
+    await fs.chmod(path.join(repoPath, 'pom.xml'), 0o000);
+    const runner = new EffectivePomRunner(effectivePom([dependency('org.projectlombok', 'lombok', '1.18.42')]));
+    const evidence = unresolvedEvidence(['org.projectlombok:lombok']);
+
+    try {
+      const enriched = await enrichS007WithMavenEffectivePom(repoPath, evidence, run(runner), runner);
+
+      expect(enriched).toBe(evidence);
+      expect(runner.requests).toHaveLength(0);
+    } finally {
+      await fs.chmod(path.join(repoPath, 'pom.xml'), 0o644);
+    }
   });
 
   it('marks a conflict introduced by an effective-POM version', async () => {

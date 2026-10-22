@@ -1617,8 +1617,8 @@
     {
       "criterionId": "S007",
       "status": "manual",
-      "evidence": "S007 manual: No technology breaks a policy rule, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
-      "details": "S007 manual: No technology breaks a policy rule, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
+      "evidence": "S007 manual: No definite policy violation was found, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
+      "details": "S007 manual: No definite policy violation was found, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
       "criterionDetails": {
         "policyFormatVersion": "1.0",
         "findingCount": 14,

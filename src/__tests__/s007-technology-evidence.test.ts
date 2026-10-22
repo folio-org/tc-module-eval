@@ -746,6 +746,56 @@ describe('S007 static technology evidence', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it.each([
+    ['assignment', 'languageVersion = JavaLanguageVersion.of(\n      21\n    )'],
+    ['set call', 'languageVersion.set(JavaLanguageVersion.of(\n      21\n    ))']
+  ])('reads a Java toolchain %s whose argument is on its own line', async (_name, declaration) => {
+    await write('build.gradle', `
+      java { toolchain { ${declaration} } }
+      dependencies { implementation 'io.vertx:vertx-core:5.0.4' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '21', sourceDetail: 'Gradle Java toolchain' });
+    expect(result.complete).toBe(true);
+  });
+
+  it('reads a Gradle property whose name starts with def, val, or var', async () => {
+    await write('build.gradle', `
+      defaultJavaVersion = "17"
+      sourceCompatibility = defaultJavaVersion
+      dependencies { implementation 'io.vertx:vertx-core:5.0.4' }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '17' });
+  });
+
+  it('does not apply a managed version of another Maven type to a dependency', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencyManagement><dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.4</version><type>test-jar</type></dependency>
+        </dependencies></dependencyManagement>
+        <dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId></dependency>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><type>test-jar</type></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const vertx = result.observations.filter(observation => observation.identityCandidates[0] === 'vertx');
+
+    expect(vertx.map(observation => [observation.mavenDependency?.type, observation.declaredVersion])).toEqual([
+      ['jar', undefined],
+      ['test-jar', '5.0.4']
+    ]);
+  });
+
   it('does not take the Spring Framework version from other Spring projects', async () => {
     await write('pom.xml', `
       <project>

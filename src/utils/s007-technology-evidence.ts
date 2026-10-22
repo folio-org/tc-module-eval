@@ -410,8 +410,10 @@ async function visitMavenPom(
     }
     const rawVersion = xmlText(dependency.version);
     const resolvedVersion = resolveMavenValue(rawVersion, effective.properties, sourcePath);
-    if (resolvedVersion) {
-      effective.dependencyManagement.set(coordinates, { rawValue: rawVersion, ...resolvedVersion });
+    const [groupId, artifactId] = coordinates.split(':');
+    const managedKey = resolveMavenDependencyKey(dependency, groupId, artifactId, effective, sourcePath);
+    if (resolvedVersion && managedKey) {
+      effective.dependencyManagement.set(mavenManagementKey(managedKey), { rawValue: rawVersion, ...resolvedVersion });
     }
     if (xmlText(dependency.type) === 'pom' && xmlText(dependency.scope) === 'import') {
       diagnostic(
@@ -498,7 +500,10 @@ function collectMavenDependencies(
     }
     const rawVersion = xmlText(dependency.version);
     const direct = rawVersion ? resolveMavenValue(rawVersion, effective.properties, sourcePath) : undefined;
-    const managed = rawVersion ? undefined : effective.dependencyManagement.get(coordinates);
+    // Maven manages each type and classifier separately: a managed test-jar version is not the jar's version.
+    const managed = rawVersion || !mavenDependency
+      ? undefined
+      : effective.dependencyManagement.get(mavenManagementKey(mavenDependency));
     const managedResolved = managed
       ? resolveMavenValue(managed.rawValue, effective.properties, managed.sourcePath)
       : undefined;
@@ -530,6 +535,10 @@ function collectMavenDependencies(
       );
     }
   }
+}
+
+function mavenManagementKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
+  return [dependency.groupId, dependency.artifactId, dependency.type, dependency.classifier].join(':');
 }
 
 function resolveMavenDependencyKey(
@@ -1406,9 +1415,9 @@ function findGradleJavaVersion(
 ): { value?: string; sourceDetail: string; expression: string } | undefined {
   const toolchains = gradleCodeMatches(
     content,
-    /\blanguageVersion\b\s*(?:=|\.\s*set\s*\()\s*JavaLanguageVersion\.of\(([^)\r\n]+)\)/g,
+    /\blanguageVersion\b\s*(?:=|\.\s*set\s*\()\s*JavaLanguageVersion\.of\(([^)]*)\)/g,
     codePositions
-  );
+  ).filter(match => /^[^\r\n]+$/.test(match[1].trim()));
   const toolchainPositions = gradleJavaToolchainPositions(content, codePositions);
   const projectToolchains = toolchains.filter(match => toolchainPositions[match.index ?? 0] === 1);
   if (projectToolchains.length > 0) {
