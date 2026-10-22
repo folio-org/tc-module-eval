@@ -1,172 +1,149 @@
-import * as fs from 'fs-extra';
+import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
 
-const LICENSE_FILES = ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'LICENCE', 'LICENCE.txt'];
-const NO_LICENSE_FILE_ROW = `License file: none (looked for ${LICENSE_FILES.join(', ')})`;
+// Top-level LICENSE, LICENCE or COPYING files in any case, with or without a suffix (LICENSE.md, LICENSE-2.0.txt).
+const LICENSE_FILE_PATTERN = /^(licen[cs]e|copying)([-._].*)?$/i;
+const NO_LICENSE_FILE_ROW = 'License file: none (looked for top-level LICENSE, LICENCE and COPYING files in any case, with any extension)';
+// A license file must name its license in these first non-empty lines; later text may be appended third-party notices.
+const LICENSE_HEADER_LINES = 10;
+const APACHE_2_TITLE = /apache license,?\s*(?:version\s*2\.0|v?2\.0)|\bapache-2\.0\b/i;
+const OTHER_LICENSE_TITLE = /\bMIT License\b|\bGeneral Public License\b|\bBSD(?:[- ]\d-Clause)? License\b|\bMozilla Public License\b|\bEclipse Public License\b|\bISC License\b|\bCreative Commons\b|\bThe Unlicense\b|SPDX-License-Identifier:\s*(?!Apache-2\.0\b)\S/i;
 const MAX_FIRST_LINE_LENGTH = 120;
+const MAX_ERROR_LENGTH = 200;
 
-/**
- * Result of a license check operation
- */
-export interface LicenseCheckResult {
-  found: boolean;
+export interface LicenseFileFinding {
+  name: string;
   isApache2: boolean;
-  source: string;
-  details: string;
+  firstLine: string;
 }
 
+export interface DeclaredLicense {
+  name: string;
+  url?: string;
+  isApache2: boolean;
+}
+
+export type BuildFileFinding =
+  | { file: 'pom.xml' | 'package.json'; status: 'missing' }
+  | { file: 'pom.xml' | 'package.json'; status: 'unparseable'; error: string }
+  | { file: 'pom.xml' | 'package.json'; status: 'no_license'; parent?: string }
+  | { file: 'pom.xml' | 'package.json'; status: 'declared'; licenses: DeclaredLicense[] };
+
 /**
- * Utility class for license detection across all FOLIO module types
- * Provides language-agnostic license checking with optional language-specific extensions
+ * S001: the module must use the Apache License 2.0. Top-level license files decide the result;
+ * licenses declared in pom.xml or package.json are used only when there is no license file.
  */
 export class LicenseUtils {
-  /**
-   * Main entry point for Apache 2.0 license evaluation
-   * @param repoPath Path to the cloned repository
-   * @param criterionId The criterion ID for result creation
-   * @returns Promise<CriterionResult> Result of the license evaluation
-   */
   static async checkApache2License(repoPath: string, criterionId: string): Promise<CriterionResult> {
     try {
-      // Check for license in LICENSE files (universal)
-      const licenseFileResult = await this.checkLicenseFiles(repoPath);
-      if (licenseFileResult) {
-        return this.createResult(criterionId, licenseFileResult);
+      const files = await this.findLicenseFiles(repoPath);
+      if (files.length) {
+        return this.licenseFileResult(criterionId, files);
       }
 
-      // Check for license in Maven pom.xml (Java-specific)
-      const pomLicenseResult = await this.checkMavenLicense(repoPath);
-      if (pomLicenseResult) {
-        return this.createResult(criterionId, pomLicenseResult);
-      }
-
-      // TODO: Add other build file checks here
-      // - checkPackageJsonLicense() for Node.js modules
-      // - checkGradleLicense() for Gradle projects
-      // - checkSetupPyLicense() for Python modules
-
-      // No license found
-      return this.createFailResult(
-        criterionId,
-        'No license found: there is no top-level LICENSE file, and no license is declared in pom.xml. Add a top-level LICENSE file with the Apache License 2.0 text.',
-        `${NO_LICENSE_FILE_ROW}\nAlso checked: licenses declared in pom.xml (none found)`
-      );
+      const buildFiles = [await this.checkMavenLicense(repoPath), await this.checkPackageJsonLicense(repoPath)]
+        .filter(finding => finding.status !== 'missing');
+      return this.buildFileResult(criterionId, buildFiles);
     } catch (error) {
       return this.createErrorResult(criterionId, error);
     }
   }
 
-  /**
-   * Check for Apache 2.0 license in LICENSE files
-   * This is the primary, language-agnostic license detection method
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<LicenseCheckResult | null> Result or null if no license files found
-   */
-  static async checkLicenseFiles(repoPath: string): Promise<LicenseCheckResult | null> {
-    for (const fileName of LICENSE_FILES) {
-      const filePath = path.join(repoPath, fileName);
-      if (await fs.pathExists(filePath)) {
-        const content = await fs.readFile(filePath, 'utf-8');
-        const isApache2 = this.isApache2License(content);
+  static async findLicenseFiles(repoPath: string): Promise<LicenseFileFinding[]> {
+    const entries = await fs.readdir(repoPath, { withFileTypes: true });
+    const names = entries
+      .filter(entry => (entry.isFile() || entry.isSymbolicLink()) && LICENSE_FILE_PATTERN.test(entry.name))
+      .map(entry => entry.name)
+      .sort();
 
-        // The first line usually names the license, which tells a reviewer what the file is instead.
-        const firstLine = content.split('\n').map(line => line.trim()).find(Boolean);
-        const startsWith = !firstLine
-          ? '(empty file)'
-          : firstLine.length > MAX_FIRST_LINE_LENGTH ? `${firstLine.slice(0, MAX_FIRST_LINE_LENGTH - 3)}...` : firstLine;
-
-        return {
-          found: true,
-          isApache2,
-          source: fileName,
-          details: isApache2
-            ? `License file: ${fileName}`
-            : `License file: ${fileName}\nFile starts with: ${startsWith}`
-        };
-      }
+    const findings: LicenseFileFinding[] = [];
+    for (const name of names) {
+      const filePath = path.join(repoPath, name);
+      if (!(await fs.stat(filePath)).isFile()) continue;
+      const content = await fs.readFile(filePath, 'utf-8');
+      const firstLine = content.split('\n').map(line => line.trim()).find(Boolean) ?? '';
+      findings.push({ name, isApache2: this.isApache2License(content), firstLine: bound(firstLine, MAX_FIRST_LINE_LENGTH) });
     }
-
-    return null;
+    return findings;
   }
 
-  /**
-   * Check for Apache 2.0 license declaration in Maven pom.xml
-   * Java/Maven-specific license detection
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<LicenseCheckResult | null> Result or null if no pom.xml or license declaration
-   */
-  static async checkMavenLicense(repoPath: string): Promise<LicenseCheckResult | null> {
-    const pomPath = path.join(repoPath, 'pom.xml');
-    if (!(await fs.pathExists(pomPath))) {
-      return null;
+  static async checkMavenLicense(repoPath: string): Promise<BuildFileFinding> {
+    const content = await readIfExists(path.join(repoPath, 'pom.xml'));
+    if (content === undefined) {
+      return { file: 'pom.xml', status: 'missing' };
     }
 
+    let project: any;
     try {
-      const pomContent = await fs.readFile(pomPath, 'utf-8');
-      const parser = new xml2js.Parser();
-      const pomData = await parser.parseStringPromise(pomContent);
-
-      const licenses = pomData?.project?.licenses?.[0]?.license;
-      if (!licenses) {
-        return null;
-      }
-
-      // Check if any license is Apache 2.0
-      const licenseArray = Array.isArray(licenses) ? licenses : [licenses];
-      for (const license of licenseArray) {
-        const name = license.name?.[0] || '';
-        const url = license.url?.[0] || '';
-
-        if (this.isApache2LicenseDeclaration(name, url)) {
-          return {
-            found: true,
-            isApache2: true,
-            source: 'pom.xml',
-            details: [NO_LICENSE_FILE_ROW, `Declared license: ${name || '(no name given)'}`, ...(url ? [`License URL: ${url}`] : [])].join('\n')
-          };
-        }
-      }
-
-      // Found licenses but none are Apache 2.0
-      const licenseNames = licenseArray.map(l => l.name?.[0]).filter(Boolean).join(', ');
-      return {
-        found: true,
-        isApache2: false,
-        source: 'pom.xml',
-        details: `${NO_LICENSE_FILE_ROW}\nDeclared licenses: ${licenseNames || '(no name given)'}`
-      };
+      project = (await new xml2js.Parser().parseStringPromise(content))?.project;
     } catch (error) {
-      // Unable to parse pom.xml
-      return null;
+      return { file: 'pom.xml', status: 'unparseable', error: errorText(error) };
     }
+    if (!project) {
+      return { file: 'pom.xml', status: 'unparseable', error: 'no <project> element' };
+    }
+
+    const licenses: any[] = project.licenses?.[0]?.license ?? [];
+    if (!licenses.length) {
+      const parent = project.parent?.[0];
+      const parentId = parent
+        ? [parent.groupId?.[0], parent.artifactId?.[0], parent.version?.[0]].filter(Boolean).join(':') || 'unnamed parent'
+        : undefined;
+      return { file: 'pom.xml', status: 'no_license', parent: parentId };
+    }
+
+    return {
+      file: 'pom.xml',
+      status: 'declared',
+      licenses: licenses.map(license => declaredLicense(textOf(license?.name), textOf(license?.url)))
+    };
+  }
+
+  static async checkPackageJsonLicense(repoPath: string): Promise<BuildFileFinding> {
+    const content = await readIfExists(path.join(repoPath, 'package.json'));
+    if (content === undefined) {
+      return { file: 'package.json', status: 'missing' };
+    }
+
+    let packageJson: any;
+    try {
+      packageJson = JSON.parse(content);
+    } catch (error) {
+      return { file: 'package.json', status: 'unparseable', error: errorText(error) };
+    }
+
+    const licenses: DeclaredLicense[] = [];
+    const { license, licenses: legacyLicenses } = packageJson ?? {};
+    if (typeof license === 'string' && license.trim()) {
+      // SPDX expression such as "Apache-2.0" or "(MIT OR Apache-2.0)"; each named license counts.
+      license.replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+/i).map(part => part.trim()).filter(Boolean)
+        .forEach(part => licenses.push(declaredLicense(part, '')));
+    } else if (license && typeof license === 'object') {
+      licenses.push(declaredLicense(textOf(license.type), textOf(license.url)));
+    }
+    if (Array.isArray(legacyLicenses)) {
+      legacyLicenses.forEach(entry => licenses.push(declaredLicense(textOf(entry?.type), textOf(entry?.url))));
+    }
+
+    return licenses.length
+      ? { file: 'package.json', status: 'declared', licenses }
+      : { file: 'package.json', status: 'no_license' };
   }
 
   /**
-   * Check if license content indicates Apache 2.0
-   * @param content License file content
-   * @returns boolean True if content appears to be Apache 2.0 license
+   * True when the top of a license file names the Apache License 2.0 (its title and version, or an
+   * Apache-2.0 SPDX id) before any other license. Mentions further down, such as notices for bundled
+   * third-party code, do not count.
    */
   static isApache2License(content: string): boolean {
-    const normalizedContent = content.toLowerCase();
-    return (
-      normalizedContent.includes('apache license') &&
-      normalizedContent.includes('version 2.0')
-    ) || (
-      normalizedContent.includes('apache software foundation') &&
-      normalizedContent.includes('2.0')
-    ) || (
-      normalizedContent.includes('apache-2.0')
-    );
+    const header = content.split('\n').map(line => line.trim()).filter(Boolean).slice(0, LICENSE_HEADER_LINES).join(' ');
+    const apache = header.search(APACHE_2_TITLE);
+    const other = header.search(OTHER_LICENSE_TITLE);
+    return apache >= 0 && (other < 0 || apache < other);
   }
 
-  /**
-   * Check if Maven license declaration indicates Apache 2.0
-   * @param name License name from pom.xml
-   * @param url License URL from pom.xml
-   * @returns boolean True if name/URL indicates Apache 2.0
-   */
   static isApache2LicenseDeclaration(name: string, url: string): boolean {
     const normalizedName = name.toLowerCase();
     const normalizedUrl = url.toLowerCase();
@@ -180,64 +157,152 @@ export class LicenseUtils {
     );
   }
 
-  /**
-   * Create a CriterionResult from a LicenseCheckResult
-   * @param criterionId The criterion ID
-   * @param licenseResult The license check result
-   * @returns CriterionResult
-   */
-  private static createResult(criterionId: string, licenseResult: LicenseCheckResult): CriterionResult {
-    const fromPom = licenseResult.source === 'pom.xml';
-    if (licenseResult.isApache2) {
+  private static licenseFileResult(criterionId: string, files: LicenseFileFinding[]): CriterionResult {
+    const details = files.map(file => file.isApache2
+      ? `License file: ${file.name} (Apache License 2.0)`
+      : `License file: ${file.name} (not Apache 2.0; starts with "${file.firstLine || '(empty file)'}")`
+    ).join('\n');
+    const apache = files.filter(file => file.isApache2).map(file => file.name);
+    const other = files.filter(file => !file.isApache2).map(file => file.name);
+
+    if (!other.length) {
       return {
         criterionId,
         status: EvaluationStatus.PASS,
-        evidence: fromPom
-          ? 'pom.xml declares the Apache License 2.0. There is no top-level LICENSE file.'
-          : `The ${licenseResult.source} file is the Apache License 2.0.`,
-        details: licenseResult.details
+        evidence: apache.length === 1
+          ? `The ${apache[0]} file is the Apache License 2.0.`
+          : `The license files (${apache.join(', ')}) are all the Apache License 2.0.`,
+        details
       };
-    } else {
+    }
+
+    if (!apache.length) {
       return {
         criterionId,
         status: EvaluationStatus.FAIL,
-        evidence: fromPom
-          ? 'There is no top-level LICENSE file, and pom.xml declares a license other than Apache 2.0. Add a top-level LICENSE file with the Apache License 2.0 text and declare Apache 2.0 in pom.xml.'
-          : `The ${licenseResult.source} file is not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace ${licenseResult.source} with the Apache License 2.0 text.`,
-        details: licenseResult.details
+        evidence: other.length === 1
+          ? `The ${other[0]} file is not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace ${other[0]} with the Apache License 2.0 text.`
+          : `The license files (${other.join(', ')}) are not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace them with a single LICENSE file containing the Apache License 2.0 text.`,
+        details
       };
     }
-  }
 
-  /**
-   * Create a FAIL result for no license found
-   * @param criterionId The criterion ID
-   * @param evidence Evidence message
-   * @param details Additional details
-   * @returns CriterionResult
-   */
-  private static createFailResult(criterionId: string, evidence: string, details: string): CriterionResult {
     return {
       criterionId,
-      status: EvaluationStatus.FAIL,
-      evidence,
+      status: EvaluationStatus.MANUAL,
+      evidence: `The top-level license files disagree: ${joinNames(apache)} ${apache.length === 1 ? 'is' : 'are'} the Apache License 2.0, but ${joinNames(other)} ${other.length === 1 ? 'is' : 'are'} not. A reviewer must decide which license applies; FOLIO modules must use Apache 2.0 only, so remove or replace the other ${other.length === 1 ? 'file' : 'files'}.`,
       details
     };
   }
 
-  /**
-   * Create an error result when evaluation fails
-   * @param criterionId The criterion ID
-   * @param error The error that occurred
-   * @returns CriterionResult
-   */
-  private static createErrorResult(criterionId: string, error: any): CriterionResult {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+  private static buildFileResult(criterionId: string, buildFiles: BuildFileFinding[]): CriterionResult {
+    const details = [NO_LICENSE_FILE_ROW, ...buildFiles.map(finding => `Build file: ${describeBuildFile(finding)}`)].join('\n');
+    const declared = buildFiles.flatMap(finding => finding.status === 'declared' ? [finding] : []);
+    const licenses = declared.flatMap(finding => finding.licenses);
+
+    if (licenses.length && licenses.every(license => license.isApache2)) {
+      const sources = declared.map(finding => finding.file);
+      return {
+        criterionId,
+        status: EvaluationStatus.PASS,
+        evidence: `${joinNames(sources)} ${sources.length === 1 ? 'declares' : 'declare'} the Apache License 2.0. There is no top-level LICENSE file.`,
+        details
+      };
+    }
+
+    if (licenses.some(license => license.isApache2)) {
+      return {
+        criterionId,
+        status: EvaluationStatus.MANUAL,
+        evidence: `There is no top-level LICENSE file, and the declared licenses disagree: ${declared.map(describeBuildFile).join('; ')}. A reviewer must decide which license applies; FOLIO modules must use Apache 2.0 only.`,
+        details
+      };
+    }
+
+    if (licenses.length) {
+      const sources = declared.map(finding => finding.file);
+      return {
+        criterionId,
+        status: EvaluationStatus.FAIL,
+        evidence: `There is no top-level LICENSE file, and ${joinNames(sources)} ${sources.length === 1 ? 'declares a license' : 'declare licenses'} other than Apache 2.0. Add a top-level LICENSE file with the Apache License 2.0 text and declare Apache 2.0 in ${joinNames(sources)}.`,
+        details
+      };
+    }
+
+    const inheritingPom = buildFiles.find(finding => finding.status === 'no_license' && finding.parent);
+    if (inheritingPom && inheritingPom.status === 'no_license') {
+      return {
+        criterionId,
+        status: EvaluationStatus.MANUAL,
+        evidence: `There is no top-level LICENSE file, and pom.xml declares no license, but its parent POM (${inheritingPom.parent}) may supply one. Check the parent POM's license, and add a top-level LICENSE file with the Apache License 2.0 text.`,
+        details
+      };
+    }
+
+    const buildFileStates = buildFiles.map(describeBuildFile);
+    return {
+      criterionId,
+      status: EvaluationStatus.FAIL,
+      evidence: `No license found: there is no top-level LICENSE file${buildFileStates.map(state => `, and ${state}`).join('')}. Add a top-level LICENSE file with the Apache License 2.0 text.`,
+      details
+    };
+  }
+
+  private static createErrorResult(criterionId: string, error: unknown): CriterionResult {
     return {
       criterionId,
       status: EvaluationStatus.MANUAL,
       evidence: 'The license check could not run, so a reviewer must check the license by hand.',
-      details: `Error: ${errorMessage}\nWhat to check: the repository has a top-level LICENSE file with the Apache License 2.0 text`
+      details: `Error: ${errorText(error)}\nWhat to check: the repository has a top-level LICENSE file with the Apache License 2.0 text`
     };
   }
+}
+
+function declaredLicense(name: string, url: string): DeclaredLicense {
+  return { name: name || url || '(no name given)', url: url || undefined, isApache2: LicenseUtils.isApache2LicenseDeclaration(name, url) };
+}
+
+function describeBuildFile(finding: BuildFileFinding): string {
+  switch (finding.status) {
+    case 'missing':
+      return `${finding.file} not found`;
+    case 'unparseable':
+      return `${finding.file} could not be parsed (${finding.error})`;
+    case 'no_license':
+      if (finding.file === 'package.json') return 'package.json has no license field';
+      return finding.parent
+        ? `pom.xml declares no license (it has a parent POM, ${finding.parent})`
+        : 'pom.xml declares no license';
+    case 'declared':
+      return `${finding.file} declares ${joinNames(finding.licenses.map(license =>
+        license.url && license.url !== license.name ? `${license.name} (${license.url})` : license.name
+      ))}`;
+  }
+}
+
+async function readIfExists(filePath: string): Promise<string | undefined> {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+function textOf(value: unknown): string {
+  const item = Array.isArray(value) ? value[0] : value;
+  return typeof item === 'string' ? item.trim() : '';
+}
+
+function joinNames(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function errorText(error: unknown): string {
+  const message = (error instanceof Error ? error.message : String(error)).split('\n')[0];
+  return bound(message, MAX_ERROR_LENGTH);
+}
+
+function bound(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }

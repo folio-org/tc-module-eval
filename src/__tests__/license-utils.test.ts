@@ -1,315 +1,212 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { LicenseUtils } from '../utils/license-utils';
 import { EvaluationStatus } from '../types';
-import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
-// Mock fs-extra module
-jest.mock('fs-extra', () => ({
-  pathExists: jest.fn(),
-  readFile: jest.fn()
-}));
+const APACHE_LICENSE = `
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
 
-import * as fs from 'fs-extra';
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+`;
+const MIT_LICENSE = 'MIT License\n\nCopyright (c) 2026 Example\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\n';
 
-describe('LicenseUtils', () => {
-  const mockFs = {
-    pathExists: fs.pathExists as jest.MockedFunction<typeof fs.pathExists>,
-    readFile: fs.readFile as jest.MockedFunction<typeof fs.readFile>
-  };
-  const mockRepoPath = '/tmp/test-repo';
+function pom(body: string): string {
+  return `<project><modelVersion>4.0.0</modelVersion><artifactId>mod-example</artifactId>${body}</project>`;
+}
+
+function pomLicense(name: string, url = ''): string {
+  return `<license><name>${name}</name>${url ? `<url>${url}</url>` : ''}</license>`;
+}
+
+describe('LicenseUtils.checkApache2License (S001)', () => {
+  let repoPath: string;
 
   beforeEach(() => {
-    setLogger(new NoopLogger());
-    jest.clearAllMocks();
+    repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 's001-'));
   });
 
   afterEach(() => {
-    resetLogger();
+    fs.rmSync(repoPath, { recursive: true, force: true });
   });
 
-  describe('checkApache2License', () => {
-    it('should return PASS for Apache 2.0 license in LICENSE file', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('LICENSE'));
-      });
+  function write(files: Record<string, string>): void {
+    for (const [name, content] of Object.entries(files)) {
+      fs.writeFileSync(path.join(repoPath, name), content);
+    }
+  }
 
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('LICENSE')) {
-          return Promise.resolve('Apache License\nVersion 2.0\nApache Software Foundation');
-        }
-        return Promise.resolve('');
-      });
+  const check = () => LicenseUtils.checkApache2License(repoPath, 'S001');
 
-      const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
+  describe('license files', () => {
+    it('passes an Apache LICENSE file', async () => {
+      write({ LICENSE: APACHE_LICENSE, 'pom.xml': pom('') });
 
-      expect(result.status).toBe(EvaluationStatus.PASS);
+      const result = await check();
+
+      expect(result).toMatchObject({ criterionId: 'S001', status: EvaluationStatus.PASS });
       expect(result.evidence).toBe('The LICENSE file is the Apache License 2.0.');
-      expect(result.details).toBe('License file: LICENSE');
-      expect(result.criterionId).toBe('S001');
+      expect(result.details).toBe('License file: LICENSE (Apache License 2.0)');
     });
 
-    it('should return FAIL for non-Apache license in LICENSE file', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('LICENSE'));
-      });
+    it('passes an Apache LICENSE file that appends third-party notices under other licenses', async () => {
+      write({ LICENSE: `${APACHE_LICENSE}\n${'   Apache terms...\n'.repeat(20)}\nThird-party notices:\n\nMIT License\nPermission is hereby granted\n` });
 
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('LICENSE')) {
-          return Promise.resolve('MIT License\nPermission is hereby granted');
-        }
-        return Promise.resolve('');
-      });
+      expect((await check()).status).toBe(EvaluationStatus.PASS);
+    });
 
-      const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
+    it('passes a license file identified by an Apache-2.0 SPDX id', async () => {
+      write({ LICENSE: 'SPDX-License-Identifier: Apache-2.0\n\nCopyright (C) 2026 The Open Library Foundation\n' });
+
+      expect((await check()).status).toBe(EvaluationStatus.PASS);
+    });
+
+    it('fails an MIT LICENSE that only mentions bundled Apache-2.0 code', async () => {
+      write({ LICENSE: `${MIT_LICENSE}\nThis product bundles parts of Example, which is available under the Apache License, Version 2.0 (Apache-2.0).\n` });
+
+      const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
       expect(result.evidence).toContain('The LICENSE file is not the Apache License 2.0.');
       expect(result.evidence).toContain('replace LICENSE with the Apache License 2.0 text');
-      expect(result.details).toContain('File starts with: MIT License');
-      expect(result.criterionId).toBe('S001');
+      expect(result.details).toBe('License file: LICENSE (not Apache 2.0; starts with "MIT License")');
     });
 
-    it('should return PASS for Apache 2.0 license in pom.xml when no LICENSE file', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('pom.xml'));
-      });
+    it('finds license files in any case and with suffixes', async () => {
+      write({ 'license.md': APACHE_LICENSE, 'LICENSE-2.0.txt': APACHE_LICENSE });
 
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('pom.xml')) {
-          return Promise.resolve(`
-            <project>
-              <licenses>
-                <license>
-                  <name>Apache License, Version 2.0</name>
-                  <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
-                </license>
-              </licenses>
-            </project>
-          `);
-        }
-        return Promise.resolve('');
-      });
+      const result = await check();
 
-      const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
+      expect(result.status).toBe(EvaluationStatus.PASS);
+      expect(result.evidence).toBe('The license files (LICENSE-2.0.txt, license.md) are all the Apache License 2.0.');
+    });
+
+    it('fails a COPYING file with another license and names it', async () => {
+      write({ COPYING: 'GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n', 'package.json': '{"license": "Apache-2.0"}' });
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toContain('The COPYING file is not the Apache License 2.0.');
+    });
+
+    it('needs manual review when license files disagree, listing every file', async () => {
+      write({ LICENSE: MIT_LICENSE, 'LICENSE.md': APACHE_LICENSE });
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain('The top-level license files disagree: LICENSE.md is the Apache License 2.0, but LICENSE is not.');
+      expect(result.details).toBe([
+        'License file: LICENSE (not Apache 2.0; starts with "MIT License")',
+        'License file: LICENSE.md (Apache License 2.0)'
+      ].join('\n'));
+    });
+  });
+
+  describe('pom.xml', () => {
+    it('passes an Apache license declared in pom.xml', async () => {
+      write({ 'pom.xml': pom(`<licenses>${pomLicense('Apache License, Version 2.0', 'https://www.apache.org/licenses/LICENSE-2.0')}</licenses>`) });
+
+      const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.PASS);
       expect(result.evidence).toBe('pom.xml declares the Apache License 2.0. There is no top-level LICENSE file.');
-      expect(result.details).toContain('Declared license: Apache License, Version 2.0');
-      expect(result.criterionId).toBe('S001');
+      expect(result.details).toContain('Build file: pom.xml declares Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)');
     });
 
-    it('should return FAIL when no license found anywhere', async () => {
-      (mockFs.pathExists as any).mockResolvedValue(false);
+    it('fails a non-Apache license declared in pom.xml', async () => {
+      write({ 'pom.xml': pom(`<licenses>${pomLicense('GNU General Public License v3.0')}</licenses>`) });
 
-      const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
+      const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
-      expect(result.evidence).toContain('No license found');
-      expect(result.evidence).toContain('Add a top-level LICENSE file with the Apache License 2.0 text.');
-      expect(result.details).toContain('License file: none (looked for LICENSE, LICENSE.txt, LICENSE.md, LICENCE, LICENCE.txt)');
-      expect(result.criterionId).toBe('S001');
+      expect(result.evidence).toContain('pom.xml declares a license other than Apache 2.0');
+      expect(result.details).toContain('Build file: pom.xml declares GNU General Public License v3.0');
     });
 
-    it('should return MANUAL when file system error occurs', async () => {
-      (mockFs.pathExists as any).mockRejectedValue(new Error('File system error'));
+    it('needs manual review when pom.xml declares Apache and another license', async () => {
+      write({ 'pom.xml': pom(`<licenses>${pomLicense('Apache License, Version 2.0')}${pomLicense('MIT License')}</licenses>`) });
 
-      const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
+      const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.evidence).toContain('could not run');
-      expect(result.details).toContain('Error: File system error');
-      expect(result.criterionId).toBe('S001');
+      expect(result.evidence).toContain('the declared licenses disagree: pom.xml declares Apache License, Version 2.0 and MIT License');
+    });
+
+    it('fails a pom.xml that declares no license and has no parent', async () => {
+      write({ 'pom.xml': pom('') });
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toBe('No license found: there is no top-level LICENSE file, and pom.xml declares no license. Add a top-level LICENSE file with the Apache License 2.0 text.');
+    });
+
+    it('needs manual review when pom.xml declares no license but has a parent that may supply one', async () => {
+      write({ 'pom.xml': pom('<parent><groupId>org.folio</groupId><artifactId>folio-parent</artifactId><version>1.0.0</version></parent>') });
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain('its parent POM (org.folio:folio-parent:1.0.0) may supply one');
+      expect(result.details).toContain('Build file: pom.xml declares no license (it has a parent POM, org.folio:folio-parent:1.0.0)');
+    });
+
+    it('reports a pom.xml that could not be parsed', async () => {
+      write({ 'pom.xml': '<project><licenses>' });
+
+      const result = await check();
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toContain('and pom.xml could not be parsed');
     });
   });
 
-  describe('checkLicenseFiles', () => {
-    it('should detect Apache 2.0 license in LICENSE file', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('LICENSE'));
-      });
+  describe('package.json', () => {
+    it('passes an Apache-2.0 license field', async () => {
+      write({ 'package.json': '{"name": "@folio/example", "license": "Apache-2.0"}' });
 
-      (mockFs.readFile as any).mockResolvedValue('Apache License\nVersion 2.0');
+      const result = await check();
 
-      const result = await LicenseUtils.checkLicenseFiles(mockRepoPath);
-
-      expect(result).not.toBeNull();
-      expect(result!.found).toBe(true);
-      expect(result!.isApache2).toBe(true);
-      expect(result!.source).toBe('LICENSE');
+      expect(result.status).toBe(EvaluationStatus.PASS);
+      expect(result.evidence).toBe('package.json declares the Apache License 2.0. There is no top-level LICENSE file.');
     });
 
-    it('should detect non-Apache license in LICENSE.txt file', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('LICENSE.txt'));
-      });
+    it('fails a non-Apache license field without mentioning pom.xml', async () => {
+      write({ 'package.json': '{"license": "MIT"}' });
 
-      (mockFs.readFile as any).mockResolvedValue('MIT License');
+      const result = await check();
 
-      const result = await LicenseUtils.checkLicenseFiles(mockRepoPath);
-
-      expect(result).not.toBeNull();
-      expect(result!.found).toBe(true);
-      expect(result!.isApache2).toBe(false);
-      expect(result!.source).toBe('LICENSE.txt');
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toContain('package.json declares a license other than Apache 2.0');
+      expect(`${result.evidence}\n${result.details}`).not.toContain('pom.xml');
     });
 
-    it('should return null when no license files found', async () => {
-      (mockFs.pathExists as any).mockResolvedValue(false);
+    it('needs manual review for a dual-license expression', async () => {
+      write({ 'package.json': '{"license": "(MIT OR Apache-2.0)"}' });
 
-      const result = await LicenseUtils.checkLicenseFiles(mockRepoPath);
-
-      expect(result).toBeNull();
+      expect((await check()).status).toBe(EvaluationStatus.MANUAL);
     });
   });
 
-  describe('checkMavenLicense', () => {
-    it('should detect Apache 2.0 license in pom.xml', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('pom.xml'));
-      });
+  it('fails a repository with no license anywhere without mentioning pom.xml', async () => {
+    write({ 'README.md': '# Example' });
 
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('pom.xml')) {
-          return Promise.resolve(`
-            <project>
-              <licenses>
-                <license>
-                  <name>Apache License, Version 2.0</name>
-                  <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
-                </license>
-              </licenses>
-            </project>
-          `);
-        }
-        return Promise.resolve('');
-      });
+    const result = await check();
 
-      const result = await LicenseUtils.checkMavenLicense(mockRepoPath);
-
-      expect(result).not.toBeNull();
-      expect(result!.found).toBe(true);
-      expect(result!.isApache2).toBe(true);
-      expect(result!.source).toBe('pom.xml');
-    });
-
-    it('should detect non-Apache license in pom.xml', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('pom.xml'));
-      });
-
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('pom.xml')) {
-          return Promise.resolve(`
-            <project>
-              <licenses>
-                <license>
-                  <name>MIT License</name>
-                  <url>https://opensource.org/licenses/MIT</url>
-                </license>
-              </licenses>
-            </project>
-          `);
-        }
-        return Promise.resolve('');
-      });
-
-      const result = await LicenseUtils.checkMavenLicense(mockRepoPath);
-
-      expect(result).not.toBeNull();
-      expect(result!.found).toBe(true);
-      expect(result!.isApache2).toBe(false);
-      expect(result!.source).toBe('pom.xml');
-      expect(result!.details).toContain('MIT License');
-    });
-
-    it('should return null when no pom.xml exists', async () => {
-      (mockFs.pathExists as any).mockResolvedValue(false);
-
-      const result = await LicenseUtils.checkMavenLicense(mockRepoPath);
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when pom.xml has no licenses section', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('pom.xml'));
-      });
-
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('pom.xml')) {
-          return Promise.resolve('<project></project>');
-        }
-        return Promise.resolve('');
-      });
-
-      const result = await LicenseUtils.checkMavenLicense(mockRepoPath);
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when pom.xml is malformed', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('pom.xml'));
-      });
-
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        if (filePath.toString().endsWith('pom.xml')) {
-          return Promise.resolve('invalid xml content');
-        }
-        return Promise.resolve('');
-      });
-
-      const result = await LicenseUtils.checkMavenLicense(mockRepoPath);
-
-      expect(result).toBeNull();
-    });
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.evidence).toBe('No license found: there is no top-level LICENSE file. Add a top-level LICENSE file with the Apache License 2.0 text.');
+    expect(result.details).not.toContain('pom.xml');
   });
 
-  describe('isApache2License', () => {
-    it('should detect standard Apache 2.0 license text', () => {
-      const licenseText = 'Apache License\\nVersion 2.0\\nApache Software Foundation';
-      expect(LicenseUtils.isApache2License(licenseText)).toBe(true);
-    });
+  it('needs manual review when the repository cannot be read', async () => {
+    const result = await LicenseUtils.checkApache2License(path.join(repoPath, 'missing'), 'S001');
 
-    it('should detect Apache-2.0 identifier', () => {
-      const licenseText = 'Licensed under Apache-2.0';
-      expect(LicenseUtils.isApache2License(licenseText)).toBe(true);
-    });
-
-    it('should detect case-insensitive Apache license', () => {
-      const licenseText = 'APACHE LICENSE\\nversion 2.0';
-      expect(LicenseUtils.isApache2License(licenseText)).toBe(true);
-    });
-
-    it('should reject MIT license', () => {
-      const licenseText = 'MIT License\\nPermission is hereby granted';
-      expect(LicenseUtils.isApache2License(licenseText)).toBe(false);
-    });
-
-    it('should reject Apache 1.1 license', () => {
-      const licenseText = 'Apache Software License, Version 1.1';
-      expect(LicenseUtils.isApache2License(licenseText)).toBe(false);
-    });
-  });
-
-  describe('isApache2LicenseDeclaration', () => {
-    it('should detect Apache 2.0 in license name', () => {
-      expect(LicenseUtils.isApache2LicenseDeclaration('Apache License, Version 2.0', '')).toBe(true);
-    });
-
-    it('should detect Apache 2.0 in license URL', () => {
-      expect(LicenseUtils.isApache2LicenseDeclaration('', 'http://www.apache.org/licenses/LICENSE-2.0')).toBe(true);
-    });
-
-    it('should detect apache-2.0 in name', () => {
-      expect(LicenseUtils.isApache2LicenseDeclaration('apache-2.0', '')).toBe(true);
-    });
-
-    it('should reject MIT license declaration', () => {
-      expect(LicenseUtils.isApache2LicenseDeclaration('MIT License', 'https://opensource.org/licenses/MIT')).toBe(false);
-    });
-
-    it('should reject Apache 1.1 license declaration', () => {
-      expect(LicenseUtils.isApache2LicenseDeclaration('Apache Software License, Version 1.1', '')).toBe(false);
-    });
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toContain('could not run');
+    expect(result.details).toContain('Error: ENOENT');
   });
 });

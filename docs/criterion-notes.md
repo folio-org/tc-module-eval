@@ -2,6 +2,16 @@
 
 This file records criterion behavior not covered in the README.
 
+## S001 Open-Source License
+
+S001 reads top-level license files: `LICENSE`, `LICENCE` and `COPYING` in any case, with or without a suffix such as `.md` or `-2.0.txt`. A file counts as the Apache License 2.0 only when its first ten non-empty lines name it (the license title and version, or an `Apache-2.0` SPDX id) before any other license. Third-party notices appended after the Apache text do not matter; an MIT or other license file that merely mentions Apache-2.0 code does not pass.
+
+- `pass`: every license file is Apache 2.0. Without a license file, pass when `pom.xml` or the `package.json` `license` field declares only Apache 2.0.
+- `fail`: the license files are not Apache 2.0; or there is no license file and the declared licenses are not Apache 2.0, or nothing declares a license.
+- `manual`: license files disagree; declarations list Apache 2.0 with another license (including SPDX `OR` expressions); there is no license file and `pom.xml` declares no license but has a `<parent>` that may supply one; or the check cannot read the repository.
+
+When a license file exists, `pom.xml` and `package.json` declarations are not consulted. Parent POMs are never resolved.
+
 ## S002 Descriptor Generation
 
 When no static descriptor exists, descriptor validation may run its build command. Enable local commands only for trusted repositories and runners.
