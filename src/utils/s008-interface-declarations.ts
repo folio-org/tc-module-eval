@@ -9,7 +9,9 @@ const BACKEND_CANDIDATES = [
   'descriptors/ModuleDescriptor.json',
   'descriptors/ModuleDescriptor-template.json',
   'ModuleDescriptor.json',
-  'src/main/resources/descriptors/ModuleDescriptor.json'
+  'src/main/resources/descriptors/ModuleDescriptor.json',
+  // FOLIO's Grails modules (mod-agreements, mod-licenses, ...) keep their Gradle build and descriptor template in service/.
+  'service/src/main/okapi/ModuleDescriptor-template.json'
 ];
 const MAX_DECLARATION_SOURCE_BYTES = 2 * 1024 * 1024;
 
@@ -155,7 +157,11 @@ function declaration(id: string, version: string, optional: boolean, sourcePath:
 }
 
 function finalize(declarations: S008Declaration[], diagnostics: S008DeclarationDiagnostic[], sourcePath: string, content: string): S008DeclarationResult {
-  const sorted = [...declarations].sort((a, b) => `${a.id}\0${a.version}\0${a.optional}`.localeCompare(`${b.id}\0${b.version}\0${b.optional}`));
+  // A descriptor that lists the same interface twice (mod-orders requires orders-storage.settings 1.0 twice) declares it once.
+  const key = (item: S008Declaration) => `${item.id}\0${item.version}\0${item.optional}`;
+  const seen = new Set<string>();
+  const sorted = declarations.filter(item => !seen.has(key(item)) && seen.add(key(item)))
+    .sort((a, b) => key(a).localeCompare(key(b)));
   return { declarations: sorted, diagnostics, sourcePaths: [sourcePath], fileHashes: { [sourcePath]: hash(content) }, complete: !diagnostics.some(item => item.material) };
 }
 

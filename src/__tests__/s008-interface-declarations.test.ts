@@ -38,6 +38,30 @@ describe('S008 static declaration collector', () => {
     });
   });
 
+  it('reads the descriptor template of a Grails module whose Gradle build is in service/', async () => {
+    const template = path.join(repo, 'service/src/main/okapi/ModuleDescriptor-template.json');
+    await fs.ensureDir(path.dirname(template));
+    await fs.writeJson(template, { id: '${info.app.name}-${info.app.version}', requires: [{ id: 'okapi', version: '1.9' }], optional: [{ id: 'licenses', version: '6.1' }] });
+    expect(collectS008Declarations(repo, 'backend-module')).toMatchObject({
+      complete: true,
+      sourcePaths: ['service/src/main/okapi/ModuleDescriptor-template.json'],
+      declarations: [{ id: 'licenses', version: '6.1', optional: true }, { id: 'okapi', version: '1.9', optional: false }]
+    });
+  });
+
+  it('counts an interface listed twice in the same way once', async () => {
+    await fs.ensureDir(path.join(repo, 'descriptors'));
+    await fs.writeJson(path.join(repo, 'descriptors/ModuleDescriptor-template.json'), {
+      requires: [{ id: 'settings', version: '1.0' }, { id: 'users', version: '16.0' }, { id: 'settings', version: '1.0' }],
+      optional: [{ id: 'settings', version: '1.0' }]
+    });
+    expect(collectS008Declarations(repo, 'backend-module').declarations).toEqual([
+      expect.objectContaining({ id: 'settings', version: '1.0', optional: false, sourceField: 'requires[0]' }),
+      expect.objectContaining({ id: 'settings', version: '1.0', optional: true }),
+      expect.objectContaining({ id: 'users', version: '16.0', optional: false })
+    ]);
+  });
+
   it('reuses an available S002 artifact and diagnoses placeholders/unsupported syntax', async () => {
     const artifact = path.join(repo, 'generated.json');
     await fs.writeJson(artifact, { requires: [{ id: 'users', version: '${version}' }, { id: 'bad', version: '^1.0' }] });
