@@ -10,6 +10,7 @@ export interface ModuleDescriptorValidationError {
   schemaPath: string;
   keyword: string;
   message: string;
+  params: Record<string, unknown>;
 }
 
 export interface ModuleDescriptorValidationResult {
@@ -58,7 +59,8 @@ export function validateModuleDescriptorJson(content: string): ModuleDescriptorV
       instancePath: error.instancePath || '',
       schemaPath: error.schemaPath,
       keyword: error.keyword,
-      message: error.message ?? 'schema validation failed'
+      message: error.message ?? 'schema validation failed',
+      params: error.params
     }))
   };
 }

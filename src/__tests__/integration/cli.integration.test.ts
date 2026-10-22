@@ -606,7 +606,7 @@ describe('CLI Integration Tests', () => {
       expect(result.criteria).toHaveLength(1);
       expect(result.criteria[0].criterionId).toBe('S002');
       expect(result.criteria[0].status).toBe('pass');
-      expect(result.criteria[0].evidence).toContain('ModuleDescriptor.json validates against Okapi schema baseline');
+      expect(result.criteria[0].evidence).toContain('ModuleDescriptor.json (committed at the repository root) matches the Okapi ModuleDescriptor schema');
     });
 
     test('should include S002 evidence in JSON and escaped HTML reports', async () => {
@@ -618,8 +618,8 @@ describe('CLI Integration Tests', () => {
         criteria: [{
           criterionId: 'S002',
           status: EvaluationStatus.PASS,
-          evidence: 'Module descriptor ModuleDescriptor.json validates against Okapi schema baseline',
-          details: 'Warnings:\n  - <script>alert("x")</script>\nCommand: mvn process-resources (success)'
+          evidence: 'The module descriptor ModuleDescriptor.json (committed at the repository root) matches the Okapi ModuleDescriptor schema.',
+          details: 'Notes:\n  - <script>alert("x")</script>\nBuild command: mvn process-resources (ran locally and succeeded)'
         }]
       };
 
@@ -627,7 +627,7 @@ describe('CLI Integration Tests', () => {
       const reportPaths = await reportGenerator.generateReports(result);
 
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
-      expect(jsonContent).toContain('Okapi schema baseline');
+      expect(jsonContent).toContain('Okapi ModuleDescriptor schema');
 
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
       expect(htmlContent).toContain('\\u003cscript\\u003ealert');
