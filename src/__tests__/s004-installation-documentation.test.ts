@@ -38,7 +38,7 @@ Set environment variable ELASTICSEARCH_URL for production search.
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
     expect(result.classification.reason).toContain('concrete steps to install');
     expect(result.classification.filesConsidered).toEqual(['README.md']);
-    expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('docker_runtime');
+    expect(result.candidates[0].signals.map(signal => signal.group)).toContain('docker_runtime');
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('okapi_tenant_enablement');
   });
 
@@ -89,7 +89,9 @@ Install this UI module into platform-complete with the related backend modules e
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('stripes_setup');
+    expect(result.candidates[0].signals.map(signal => signal.group)).toEqual(
+      expect.arrayContaining(['stripes_setup', 'okapi_tenant_enablement'])
+    );
   });
 
   it('keeps long excerpts on one report line', () => {
@@ -101,12 +103,118 @@ Install this UI module into platform-complete with the related backend modules e
     expect(Buffer.byteLength(excerpt)).toBeLessThanOrEqual(704);
   });
 
-  it('does not label backend tenant identifiers or Okapi URLs as frontend setup', () => {
+  it('treats configuring the Okapi URL and tenant ID as configuration, not frontend or Okapi setup', () => {
     writeFile('README.md', 'Configure the Okapi URL and tenant ID before enabling this backend module.');
     const result = analyzeS004Documentation(tempRoot);
     const groups = result.candidates.flatMap(candidate => candidate.signals.map(signal => signal.group));
-    expect(groups).toContain('okapi_tenant_enablement');
-    expect(groups).not.toContain('stripes_setup');
+    expect(groups).toEqual(['env_configuration']);
+  });
+
+  it('does not count Okapi or tenant mentions in configuration tables as Okapi steps', () => {
+    writeFile('README.md', `
+## Configuration
+| Property | Default | Description |
+|---|---|---|
+| \`SECURE_REQUESTS_FEATURE_ENABLED\` | \`false\` | true to enable secure requests |
+| \`SECURE_TENANT_ID\` | \`secure\` | Tenant id for GET /patron/tenant/{tenantId} |
+| \`SYSTEM_USER_ENABLED\` | \`false\` | Enable legacy Okapi system-user token retrieval |
+
+These require the use of Okapi 3.x or later.
+`);
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].signals.map(signal => signal.group)).not.toContain('okapi_tenant_enablement');
+    expect(result.classification.reason).toContain('too briefly');
+  });
+
+  it.each([
+    'POST http://{okapi-location}/circulation/check-out-by-barcode',
+    'The meta `_tenant` interface is present in all modules.',
+    'x-okapi-tenant: <tenant>',
+    'Enable this feature for a tenant in the settings app.'
+  ])('does not count an Okapi or tenant mention as an Okapi step: %s', mention => {
+    writeFile('README.md', mention);
+    const result = analyzeS004Documentation(tempRoot);
+    expect(result.candidates[0].signals.map(signal => signal.group)).not.toContain('okapi_tenant_enablement');
+  });
+
+  it.each([
+    'curl -X POST -H "X-Okapi-Tenant: diku" -d @descriptor.json http://localhost:9130/_/proxy/tenants/diku/modules',
+    'Post the module descriptor to Okapi with curl -d @target/ModuleDescriptor.json http://localhost:9130/_/proxy/modules',
+    'Enable the module for your tenant by posting to /_/proxy/tenants/diku/install.'
+  ])('recognizes an Okapi or tenant step: %s', step => {
+    writeFile('README.md', step);
+    const result = analyzeS004Documentation(tempRoot);
+    expect(result.candidates[0].signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ group: 'okapi_tenant_enablement', strength: 'strong' })
+    ]));
+  });
+
+  it('does not reach the concrete-steps tier on Okapi or tenant steps alone', () => {
+    writeFile('README.md', `
+## Tenant setup
+curl -d @descriptor.json http://localhost:9130/_/proxy/tenants/diku/modules
+`);
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.classification.strongestSignals).toEqual([
+      expect.objectContaining({ group: 'okapi_tenant_enablement', strength: 'strong' })
+    ]);
+    expect(result.classification.reason).toContain('too briefly');
+  });
+
+  it('does not use a developer build under an installation heading as the install or run example', () => {
+    writeFile('README.md', `
+## Installing and deployment
+
+### Compiling
+
+Compile with
+\`\`\`shell
+mvn clean install
+\`\`\`
+`);
+    const result = analyzeS004Documentation(tempRoot);
+    const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
+
+    expect(installSignal).toMatchObject({ strength: 'candidate', line: 1 });
+    expect(result.classification.reason).toContain('too briefly');
+  });
+
+  it('shows at most one example per paragraph', () => {
+    writeFile('README.md', `
+# ui-example
+
+The Stripes UI module is configured through its settings page.
+See https://example.org/docs for details.
+
+## Build
+mvn package
+`);
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].signals.map(signal => signal.group)).toEqual(
+      expect.arrayContaining(['stripes_setup', 'env_configuration', 'external_reference', 'build_test'])
+    );
+    expect(result.classification.strongestSignals.map(signal => signal.line)).toEqual([3, 7]);
+  });
+
+  it('strips code fences and table pipes from examples', () => {
+    writeFile('README.md', `
+## Running
+\`\`\`shell
+java -jar target/app.jar
+\`\`\`
+
+| Variable | Description |
+|----------|-------------|
+| \`DB_HOST\` | Database host configuration |
+`);
+    const result = analyzeS004Documentation(tempRoot);
+    const signals = result.candidates[0].signals;
+
+    expect(signals.find(signal => signal.group === 'install_deploy_run')?.excerpt).toBe('## Running java -jar target/app.jar');
+    expect(signals.find(signal => signal.group === 'env_configuration')?.excerpt).toBe('Variable; Description \`DB_HOST\`; Database host configuration');
   });
 
   it('returns manual for thin operational references', () => {
@@ -373,6 +481,19 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling the ten
     expect(result.warnings).toEqual([
       'Did not follow a documentation link that points outside the repository: ../outside.md (linked from README.md).'
     ]);
+  });
+
+  it('counts only distinct unread files after the documentation file limit', () => {
+    const links = Array.from({ length: 5 }, () => '[setup](docs/d00.md)').join('\n');
+    writeFile('README.md', `Run docker compose up to start the module.\n${links}`);
+    for (let index = 0; index <= 40; index++) {
+      writeFile(`docs/d${String(index).padStart(2, '0')}.md`, 'Notes.');
+    }
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates).toHaveLength(40);
+    expect(result.warnings).toEqual(['Only the first 40 documentation files were checked; 2 more were not read.']);
   });
 
   it('merges skipped symbolic links into one warning', () => {

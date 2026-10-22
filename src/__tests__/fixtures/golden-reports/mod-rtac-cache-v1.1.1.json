@@ -78,8 +78,8 @@
     {
       "criterionId": "S004",
       "status": "manual",
-      "evidence": "S004 manual: The documentation appears to include concrete steps to install, deploy, run, or enable the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.",
-      "details": "Documentation files checked:\n  - README.md\n\nStrongest examples:\n  - README.md:28 [run] Install, deploy, or run steps: Compile with ```shell mvn clean install ```\n  - README.md:52 [services] Docker or required services: ```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```\n  - README.md:12 [link] Link to other documentation: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build] Build steps: ### Compiling Compile with ```shell mvn clean install\n  - README.md:63 [okapi] Okapi or tenant setup: ``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "evidence": "S004 manual: The documentation appears to include concrete steps to install, deploy, or run the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.",
+      "details": "Documentation files checked:\n  - README.md\n\nStrongest examples:\n  - README.md:52 [run] Install, deploy, or run steps: DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar\n  - README.md:12 [link] Link to other documentation: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build] Build steps: ### Compiling Compile with mvn clean install\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "candidates": [
           {
@@ -99,8 +99,8 @@
                 "group": "install_deploy_run",
                 "label": "Install, deploy, or run steps",
                 "path": "README.md",
-                "line": 28,
-                "excerpt": "Compile with ```shell mvn clean install ```",
+                "line": 52,
+                "excerpt": "DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar",
                 "strength": "strong"
               },
               {
@@ -108,7 +108,7 @@
                 "label": "Build steps",
                 "path": "README.md",
                 "line": 26,
-                "excerpt": "### Compiling Compile with ```shell mvn clean install",
+                "excerpt": "### Compiling Compile with mvn clean install",
                 "strength": "candidate"
               },
               {
@@ -116,38 +116,22 @@
                 "label": "Docker or required services",
                 "path": "README.md",
                 "line": 52,
-                "excerpt": "```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```",
+                "excerpt": "DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar",
                 "strength": "strong"
-              },
-              {
-                "group": "okapi_tenant_enablement",
-                "label": "Okapi or tenant setup",
-                "path": "README.md",
-                "line": 63,
-                "excerpt": "``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module",
-                "strength": "candidate"
               }
             ]
           }
         ],
         "classification": {
           "status": "manual",
-          "reason": "The documentation appears to include concrete steps to install, deploy, run, or enable the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.",
+          "reason": "The documentation appears to include concrete steps to install, deploy, or run the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.",
           "strongestSignals": [
             {
               "group": "install_deploy_run",
               "label": "Install, deploy, or run steps",
               "path": "README.md",
-              "line": 28,
-              "excerpt": "Compile with ```shell mvn clean install ```",
-              "strength": "strong"
-            },
-            {
-              "group": "docker_runtime",
-              "label": "Docker or required services",
-              "path": "README.md",
               "line": 52,
-              "excerpt": "```shell DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar ```",
+              "excerpt": "DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar",
               "strength": "strong"
             },
             {
@@ -163,15 +147,7 @@
               "label": "Build steps",
               "path": "README.md",
               "line": 26,
-              "excerpt": "### Compiling Compile with ```shell mvn clean install",
-              "strength": "candidate"
-            },
-            {
-              "group": "okapi_tenant_enablement",
-              "label": "Okapi or tenant setup",
-              "path": "README.md",
-              "line": 63,
-              "excerpt": "``` ### Module Descriptor See the built `target/ModuleDescriptor.json` for the interfaces that this module",
+              "excerpt": "### Compiling Compile with mvn clean install",
               "strength": "candidate"
             }
           ],

@@ -20,6 +20,7 @@ export const MAX_DOC_BYTES = 96 * 1024;
 const MAX_LINK_DEPTH = 2;
 const EXCERPT_RADIUS = 2;
 const MAX_EXCERPT_BYTES = 700;
+const MAX_EXAMPLES = 6;
 const MAX_HEADING_INSTRUCTION_DISTANCE = 12;
 const MAX_LINE_INSTRUCTION_DISTANCE = 4;
 const COMMAND_PATTERNS = [
@@ -55,7 +56,10 @@ const SIGNAL_RULES: SignalRule[] = [
   { group: 'install_deploy_run', label: 'Install, deploy, or run steps', pattern: /\b(install|installation|deploy|deployment|running|run locally|start the module|enable the module)\b/i, strength: 'strong' },
   { group: 'docker_runtime', label: 'Docker or required services', pattern: /\b(docker|docker compose|compose\.ya?ml|container|kafka|postgres|elasticsearch|opensearch|runtime dependenc)/i, strength: 'strong' },
   { group: 'env_configuration', label: 'Configuration settings', pattern: /\b(environment variable|env var|configuration|configure|settings|system property|yaml|properties)\b/i, strength: 'candidate' },
-  { group: 'okapi_tenant_enablement', label: 'Okapi or tenant setup', pattern: /\b(okapi|tenant|tenant init|enable module|module descriptor|_tenant)\b/i, strength: 'strong' },
+  // Only Okapi or tenant steps count: Okapi admin endpoints (/_/proxy, /_/discovery, /_/tenant), --okapi or
+  // --tenant flags, curl calls to Okapi, posting or deploying to Okapi, or enabling the module for a tenant.
+  // Mentions of "tenant" or "Okapi" in prose, API examples, or configuration tables do not.
+  { group: 'okapi_tenant_enablement', label: 'Okapi or tenant setup', pattern: /\/_\/(?:proxy|discovery|deployment|tenant)\b|--(?:okapi|tenant)\b|\bcurl\b.*\b(?:okapi|tenants?)\b|\b(?:post|deploy|register|install)\w*\b.{0,80}\b(?:to|with|through|into|onto|in)\s+okapi\b|\benabl\w*\s+(?:the\s+|this\s+)?(?:module|mod-[\w-]+|ui-[\w-]+|it)\b.{0,60}\bfor\s+(?:a|the|each|every|your)?\s*tenants?\b/i, strength: 'strong' },
   { group: 'stripes_setup', label: 'Stripes UI setup', pattern: /\b(stripes|yarn start|ui module|platform-complete)\b/i, strength: 'strong' },
   { group: 'build_test', label: 'Build steps', pattern: /\b(compile|package|assemble|mvn\s+(clean\s+)?(install|package)|gradle(w)?\s+(build|assemble)|npm\s+run\s+build|yarn\s+build|pnpm\s+build)\b/i, strength: 'candidate' },
   { group: 'external_reference', label: 'Link to other documentation', pattern: /https?:\/\/[^\s)]+/i, strength: 'candidate' }
@@ -94,7 +98,6 @@ export function classifyS004Documentation(
 
   const hasCandidateEvidence = allSignals.length > 0;
   const hasRunOrDeploy = strongOperationalSignals.some(signal => signal.group === 'install_deploy_run');
-  const hasOkapiInstall = strongOperationalSignals.some(signal => signal.group === 'okapi_tenant_enablement');
   const hasRuntimeOrDocker = strongOperationalSignals.some(signal => signal.group === 'docker_runtime');
   const hasContext = allSignals.some(signal =>
     signal.group === 'env_configuration' ||
@@ -103,10 +106,11 @@ export function classifyS004Documentation(
     signal.group === 'docker_runtime'
   );
 
-  if ((hasRunOrDeploy || hasOkapiInstall) && hasActionableExcerpt(strongOperationalSignals)) {
+  // Okapi or tenant steps alone do not reach this tier: S004 asks for developer build and run instructions.
+  if (hasRunOrDeploy && hasActionableExcerpt(strongOperationalSignals)) {
     return {
       status: EvaluationStatus.MANUAL,
-      reason: 'The documentation appears to include concrete steps to install, deploy, run, or enable the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.',
+      reason: 'The documentation appears to include concrete steps to install, deploy, or run the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.',
       strongestSignals: strongestSignals(allSignals),
       filesConsidered,
       warnings
@@ -259,8 +263,13 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
   if (symlinks.length) {
     warnings.push(`Did not read ${describePaths(symlinks)} because symbolic links in documentation folders are not followed.`);
   }
-  if (queue.length) {
-    warnings.push(`Only the first ${MAX_DOC_FILES} documentation files were checked; ${queue.length} more ${queue.length === 1 ? 'was' : 'were'} not read.`);
+  // The queue can hold files already read, queued twice, or outside the repository; count only files that would be read.
+  const unreadFiles = new Set(queue
+    .filter(item => isWithinRepo(repoPath, item.absolutePath))
+    .map(item => realPath(item.absolutePath)?.toLowerCase())
+    .filter((key): key is string => key !== undefined && !seen.has(key)));
+  if (unreadFiles.size) {
+    warnings.push(`Only the first ${MAX_DOC_FILES} documentation files were checked; ${unreadFiles.size} more ${unreadFiles.size === 1 ? 'was' : 'were'} not read.`);
   }
 
   return candidates;
@@ -282,11 +291,17 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (!rule.pattern.test(line)) {
         continue;
       }
-      if (rule.group === 'install_deploy_run' && isDevelopmentInstallLine(line)) {
+      if (rule.group === 'okapi_tenant_enablement' && isTableRow(line)) {
         continue;
       }
-      const strength = contextualSignalStrength(lines, fencedLines, index, rule.strength);
-      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, fencedLines, index) : index;
+      // A developer build such as "mvn clean install" is build evidence, not an install or run step,
+      // whether it is the matched line or the command found below an "Installation" heading.
+      const ignoredLine = rule.group === 'install_deploy_run' ? isDevelopmentInstallLine : undefined;
+      if (ignoredLine?.(line)) {
+        continue;
+      }
+      const strength = contextualSignalStrength(lines, fencedLines, index, rule.strength, ignoredLine);
+      const evidenceIndex = strength === 'strong' ? concreteInstructionIndex(lines, fencedLines, index, ignoredLine) : index;
       const signal = {
         group: rule.group,
         label: rule.label,
@@ -312,38 +327,51 @@ function contextualSignalStrength(
   lines: string[],
   fencedLines: boolean[],
   index: number,
-  configured: S004DocumentationSignal['strength']
+  configured: S004DocumentationSignal['strength'],
+  ignoredLine?: (line: string) => boolean
 ): S004DocumentationSignal['strength'] {
   const line = lines[index].trim();
   if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
     return 'insufficient';
   }
-  const context = localInstructionBlock(lines, fencedLines, index);
+  const context = localInstructionBlock(lines, fencedLines, index, ignoredLine);
   if (isConcreteInstruction(context)) {
     return configured === 'candidate' ? 'candidate' : 'strong';
   }
   return configured === 'strong' ? 'candidate' : configured;
 }
 
-function localInstructionBlock(lines: string[], fencedLines: boolean[], index: number): string {
+function localInstructionBlock(
+  lines: string[],
+  fencedLines: boolean[],
+  index: number,
+  ignoredLine?: (line: string) => boolean
+): string {
   const block = [lines[index]];
   const distance = instructionBlockDistance(lines[index], fencedLines[index]);
   for (let next = index + 1; next < lines.length && next <= index + distance; next++) {
     if (startsNewInstructionSection(lines[index], fencedLines[index], lines[next], fencedLines[next])) {
       break;
     }
-    block.push(lines[next]);
+    if (!ignoredLine?.(lines[next])) {
+      block.push(lines[next]);
+    }
   }
   return block.join('\n');
 }
 
-function concreteInstructionIndex(lines: string[], fencedLines: boolean[], index: number): number {
+function concreteInstructionIndex(
+  lines: string[],
+  fencedLines: boolean[],
+  index: number,
+  ignoredLine?: (line: string) => boolean
+): number {
   const distance = instructionBlockDistance(lines[index], fencedLines[index]);
   for (let candidate = index; candidate < lines.length && candidate <= index + distance; candidate++) {
     if (candidate > index && startsNewInstructionSection(lines[index], fencedLines[index], lines[candidate], fencedLines[candidate])) {
       break;
     }
-    if (isConcreteInstruction(lines[candidate])) {
+    if (!ignoredLine?.(lines[candidate]) && isConcreteInstruction(lines[candidate])) {
       return candidate;
     }
   }
@@ -409,14 +437,28 @@ function isTableOfContentsLine(line: string): boolean {
   return /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]\(#[^)]+\)\s*$/i.test(line);
 }
 
+// One example per location: signals whose lines fall inside each other's excerpt come from the same
+// paragraph and would repeat the same text, so only the strongest of them is shown.
 function strongestSignals(signals: S004DocumentationSignal[]): S004DocumentationSignal[] {
-  return [...signals]
-    .sort((left, right) => evidenceStrengthRank(left.strength) - evidenceStrengthRank(right.strength))
-    .slice(0, 6);
+  const picked: S004DocumentationSignal[] = [];
+  const sorted = [...signals].sort((left, right) => evidenceStrengthRank(left.strength) - evidenceStrengthRank(right.strength));
+  for (const signal of sorted) {
+    if (picked.length === MAX_EXAMPLES) {
+      break;
+    }
+    if (!picked.some(other => other.path === signal.path && Math.abs((other.line ?? 0) - (signal.line ?? 0)) <= EXCERPT_RADIUS)) {
+      picked.push(signal);
+    }
+  }
+  return picked;
 }
 
 function hasActionableExcerpt(signals: S004DocumentationSignal[]): boolean {
   return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|pnpm|mvn|gradle|helm|kubectl|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
+}
+
+function isTableRow(line: string): boolean {
+  return /^\s*\|/.test(line);
 }
 
 function isDevelopmentInstallLine(line: string): boolean {
@@ -477,7 +519,15 @@ function extractMarkdownLinks(content: string): string[] {
 function excerptAround(lines: string[], index: number): string {
   const start = Math.max(0, index - EXCERPT_RADIUS);
   const end = Math.min(lines.length, index + EXCERPT_RADIUS + 1);
-  const excerpt = lines.slice(start, end).join(' ').replace(/\s+/g, ' ').trim();
+  // Drop code fences and table pipes so the example reads as text.
+  const excerpt = lines.slice(start, end)
+    .filter(line => !/^\s*(?:`{3,}|~{3,})/.test(line) && !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{0,}:?\s*$/.test(line))
+    .map(line => isTableRow(line)
+      ? line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim()).filter(Boolean).join('; ')
+      : line)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const buffer = Buffer.from(excerpt);
   // Keep long excerpts on one line: a report row that breaks onto a new line shows up as a separate section.
   return buffer.length <= MAX_EXCERPT_BYTES
