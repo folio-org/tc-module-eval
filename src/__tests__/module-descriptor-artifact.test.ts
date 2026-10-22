@@ -78,6 +78,37 @@ describe('module-descriptor-artifact', () => {
     expect(result.errors.join('\n')).toContain('templates');
   });
 
+  it('should not treat descriptors as templates because the clone directory name contains template', async () => {
+    const staticRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'template-clone-'));
+    fs.writeFileSync(path.join(staticRepo, 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-static-1.0.0' }));
+    const mavenRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'template-clone-'));
+    fs.writeFileSync(path.join(mavenRepo, 'pom.xml'), '<project><artifactId>mod-example</artifactId></project>');
+    fs.mkdirSync(path.join(mavenRepo, 'target'));
+    const runner = new FakeRunner(request => {
+      fs.writeFileSync(path.join(mavenRepo, 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-example-1.0.0' }));
+      return commandResult(request);
+    });
+
+    const staticResult = await produceModuleDescriptorArtifact(staticRepo);
+    const mavenResult = await produceModuleDescriptorArtifact(mavenRepo, undefined, runner);
+
+    expect(staticResult.status).toBe('discovered');
+    expect(staticResult.descriptorPath).toBe('ModuleDescriptor.json');
+    expect(mavenResult.status).toBe('produced');
+    expect(mavenResult.descriptorPath).toBe('target/ModuleDescriptor.json');
+  });
+
+  it('should not report unrelated template JSON files as descriptor templates', async () => {
+    const repo = tempRepo();
+    fs.mkdirSync(path.join(repo, 'src', 'main', 'resources', 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'src', 'main', 'resources', 'templates', 'email.json'), '{}');
+
+    const result = await produceModuleDescriptorArtifact(repo);
+
+    expect(result.status).toBe('missing');
+    expect(result.errors.join('\n')).not.toContain('templates');
+  });
+
   it('should not fall through to static descriptor after Maven command failure', async () => {
     const repo = tempRepo();
     fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><artifactId>mod-example</artifactId></project>');
@@ -138,7 +169,7 @@ describe('module-descriptor-artifact', () => {
     const result = await produceModuleDescriptorArtifact(repo, undefined, runner);
 
     expect(result.status).toBe('ambiguous-candidates');
-    expect(result.errors.join('\n')).toContain('none could be matched to this module: a/target/ModuleDescriptor.json, b/target/ModuleDescriptor.json');
+    expect(result.errors.join('\n')).toContain('no single one could be matched to this module: a/target/ModuleDescriptor.json, b/target/ModuleDescriptor.json');
   });
 
   it('should match the generated descriptor whose id contains the Maven artifactId', async () => {
@@ -149,6 +180,23 @@ describe('module-descriptor-artifact', () => {
     const runner = new FakeRunner(request => {
       fs.writeFileSync(path.join(repo, 'a', 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-other-1.0.0' }));
       fs.writeFileSync(path.join(repo, 'b', 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-example-1.0.0' }));
+      return commandResult(request);
+    });
+
+    const result = await produceModuleDescriptorArtifact(repo, undefined, runner);
+
+    expect(result.status).toBe('produced');
+    expect(result.descriptorPath).toBe('b/target/ModuleDescriptor.json');
+  });
+
+  it('should not match a generated descriptor whose id only starts with the artifactId', async () => {
+    const repo = tempRepo();
+    fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><artifactId>mod-foo</artifactId></project>');
+    fs.mkdirSync(path.join(repo, 'a', 'target'), { recursive: true });
+    fs.mkdirSync(path.join(repo, 'b', 'target'), { recursive: true });
+    const runner = new FakeRunner(request => {
+      fs.writeFileSync(path.join(repo, 'a', 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-foo-bar-1.0.0' }));
+      fs.writeFileSync(path.join(repo, 'b', 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-foo-2.3.0-SNAPSHOT' }));
       return commandResult(request);
     });
 

@@ -150,14 +150,47 @@ describe('S002 module descriptor evaluator', () => {
     failedRun.artifacts.moduleDescriptor = {
       status: 'command-failed',
       strategy: 'maven-generation',
-      command: { ...command, status: 'failed', exitCode: 1, localCommandsAllowed: true },
+      command: {
+        ...command, status: 'failed', exitCode: 1, localCommandsAllowed: true,
+        stdout: '[INFO] building\n[ERROR] first line\n[ERROR] second line\n',
+        stderr: 'Cloning into submodule...\n'
+      },
       warnings: [],
-      errors: ['Command exited with code 1: [ERROR] first line\n[ERROR] second line']
+      errors: ['Command exited with code 1: Cloning into submodule...']
     };
     const failed = await evaluator.evaluateCriterion('S002', repo, failedRun);
 
     expect(failed.status).toBe(EvaluationStatus.MANUAL);
     expect(failed.evidence).toContain('The Maven build that generates the module descriptor failed with exit code 1');
-    expect(failed.details).toContain('Build error:\n  - [ERROR] first line\n  - [ERROR] second line');
+    expect(failed.details).toContain(
+      'Build error (error lines from the end of the build output):\n  - [ERROR] first line\n  - [ERROR] second line'
+    );
+    expect(failed.details).not.toContain('Cloning into submodule');
+  });
+
+  it('should show only the last 40 lines of the error output of a failed build', async () => {
+    const repo = tempRepo();
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
+    const output = Array.from({ length: 100 }, (_, index) => `[INFO] line ${index + 1}`).join('\n');
+    run.artifacts.moduleDescriptor = {
+      status: 'command-failed',
+      strategy: 'maven-generation',
+      command: {
+        identity: 'mvn', command: 'mvn', args: ['process-resources', '-DskipTests'], cwd: repo,
+        commandExecutionEnvironment: 'local', localCommandsAllowed: true, status: 'failed', exitCode: 1,
+        durationMs: 0, stdout: '', stderr: output, sanitized: true
+      },
+      warnings: [],
+      errors: [`Command exited with code 1: ${output}`]
+    };
+
+    const result = await new JavaSharedEvaluator().evaluateCriterion('S002', repo, run);
+    const buildError = result.details!.slice(result.details!.indexOf('Build error'));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(buildError.split('\n')[0]).toBe('Build error (last 40 of 100 lines of build output):');
+    expect(buildError).toContain('  - [INFO] line 61\n');
+    expect(buildError).toMatch(/  - \[INFO\] line 100$/);
+    expect(buildError).not.toContain('[INFO] line 60\n');
   });
 });

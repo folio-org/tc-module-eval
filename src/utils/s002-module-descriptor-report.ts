@@ -4,6 +4,11 @@ import { ModuleDescriptorValidationError, ModuleDescriptorValidationResult } fro
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
 const MAVEN_TEMPLATE_HINT = 'usually descriptors/ModuleDescriptor-template.json';
+const MAX_BUILD_ERROR_LINES = 40;
+const MAX_BUILD_ERROR_LINE_LENGTH = 500;
+const LOG_LEVEL_TAG = /^\s*\[[A-Z]+\]/;
+// Maven "[ERROR]", yarn/npm "error"/"ERR!", and Node exception lines such as "TypeError: ...".
+const ERROR_LINE = /^\s*(?:\[(?:ERROR|FATAL)\]|(?:npm )?ERR!|error\b|\w*Error:)/i;
 const UNCERTAIN_ARTIFACT_STATUSES = new Set<ModuleDescriptorArtifact['status']>([
   'ambiguous-candidates',
   'unsafe-to-run',
@@ -130,12 +135,32 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
     return [];
   }
 
-  const output = artifact.errors
-    .map(error => error.replace(/^Command exited with code \S+:\s*/, ''))
-    .flatMap(error => error.split('\n'))
-    .map(line => line.trim())
-    .filter(Boolean);
-  return output.length ? ['Build error:', ...output.map(line => `  - ${line}`)] : [];
+  // Maven reports failures on stdout and yarn on stderr; put that stream last so the tail keeps the failure.
+  const command = artifact.command;
+  const streams = artifact.strategy === 'maven-generation'
+    ? [command?.stderr, command?.stdout]
+    : [command?.stdout, command?.stderr];
+  const output = streams
+    .flatMap(stream => (stream ?? '').split('\n'))
+    .map(line => line.trimEnd())
+    .filter(line => /[A-Za-z0-9]/.test(line.replace(LOG_LEVEL_TAG, '')));
+  if (!output.length) {
+    return [];
+  }
+
+  // The runner keeps up to 64 KB per stream; the end of the output usually holds the actual failure.
+  // The report shows long lists collapsed to their first few items, so list only the error lines when there are any.
+  const tail = output.slice(-MAX_BUILD_ERROR_LINES);
+  const errorLines = tail.filter(line => ERROR_LINE.test(line));
+  const shown = (errorLines.length ? errorLines : tail).map(line =>
+    line.length > MAX_BUILD_ERROR_LINE_LENGTH ? `${line.slice(0, MAX_BUILD_ERROR_LINE_LENGTH)}… (line shortened)` : line
+  );
+  const heading = errorLines.length
+    ? 'Build error (error lines from the end of the build output):'
+    : output.length > tail.length
+      ? `Build error (last ${tail.length} of ${output.length} lines of build output):`
+      : 'Build error:';
+  return [heading, ...shown.map(line => `  - ${line}`)];
 }
 
 function describeDescriptor(artifact: ModuleDescriptorArtifact): string {

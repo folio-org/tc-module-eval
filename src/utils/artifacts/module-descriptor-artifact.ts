@@ -79,7 +79,7 @@ async function runMavenDescriptorStrategy(
       strategy: 'maven-generation',
       command,
       errors: candidates.length > 1
-        ? [`The Maven build generated several ModuleDescriptor.json files, and none could be matched to this module: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}.`]
+        ? [`The Maven build generated several ModuleDescriptor.json files, and no single one could be matched to this module: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}.`]
         : ['The Maven build ran, but it did not generate a ModuleDescriptor.json under a target/ directory.']
     });
   }
@@ -164,14 +164,15 @@ function getFrontendDescriptorScript(repoPath: string): string | undefined {
   }
 }
 
+// Candidates are already final descriptors inside the repository (see findDescriptorCandidates),
+// so several candidates without a single match really are ambiguous.
 async function selectGeneratedCandidate(repoPath: string, candidates: string[]): Promise<string | undefined> {
-  const safeCandidates = candidates.filter(candidate => isSafeFinalDescriptor(repoPath, candidate));
-  if (safeCandidates.length <= 1) {
-    return safeCandidates[0];
+  if (candidates.length <= 1) {
+    return candidates[0];
   }
 
   const moduleName = await getExpectedModuleName(repoPath);
-  const matching = safeCandidates.filter(candidate => descriptorMatchesModule(candidate, moduleName));
+  const matching = candidates.filter(candidate => descriptorMatchesModule(candidate, moduleName));
   return matching.length === 1 ? matching[0] : undefined;
 }
 
@@ -206,7 +207,9 @@ function descriptorMatchesModule(candidate: string, moduleName?: string): boolea
 
   try {
     const descriptor = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
-    return typeof descriptor.id === 'string' && descriptor.id.includes(moduleName);
+    // Descriptor ids are "<artifactId>" or "<artifactId>-<version>"; a prefix such as mod-foo must not match mod-foo-bar.
+    return typeof descriptor.id === 'string' &&
+      (descriptor.id === moduleName || (descriptor.id.startsWith(`${moduleName}-`) && /^\d/.test(descriptor.id.slice(moduleName.length + 1))));
   } catch {
     return false;
   }
@@ -248,26 +251,31 @@ function findGeneratedDescriptorCandidates(repoPath: string): string[] {
 
 function findDescriptorCandidates(repoPath: string, startPath: string): string[] {
   return findCandidateFiles(repoPath, startPath, candidate =>
-    path.basename(candidate) === DESCRIPTOR_NAME && !isTemplatePath(candidate)
+    path.basename(candidate) === DESCRIPTOR_NAME && !isTemplatePath(repoPath, candidate)
   );
 }
 
 function findTemplateCandidates(repoPath: string): string[] {
   return findCandidateFiles(repoPath, repoPath, candidate =>
-    path.basename(candidate).endsWith('.json') && isTemplatePath(candidate)
+    isDescriptorTemplateName(path.basename(candidate)) && isTemplatePath(repoPath, candidate)
   );
 }
 
 function isSafeFinalDescriptor(repoPath: string, candidatePath: string): boolean {
-  if (isTemplatePath(candidatePath)) {
+  if (isTemplatePath(repoPath, candidatePath)) {
     return false;
   }
 
   return isWithinRepo(repoPath, candidatePath);
 }
 
-function isTemplatePath(candidatePath: string): boolean {
-  return candidatePath.toLowerCase().includes('template');
+// Only the repository-relative path counts; the clone directory's own name must not make files look like templates.
+function isTemplatePath(repoPath: string, candidatePath: string): boolean {
+  return relative(repoPath, candidatePath).toLowerCase().includes('template');
+}
+
+function isDescriptorTemplateName(fileName: string): boolean {
+  return /moduledescriptor.*\.json$/i.test(fileName);
 }
 
 function snapshotGeneratedDescriptorPaths(repoPath: string): Set<string> {
