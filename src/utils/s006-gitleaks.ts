@@ -84,7 +84,7 @@ export async function runS006GitleaksScan(
       findings: [],
       warnings: [buildS006Warning(
         'scanner-unavailable',
-        `Gitleaks scanner could not run: ${error instanceof Error ? error.message : String(error)}`,
+        `Gitleaks could not be used: ${oneLine(error instanceof Error ? error.message : String(error))}. Check that Gitleaks is installed or set GITLEAKS_PATH, then run the evaluation again.`,
         true
       )]
     };
@@ -102,11 +102,11 @@ function readGitleaksReport(reportPath: string, repoPath: string): S006GitleaksF
   try {
     parsed = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
   } catch (error) {
-    throw new Error(`Gitleaks JSON report could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`the report could not be read: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error('Gitleaks JSON report did not contain an array of findings');
+    throw new Error('the report did not contain a list of findings');
   }
 
   return parsed
@@ -172,10 +172,14 @@ function normalizeGitleaksFingerprint(
 }
 
 function buildUnavailableWarning(result: CommandExecutionResult): S006ScanWarning {
-  const detail = result.errorMessage || result.stderr || result.stdout || `command status ${result.status}`;
+  const detail = oneLine(result.errorMessage || result.stderr || result.stdout || `command status ${result.status}`);
   return buildS006Warning(
     'scanner-unavailable',
-    `Gitleaks scanner was unavailable or failed (${result.status}${result.exitCode === undefined ? '' : `, exit ${result.exitCode}`}): ${detail}`,
+    `Gitleaks did not run (${result.status}${result.exitCode === undefined ? '' : `, exit ${result.exitCode}`}): ${detail}. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.`,
     true
   );
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().replace(/\.$/, '');
 }

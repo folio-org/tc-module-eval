@@ -52,7 +52,9 @@ S005 checks `PERSONAL_DATA_DISCLOSURE.md` mechanics and completion, plus bounded
 
 ## S006 Sensitive Information Review
 
-S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. Reports show matched values as bounded excerpts. High-confidence production, CI, or deployment evidence can fail; documentation, fixtures, local defaults, private endpoints, and incomplete scans require manual review.
+S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. A value that looks like a real secret in production code or CI/deployment files fails; documentation, tests, examples, local Docker defaults, host names, private addresses, and incomplete scans require manual review.
+
+The report lists each finding by file, line, kind (`[secret]`, `[token]`, `[api-key]`, `[private-key]`, `[login-url]`, `[private-url]`, `[host]`, `[local-path]`, `[env-file]`), and where it was found. It hides matched values; for an assignment it names only the variable, such as "assigned to DB_PASSWORD". Agent review receives the matched values. "Coverage gaps" lists what was not fully scanned and keeps the result in manual review; "Skipped" lists folders and files that do not affect the result, such as `.git` and `node_modules`.
 
 The devcontainer and GitHub Actions install Gitleaks. Elsewhere, install `gitleaks` on `PATH` or set `GITLEAKS_PATH`. An unavailable or failed scanner produces a material warning and manual status.
 

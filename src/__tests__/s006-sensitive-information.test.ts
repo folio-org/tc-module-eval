@@ -368,7 +368,7 @@ describe('S006 bounded repository candidate scanning', () => {
     expect(result.coverage.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'traversal-limit',
-        message: expect.stringContaining(`${traversalEntryLimit}-entry traversal cap`),
+        message: `Stopped listing files after ${traversalEntryLimit} entries; the rest of the repository was not read by the built-in scan.`,
         materialToCoverage: true
       })
     ]));
@@ -412,7 +412,7 @@ describe('S006 bounded repository candidate scanning', () => {
         expect.objectContaining({
           path: 'config/unreadable.yml',
           reason: 'read-error',
-          message: 'Unable to read S006 candidate file.',
+          message: 'Could not read this file.',
           materialToCoverage: true
         })
       ]));
@@ -517,7 +517,7 @@ describe('S006 sensitive information finding extraction', () => {
 
     const topExample = formatS006Evidence(result).details.split('\n')
       .find(line => line.includes('config/key.txt:2-4'));
-    expect(topExample).toContain('[REDACTED_PRIVATE_KEY]');
+    expect(topExample).toContain('config/key.txt:2-4 [private-key] Fails S006: private key that looks real');
     expect(topExample).not.toContain(privateKeyBody);
     expect(formatS006Evidence(result).details).not.toMatch(new RegExp(`^${privateKeyBody}`, 'm'));
   });
@@ -1141,7 +1141,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       materiallyWeakenedCoverage: false,
       findingReferences: ['src/main/resources/application.yml:1:provider-api-key']
     });
-    expect(result.classification.reason).toContain('high-confidence live-looking secret');
+    expect(result.classification.reason).toContain('Found 1 value that looks like a real secret in production code or CI/deployment files, for example src/main/resources/application.yml:1. Remove it');
     expect(finding).toMatchObject({
       category: 'provider_api_key',
       context: 'production_source_or_configuration',
@@ -1307,8 +1307,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       materiallyWeakened: false
     });
     expect(result.classification.status).toBe(EvaluationStatus.PASS);
-    expect(result.classification.reason).toContain('scanning 2 of 2 candidate files');
-    expect(result.classification.reason).toContain('no material coverage warnings');
+    expect(result.classification.reason).toBe('No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read 2 files with no coverage gaps.');
   });
 
   it('returns manual with coverage-warning evidence when material truncation weakens a no-finding scan', async () => {
@@ -1329,7 +1328,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
         materialToCoverage: true
       })
     ]));
-    expect(result.classification.reason).toContain('materially weakened');
+    expect(result.classification.reason).toContain('part of the repository was not fully scanned');
   });
 
   it('keeps private key blocks in fixtures manual while production-like private keys fail', async () => {
@@ -1599,7 +1598,7 @@ describe('S006 report formatting and criterion details', () => {
     const lines = formatS006Evidence(analysis).details.split('\n');
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(lines.filter(line => line.includes('boom ↵ Injected section:'))).toHaveLength(2);
+    expect(lines.filter(line => line.includes('boom ↵ Injected section:'))).toEqual(['  - Not applied: boom ↵ Injected section:']);
     expect(lines).not.toContain('Injected section:');
   });
 
@@ -1620,8 +1619,9 @@ describe('S006 report formatting and criterion details', () => {
     expect(documentationIndex).toBeGreaterThan(deterministicIndex);
     expect(rendered.details).not.toContain(rawProductionKey);
     expect(rendered.details).not.toContain(rawDocumentationToken);
-    expect(rendered.details).toContain('scanner/pattern candidate');
-    expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
+    expect(rendered.details).toContain('src/main/resources/application.yml:1 [api-key] Fails S006: API key that looks real, in production code or configuration\n');
+    expect(rendered.details).toContain('docs/auth.md:1 [token] Access token in documentation');
+    expect(rendered.details).toContain('Open each possible secret and decide whether it is real.');
   });
 
   it('renders local Docker defaults with local-default context and reviewer rationale', async () => {
@@ -1641,9 +1641,9 @@ describe('S006 report formatting and criterion details', () => {
     const rendered = formatS006Evidence(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('local docker defaults');
-    expect(rendered.details).toContain('Confirm local Docker defaults are not reused outside local development');
-    expect(rendered.details).toContain('POSTGRES_PASSWORD=[REDACTED]');
+    expect(rendered.details).toContain('1 password or secret value in local Docker setup');
+    expect(rendered.details).toContain('Check that local Docker defaults are used only for local development.');
+    expect(rendered.details).toContain('docker-compose.yml:4 [secret] Password or secret value assigned to POSTGRES_PASSWORD in local Docker setup');
   });
 
   it('renders documentation snippets as manual evidence with the matched token excerpt', async () => {
@@ -1655,9 +1655,9 @@ describe('S006 report formatting and criterion details', () => {
     const rendered = formatS006Evidence(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('Confirm documentation, sample, and test findings are examples');
+    expect(rendered.details).toContain('Open each possible secret and decide whether it is real.');
     expect(rendered.details).not.toContain(rawToken);
-    expect(rendered.details).toContain('[REDACTED_BEARER_OR_JWT_TOKEN]');
+    expect(rendered.details).toContain('README.md:1 [token] Access token in documentation');
   });
 
   it('reports pass scan coverage, skipped-file counts, and non-material warnings', async () => {
@@ -1673,10 +1673,16 @@ describe('S006 report formatting and criterion details', () => {
     const details = buildS006CriterionDetails(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.PASS);
-    expect(rendered.details).toContain('Secret scanner: Gitleaks completed');
-    expect(rendered.details).toContain('Files scanned:');
-    expect(rendered.details).toContain('Skipped files: 1 (0 material, 1 non-material)');
-    expect(rendered.details).toContain('Non-material coverage warnings:');
+    expect(rendered.details).toContain('Gitleaks: ran and reported 0 possible secrets');
+    expect(rendered.details).toContain(`Built-in scan: read ${MAX_S006_SCAN_CANDIDATE_FILES} of ${MAX_S006_SCAN_CANDIDATE_FILES + 3} files`);
+    expect(rendered.details).toContain('Complete: yes');
+    expect(rendered.details).not.toContain('Coverage gaps:');
+    expect(rendered.details).toContain([
+      'Skipped (does not affect the result):',
+      `  - The built-in scan reads at most ${MAX_S006_SCAN_CANDIDATE_FILES} files and found ${MAX_S006_SCAN_CANDIDATE_FILES + 3}; the other 3 were not read. It reads .env, CI, deployment, and configuration files first.`,
+      '  - Dependency folders:',
+      '    - node_modules'
+    ].join('\n'));
     expect(details.scanner).toMatchObject({
       name: 'Gitleaks',
       status: 'completed',
@@ -1699,9 +1705,11 @@ describe('S006 report formatting and criterion details', () => {
     const details = buildS006CriterionDetails(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(rendered.details).toContain('Review summary:');
-    expect(rendered.details).toContain('Material coverage warnings:');
-    expect(rendered.details).toContain('.env.production [file-truncated]');
+    expect(rendered.details).toContain([
+      'Coverage gaps:',
+      '  - Files only partly read (at most 96 KB of each):',
+      '    - .env.production'
+    ].join('\n'));
     expect(details.coverageSummary.materialWarningCount).toBeGreaterThan(0);
     expect(details.coverageSummary.scanLimitWarnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'file-truncated', path: '.env.production', materialToCoverage: true })
@@ -1724,6 +1732,7 @@ describe('S006 report formatting and criterion details', () => {
     expect(details.findings[0]).toMatchObject({
       path: 'src/main/resources/application.yml',
       excerpt: expect.objectContaining({ text: '[REDACTED_PROVIDER_API_KEY]' }),
+      rationale: 'Fails S006: API key that looks real, in production code or configuration.',
       disposition: 'deterministic_failure',
       detectorId: 'provider-api-key',
       context: 'production_source_or_configuration'

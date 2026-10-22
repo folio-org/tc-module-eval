@@ -75,7 +75,7 @@ export function scanS006RepositoryCandidates(
   if (!repoRoot) {
     const warning = buildS006Warning(
       'traversal-limit',
-      'Unable to resolve repository path while scanning S006 candidate files.',
+      'Could not open the repository folder, so the built-in scan read nothing.',
       true
     );
     const coverage = buildS006Coverage(0, 0, 0, [], [warning], true, false);
@@ -93,7 +93,7 @@ export function scanS006RepositoryCandidates(
   if (discovery.files.length > MAX_S006_SCAN_CANDIDATE_FILES) {
     warnings.push(buildS006Warning(
       'candidate-limit',
-      `S006 candidate discovery retained first ${MAX_S006_SCAN_CANDIDATE_FILES} supported files; additional candidates were not scanned.`,
+      `The built-in scan reads at most ${MAX_S006_SCAN_CANDIDATE_FILES} files and found ${discovery.files.length}; the other ${discovery.files.length - MAX_S006_SCAN_CANDIDATE_FILES} were not read. It reads .env, CI, deployment, and configuration files first.`,
       discovery.truncatedBeforePriorityComplete
     ));
   }
@@ -117,7 +117,7 @@ export function scanS006RepositoryCandidates(
       );
       warnings.push(buildS006Warning(
         'byte-limit',
-        `S006 candidate reading stopped at the ${MAX_S006_SCAN_TOTAL_BYTES}-byte total scan cap.`,
+        `The built-in scan stopped after reading ${MAX_S006_SCAN_TOTAL_BYTES / (1024 * 1024)} MB in total; later files were not read.`,
         material
       ));
       break;
@@ -148,7 +148,7 @@ export function scanS006RepositoryCandidates(
       });
       warnings.push(buildS006Warning(
         'unreadable-file',
-        `Unable to read S006 candidate file ${relativePath}.`,
+        `Could not read ${relativePath}.`,
         materialToCoverage,
         relativePath
       ));
@@ -178,7 +178,7 @@ export function scanS006RepositoryCandidates(
     if (readResult.truncated) {
       warnings.push(buildS006Warning(
         'file-truncated',
-        `S006 candidate scanning truncated ${relativePath} to ${readResult.bytesRead} bytes.`,
+        `Only the first ${readResult.bytesRead} bytes of ${relativePath} were read.`,
         readResult.materialToCoverage,
         relativePath
       ));
@@ -191,7 +191,7 @@ export function scanS006RepositoryCandidates(
       ) || readResult.materialToCoverage;
       warnings.push(buildS006Warning(
         'byte-limit',
-        `S006 candidate reading stopped at the ${MAX_S006_SCAN_TOTAL_BYTES}-byte total scan cap.`,
+        `The built-in scan stopped after reading ${MAX_S006_SCAN_TOTAL_BYTES / (1024 * 1024)} MB in total; later files were not read.`,
         material
       ));
       break;
@@ -266,7 +266,7 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
       pushS006SkippedFile(skippedFiles, {
         path: relativePath,
         reason: 'read-error',
-        message: 'Unable to inspect path while discovering S006 candidate files.',
+        message: 'Could not inspect this path.',
         materialToCoverage
       });
       return;
@@ -277,7 +277,7 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
       pushS006SkippedFile(skippedFiles, {
         path: relativePath,
         reason: 'unsupported-file',
-        message: 'Symbolic links are not followed during S006 candidate scanning.',
+        message: 'Symbolic link; not followed.',
         materialToCoverage: false
       });
       return;
@@ -293,12 +293,12 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
         pushS006SkippedFile(skippedFiles, {
           path: relativePath,
           reason: 'unsupported-file',
-          message: 'Unsupported high-signal S006 candidate path.',
+          message: 'The built-in scan does not read this file type, and the file is in a folder where secrets are often kept.',
           materialToCoverage: true
         });
         warnings.push(buildS006Warning(
           'unsupported-high-signal-file',
-          `Unsupported high-signal S006 candidate file ${relativePath} was not scanned.`,
+          `${relativePath} was not read: the built-in scan does not read this file type, and the file is in a folder where secrets are often kept.`,
           true,
           relativePath
         ));
@@ -345,13 +345,13 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
       pushS006SkippedFile(skippedFiles, {
         path: relativePath,
         reason: 'read-error',
-        message: 'Unable to read directory while discovering S006 candidate files.',
+        message: 'Could not read this folder.',
         materialToCoverage
       });
       if (materialToCoverage) {
         warnings.push(buildS006Warning(
           'unreadable-file',
-          `Unable to read high-signal S006 candidate directory ${relativePath}.`,
+          `Could not read the folder ${relativePath}, where secrets are often kept.`,
           true,
           relativePath
         ));
@@ -374,7 +374,7 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
   if (truncated) {
     warnings.push(buildS006Warning(
       'traversal-limit',
-      `S006 candidate discovery reached the ${traversalEntryLimit}-entry traversal cap; additional paths were not inspected.`,
+      `Stopped listing files after ${traversalEntryLimit} entries; the rest of the repository was not read by the built-in scan.`,
       true
     ));
   }
@@ -480,7 +480,7 @@ function readBoundedS006CandidateText(
   } catch (error) {
     return {
       status: 'read-error',
-      message: 'Unable to read S006 candidate file.'
+      message: 'Could not read this file.'
     };
   }
 }

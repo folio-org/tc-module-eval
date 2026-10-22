@@ -1,5 +1,8 @@
 import {
+  S006DetectorId,
+  S006FindingCategory,
   S006FindingConfidence,
+  S006FindingContext,
   S006FindingSeverity,
   S006ReportDetails,
   S006ReportFinding,
@@ -17,6 +20,52 @@ import {
 const MAX_CRITERION_FINDINGS = 16;
 const MAX_CRITERION_SKIPPED_FILES = 40;
 const MAX_CRITERION_WARNINGS = 40;
+
+export const S006_CATEGORY_LABELS: Record<S006FindingCategory, { one: string; many: string }> = {
+  provider_api_key: { one: 'API key', many: 'API keys' },
+  private_key: { one: 'private key', many: 'private keys' },
+  bearer_or_jwt_token: { one: 'access token', many: 'access tokens' },
+  password_or_secret_assignment: { one: 'password or secret value', many: 'passwords or secret values' },
+  credential_url: { one: 'URL with a user name and password', many: 'URLs with a user name and password' },
+  private_url: { one: 'local or private network address', many: 'local or private network addresses' },
+  environment_file: { one: '.env file', many: '.env files' },
+  tenant_or_host_endpoint: { one: 'server host name', many: 'server host names' },
+  local_absolute_path: { one: "path on a developer's machine", many: "paths on a developer's machine" }
+};
+
+export const S006_CONTEXT_LABELS_PLAIN: Record<S006FindingContext, string> = {
+  production_source_or_configuration: 'production code or configuration',
+  ci_or_deployment_configuration: 'CI or deployment files',
+  documentation: 'documentation',
+  test_fixture: 'tests',
+  sample_or_example: 'examples or templates',
+  local_docker_defaults: 'local Docker setup',
+  generated_content: 'generated files',
+  unknown: 'other files'
+};
+
+export const S006_DETECTOR_TAGS: Record<S006DetectorId, string> = {
+  'provider-api-key': 'api-key',
+  'private-key-block': 'private-key',
+  'bearer-or-jwt-token': 'token',
+  'password-secret-assignment': 'secret',
+  'credential-url': 'login-url',
+  'private-url': 'private-url',
+  'environment-file': 'env-file',
+  'tenant-host-endpoint': 'host',
+  'local-absolute-path': 'local-path'
+};
+
+export const S006_SKIPPED_REASON_LABELS: Record<S006SkippedFile['reason'], string> = {
+  'outside-repository': 'Links that point outside the repository',
+  'dependency-directory': 'Dependency folders',
+  'generated-artifact': 'Version control, build output, and report folders',
+  binary: 'Binary files',
+  'unsupported-file': 'Files the built-in scan does not read or follow',
+  'read-error': 'Files or folders that could not be read',
+  'file-too-large': 'Files too large to read',
+  'scan-limit': 'Files past the scan limit'
+};
 
 export function buildS006CriterionDetails(
   analysis: S006SensitiveInformationAnalysisResult
@@ -80,19 +129,22 @@ export function projectS006ReportFinding(finding: S006SensitiveInformationFindin
       text: reportSafeExcerpt(finding)
     },
     rationale: disposition === 'deterministic_failure'
-      ? `Deterministic failure under S006 policy; rule=${finding.detectorId}, context=${finding.context}.`
-      : `Scanner/pattern candidate requiring reviewer judgment; rule=${finding.detectorId}, context=${finding.context}.`
+      ? `Fails S006: ${S006_CATEGORY_LABELS[finding.category].one} that looks real, in ${S006_CONTEXT_LABELS_PLAIN[finding.context]}.`
+      : `A reviewer must decide whether this ${S006_CATEGORY_LABELS[finding.category].one} in ${S006_CONTEXT_LABELS_PLAIN[finding.context]} is real.`
   };
 }
 
 function reportSafeExcerpt(finding: S006SensitiveInformationFinding): string {
+  const name = s006AssignedName(finding);
+  return name ? `${name}=[REDACTED]` : `[REDACTED_${finding.category.toUpperCase()}]`;
+}
+
+/** The variable or key a secret is assigned to, so reports can name it without showing the value. */
+export function s006AssignedName(finding: S006SensitiveInformationFinding): string | undefined {
   if (finding.detectorId === 'password-secret-assignment' || finding.detectorId === 'provider-api-key') {
-    const key = finding.excerpt.text.match(/^\s*([A-Za-z_][A-Za-z0-9_.-]{0,80})\s*[:=]/)?.[1];
-    if (key) {
-      return `${key}=[REDACTED]`;
-    }
+    return finding.excerpt.text.match(/^\s*([A-Za-z_][A-Za-z0-9_.-]{0,80})\s*[:=]/)?.[1];
   }
-  return `[REDACTED_${finding.category.toUpperCase()}]`;
+  return undefined;
 }
 
 export function buildFindingSummary(

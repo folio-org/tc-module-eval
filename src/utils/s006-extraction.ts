@@ -30,6 +30,7 @@ import {
   scanS006RepositoryCandidates,
   S006ScannedCandidateTextFile
 } from './s006-scanner';
+import { reportPath } from './report-text';
 
 export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
   'production_source_or_configuration',
@@ -157,7 +158,7 @@ export function extractS006SensitiveInformationFindings(
   if (findingLimitReached) {
     warnings.push(buildS006Warning(
       'finding-limit',
-      `S006 detector extraction retained first ${MAX_S006_RETAINED_FINDINGS} findings; additional findings were omitted.`,
+      `Stopped after ${MAX_S006_RETAINED_FINDINGS} findings; later matches are not listed.`,
       true
     ));
   }
@@ -185,7 +186,7 @@ export async function analyzeS006SensitiveInformation(
     materiallyWeakened: scan.coverage.materiallyWeakened || newWarningsAreMaterial,
     complete: scan.coverage.complete && !newWarningsAreMaterial
   };
-  const classification = classifyS006DeterministicResult(extraction.findings, coverage);
+  const classification = classifyS006DeterministicResult(extraction.findings, coverage, !scannerWarning);
 
   return {
     criterionId: 'S006',
@@ -653,15 +654,18 @@ function formatS006FindingReference(finding: S006SensitiveInformationFinding): s
 
 function classifyS006DeterministicResult(
   findings: S006SensitiveInformationFinding[],
-  coverage: S006ScanCoverage
+  coverage: S006ScanCoverage,
+  scannerCompleted: boolean
 ): S006SensitiveInformationAnalysisResult['classification'] {
   const findingReferences = findings.map(finding => formatS006FindingReference(finding));
   const failFindings = findings.filter(isS006DeterministicFailFinding);
+  const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
   if (failFindings.length > 0) {
+    const first = failFindings[0];
     return {
       status: EvaluationStatus.FAIL,
-      reason: `S006 found ${failFindings.length} high-confidence live-looking secret finding${failFindings.length === 1 ? '' : 's'} in production or CI/deployment context.`,
+      reason: `Found ${plural(failFindings.length, 'value that looks like a real secret', 'values that look like real secrets')} in production code or CI/deployment files, for example ${reportPath(first.path)}${first.line === undefined ? '' : `:${first.line}`}. Remove ${failFindings.length === 1 ? 'it' : 'them'} from the repository, load ${failFindings.length === 1 ? 'it' : 'them'} from environment variables or a secret store, and replace each exposed secret, because the old value stays in the Git history.`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };
@@ -670,17 +674,18 @@ function classifyS006DeterministicResult(
   if (findings.length > 0) {
     return {
       status: EvaluationStatus.MANUAL,
-      reason: `S006 retained ${findings.length} sensitive or environment-specific finding${findings.length === 1 ? '' : 's'} that require reviewer judgment based on context, confidence, severity, and matched evidence.`,
+      reason: `Found ${plural(findings.length, 'possible secret or environment-specific value', 'possible secrets or environment-specific values')}. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real.${coverage.materiallyWeakened ? ' Part of the repository was not fully scanned; see Coverage gaps.' : ''}`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };
   }
 
   if (coverage.materiallyWeakened) {
-    const materialWarnings = coverage.warnings.filter(warning => warning.materialToCoverage);
     return {
       status: EvaluationStatus.MANUAL,
-      reason: `S006 found no retained findings, but scan coverage was materially weakened by ${materialWarnings.length || 'one or more'} bounded traversal, reading, or truncation warning${materialWarnings.length === 1 ? '' : 's'}.`,
+      reason: scannerCompleted
+        ? 'No secrets or environment-specific values were found, but part of the repository was not fully scanned. A reviewer must check the files listed under Coverage gaps.'
+        : 'No secrets or environment-specific values were found, but Gitleaks did not run, so secrets it detects could be missed. Install Gitleaks or set GITLEAKS_PATH and run the evaluation again.',
       findingReferences,
       materiallyWeakenedCoverage: true
     };
@@ -688,7 +693,7 @@ function classifyS006DeterministicResult(
 
   return {
     status: EvaluationStatus.PASS,
-    reason: `S006 found no retained sensitive or environment-specific findings after scanning ${coverage.scannedFiles} of ${coverage.candidateFiles} candidate file${coverage.candidateFiles === 1 ? '' : 's'} (${coverage.scannedBytes} bytes) with no material coverage warnings.`,
+    reason: `No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read ${plural(coverage.scannedFiles, 'file', 'files')} with no coverage gaps.`,
     findingReferences,
     materiallyWeakenedCoverage: false
   };
