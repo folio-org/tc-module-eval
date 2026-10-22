@@ -24,6 +24,10 @@ When a repository has a Maven project or a descriptor script, the build always r
 
 Files whose repository path contains `template` are never used as the final descriptor. A repository with no descriptor source but with a descriptor template (a `*ModuleDescriptor*.json` file under a path containing `template`, such as `descriptors/ModuleDescriptor-template.json`) fails with a message naming the templates.
 
+## Gradle Modules
+
+A Gradle build is found at the repository root or in `service/`, where FOLIO's Grails modules (mod-agreements, mod-licenses, mod-serials-management) keep it. With local commands, S002 runs the Gradle wrapper's `processResources` to generate the descriptor from its template, and S003 lists dependencies with the [jk1 license report plugin](https://github.com/jk1/Gradle-License-Report), which the evaluator applies through an init script because FOLIO projects do not apply it. The wrapper runs on the `java` found on `PATH`; Gradle 7.x, used by these modules, does not run on Java 21, so put a Java 17 JDK first on `PATH` for them.
+
 ## Source Inspection Boundaries
 
 Source inspection never modifies evaluated repositories or runs their code, tests, builds, services, databases, or Okapi calls.
