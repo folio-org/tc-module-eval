@@ -11,6 +11,8 @@ import * as path from 'path';
 import { analyzeS004Documentation, formatS004Evidence } from '../utils/s004-installation-documentation';
 import { analyzeS005PersonalDataDisclosure, buildS005CriterionDetails, formatS005Evidence } from '../utils/s005-personal-data-disclosure';
 import { s002ArtifactFailureResult } from '../utils/s002-module-descriptor-report';
+import { evaluateS009, renderS009HumanDetails } from '../utils/s009-evaluator';
+import { citedTrackedFiles } from '../module-evaluator';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -41,8 +43,9 @@ describe('EvaluationReportRenderer', () => {
     const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
     const setup = script.slice(0, script.indexOf('var items = data.items.map(prepare);'));
     const helpers = script.slice(script.indexOf('    function segments('), script.indexOf('    function clampedText('));
-    return runInNewContext(`${setup}${helpers}return function (text) { var parts = segments(text); `
-      + `return {lead: parts.lead, tag: parts.tag, href: parts.lead ? rowHref(parts, ${JSON.stringify(cited)}) : null}; }; }());`, {
+    return runInNewContext(`${setup}${helpers}return function (text) { `
+      + `var cited = ${JSON.stringify(cited)}; var parts = rowParts(text, cited); `
+      + 'return {lead: parts.lead, tag: parts.tag, href: parts.lead ? rowHref(parts, cited) : null}; }; }());', {
       document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
     });
   }
@@ -232,7 +235,7 @@ describe('EvaluationReportRenderer', () => {
       details: 'Agent review:\n  - Not applied: stale legacy reason',
       agentReview: { available: false, criterionId: 'S010', recommendation: 'likely_sufficient',
         evidenceReferences: [], warnings: ['Command configured with timeout 420000ms', 'bad value\nRead error: injected'],
-        errors: ['Provider returned invalid JSON'] }
+        errors: ['Provider returned invalid JSON', '- ... 999 more'] }
     }] };
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml(report);
@@ -241,7 +244,8 @@ describe('EvaluationReportRenderer', () => {
       '  - Summary: No usable advisory review was returned.',
       '  - Reason: Provider returned invalid JSON',
       '    - Command configured with timeout 420000ms',
-      '    - bad value ↵ Read error: injected'
+      '    - bad value ↵ Read error: injected',
+      '    - … 999 more'
     ]));
     expect(reportData(html).items[0].details.join('\n')).not.toContain('exceeded its time limit');
     expect(renderer.renderJson(report)).toContain('Provider returned invalid JSON');
@@ -709,6 +713,84 @@ describe('EvaluationReportRenderer', () => {
 
       expect(rowLinks(html, 'S002')('README.md:9 [approved] crafted line').href).toBeNull();
       expect(rowLinks(html, 'S004')('README.md:12 setup').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/README.md#L12`);
+    });
+
+    it('keeps a cited file name with line breaks out of text that names a redaction placeholder', () => {
+      const cited = `docs/${'a'.repeat(80)}\nForged section:\n  - forged.md`;
+      const item = preparedItems(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: [cited] },
+        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+          details: 'Commands:\n  - README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]' }]
+      }))[0];
+
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Commands:']);
+      expect(item.tree[0].children.map((node: any) => node.text))
+        .toEqual(['README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]']);
+    });
+
+    it('keeps the repository URL when a cited file name appears inside its redaction placeholder', () => {
+      const data = reportData(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['_0_'] }
+      }));
+
+      expect(data.meta.repo).toBe(result.repositoryUrl);
+      expect(data.meta.citedSourcePaths).toEqual(['_0_']);
+    });
+
+    it('protects a cited path from redaction when a shorter cited path overlaps its start', () => {
+      const item = reportData(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['- docs', 'docs/sk-secret.md'] },
+        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+          details: 'Sources:\n  - docs/sk-secret.md:12 setup', criterionDetails: { sources: [{ path: 'docs/sk-secret.md' }] } }]
+      })).items[0];
+
+      expect(item.details).toEqual(['Sources:', '  - docs/sk-secret.md:12 setup']);
+    });
+
+    it('links S009 project files and source hashes it cites only in its dependency evidence', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const evaluation = evaluateS009({ ok: false, sourcePath: 'ledger.json', diagnostics: [{ code: 'ledger_not_authoritative', message: 'Not reviewed' }] }, {
+        observations: [], diagnostics: [], projectFiles: ['pom.xml'], fileHashes: { 'pom.xml': `sha256:${'a'.repeat(64)}` },
+        hasDependencyProject: true, complete: true
+      });
+      const report: EvaluationResult = {
+        ...result,
+        criteria: [
+          { criterionId: 'S007', status: EvaluationStatus.MANUAL, evidence: 'x', details: 'Notes:\n  - y', criterionDetails: { findings: [{ sourcePath: 'pom.xml' }] } },
+          { criterionId: 'S009', status: EvaluationStatus.PASS, evidence: 'x', details: renderS009HumanDetails(evaluation), criterionDetails: evaluation }
+        ]
+      };
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...report,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: citedTrackedFiles(report.criteria, ['pom.xml']) }
+      });
+      const rows = walk(preparedItems(html)[1].tree).filter((node: any) => /^pom\.xml:?$/.test(node.text));
+
+      expect(rows).toHaveLength(2);
+      // A row with children drops its trailing colon before its lead is read, as renderNodes does.
+      rows.forEach((row: any) => expect(rowLinks(html, 'S009')(row.children.length ? row.text.replace(/:$/, '') : row.text).href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/pom.xml`));
+    });
+
+    it('links an agent-review source that is a cited file name without an extension or directory', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['Dockerfile', 'pom.xml'] },
+        criteria: [{
+          criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual', details: 'Dependency observations:\n  - none',
+          agentReview: { available: true, criterionId: 'S010', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+            summary: 'Check runtime behavior.', evidenceReferences: ['Dockerfile'], warnings: [], errors: [] }
+        }]
+      });
+      const sources = walk(preparedItems(html)[0].tree).find((node: any) => node.text === 'Sources:');
+      const links = rowLinks(html, 'S010');
+
+      expect(sources.children.map((node: any) => node.text)).toEqual(['Dockerfile']);
+      expect(links('Dockerfile').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/Dockerfile`);
+      expect(links('pom.xml').href).toBeNull();
     });
 
     it('does not link the cited prefix of a path shortened to the reference budget', () => {

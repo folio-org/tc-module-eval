@@ -12,7 +12,7 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
   const explicitReferences = new Set<string>();
   const collect = (value: unknown, key?: string): void => {
     if (typeof value === 'string') {
-      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences') {
+      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences' || key === 'projectFiles') {
         explicitReferences.add(value);
       }
       return;
@@ -22,6 +22,8 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
       return;
     }
     if (value && typeof value === 'object') {
+      // S009 records each hashed source file as a key of fileHashes.
+      if (key === 'fileHashes') Object.keys(value).forEach(file => explicitReferences.add(file));
       Object.entries(value).forEach(([childKey, child]) => collect(child, childKey));
     }
   };

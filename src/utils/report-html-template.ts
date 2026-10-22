@@ -55,17 +55,22 @@ function reportSafeValue<T>(value: T, redactText: (value: string) => string): T 
 
 function createReportRedactor(protectedStrings: string[]): (value: string) => string {
   const identities = [...new Set(protectedStrings.filter(Boolean))].sort((left, right) => right.length - left.length);
-  const placeholders = identities.map((identity, index) => ({ identity, placeholder: `[REPORT_IDENTITY_${index}]` }));
   return value => {
-    let protectedValue = value;
-    for (const { identity, placeholder } of placeholders) {
-      protectedValue = protectedValue.split(identity).join(placeholder);
-    }
-    let redacted = redactSensitiveText(protectedValue);
-    for (const { identity, placeholder } of placeholders) {
-      redacted = redacted.split(placeholder).join(identity);
-    }
-    return redacted;
+    // The placeholder tag never occurs in the value, so repository text cannot name a placeholder and
+    // have a protected string (with its raw line breaks) substituted into it.
+    let tag = 0;
+    while (value.includes(`REPORT_IDENTITY_${tag}_`)) tag++;
+    // Longest identities first, each searched only in text no identity has claimed, so one identity can
+    // neither match inside another's placeholder nor split a longer identity.
+    let parts: Array<string | number> = [value];
+    identities.forEach((identity, index) => {
+      parts = parts.flatMap(part => typeof part === 'number'
+        ? [part]
+        : part.split(identity).flatMap((text, position) => position ? [index, text] : [text]));
+    });
+    const protectedValue = parts.map(part => typeof part === 'number' ? `[REPORT_IDENTITY_${tag}_${part}]` : part).join('');
+    return redactSensitiveText(protectedValue)
+      .replace(new RegExp(`\\[REPORT_IDENTITY_${tag}_(\\d+)\\]`, 'g'), (_placeholder, index) => identities[Number(index)]);
   };
 }
 
@@ -87,7 +92,7 @@ function diagnosticLines(values: string[]): string[] {
   const seen = new Set<string>();
   // Review errors and warnings can quote repository text, so each stays on one row.
   return values
-    .map(value => reportText(value).trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, ''))
+    .map(value => reportText(value.trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, '')))
     .filter(value => value && !seen.has(value) && seen.add(value))
     .map(value => value.length > 500 ? `${value.slice(0, 497)}...` : value);
 }
@@ -528,6 +533,13 @@ export function createHtmlReport(result: EvaluationResult): string {
       if(!file||file.charAt(0)==='/'||file.split('/').indexOf('..')>=0||cited.indexOf(file)<0)return null;
       return data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'');
     }
+    // A row that is exactly a file this criterion cites (such as "Dockerfile" in agent-review sources) is that file.
+    function rowParts(text,cited) {
+      var parts=segments(text),file;
+      if(parts.lead||parts.tag)return parts;
+      try{file=decodeURIComponent(text);}catch(error){return parts;}
+      return cited.indexOf(file)>=0?{lead:text,tag:'',text:''}:parts;
+    }
     // A path shortened to the reference budget names a different file than its cited prefix, so it gets no link.
     function rowHref(parts,cited) { return /^\[truncated to \d+ bytes\]/.test(parts.text)?null:sourceHref(parts.lead,cited); }
     function clampedText(container,text,key,showFullText) {
@@ -541,7 +553,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection||!!node.openByDefault;
         if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')));if(!node.hideCount)section.appendChild(h('span','count-chip',String(node.countText||kids)));section.appendChild(h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
-        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=rowHref(parts,citedById[prefix.split('/')[0]]);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
+        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var cited=citedById[prefix.split('/')[0]],parts=rowParts(node.text.replace(/:$/,kids?'':':'),cited);var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=rowHref(parts,cited);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
         if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden);
       });
       if(hidden){var omitted=h('div','item-row');omitted.style.setProperty('--indent',Math.max(0,depth-1)*22+'px');omitted.append(h('span','leaf'),h('span','more-text',hidden+' more not included in the report'));parent.appendChild(omitted);}
