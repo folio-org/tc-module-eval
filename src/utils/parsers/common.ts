@@ -1,7 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { CommandExecutionResult } from '../../types';
 import { isNonEmptyString } from '../type-guards';
 import { getLogger } from '../logger';
+
+/** Plain-English reason a dependency-listing command did not succeed, for the S003 report. */
+export function commandFailureReason(result: CommandExecutionResult): string {
+  if (result.status === 'blocked' && !result.localCommandsAllowed) {
+    return 'build commands are turned off for this evaluation';
+  }
+  return result.errorMessage || result.stderr || result.status;
+}
 
 /**
  * Safely read file contents

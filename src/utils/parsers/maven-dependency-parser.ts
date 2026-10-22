@@ -37,7 +37,7 @@ import { parseStringPromise } from 'xml2js';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { safeReadFile, validateRepoPath } from './common';
+import { commandFailureReason, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
@@ -362,8 +362,8 @@ export async function getMavenDependencies(
     if (commandResult.status !== 'success') {
       errors.push({
         source: 'maven-parser',
-        message: `Failed to extract Maven dependencies: ${commandResult.errorMessage ?? commandResult.status}`,
-        error: new Error(commandResult.stderr || commandResult.errorMessage || commandResult.status)
+        message: `Maven could not list the dependencies: ${commandFailureReason(commandResult)}`,
+        error: new Error(commandResult.stderr || commandFailureReason(commandResult))
       });
       return { dependencies: [], errors, warnings };
     }
@@ -385,9 +385,8 @@ export async function getMavenDependencies(
 
     warnings.push({
       source: 'maven-parser',
-      message: 'Maven license plugin did not generate THIRD-PARTY.txt file. ' +
-               'This typically means the project has no third-party dependencies. ' +
-               `Expected location: ${MAVEN_THIRD_PARTY_PATH}`
+      message: `Maven ran but did not write a third-party license list (${MAVEN_THIRD_PARTY_PATH}). ` +
+               'This usually means the module has no third-party dependencies.'
     });
 
     return { dependencies: [], errors, warnings };
@@ -399,7 +398,7 @@ export async function getMavenDependencies(
 
     errors.push({
       source: 'maven-parser',
-      message: `Failed to extract Maven dependencies: ${errorMessage}`,
+      message: `Maven could not list the dependencies: ${errorMessage}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

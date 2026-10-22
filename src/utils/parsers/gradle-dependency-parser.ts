@@ -34,7 +34,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { safeReadFile, validateRepoPath } from './common';
+import { commandFailureReason, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
@@ -164,8 +164,8 @@ export async function getGradleDependencies(
     if (licenseCommand.status !== 'success') {
       errors.push({
         source: 'gradle-parser',
-        message: `Failed to generate Gradle license report: ${licenseCommand.errorMessage ?? licenseCommand.status}`,
-        error: new Error(licenseCommand.stderr || licenseCommand.errorMessage || licenseCommand.status)
+        message: `Gradle could not list the dependencies: ${commandFailureReason(licenseCommand)}`,
+        error: new Error(licenseCommand.stderr || commandFailureReason(licenseCommand))
       });
       return { dependencies: [], errors, warnings };
     }
@@ -181,7 +181,7 @@ export async function getGradleDependencies(
 
     errors.push({
       source: 'gradle-parser',
-      message: `Gradle license plugin did not generate ${GRADLE_LICENSE_REPORT_PATH}; dependency evidence unavailable`,
+      message: `Gradle ran but did not write its license report (${GRADLE_LICENSE_REPORT_PATH}), so the dependencies could not be listed.`,
       error: new Error('Gradle license report missing')
     });
     return { dependencies: [], errors, warnings };
@@ -189,7 +189,7 @@ export async function getGradleDependencies(
   } catch (error) {
     errors.push({
       source: 'gradle-parser',
-      message: 'Failed to extract Gradle dependencies',
+      message: 'Gradle could not list the dependencies',
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

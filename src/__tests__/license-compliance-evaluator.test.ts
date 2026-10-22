@@ -6,6 +6,11 @@ import {
   ThirdPartyLicenseEvaluatorAdapters
 } from '../utils/license-compliance-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
+import { createEvaluationRun } from '../utils/evaluation-run';
+import { LocalCommandRunner } from '../utils/command-runner';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 beforeEach(() => {
   setLogger(new NoopLogger());
@@ -21,7 +26,7 @@ describe('formatExtractionErrors', () => {
       { source: 'maven-parser', message: 'Build failed' }
     ];
     const result = formatExtractionErrors(errors);
-    expect(result).toBe('  - [maven-parser] Build failed');
+    expect(result).toBe('  - [maven] Build failed');
   });
 
   it('should not duplicate message when nested error.message matches outer message', () => {
@@ -33,12 +38,12 @@ describe('formatExtractionErrors', () => {
       }
     ];
     const result = formatExtractionErrors(errors);
-    // Should NOT append "Details:" since the message is already included
-    expect(result).toBe('  - [gradle-parser] Command timed out');
-    expect(result).not.toContain('Details:');
+    // Should NOT append "Cause:" since the message is already included
+    expect(result).toBe('  - [gradle] Command timed out');
+    expect(result).not.toContain('Cause:');
   });
 
-  it('should append Details when nested error.message differs from outer message', () => {
+  it('should append the cause when nested error.message differs from outer message', () => {
     const errors: DependencyExtractionError[] = [
       {
         source: 'npm-parser',
@@ -47,11 +52,10 @@ describe('formatExtractionErrors', () => {
       }
     ];
     const result = formatExtractionErrors(errors);
-    expect(result).toContain('  - [npm-parser] License extraction failed');
-    expect(result).toContain('Details: ENOENT: no such file');
+    expect(result).toBe('  - [npm] License extraction failed\n    Cause: ENOENT: no such file');
   });
 
-  it('should include stack trace first line when present', () => {
+  it('should leave stack traces out of the report', () => {
     const err = new Error('Something broke');
     // Error stack includes the message line + call frames
     const errors: DependencyExtractionError[] = [
@@ -62,8 +66,7 @@ describe('formatExtractionErrors', () => {
       }
     ];
     const result = formatExtractionErrors(errors);
-    expect(result).toContain('Details: Something broke');
-    expect(result).toContain('Stack:');
+    expect(result).toBe('  - [maven] Parse error\n    Cause: Something broke');
   });
 
   it('should format multiple errors joined by newlines', () => {
@@ -73,8 +76,8 @@ describe('formatExtractionErrors', () => {
     ];
     const result = formatExtractionErrors(errors);
     const lines = result.split('\n');
-    expect(lines[0]).toBe('  - [maven-parser] Error one');
-    expect(lines[1]).toBe('  - [gradle-parser] Error two');
+    expect(lines[0]).toBe('  - [maven] Error one');
+    expect(lines[1]).toBe('  - [gradle] Error two');
   });
 });
 
@@ -87,7 +90,7 @@ describe('determineComplianceStatus', () => {
 
     expect(result.criterionId).toBe('S003');
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('All third-party dependencies comply');
+    expect(result.details).toContain('Every dependency has a license that the ASF 3rd Party License Policy allows');
   });
 
   it('should return MANUAL when compliant but has fallback warning', () => {
@@ -95,8 +98,8 @@ describe('determineComplianceStatus', () => {
     const result = determineComplianceStatus('S003', complianceResult, evidence, [], true);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('MANUAL REVIEW REQUIRED');
-    expect(result.details).toContain('Transitive dependencies are unavailable');
+    expect(result.details).toContain('only direct dependencies were checked');
+    expect(result.details).toContain('What to do: Check the licenses of the transitive dependencies by hand.');
   });
 
   it('should return FAIL when Category X violation is present', () => {
@@ -111,8 +114,12 @@ describe('determineComplianceStatus', () => {
     const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.details).toContain('bad-lib:1.0');
-    expect(result.details).toContain('GPL-3.0 is Category X');
+    expect(result.details).toBe(
+      'Some dependencies use licenses that the ASF 3rd Party License Policy prohibits.\n' +
+      'What to do: Remove or replace prohibited dependencies.\n\n' +
+      'Prohibited licenses (Category X):\n' +
+      '  - bad-lib:1.0 - GPL-3.0 is Category X'
+    );
   });
 
   it('should return MANUAL when all issues are manual-review types', () => {
@@ -134,10 +141,10 @@ describe('determineComplianceStatus', () => {
     const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('require manual review');
+    expect(result.details).toContain('No prohibited licenses were found, but some dependencies need a reviewer to check their licenses.');
   });
 
-  it('should return MANUAL for mixed non-Category-X issues', () => {
+  it('should return MANUAL for mixed non-Category-X issues, grouped by problem', () => {
     const complianceResult: ComplianceResult = {
       compliant: false,
       issues: [
@@ -150,13 +157,27 @@ describe('determineComplianceStatus', () => {
           dependency: { name: 'lib-b', version: '1.0' },
           reason: 'Parser error',
           issueType: LicenseIssueType.PARSER_ERROR
+        },
+        {
+          dependency: { name: 'lib-c', version: '2.0' },
+          reason: 'Not in the README',
+          issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
         }
       ]
     };
     const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Please review these issues');
+    // Sections follow severity order, not input order; each row keeps "name:version - reason" for the HTML report.
+    expect(result.details).toBe(
+      'No prohibited licenses were found, but some dependencies need a reviewer to check their licenses.\n' +
+      'What to do: List LGPL and Category B dependencies or their licenses in the README. ' +
+      'Check unknown licenses against the ASF policy. ' +
+      'Check combined license expressions by hand.\n\n' +
+      'Must be mentioned in the README:\n  - lib-c:2.0 - Not in the README\n\n' +
+      'Licenses the evaluator does not know:\n  - lib-a:1.0 - Unknown license\n\n' +
+      'License text that could not be read:\n  - lib-b:1.0 - Parser error'
+    );
   });
 
   it('should append extraction warnings when present', () => {
@@ -167,8 +188,7 @@ describe('determineComplianceStatus', () => {
     const result = determineComplianceStatus('S003', complianceResult, evidence, warnings, false);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('Extraction warnings:');
-    expect(result.details).toContain('[gradle-parser] No Gradle wrapper found');
+    expect(result.details).toContain('\n\nWarnings:\n  - [gradle] No Gradle wrapper found');
   });
 
   it('should use the provided criterionId', () => {
@@ -208,9 +228,9 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const result = await evaluator.evaluate('/repo');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('Failed to extract dependencies due to 1 error(s)');
-    expect(result.details).toContain('Dependency extraction errors:');
-    expect(result.details).toContain('[maven-parser] Build failed');
+    expect(result.evidence).toBe('Dependency licenses were not checked because the dependencies could not be listed.');
+    expect(result.details).toContain('What to do: Fix the problem below and rerun the evaluation, or check the dependency licenses by hand.');
+    expect(result.details).toContain('Why the dependencies could not be listed:\n  - [maven] Build failed');
   });
 
   it('should return MANUAL when no dependencies are found', async () => {
@@ -223,9 +243,9 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const result = await evaluator.evaluate('/repo');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('No third-party dependencies found');
-    expect(result.details).toContain('Manual review required to confirm compliance');
-    expect(result.details).toContain('[dependency-orchestrator] No supported build tools found');
+    expect(result.evidence).toBe('No third-party dependencies were found.');
+    expect(result.details).toContain('What to do: Confirm that the module really has no third-party dependencies.');
+    expect(result.details).toContain('Warnings:\n  - No supported build tools found');
   });
 
   it('should return PASS when dependencies are compliant', async () => {
@@ -239,7 +259,7 @@ describe('ThirdPartyLicenseEvaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.evidence).toBe('Found 1 dependencies. Licenses: example-lib:1.0.0 (MIT)');
-    expect(result.details).toContain('All third-party dependencies comply');
+    expect(result.details).toContain('Every dependency has a license that the ASF 3rd Party License Policy allows');
   });
 
   it('should return MANUAL when compliant dependencies came from fallback extraction', async () => {
@@ -252,8 +272,7 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const result = await evaluator.evaluate('/repo');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('MANUAL REVIEW REQUIRED');
-    expect(result.details).toContain('Transitive dependencies are unavailable');
+    expect(result.details).toContain('only direct dependencies were checked');
   });
 
   it('should return FAIL when Category X violations are present', async () => {
@@ -299,7 +318,29 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const result = await evaluator.evaluate('/repo');
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('require manual review');
+    expect(result.details).toContain('Licenses the evaluator does not know:\n  - example-lib:1.0.0 - Unknown license');
+  });
+
+  it('should explain how to rerun when build commands are turned off', async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-safe-'));
+    try {
+      fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><packaging>jar</packaging></project>');
+      const evaluationRun = createEvaluationRun({
+        repositoryPath: repo,
+        language: 'java',
+        commandRunner: new LocalCommandRunner(false)
+      });
+
+      const result = await new ThirdPartyLicenseEvaluator().evaluate(repo, 'S003', evaluationRun);
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toBe('Dependency licenses were not checked because build commands are turned off for this evaluation.');
+      expect(result.details).toContain('What to do: Rerun the evaluation with --allow-local-commands on a trusted machine, or check the dependency licenses by hand.');
+      expect(result.details).toContain('Why the dependencies could not be listed:\n  - [maven] Maven could not list the dependencies: build commands are turned off for this evaluation\n\nBuild commands:');
+      expect(result.details).toContain('Build commands:\n  - Not run: mvn license:add-third-party ');
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it('should return MANUAL when an adapter throws during evaluation', async () => {
@@ -314,8 +355,8 @@ describe('ThirdPartyLicenseEvaluator', () => {
     expect(result).toEqual({
       criterionId: 'S003',
       status: EvaluationStatus.MANUAL,
-      evidence: 'Error occurred during dependency analysis',
-      details: 'Failed to analyze third-party license compliance: Dependency tool crashed. Manual review required.'
+      evidence: 'The license check stopped with an unexpected error, so dependency licenses were not checked.',
+      details: 'The license check stopped with an unexpected error: Dependency tool crashed.\nWhat to do: Check the dependency licenses by hand.'
     });
   });
 });

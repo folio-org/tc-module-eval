@@ -46,7 +46,7 @@ import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { validateRepoPath } from './common';
+import { commandFailureReason, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { NPM_NETWORK_POLICY } from '../build-tool-policies';
@@ -277,7 +277,7 @@ export async function getNpmDependencies(
     }, evaluationRun);
 
     if (installResult.status !== 'success') {
-      throw new Error(installResult.errorMessage || installResult.stderr || installResult.status);
+      throw new Error(commandFailureReason(installResult));
     }
 
     // Step 2: Run license-checker-rseidelsohn to extract license information
@@ -295,7 +295,7 @@ export async function getNpmDependencies(
     }, evaluationRun);
 
     if (checkerResult.status !== 'success') {
-      throw new Error(checkerResult.errorMessage || checkerResult.stderr || checkerResult.status);
+      throw new Error(commandFailureReason(checkerResult));
     }
 
     // Step 3: Parse the JSON output
@@ -312,7 +312,7 @@ export async function getNpmDependencies(
 
     errors.push({
       source: 'npm-parser',
-      message: `Failed to extract npm dependencies: ${errorMessage}`,
+      message: `npm could not list the dependencies: ${errorMessage}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

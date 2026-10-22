@@ -44,7 +44,7 @@ interface LicenseEvaluation {
  */
 const DEFAULT_EVALUATION_FAILURE = {
   status: EvaluationStatus.MANUAL,
-  reason: 'Unable to evaluate licenses',
+  reason: 'The licenses could not be checked.',
   issueType: LicenseIssueType.UNKNOWN_LICENSE
 } as const;
 
@@ -177,7 +177,7 @@ function evaluateMultipleLicenses(
     return {
       license: 'Unknown',
       status: EvaluationStatus.MANUAL,
-      reason: 'No license information available',
+      reason: 'No license was reported.',
       issueType: LicenseIssueType.NO_LICENSE_INFO
     };
   }
@@ -193,7 +193,7 @@ function evaluateMultipleLicenses(
       evaluations.push({
         license,
         status: EvaluationStatus.MANUAL,
-        reason: `Unknown license '${license}'`,
+        reason: `'${license}' is not in the evaluator's list of known licenses.`,
         issueType: LicenseIssueType.UNKNOWN_LICENSE
       });
     } else if (category === LicenseCategory.A) {
@@ -202,7 +202,7 @@ function evaluateMultipleLicenses(
         license,
         category,
         status: EvaluationStatus.PASS,
-        reason: `Category A license '${license}' is approved`
+        reason: `'${license}' is allowed (Category A).`
       };
     } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
       // Category B - check documentation
@@ -217,14 +217,14 @@ function evaluateMultipleLicenses(
           license,
           category,
           status: EvaluationStatus.PASS,
-          reason: `Category B license '${license}' is documented in README`
+          reason: `'${license}' (Category B) is mentioned in the README.`
         });
       } else {
         evaluations.push({
           license,
           category,
           status: EvaluationStatus.FAIL,
-          reason: `Category B license '${license}' not documented in README`,
+          reason: `'${license}' is a Category B license, and neither it nor this dependency is mentioned in the README.`,
           issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
         });
       }
@@ -242,14 +242,14 @@ function evaluateMultipleLicenses(
             license,
             category,
             status: EvaluationStatus.PASS,
-            reason: `LGPL license '${license}' with special exception is documented`
+            reason: `'${license}' is allowed for this library because the README mentions it.`
           });
         } else {
           evaluations.push({
             license,
             category,
             status: EvaluationStatus.FAIL,
-            reason: `LGPL license '${license}' requires documentation (special exception: ${dependency.name})`,
+            reason: `'${license}' is allowed for this library only if the README mentions it, and it does not.`,
             issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
           });
         }
@@ -258,7 +258,7 @@ function evaluateMultipleLicenses(
           license,
           category,
           status: EvaluationStatus.FAIL,
-          reason: `License '${license}' is in Category X (prohibited)`,
+          reason: `'${license}' is prohibited (Category X).`,
           issueType: LicenseIssueType.CATEGORY_X_VIOLATION
         });
       }
@@ -280,7 +280,7 @@ function evaluateMultipleLicenses(
     return {
       license: licenses.join(' | '),
       status: EvaluationStatus.MANUAL,
-      reason: `Unknown licenses require manual review: ${evaluations.filter(e => e.status === EvaluationStatus.MANUAL).map(e => e.license).join(', ')}`,
+      reason: `These licenses are not in the evaluator's list of known licenses: ${evaluations.filter(e => e.status === EvaluationStatus.MANUAL).map(e => `'${e.license}'`).join(', ')}.`,
       issueType: LicenseIssueType.UNKNOWN_LICENSE
     };
   }
@@ -335,7 +335,7 @@ export function checkLicenseCompliance(
     if (!dependency.licenses || !Array.isArray(dependency.licenses) || dependency.licenses.length === 0) {
       issues.push({
         dependency,
-        reason: 'No license information available',
+        reason: 'No license was reported.',
         issueType: LicenseIssueType.NO_LICENSE_INFO
       });
       continue;
@@ -347,7 +347,7 @@ export function checkLicenseCompliance(
     if (allLicenses.length === 0) {
       issues.push({
         dependency,
-        reason: 'No valid license information available',
+        reason: 'No license was reported.',
         issueType: LicenseIssueType.NO_LICENSE_INFO
       });
       continue;
@@ -374,7 +374,7 @@ export function checkLicenseCompliance(
       );
       issues.push({
         dependency,
-        reason: `Parser error: Licenses not properly split (found separators in: ${unsplitLicenses.join(', ')})`,
+        reason: `The license text combines several licenses and could not be checked: ${unsplitLicenses.map(license => `'${license}'`).join(', ')}.`,
         issueType: LicenseIssueType.PARSER_ERROR
       });
       continue;
@@ -405,7 +405,7 @@ export function checkLicenseCompliance(
         // Unknown license even after normalization
         issues.push({
           dependency,
-          reason: `Unknown license '${license}' - requires manual review`,
+          reason: `'${license}' is not in the evaluator's list of known licenses.`,
           issueType: LicenseIssueType.UNKNOWN_LICENSE
         });
       } else if (category === LicenseCategory.X) {
@@ -415,7 +415,7 @@ export function checkLicenseCompliance(
           if (!isDocumentedInReadme(dependency, readmeContent)) {
             issues.push({
               dependency,
-              reason: `LGPL license '${license}' requires documentation in README (special exception: ${dependency.name})`,
+              reason: `'${license}' is allowed for this library only if the README mentions it, and it does not.`,
               issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
             });
           }
@@ -424,28 +424,18 @@ export function checkLicenseCompliance(
           // All other Category X licenses are prohibited
           issues.push({
             dependency,
-            reason: `License '${license}' is in Category X (prohibited)`,
+            reason: `'${license}' is prohibited (Category X).`,
             issueType: LicenseIssueType.CATEGORY_X_VIOLATION
           });
         }
       } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
         // Category B - requires documentation
         if (!isDocumentedInReadme(dependency, readmeContent)) {
-          // Check for special exceptions
-          if (isSpecialException(dependency.name)) {
-            // Special exception but still needs documentation
-            issues.push({
-              dependency,
-              reason: `Category B license '${license}' not documented in README (special exception: ${dependency.name})`,
-              issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-            });
-          } else {
-            issues.push({
-              dependency,
-              reason: `Category B license '${license}' not documented in README`,
-              issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-            });
-          }
+          issues.push({
+            dependency,
+            reason: `'${license}' is a Category B license, and neither it nor this dependency is mentioned in the README.`,
+            issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
+          });
         }
       }
       // Category A licenses are automatically compliant

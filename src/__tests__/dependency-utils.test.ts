@@ -5,7 +5,7 @@
 import { getDependencies } from '../utils/dependency-orchestrator';
 import { checkLicenseCompliance } from '../utils/license-compliance';
 import { LicenseCategory } from '../utils/license-policy';
-import { Dependency, ComplianceResult } from '../types';
+import { Dependency, ComplianceResult, LicenseIssueType } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -128,7 +128,7 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Category X (prohibited)');
+      expect(result.issues[0].reason).toContain('is prohibited (Category X)');
     });
 
     it('should fail with undocumented Category B licenses', () => {
@@ -145,7 +145,7 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('not documented in README');
+      expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
     });
 
     it('should pass with documented Category B licenses', () => {
@@ -178,7 +178,8 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('special exception: org.hibernate:hibernate-core');
+      expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
+      expect(result.issues[0].reason).toContain('mentioned in the README');
     });
 
     it('should handle special exceptions for CQL Java library', () => {
@@ -195,7 +196,8 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('special exception: org.z3950.zing:cql-java');
+      expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
+      expect(result.issues[0].reason).toContain('mentioned in the README');
     });
 
     // Comprehensive Category B license tests
@@ -246,7 +248,7 @@ describe('Dependency Utils', () => {
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(1);
-        expect(result.issues[0].reason).toContain('not documented in README');
+        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
       });
 
       it('should pass with documented EPL (Eclipse Public License) dependencies', () => {
@@ -295,7 +297,7 @@ describe('Dependency Utils', () => {
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(1);
-        expect(result.issues[0].reason).toContain('not documented in README');
+        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
       });
 
       it('should pass with documented CDDL (Common Development and Distribution License) dependencies', () => {
@@ -344,7 +346,7 @@ describe('Dependency Utils', () => {
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(1);
-        expect(result.issues[0].reason).toContain('not documented in README');
+        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
       });
 
       it('should handle mixed Category B dependencies', () => {
@@ -409,8 +411,8 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(2);
-      expect(result.issues[0].reason).toContain('No license information available');
-      expect(result.issues[1].reason).toContain('No license information available');
+      expect(result.issues[0].reason).toBe('No license was reported.');
+      expect(result.issues[1].reason).toBe('No license was reported.');
     });
 
     it('should report issues for unknown licenses', () => {
@@ -427,7 +429,7 @@ describe('Dependency Utils', () => {
       
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Unknown license \'Custom-License-1.0\'');
+      expect(result.issues[0].reason).toBe("'Custom-License-1.0' is not in the evaluator's list of known licenses.");
     });
 
   });
@@ -658,8 +660,8 @@ describe('Dependency Utils', () => {
       // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Parser error');
-      expect(result.issues[0].reason).toContain('not properly split');
+      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
+      expect(result.issues[0].reason).toContain("'Apache-2.0|MIT'");
     });
 
     it('should detect parser contract violation when licenses contain OR separator', () => {
@@ -677,8 +679,8 @@ describe('Dependency Utils', () => {
       // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Parser error');
-      expect(result.issues[0].reason).toContain('separators');
+      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
+      expect(result.issues[0].reason).toContain("'MIT OR Apache-2.0'");
     });
 
     it('should detect parser contract violation when licenses contain AND separator', () => {
@@ -696,7 +698,7 @@ describe('Dependency Utils', () => {
       // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Parser error');
+      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
     });
 
     it('should detect parser contract violation when licenses contain parentheses', () => {
@@ -714,8 +716,8 @@ describe('Dependency Utils', () => {
       // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Parser error');
-      expect(result.issues[0].reason).toContain('not properly split');
+      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
+      expect(result.issues[0].reason).toContain("'(MIT OR Apache-2.0)'");
     });
 
     it('should detect parser contract violation when licenses contain WITH keyword', () => {
@@ -733,8 +735,8 @@ describe('Dependency Utils', () => {
       // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('Parser error');
-      expect(result.issues[0].reason).toContain('not properly split');
+      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
+      expect(result.issues[0].reason).toContain("'Apache-2.0 WITH LLVM-exception'");
     });
   });
 

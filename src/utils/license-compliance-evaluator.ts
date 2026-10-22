@@ -24,21 +24,71 @@ export interface ThirdPartyLicenseEvaluatorAdapters {
   checkCompliance(dependencies: Dependency[], readmeContent: string): ComplianceResult;
 }
 
+const TOOL_TAGS: Record<string, string> = {
+  'maven-parser': 'maven',
+  'gradle-parser': 'gradle',
+  'npm-parser': 'npm'
+};
+
+/** Formats an extraction problem as a report row, tagged with the build tool that reported it. */
+function formatProblem(problem: DependencyExtractionError): string {
+  const tag = TOOL_TAGS[problem.source];
+  return `  - ${tag ? `[${tag}] ` : ''}${problem.message}`;
+}
+
 /**
  * Format extraction errors into a detailed string for inclusion in criterion results.
  */
 export function formatExtractionErrors(errors: DependencyExtractionError[]): string {
   return errors
     .map(e => {
-      const baseMessage = `  - [${e.source}] ${e.message}`;
-      if (e.error && e.error.message && !e.message.includes(e.error.message)) {
-        const stackInfo = e.error.stack ? `\n    Stack: ${e.error.stack.split('\n')[1]}` : '';
-        return `${baseMessage}\n    Details: ${e.error.message}${stackInfo}`;
-      }
-      return baseMessage;
+      const row = formatProblem(e);
+      return e.error?.message && !e.message.includes(e.error.message)
+        ? `${row}\n    Cause: ${e.error.message}`
+        : row;
     })
     .join('\n');
 }
+
+function formatWarnings(warnings: DependencyExtractionError[]): string {
+  return warnings.length > 0 ? `\n\nWarnings:\n${warnings.map(formatProblem).join('\n')}` : '';
+}
+
+const COMMAND_STATUS_LABELS: Record<CommandExecutionResult['status'], string> = {
+  success: 'Ran',
+  failed: 'Failed',
+  timed_out: 'Timed out',
+  blocked: 'Not run'
+};
+
+/** Report sections for compliance issues, most serious first, with the action that resolves each. */
+const ISSUE_GROUPS: Array<{ type: LicenseIssueType; title: string; action: string }> = [
+  {
+    type: LicenseIssueType.CATEGORY_X_VIOLATION,
+    title: 'Prohibited licenses (Category X)',
+    action: 'Remove or replace prohibited dependencies.'
+  },
+  {
+    type: LicenseIssueType.UNDOCUMENTED_CATEGORY_B,
+    title: 'Must be mentioned in the README',
+    action: 'List LGPL and Category B dependencies or their licenses in the README.'
+  },
+  {
+    type: LicenseIssueType.UNKNOWN_LICENSE,
+    title: 'Licenses the evaluator does not know',
+    action: 'Check unknown licenses against the ASF policy.'
+  },
+  {
+    type: LicenseIssueType.NO_LICENSE_INFO,
+    title: 'No license reported',
+    action: 'Find the missing licenses and check them.'
+  },
+  {
+    type: LicenseIssueType.PARSER_ERROR,
+    title: 'License text that could not be read',
+    action: 'Check combined license expressions by hand.'
+  }
+];
 
 /**
  * Find and read README content from a repository, checking common filename variants.
@@ -65,8 +115,9 @@ export function buildEvidenceSummary(dependencies: Dependency[]): string {
     .map(d => `${d.name}:${d.version} (${d.licenses!.join(', ')})`)
     .join('; ');
 
+  // The HTML report groups licenses from the exact "Found N dependencies. Licenses: ..." form.
   return `Found ${dependencyCount} dependencies. ` +
-    (licenseInfo ? `Licenses: ${licenseInfo}` : 'No license information available for analysis.');
+    (licenseInfo ? `Licenses: ${licenseInfo}` : 'None of them reported a license.');
 }
 
 /**
@@ -79,9 +130,7 @@ export function determineComplianceStatus(
   warnings: DependencyExtractionError[],
   hasFallbackWarning: boolean
 ): CriterionResult {
-  const warningInfo = warnings.length > 0
-    ? `\n\nExtraction warnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
-    : '';
+  const warningInfo = formatWarnings(warnings);
 
   if (complianceResult.compliant) {
     if (hasFallbackWarning) {
@@ -89,7 +138,7 @@ export function determineComplianceStatus(
         criterionId,
         status: EvaluationStatus.MANUAL,
         evidence,
-        details: `License compliance check passed for analyzed dependencies, but MANUAL REVIEW REQUIRED.\n\n⚠️  WARNING: Only direct dependencies were analyzed. Transitive dependencies are unavailable and were not included in this analysis. Full license compliance cannot be verified without analyzing all transitive dependencies.${warningInfo}`
+        details: `All checked dependencies have allowed licenses, but only direct dependencies were checked: the build tool did not report their transitive dependencies.\nWhat to do: Check the licenses of the transitive dependencies by hand.${warningInfo}`
       };
     }
 
@@ -97,23 +146,22 @@ export function determineComplianceStatus(
       criterionId,
       status: EvaluationStatus.PASS,
       evidence,
-      details: `All third-party dependencies comply with ASF 3rd Party License Policy. No Category X licenses found, and all Category B licenses are properly documented.${warningInfo}`
+      details: `Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every license that must be mentioned in the README (Category B) is mentioned.${warningInfo}`
     };
   }
 
-  // Generate detailed compliance issues
-  const issueDetails = complianceResult.issues
-    .map(issue => `• ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
-    .join('\n');
+  const groups = ISSUE_GROUPS
+    .map(group => ({ ...group, issues: complianceResult.issues.filter(issue => issue.issueType === group.type) }))
+    .filter(group => group.issues.length > 0);
+  const issueDetails = groups
+    .map(group => `${group.title}:\n${group.issues
+      .map(issue => `  - ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
+      .join('\n')}`)
+    .join('\n\n');
+  const actions = groups.map(group => group.action).join(' ');
 
   const hasCategoryXViolation = complianceResult.issues.some(issue =>
     issue.issueType === LicenseIssueType.CATEGORY_X_VIOLATION
-  );
-
-  const allIssuesAreManualReview = complianceResult.issues.every(issue =>
-    issue.issueType === LicenseIssueType.UNKNOWN_LICENSE ||
-    issue.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B ||
-    issue.issueType === LicenseIssueType.NO_LICENSE_INFO
   );
 
   if (hasCategoryXViolation) {
@@ -121,16 +169,7 @@ export function determineComplianceStatus(
       criterionId,
       status: EvaluationStatus.FAIL,
       evidence,
-      details: `Third-party license compliance issues found. Please resolve these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
-    };
-  }
-
-  if (allIssuesAreManualReview) {
-    return {
-      criterionId,
-      status: EvaluationStatus.MANUAL,
-      evidence,
-      details: `Third-party license compliance issues require manual review. Please verify these dependencies comply with ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+      details: `Some dependencies use licenses that the ASF 3rd Party License Policy prohibits.\nWhat to do: ${actions}\n\n${issueDetails}${warningInfo}`
     };
   }
 
@@ -138,7 +177,7 @@ export function determineComplianceStatus(
     criterionId,
     status: EvaluationStatus.MANUAL,
     evidence,
-    details: `Third-party license compliance issues found. Please review these issues according to ASF 3rd Party License Policy:\n${issueDetails}${warningInfo}`
+    details: `No prohibited licenses were found, but some dependencies need a reviewer to check their licenses.\nWhat to do: ${actions}\n\n${issueDetails}${warningInfo}`
   };
 }
 
@@ -165,7 +204,7 @@ export class ThirdPartyLicenseEvaluator {
       const commandObservations = this.getNewCommandObservations(evaluationRun, previousCommandIdentities);
 
       if (errors.length > 0) {
-        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors), commandObservations);
+        return this.withCommandExecutionDetails(this.createExtractionErrorResult(criterionId, errors, commandObservations), commandObservations);
       }
 
       if (dependencies.length === 0) {
@@ -188,22 +227,29 @@ export class ThirdPartyLicenseEvaluator {
       return {
         criterionId,
         status: EvaluationStatus.MANUAL,
-        evidence: 'Error occurred during dependency analysis',
-        details: `Failed to analyze third-party license compliance: ${error instanceof Error ? error.message : 'Unknown error'}. Manual review required.`
+        evidence: 'The license check stopped with an unexpected error, so dependency licenses were not checked.',
+        details: `The license check stopped with an unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}.\nWhat to do: Check the dependency licenses by hand.`
       };
     }
   }
 
   private createExtractionErrorResult(
     criterionId: string,
-    errors: DependencyExtractionError[]
+    errors: DependencyExtractionError[],
+    commandObservations: CommandExecutionResult[]
   ): CriterionResult {
-    const errorDetails = formatExtractionErrors(errors);
+    const blocked = commandObservations.some(command => command.status === 'blocked' && !command.localCommandsAllowed);
     return {
       criterionId,
       status: EvaluationStatus.MANUAL,
-      evidence: `Failed to extract dependencies due to ${errors.length} error(s)`,
-      details: `Dependency extraction errors:\n${errorDetails}\n\nManual review required to verify third-party license compliance.`
+      evidence: blocked
+        ? 'Dependency licenses were not checked because build commands are turned off for this evaluation.'
+        : 'Dependency licenses were not checked because the dependencies could not be listed.',
+      details: 'S003 lists dependencies by running Maven, Gradle or npm, and that step did not work.\n' +
+        (blocked
+          ? 'What to do: Rerun the evaluation with --allow-local-commands on a trusted machine, or check the dependency licenses by hand.'
+          : 'What to do: Fix the problem below and rerun the evaluation, or check the dependency licenses by hand.') +
+        `\n\nWhy the dependencies could not be listed:\n${formatExtractionErrors(errors)}`
     };
   }
 
@@ -211,15 +257,12 @@ export class ThirdPartyLicenseEvaluator {
     criterionId: string,
     warnings: DependencyExtractionError[]
   ): CriterionResult {
-    const warningInfo = warnings.length > 0
-      ? `\n\nWarnings:\n${warnings.map(w => `  - [${w.source}] ${w.message}`).join('\n')}`
-      : '';
-
     return {
       criterionId,
       status: EvaluationStatus.MANUAL,
-      evidence: 'No third-party dependencies found',
-      details: `Repository appears to have no third-party dependencies. This is uncommon and may indicate a library project, configuration-only project, or build tool detection issue. Manual review required to confirm compliance.${warningInfo}`
+      evidence: 'No third-party dependencies were found.',
+      details: 'No third-party dependencies were found. This is unusual for a FOLIO module: it may be a library or configuration-only project, or the build files may not have been recognized.\n' +
+        `What to do: Confirm that the module really has no third-party dependencies.${formatWarnings(warnings)}`
     };
   }
 
@@ -247,12 +290,14 @@ export class ThirdPartyLicenseEvaluator {
       return result;
     }
 
-    const lines = observations
-      .map(command => `  - ${command.command} ${command.args.join(' ')} (${command.status}, environment: ${command.commandExecutionEnvironment})`);
+    const lines = observations.map(command => {
+      const where = command.commandExecutionEnvironment === 'github-actions' ? ' (in GitHub Actions)' : '';
+      return `  - ${COMMAND_STATUS_LABELS[command.status]}: ${command.command} ${command.args.join(' ')}${where}`;
+    });
 
     return {
       ...result,
-      details: `${result.details ?? ''}\n\nCommand execution:\n${lines.join('\n')}`
+      details: `${result.details ?? ''}\n\nBuild commands:\n${lines.join('\n')}`
     };
   }
 }

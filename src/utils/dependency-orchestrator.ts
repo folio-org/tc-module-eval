@@ -111,7 +111,7 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
     if (dependencies.length === 0 && errors.length === 0 && !hasMaven && !hasGradle && !hasNpm) {
       warnings.push({
         source: 'dependency-orchestrator',
-        message: 'No supported build tools found (Maven, Gradle, npm). Future support: Go.'
+        message: 'No Maven, Gradle or npm build file was found, so no dependencies could be listed.'
       });
     }
 
@@ -127,7 +127,7 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
   } catch (error) {
     errors.push({
       source: 'dependency-orchestrator',
-      message: `Error extracting dependencies from ${repoPath}`,
+      message: 'Listing the dependencies failed unexpectedly',
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };
