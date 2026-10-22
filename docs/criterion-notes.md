@@ -17,12 +17,17 @@ When a license file exists, `pom.xml` and `package.json` declarations are not co
 S002 checks the final `ModuleDescriptor.json` against the Okapi schema. It picks the descriptor source in this order:
 
 1. A Maven project (`pom.xml`): run `mvn process-resources -DskipTests` and use the `ModuleDescriptor.json` generated under a `target/` directory. When several are generated, use the one whose `id` is the module name or `<module name>-<version>`, where the module name is the `package.json` name without `@folio/`, or else the `pom.xml` `artifactId`. If not exactly one matches, S002 needs manual review.
-2. A `package.json` script named `build-mod-descriptor`, `build-module-descriptor`, or `generate-module-descriptor`: run it with `yarn run` and use the `ModuleDescriptor.json` it writes at the repository root.
-3. Otherwise, a committed `ModuleDescriptor.json` at the repository root.
+2. A Gradle project (`build.gradle` or `build.gradle.kts` at the repository root or in `service/`): run the wrapper's `processResources` and use the `ModuleDescriptor.json` generated under that project's `build/resources/main/`. See [Gradle Modules](#gradle-modules).
+3. A `package.json` script named `build-mod-descriptor`, `build-module-descriptor`, or `generate-module-descriptor`: run it with `yarn run` and use the `ModuleDescriptor.json` it writes at the repository root.
+4. Otherwise, a committed `ModuleDescriptor.json` at the repository root.
 
-When a repository has a Maven project or a descriptor script, the build always runs, even if a `ModuleDescriptor.json` is also committed; the committed file is not used as a fallback. If the build is blocked because local commands are off, or the build fails, S002 needs manual review. Enable local commands only for trusted repositories and runners.
+When a repository has a Maven or Gradle project or a descriptor script, the build always runs, even if a `ModuleDescriptor.json` is also committed; the committed file is not used as a fallback. If the build is blocked because local commands are off, or the build fails, S002 needs manual review. Enable local commands only for trusted repositories and runners.
 
 Files whose repository path contains `template` are never used as the final descriptor. A repository with no descriptor source but with a descriptor template (a `*ModuleDescriptor*.json` file under a path containing `template`, such as `descriptors/ModuleDescriptor-template.json`) fails with a message naming the templates.
+
+## Gradle Modules
+
+A Gradle build is found at the repository root or in `service/`, where FOLIO's Grails modules (mod-agreements, mod-licenses, mod-serials-management) keep it. With local commands, S002 runs the Gradle wrapper's `processResources` to generate the descriptor from its template, and S003 lists dependencies with the [jk1 license report plugin](https://github.com/jk1/Gradle-License-Report), which the evaluator applies through an init script because FOLIO projects do not apply it. The wrapper runs on the `java` found on `PATH`; Gradle 7.x, used by these modules, does not run on Java 21, so put a Java 17 JDK first on `PATH` for them.
 
 ## Source Inspection Boundaries
 

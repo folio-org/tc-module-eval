@@ -3,6 +3,8 @@
  */
 
 import { normalizeLicenseName, getLicenseCategoryNormalized, LicenseCategory } from '../utils/license-policy';
+import { checkLicenseCompliance } from '../utils/license-compliance';
+import { LicenseIssueType } from '../types';
 
 describe('License Name Normalization', () => {
   describe('normalizeLicenseName', () => {
@@ -63,10 +65,8 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName('Eclipse Public License v2.0')).toBe('EPL-2.0');
       expect(normalizeLicenseName('Eclipse Public License - v 2.0')).toBe('EPL-2.0');
       expect(normalizeLicenseName('(Eclipse Public License - v 1.0) AspectJ (org.aspectj:aspectjweaver:1.9.25.1 - https://example.org)')).toBe('EPL-1.0');
-      expect(normalizeLicenseName('Eclipse Distribution License - v 1.0')).toBe('EPL-1.0');
       expect(normalizeLicenseName('Eclipse Public License 1.0')).toBe('EPL-1.0');
       expect(normalizeLicenseName('Eclipse Public License, Version 2.0')).toBe('Eclipse Public License 2.0');
-      expect(normalizeLicenseName('EDL 1.0')).toBe('EPL-1.0');
       expect(normalizeLicenseName('EPL')).toBe('EPL-1.0');
     });
 
@@ -136,6 +136,48 @@ describe('License Name Normalization', () => {
     test('should return undefined for unknown licenses', () => {
       expect(getLicenseCategoryNormalized('Some Unknown License')).toBeUndefined();
       expect(getLicenseCategoryNormalized('(Proprietary License) some-artifact')).toBeUndefined();
+    });
+
+    // ASF lists GPL-2.0 with the Classpath exception under Category B ("weak copyleft"); its Category X
+    // GPL entry excludes it. The bare GPL-2.0 stays Category X.
+    test.each([
+      'GPL-2.0-only WITH Classpath-exception-2.0',
+      'GPL-2.0 WITH Classpath-exception-2.0',
+      'GNU General Public License, version 2 with the GNU Classpath Exception',
+      'GNU General Public License, version 2, with the Classpath Exception',
+      'GNU General Public License, Version 2 with the Classpath Exception',
+      'GPL v2 with the Classpath exception',
+      'GPL2 w/ CPE'
+    ])('should put GPL-2.0 with the Classpath exception (%s) in Category B', license => {
+      expect(getLicenseCategoryNormalized(normalizeLicenseName(license))).toBe(LicenseCategory.B_WCL);
+    });
+
+    // ASF lists the Eclipse Distribution License 1.0 under Category A, as a BSD-3-Clause variant.
+    test.each([
+      'Eclipse Distribution License - v 1.0',
+      'Eclipse Distribution License v. 1.0',
+      'Eclipse Distribution License v1.0',
+      'Eclipse Distribution License',
+      'EDL 1.0'
+    ])('should put the Eclipse Distribution License (%s) in Category A', license => {
+      expect(getLicenseCategoryNormalized(normalizeLicenseName(license))).toBe(LicenseCategory.A);
+    });
+
+    test('should check GPL-2.0 with the Classpath exception as one Category B license, not an unsplit expression', () => {
+      const dependency = { name: 'org.openjdk.nashorn:nashorn-core', version: '15.4', licenses: [normalizeLicenseName('GPL v2 with the Classpath exception')] };
+
+      const result = checkLicenseCompliance([dependency], 'This module uses nashorn-core.');
+      const unnamed = checkLicenseCompliance([dependency], '');
+
+      expect(result.issues).toEqual([]);
+      expect(unnamed.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B })]);
+    });
+
+    test.each(['(MIT) AND (GPL-3.0)', '(MIT)|GPL-3.0'])('should still report %s as an unsplit expression', license => {
+      // Normalizing either one would keep only "MIT" (Category A).
+      const result = checkLicenseCompliance([{ name: 'org.example:lib', version: '1.0', licenses: [license] }], '');
+
+      expect(result.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.PARSER_ERROR })]);
     });
 
     // Test normalization fallback

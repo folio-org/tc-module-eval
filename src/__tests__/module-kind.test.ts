@@ -20,6 +20,12 @@ describe('module kind classifier', () => {
     expect(classifyModuleKind(tempRoot).kind).toBe('backend-module');
   });
 
+  it('detects backend descriptor templates kept in service/, as in FOLIO Grails modules', () => {
+    writeFile('service/src/main/okapi/ModuleDescriptor-template.json', '{"id":"mod-test-1.0.0"}');
+
+    expect(classifyModuleKind(tempRoot).kind).toBe('backend-module');
+  });
+
   it('detects UI modules by package name', () => {
     writeFile('package.json', JSON.stringify({ name: 'ui-users' }));
 

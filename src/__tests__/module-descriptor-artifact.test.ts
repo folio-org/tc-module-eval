@@ -140,6 +140,31 @@ describe('module-descriptor-artifact', () => {
     expect(result.warnings.join('\n')).toContain('target/ModuleDescriptor.json was generated during this evaluation');
   });
 
+  it('should generate the descriptor with Gradle in service/, as in FOLIO Grails modules', async () => {
+    const repo = tempRepo();
+    const service = path.join(repo, 'service');
+    fs.mkdirSync(path.join(service, 'src', 'main', 'okapi'), { recursive: true });
+    fs.writeFileSync(path.join(service, 'build.gradle'), '');
+    fs.writeFileSync(path.join(service, 'gradlew'), '');
+    fs.writeFileSync(path.join(service, 'src', 'main', 'okapi', 'ModuleDescriptor-template.json'), JSON.stringify({ id: '${info.app.name}-${info.app.version}' }));
+    // A descriptor elsewhere in a build/ directory is not the one Gradle generates.
+    fs.mkdirSync(path.join(repo, 'fixtures', 'example', 'build'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'fixtures', 'example', 'build', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-other-1.0.0' }));
+    const runner = new FakeRunner(request => {
+      const output = path.join(request.cwd, 'build', 'resources', 'main', 'okapi');
+      fs.mkdirSync(output, { recursive: true });
+      fs.writeFileSync(path.join(output, 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-example-1.0.0' }));
+      return commandResult(request);
+    });
+
+    const result = await produceModuleDescriptorArtifact(repo, undefined, runner);
+
+    expect(runner.calls).toEqual([expect.objectContaining({ command: path.join(service, 'gradlew'), args: ['processResources'], cwd: service })]);
+    expect(result.status).toBe('produced');
+    expect(result.strategy).toBe('gradle-generation');
+    expect(result.descriptorPath).toBe('service/build/resources/main/okapi/ModuleDescriptor.json');
+  });
+
   it('should select a nested Maven module descriptor generated under target', async () => {
     const repo = tempRepo();
     fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><artifactId>mod-example</artifactId></project>');

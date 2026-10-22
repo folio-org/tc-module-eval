@@ -38,13 +38,22 @@ describe('JavaEvaluator', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true for Gradle projects', async () => {
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        return Promise.resolve(filePath.toString().endsWith('build.gradle'));
-      });
+    it('should return true for Gradle projects at the root or in service/, like FOLIO Grails modules', async () => {
+      (mockFs.pathExists as jest.Mock).mockResolvedValue(false);
+      const repo = realFs.mkdtempSync(path.join(os.tmpdir(), 'java-evaluator-'));
+      try {
+        realFs.mkdirSync(path.join(repo, 'service'));
+        realFs.writeFileSync(path.join(repo, 'service', 'build.gradle'), '');
+        expect(await evaluator.canEvaluate(repo)).toBe(true);
 
-      const result = await evaluator.canEvaluate(mockRepoPath);
-      expect(result).toBe(true);
+        realFs.renameSync(path.join(repo, 'service'), path.join(repo, 'tools'));
+        expect(await evaluator.canEvaluate(repo)).toBe(false);
+
+        realFs.writeFileSync(path.join(repo, 'build.gradle.kts'), '');
+        expect(await evaluator.canEvaluate(repo)).toBe(true);
+      } finally {
+        realFs.rmSync(repo, { recursive: true, force: true });
+      }
     });
 
     it('should return false for non-Java projects', async () => {

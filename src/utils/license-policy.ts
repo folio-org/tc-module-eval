@@ -147,6 +147,15 @@ export function isSpecialException(dependencyName: string): boolean {
 }
 
 /**
+ * Whether the name is exactly a license listed in license-categories.json or a spelling listed in
+ * license-variations.json, without any cleanup. Such a name is one license even if it contains
+ * words like " AND " or " WITH ".
+ */
+export function isListedLicenseName(licenseName: string): boolean {
+  return loadLicenseCategories().has(licenseName) || loadLicenseVariations().has(licenseName);
+}
+
+/**
  * Get the license category for a given license name
  * @param licenseName The license name to categorize
  * @returns LicenseCategory or undefined if not found

@@ -9,6 +9,7 @@ import {
   S007TechnologyObservation
 } from '../types';
 import { isWithinRepo, relativePosixPath } from './repo-files';
+import { findGradleProjectDir } from './parsers/gradle-dependency-parser';
 
 const MAX_MANIFEST_BYTES = 1024 * 1024;
 const MAX_MANIFESTS = 64;
@@ -525,27 +526,29 @@ function resolveMavenDependencyKey(
 
 function collectGradleEvidence(context: EvidenceContext): void {
   const firstGradleObservation = context.observations.length;
-  const rootFiles = ['build.gradle', 'build.gradle.kts']
-    .map(name => path.join(context.repoPath, name))
-    .filter(file => fs.existsSync(file));
-  if (rootFiles.length === 0) {
+  const projectDir = findGradleProjectDir(context.repoPath);
+  if (!projectDir) {
     return;
   }
+  const rootFiles = ['build.gradle', 'build.gradle.kts']
+    .map(name => path.join(projectDir, name))
+    .filter(file => fs.existsSync(file));
 
-  const properties = readGradleProperties(context, path.join(context.repoPath, 'gradle.properties'));
+  const properties = readGradleProperties(context, path.join(projectDir, 'gradle.properties'));
   const pluginVersions = new Map<string, string>();
 
-  if (fs.existsSync(path.join(context.repoPath, 'gradle', 'libs.versions.toml'))) {
-    diagnostic(context, 'gradle_version_catalog', 'Gradle version catalogs are not statically resolved for S007.', true, 'gradle/libs.versions.toml');
+  const versionCatalog = path.join(projectDir, 'gradle', 'libs.versions.toml');
+  if (fs.existsSync(versionCatalog)) {
+    diagnostic(context, 'gradle_version_catalog', 'Gradle version catalogs are not statically resolved for S007.', true, relativePosixPath(context.repoPath, versionCatalog));
   }
   for (const directory of ['buildSrc', 'build-logic']) {
-    if (fs.existsSync(path.join(context.repoPath, directory))) {
-      diagnostic(context, 'gradle_build_logic', `Gradle ${directory} build logic is outside bounded S007 resolution.`, true, directory);
+    if (fs.existsSync(path.join(projectDir, directory))) {
+      diagnostic(context, 'gradle_build_logic', `Gradle ${directory} build logic is outside bounded S007 resolution.`, true, relativePosixPath(context.repoPath, path.join(projectDir, directory)));
     }
   }
 
   const settingsPath = ['settings.gradle', 'settings.gradle.kts']
-    .map(name => path.join(context.repoPath, name))
+    .map(name => path.join(projectDir, name))
     .find(file => fs.existsSync(file));
   const settings = settingsPath ? readManifest(context, settingsPath) : undefined;
   if (settings !== undefined) {
@@ -565,7 +568,7 @@ function collectGradleEvidence(context: EvidenceContext): void {
         }
         context.gradleModuleCandidates += 1;
         const normalized = moduleName.replace(/^:/, '').replace(/:/g, path.sep);
-        const declaredModuleDir = path.resolve(context.repoPath, normalized);
+        const declaredModuleDir = path.resolve(projectDir, normalized);
         if (!isPathLexicallyInside(context.repoPath, declaredModuleDir)) {
           diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} resolves outside the repository.`, true, relativePosixPath(context.repoPath, settingsPath));
           continue;
@@ -575,7 +578,7 @@ function collectGradleEvidence(context: EvidenceContext): void {
           continue;
         }
         if (fs.lstatSync(declaredModuleDir).isSymbolicLink()) {
-          diagnostic(context, 'local_module_symlink', `Gradle module ${moduleName} is a symlink and was not followed.`, true, normalized);
+          diagnostic(context, 'local_module_symlink', `Gradle module ${moduleName} is a symlink and was not followed.`, true, relativePosixPath(context.repoPath, declaredModuleDir));
           continue;
         }
         const moduleDir = fs.realpathSync(declaredModuleDir);

@@ -614,6 +614,19 @@ describe('S007 static technology evidence', () => {
     expect(find(result, 'grails')).toMatchObject({ declaredVersion: '7.0.0', confidence: 'confident' });
   });
 
+  it('reads a Gradle build kept in service/, as in FOLIO Grails modules', async () => {
+    await write('service/gradle.properties', 'grailsVersion=6.2.3\n');
+    await write('service/build.gradle', `
+      buildscript { dependencies { classpath "org.grails:grails-gradle-plugin:$grailsVersion" } }
+      java { sourceCompatibility = JavaVersion.VERSION_17 }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'grails')).toMatchObject({ declaredVersion: '6.2.3', sourcePath: 'service/build.gradle' });
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '17', sourcePath: 'service/build.gradle' });
+  });
+
   it('reads Groovy map-style dependency declarations in any key order', async () => {
     await write('gradle.properties', 'vertxVersion=5.0.2\n');
     await write('build.gradle', `
