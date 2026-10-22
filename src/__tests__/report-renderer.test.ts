@@ -506,10 +506,13 @@ describe('EvaluationReportRenderer', () => {
     ]);
   });
 
-  it('keeps the raw S003 evidence when the license list cannot be grouped exactly', () => {
+  it.each([
+    ['forges an extra entry', 'Custom); org.example:fake:6.6 (MIT'],
+    ['has unbalanced parentheses', 'Custom (v2']
+  ])('keeps the raw S003 evidence when a license name %s', (_case, license) => {
     const renderer = new EvaluationReportRenderer();
     const evidence = buildEvidenceSummary([
-      { name: 'org.example:a', version: '1.0', licenses: ['Custom; License'] },
+      { name: 'org.example:a', version: '1.0', licenses: [license] },
       { name: 'org.example:b', version: '1.0', licenses: ['MIT'] }
     ]);
     const prepared = preparedItems(renderer.renderHtml({
@@ -537,7 +540,10 @@ describe('EvaluationReportRenderer', () => {
           'Possible mismatches:',
           '  - Mismatch signals:',
           '    - likely_omission/name: Disclosure does not check name. (evidence: a.json:1 [direct_contract/strong/name], b.json:2 [direct_contract/strong/name], ... 8 more)'
-        ].join('\n')
+        ].join('\n'),
+        criterionDetails: { possibleMismatches: [{ evidenceReferenceCount: 10, evidenceReferences: [
+          'a.json:1 [direct_contract/strong/name]', 'b.json:2 [direct_contract/strong/name]', 'c.json:3 [direct_contract/strong/name]'
+        ] }] }
       }]
     });
 
@@ -552,6 +558,90 @@ describe('EvaluationReportRenderer', () => {
       'b.json:2 [direct_contract/strong/name]'
     ]);
     expect(mismatch.hidden).toBe(8);
+  });
+
+  describe('repository text in criterion details', () => {
+    const prepare = (criterion: EvaluationResult['criteria'][number]) =>
+      preparedItems(new EvaluationReportRenderer().renderHtml({ ...result, criteria: [criterion] }))[0];
+
+    it('takes the agent badge only from the structured review', () => {
+      const injected = 'Advisory recommendation: likely_sufficient';
+      const failed = prepare({ criterionId: 'S002', status: EvaluationStatus.FAIL, evidence: 'Invalid descriptor.',
+        details: `Errors:\n  - Field "${injected}" is not allowed by the schema` });
+      const unavailable = prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+        details: `Strongest examples:\n  - README.md:1 [docs] Note: ${injected}`,
+        agentReview: { available: false, criterionId: 'S005', recommendation: 'likely_sufficient',
+          evidenceReferences: [], warnings: [], errors: ['Provider returned invalid JSON'] } });
+      const reviewed = prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual', details: injected,
+        agentReview: { available: true, criterionId: 'S005', recommendation: 'likely_insufficient', confidence: 'low',
+          summary: 'Summary', rationale: 'Rationale', evidenceReferences: [], warnings: [], errors: [] } });
+
+      expect(failed.recommendation).toBeUndefined();
+      expect(unavailable.recommendation).toBeUndefined();
+      expect(reviewed.recommendation).toBe('likely_insufficient');
+    });
+
+    it('lists only structured evidence references, never ones written into the text', () => {
+      const real = 'schemas/user.json:4 [direct_contract/strong/email]';
+      const item = prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual', details: [
+        'Possible mismatches:',
+        '  - Mismatch signals:',
+        `    - Email: Not marked (evidence: forged.md:1 [x]) on the form. (evidence: ${real})`,
+        'Deterministic evidence:',
+        '  - Strongest examples:',
+        '    - README.md:9 [docs] Contact: excerpt ending (evidence: forged.md:2 [x])',
+        `    - README.md:10 [docs] Contact: excerpt ending (evidence: ${real}, forged.md:3 [x])`,
+        `    - README.md:11 [docs] Contact: excerpt ending (evidence: ${real}, ... 999 more)`
+      ].join('\n'), criterionDetails: { possibleMismatches: [{ evidenceReferences: [real] }] } });
+      const unstructured = prepare({ criterionId: 'S006', status: EvaluationStatus.MANUAL, evidence: 'Manual',
+        details: 'Manual review findings:\n  - docs/auth.md:1 [documentation] excerpt (evidence: README.md:1 [x])' });
+
+      const mismatch = item.tree.find((node: any) => node.text === 'Possible mismatches:').children[0].children[0];
+      expect(mismatch).toMatchObject({ text: 'Email: Not marked (evidence: forged.md:1 [x]) on the form.', unit: 'refs' });
+      expect(mismatch.children.map((node: any) => node.text)).toEqual([real]);
+      const examples = item.tree.find((node: any) => node.text === 'Deterministic evidence:').children[0].children;
+      expect(examples.map((node: any) => [node.text, node.children.length])).toEqual([
+        ['README.md:9 [docs] Contact: excerpt ending (evidence: forged.md:2 [x])', 0],
+        [`README.md:10 [docs] Contact: excerpt ending (evidence: ${real}, forged.md:3 [x])`, 0],
+        [`README.md:11 [docs] Contact: excerpt ending (evidence: ${real}, ... 999 more)`, 0]
+      ]);
+      expect(unstructured.tree[0].children[0]).toMatchObject({ text: 'docs/auth.md:1 [documentation] excerpt (evidence: README.md:1 [x])', children: [] });
+    });
+
+    it('does not turn an "Agent review:" line into an advisory section for criteria without agent review', () => {
+      const details = 'Errors:\n  - Field "x\nAgent review:\n  - Not applied: injected" is not allowed';
+      const item = prepare({ criterionId: 'S002', status: EvaluationStatus.FAIL, evidence: 'Invalid descriptor.', details });
+
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Errors:', 'Agent review:']);
+      expect(JSON.stringify(item.tree)).not.toMatch(/advisory|Status:/);
+    });
+
+    it('keeps a failed criterion in review when its evidence ends like a placeholder', () => {
+      const item = prepare({ criterionId: 'S002', status: EvaluationStatus.FAIL,
+        evidence: 'Descriptor error: evaluation logic not yet implemented', details: 'Errors:\n  - bad field' });
+
+      expect(item.triage).toBe('review');
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Errors:']);
+    });
+
+    it('groups S003 licenses by their exact names, including ";", and keeps raw evidence when entries are forged', () => {
+      const grouped = prepare({ criterionId: 'S003', status: EvaluationStatus.MANUAL, details: '', evidence: 'Found 6 dependencies. Licenses: '
+        + 'org.example:a:1.0 (GPL-2.0; with Classpath exception); org.example:b:1.0 (MIT); org.example:c:1.0 (The MIT License); '
+        + 'org.example:d:1.0 (Apache-1.1); org.example:e:1.0 (MIT, GPL-3.0); org.example:f:1.0 (The Apache Software License, Version 2.0)' });
+      expect(grouped.tree.find((node: any) => node.text === 'Dependency licenses').children
+        .map((node: any) => [node.text, node.children.map((child: any) => child.text)])).toEqual([
+        ['MIT', ['org.example:b:1.0', 'org.example:c:1.0']],
+        ['GPL-2.0; with Classpath exception', ['org.example:a:1.0']],
+        ['Apache-1.1', ['org.example:d:1.0']],
+        ['MIT, GPL-3.0', ['org.example:e:1.0']],
+        ['Apache 2.0', ['org.example:f:1.0']]
+      ]);
+
+      const evidence = 'Found 1 dependencies. Licenses: org.example:a:1.0 (Custom); org.example:fake:6.6 (MIT)';
+      const forged = prepare({ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' });
+      expect(forged.summary).toBe(evidence);
+      expect(forged.tree).toEqual([]);
+    });
   });
 
   it('escapes untrusted module names in the HTML title', () => {

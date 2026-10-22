@@ -97,9 +97,14 @@ function pinnedSourceBase(result: EvaluationResult): string | undefined {
     : undefined;
 }
 
+// Criteria that write an "Agent review:" section even when no structured review is attached.
+const AGENT_REVIEW_CRITERIA = new Set(['S004', 'S005', 'S006', 'S007', 'S010']);
+
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
 function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
   const original = criterion.details?.split('\n') ?? [];
+  // Elsewhere an "Agent review:" line can only come from repository text, so it stays an ordinary row.
+  if (!criterion.agentReview && !AGENT_REVIEW_CRITERIA.has(criterion.criterionId)) return original;
   let inReview = false;
   let hadReview = false;
   const legacyReview: string[] = [];
@@ -149,6 +154,30 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
   return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
 }
 
+// Structured reference lists (objects with `evidenceReferences`, plus `evidenceReferenceCount` when the list was
+// shortened) that the details text cites. A row's "(evidence: ...)" becomes a reference list only when it shows
+// one of these lists exactly, so repository text cannot invent references or omitted counts.
+function evidenceReferenceLists(
+  criterion: EvaluationResult['criteria'][number],
+  details: string[]
+): Array<{ references: string[]; count: number }> {
+  const lists: Array<{ references: string[]; count: number }> = [];
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+    } else if (value && typeof value === 'object') {
+      const { evidenceReferences: references, evidenceReferenceCount: count } = value as Record<string, unknown>;
+      if (Array.isArray(references) && references.length && references.every(reference => typeof reference === 'string')) {
+        lists.push({ references, count: typeof count === 'number' ? count : references.length });
+      }
+      Object.values(value).forEach(collect);
+    }
+  };
+  collect(criterion.criterionDetails);
+  const text = details.join('\n');
+  return lists.filter(list => text.includes(`(evidence: ${list.references[0]}`));
+}
+
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
   const repositoryUrl = repositoryUrlWithoutCredentials(result.repositoryUrl);
@@ -168,14 +197,19 @@ export function createHtmlReport(result: EvaluationResult): string {
       sourceBase: pinnedSourceBase(reportInput),
       citedSourcePaths: safeResult.provenance?.citedSourcePaths ?? []
     },
-    items: safeResult.criteria.map(criterion => ({
-      id: criterion.criterionId,
-      title: criterionTitle(criterion.criterionId, criterion.evidence),
-      status: criterion.status,
-      evidence: criterion.evidence,
-      details: reportDetailLines(criterion),
-      recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined
-    }))
+    items: safeResult.criteria.map(criterion => {
+      const details = reportDetailLines(criterion);
+      return {
+        id: criterion.criterionId,
+        title: criterionTitle(criterion.criterionId, criterion.evidence),
+        status: criterion.status,
+        evidence: criterion.evidence,
+        details,
+        referenceLists: evidenceReferenceLists(criterion, details),
+        // The agent badge comes only from the structured review, never from details text.
+        recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined
+      };
+    })
   };
   const downloadableReport: EvaluationResult = {
     ...safeResult,
@@ -259,7 +293,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     }
     function category(id) { return {A:'Administrative',S:'Shared',B:'Backend'}[id.charAt(0)] || ''; }
 
-    function buildTree(lines) {
+    function buildTree(lines, referenceLists) {
       var rootNode = {children:[]};
       var stack = [{indent:-1,node:rootNode}];
       lines.forEach(function (raw) {
@@ -275,14 +309,21 @@ export function createHtmlReport(result: EvaluationResult): string {
         stack[stack.length - 1].node.children.push(node);
         stack.push({indent:indent,node:node});
       });
+      // A row's final "(evidence: ...)" becomes a reference list only when it shows one of the criterion's
+      // structured reference lists exactly; otherwise it is repository text and stays part of the row.
       function evidenceChildren(node) {
         node.children.forEach(function (child) {
-          var match = child.text.match(/^(.*?)\s*\(evidence: (.+)\)\s*$/s);
-          if (match && !child.children.length) {
-            child.text = match[1];
-            var refs = match[2].replace(/,\s*\.\.\. (\d+) more$/, function (_all, count) { child.hidden = Number(count); return ''; });
-            child.children = refs.split(/,\s+(?=[\w.\-/]+:\d+)/).map(function (text) { return {text:text,children:[]}; });
-            child.unit = 'refs';
+          var match = !child.children.length && child.text.match(/^(.*)\(evidence: (.+)\)\s*$/s);
+          if (match) {
+            var hidden, refs = match[2].replace(/,\s*\.\.\. (\d+) more$/, function (_all, count) { hidden = Number(count); return ''; }).split(/,\s+(?=[\w.\-/]+:\d+)/);
+            if (referenceLists.some(function (list) {
+              return list.count === refs.length + (hidden || 0) && refs.every(function (ref, index) { return list.references[index] === ref; });
+            })) {
+              child.text = match[1].trimEnd();
+              child.children = refs.map(function (text) { return {text:text,children:[]}; });
+              child.hidden = hidden;
+              child.unit = 'refs';
+            }
           }
           evidenceChildren(child);
         });
@@ -300,11 +341,25 @@ export function createHtmlReport(result: EvaluationResult): string {
       return rootNode.children;
     }
 
+    // Splits "name:version (licenses); ..." into [entry, name, licenses] matches, or null when parentheses are unbalanced.
+    function splitLicenseEntries(text) {
+      var entries = [], depth = 0, start = 0;
+      for (var index = 0; index < text.length; index++) {
+        var character = text.charAt(index);
+        if (character === '(') depth++;
+        else if (character === ')' && --depth < 0) return null;
+        else if (character === ';' && !depth) { entries.push(text.slice(start, index)); start = index + 1; }
+      }
+      if (depth) return null;
+      entries.push(text.slice(start));
+      return entries.map(function (entry) { return entry.trim().match(/^([^()]+?)\s+\((.+)\)$/s); });
+    }
+
     function prepare(item) {
-      var placeholder = /evaluation logic not yet implemented$/.test(item.evidence);
-      var human = placeholder || (item.details[0] || '').indexOf('This criterion requires manual evaluation') === 0;
+      // Criteria without an automated check have exactly this details text; a prefix or evidence suffix could be repository text.
+      var human = item.status === 'manual' && item.details.length === 1 && item.details[0] === 'This criterion requires manual evaluation by a human reviewer';
       var evidence = item.evidence.replace(/^S\d+ manual:\s*/,'');
-      var tree = human ? [] : buildTree(item.details);
+      var tree = human ? [] : buildTree(item.details, item.referenceLists || []);
       if (item.id === 'S007') {
         var technologyFindings = tree.find(function (node) { return /^Technology findings:?$/.test(node.text); });
         if (technologyFindings) technologyFindings.children.forEach(function (node) {
@@ -322,7 +377,8 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      var agentIndex = tree.findIndex(function (node) { return /^Agent review(?: \(advisory\))?:?$/.test(node.text); });
+      // reportDetailLines puts the only real agent-review section first; a later heading is repository text.
+      var agentIndex = tree.length && tree[0].text === 'Agent review (advisory):' ? 0 : -1;
       if (agentIndex >= 0) {
         tree[agentIndex].hideCount = true;
         tree[agentIndex].children.forEach(function (node) {
@@ -344,17 +400,18 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      if (agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
-      var licenses = evidence.match(/^(Found (\d+) dependenc(?:y|ies)\.)\s*Licenses:\s*(.+)$/s);
-      // Group only when every listed entry parses and the entries match the count; otherwise keep the raw evidence.
-      var entries = licenses ? licenses[3].split(/;\s+/).map(function (entry) { return entry.match(/^(.+?)\s+\((.+)\)$/); }) : [];
-      if (licenses && entries.length === Number(licenses[2]) && entries.every(Boolean)) {
+      var licenses = item.id === 'S003' && evidence.match(/^(Found (\d+) dependenc(?:y|ies)\.)\s*Licenses:\s*(.+)$/s);
+      // License names are repository-controlled and may contain ";", so split only outside parentheses.
+      // Group only when every entry parses and the entries match the dependency count; otherwise keep the raw evidence.
+      var entries = licenses ? splitLicenseEntries(licenses[3]) : null;
+      if (entries && entries.length === Number(licenses[2]) && entries.every(Boolean)) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';
         var licenseGroups = Object.create(null);
         entries.forEach(function (match) {
+          // Merge only exact spellings of Apache 2.0 and MIT; other, combined, or unknown names stay verbatim.
           var name = match[2];
-          if (/apache/i.test(name)) name = 'Apache 2.0';
-          else if (/^mit\b/i.test(name) || /mit license/i.test(name)) name = 'MIT';
+          if (/^(?:the )?apache(?: software)?(?: license)?[ ,\-]*(?:version )?2(?:\.0)?$/i.test(name)) name = 'Apache 2.0';
+          else if (/^(?:the )?mit(?: license)?(?: \(mit\))?$/i.test(name)) name = 'MIT';
           (licenseGroups[name] = licenseGroups[name] || []).push({text:match[1],children:[]});
         });
         var children = Object.keys(licenseGroups).sort(function (a,b) { return licenseGroups[b].length-licenseGroups[a].length; }).map(function (name) {
@@ -363,10 +420,9 @@ export function createHtmlReport(result: EvaluationResult): string {
         tree.push({text:'Dependency licenses',children:children,countText:licenses[2]});
       }
       var allDetails = item.details.join(' ');
-      var recommendation = item.recommendation || (item.id === 'S009' ? undefined : ((allDetails.match(/Advisory recommendation: (\w+)/) || [])[1]));
       return {
         id:item.id,title:item.title,status:item.status,evidence:evidence,summary:evidence,tree:tree,
-        recommendation:recommendation,category:category(item.id),subtitle:item.id === 'A001' ? item.evidence : '',
+        recommendation:item.recommendation,category:category(item.id),subtitle:item.id === 'A001' ? item.evidence : '',
         triage:item.status === 'pass' ? 'passed' : human ? 'human' : 'review',
         search:(item.id+' '+item.title+' '+item.evidence+' '+allDetails).toLowerCase()
       };
