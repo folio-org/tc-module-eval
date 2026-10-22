@@ -1757,8 +1757,8 @@
     {
       "criterionId": "S008",
       "status": "pass",
-      "evidence": "All 16 declared interfaces have compatible eligible providers in the official catalog.",
-      "details": "All 16 declared interfaces have compatible eligible providers in the official catalog.",
+      "evidence": "All 16 interfaces the module declares are provided by accepted modules in the official catalog (R1-2026.27).",
+      "details": "All 16 interfaces the module declares are provided by accepted modules in the official catalog (R1-2026.27).",
       "criterionDetails": {
         "channel": "official",
         "policyDiagnosticCodes": [],

@@ -101,6 +101,15 @@ The report lists each problem once under "Repository evidence coverage"; problem
 
 S012 build tools, S013 testing, infrastructure compatibility, live policy synchronization, and new-module applicability remain outside S007.
 
+## S008 Interface Acceptance
+
+S008 checks every interface the module requires or optionally uses against the checked-in catalog of interfaces that accepted modules provide in a platform release (see [S008 interface acceptance](s008-interface-acceptance.md)). A backend module's interfaces come from the `ModuleDescriptor.json` that S002 generated in the same evaluation, or else from the first of `descriptors/ModuleDescriptor.json`, `descriptors/ModuleDescriptor-template.json`, `ModuleDescriptor.json`, and `src/main/resources/descriptors/ModuleDescriptor.json`. A UI module's come from `stripes.okapiInterfaces` and `stripes.optionalOkapiInterfaces` in `package.json`. Versions are compared the way Eureka compares them: same major version, and at least the required minor (and patch) version.
+
+- `pass`: every interface is provided, in a compatible version, by a module the Technical Council has accepted or by a Eureka platform component.
+- `fail`: an interface, optional ones included, is not in the catalog, is there only in an older or different major version, or is provided only by modules that are not accepted. The report lists each problem with what the catalog has, and says how to fix it.
+- `manual`: some declarations could not be read (no descriptor, invalid JSON, placeholders, or version formats Eureka cannot read), the catalog or acceptance ledger could not be loaded, or the repository kind is unclear. A failure takes precedence over unreadable declarations.
+- `not_applicable`: the repository is an explicit FOLIO library.
+
 ## S010 Third-Party System Resilience
 
 S010 applies to deployable Java and Stripes/React modules and covers every runtime

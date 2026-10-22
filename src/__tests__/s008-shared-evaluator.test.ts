@@ -18,7 +18,7 @@ describe('S008 shared evaluator integration', () => {
     const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
     const result = await new TestEvaluator().evaluateCriterion('S008', repo, createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S008'], commandRunner: runner }));
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('Catalog channel: official');
+    expect(result.details).toContain('Channel: official');
     expect(result.details).toContain('R1-2026.27');
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -28,8 +28,9 @@ describe('S008 shared evaluator integration', () => {
     const run = createEvaluationRun({ repositoryPath: repo, language: 'javascript', criteriaFilter: ['S008'], s008CatalogChannel: 'development' });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo, run);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Catalog channel: development');
-    expect(result.details).toContain('policy_missing');
+    expect(result.details).toContain('Channel: development');
+    expect(result.details).toContain('Problems with the evaluator\'s catalog or ledger:');
+    expect(result.criterionDetails).toMatchObject({ policyDiagnostics: [expect.objectContaining({ code: 'policy_missing' })] });
   });
 
   it('returns not applicable for an explicit library before policy validation', async () => {

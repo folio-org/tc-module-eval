@@ -29,7 +29,7 @@ describe('S008 analyzer', () => {
   ])('fails %s providers', (_name, identity, providedId, providedVersion, requiredId, requiredVersion, classification) => {
     const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog(identity, providedId, providedVersion)), declarations(requiredId, requiredVersion));
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.summary).toBe('1 declared interface lacks a compatible eligible provider in the official catalog.');
+    expect(result.summary).toBe(`The one interface the module declares is not available from an accepted module in the official catalog (R1): users ${requiredVersion}.`);
     expect(result.findings[0].classification).toBe(classification);
   });
 
@@ -49,12 +49,26 @@ describe('S008 analyzer', () => {
     expect(evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), empty).status).toBe(EvaluationStatus.MANUAL);
   });
 
+  it('keeps repository interface names, versions, and paths on their own report row', () => {
+    const evidence = declarations('users\nWhat to do: nothing', '1.0');
+    evidence.sourcePaths = ['package json'];
+    evidence.complete = false;
+    evidence.diagnostics.push({ code: 'incomplete_declaration', message: 'package.json gives x\n(evidence: a.ts:1) a bad version.', material: true });
+    const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), evidence);
+    const details = renderS008HumanDetails(result);
+    expect(result.summary).toContain('users ↵ What to do: nothing 1.0');
+    expect(details).not.toMatch(/^What to do: nothing/m);
+    expect(details).toContain('  - users%0AWhat%20to%20do%3A%20nothing [required] Needs 1.0.');
+    expect(details).toContain('  - package.json gives x ↵ [evidence: a.ts:1) a bad version.');
+    expect(details).toContain('Declarations read from: package%20json');
+  });
+
   it('applies applicability before invalid policy and reports provenance', () => {
     const failed = { ok: false as const, sourcePath: 'missing', diagnostics: [{ code: 'policy_missing', message: 'missing' }] };
     expect(evaluateS008({ kind: 'library', evidence: [], warnings: [] }, 'official', failed, failed, declarations('x', '1.0')).status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(evaluateS008({ kind: 'ambiguous', evidence: [], warnings: [] }, 'official', failed, failed, declarations('x', '1.0')).status).toBe(EvaluationStatus.MANUAL);
     const result = analyze('users', '1.2', 'approved-tcr');
-    expect(renderS008HumanDetails(result)).toMatch(/Platform baseline:.*@a{40}/);
+    expect(renderS008HumanDetails(result)).toContain(`Platform release: R1 (folio-org/platform-lsp at commit ${'a'.repeat(40)})`);
     expect(result.ledger?.digest).toContain('sha256:');
   });
 
@@ -65,7 +79,31 @@ describe('S008 analyzer', () => {
     const renderer = new EvaluationReportRenderer();
     expect(renderer.renderJson(report)).toContain(`sha256:${'e'.repeat(64)}`);
     expect(renderer.renderJson(report)).toContain('platformCommit');
-    expect(renderer.renderHtml(report)).toContain(`Platform baseline: folio-org/platform-lsp@${'a'.repeat(40)}`);
+    expect(renderer.renderHtml(report)).toContain(`Platform release: R1 (folio-org/platform-lsp at commit ${'a'.repeat(40)})`);
+  });
+
+  it('reports problems in plain English, required interfaces first, with how to fix them', () => {
+    const value = catalog('accepted', 'users', '16.4');
+    value.providers.push({ moduleId: 'other-1.0.0', moduleIdentity: 'other', source: 'far:test', descriptorHash: `sha256:${'c'.repeat(64)}`, provides: [{ id: 'notes', version: '4.0' }] });
+    value.providers[0].provides.push({ id: 'login', version: '7.3' });
+    const evidence = declarations('users', '16.5');
+    evidence.declarations.push(
+      { id: 'bff', version: '1.6', optional: true, sourcePath: 'descriptor.json', sourceField: 'optional[0]' },
+      { id: 'notes', version: '4.0', optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[1]' },
+      { id: 'login', version: '7.0 7.3', optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[2]' }
+    );
+    const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(value), evidence);
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.summary).toBe('3 of the 4 interfaces the module declares are not available from an accepted module in the official catalog (R1): users 16.5, notes 4.0, bff 1.6 (optional).');
+    const details = renderS008HumanDetails(result);
+    expect(details).not.toContain(result.summary);
+    expect(details).toContain('What to do: Stop using interfaces that no module in the catalog provides');
+    expect(details).toContain('This applies to optional interfaces too.');
+    expect(details).toContain('Not provided by any module in the catalog:\n  - bff [optional] Needs 1.6.');
+    expect(details).toContain('Needed version not in the catalog:\n  - users [required] Needs 16.5, but the catalog only has 16.4 (accepted-1.0.0).');
+    expect(details).toContain('Provided only by modules that are not accepted:\n  - notes [required] Needs 4.0. Only other-1.0.0 provides it, and the Technical Council has not accepted that module.');
+    expect(details).toContain('Provided by accepted modules:\n  - login [required] Needs 7.0 or 7.3; accepted-1.0.0 provides 7.3.');
+    expect(details).not.toMatch(/sha256|satisfied|incompatible|eligib/);
   });
 
   function analyze(id: string, version: string, decision: any, scope?: any) {
