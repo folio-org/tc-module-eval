@@ -31,10 +31,11 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { safeReadFile, validateRepoPath } from './common';
+import { commandError, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
@@ -42,6 +43,34 @@ import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 // Gradle-specific constants
 const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
+
+// ASF policy covers what the module distributes. This init script limits the project's license report
+// to the runtime classpath, so test configurations are not checked. projectsEvaluated runs after every
+// project's own afterEvaluate callbacks, so it overrides configurations the build sets, even late ones.
+const RUNTIME_CLASSPATH_INIT_SCRIPT = `gradle.projectsEvaluated {
+  gradle.rootProject.allprojects { project ->
+    project.plugins.withId('com.github.jk1.dependency-license-report') {
+      project.licenseReport.configurations = ['runtimeClasspath'] as String[]
+    }
+  }
+}
+`;
+
+/**
+ * Runs `command` with the init script in a fresh private temp directory outside the repository,
+ * so concurrent evaluations don't share it and no pre-existing path is written through.
+ * The directory is removed once the command finishes.
+ */
+async function withRuntimeClasspathInitScript<T>(command: (initScript: string) => Promise<T>): Promise<T> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-module-eval-s003-gradle-'));
+  try {
+    const initScript = path.join(dir, 'runtime-classpath.gradle');
+    fs.writeFileSync(initScript, RUNTIME_CLASSPATH_INIT_SCRIPT, { encoding: 'utf-8', flag: 'wx' });
+    return await command(initScript);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
@@ -150,23 +179,19 @@ export async function getGradleDependencies(
 
   try {
     const gradle = getGradleCommand(validatedPath);
-    const licenseCommand = await commandRunner.run({
+    const licenseCommand = await withRuntimeClasspathInitScript(initScript => commandRunner.run({
       command: gradle.command,
-      args: [...gradle.argsPrefix, 'generateLicenseReport'],
+      args: [...gradle.argsPrefix, '--init-script', initScript, 'generateLicenseReport'],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,
       requiresIsolation: true,
       networkPolicy: GRADLE_NETWORK_POLICY
-    }, evaluationRun);
+    }, evaluationRun));
 
     getLogger().info('Gradle license plugin output:', licenseCommand.stdout);
 
     if (licenseCommand.status !== 'success') {
-      errors.push({
-        source: 'gradle-parser',
-        message: `Failed to generate Gradle license report: ${licenseCommand.errorMessage ?? licenseCommand.status}`,
-        error: new Error(licenseCommand.stderr || licenseCommand.errorMessage || licenseCommand.status)
-      });
+      errors.push(commandError('gradle-parser', 'Gradle', licenseCommand));
       return { dependencies: [], errors, warnings };
     }
 
@@ -181,7 +206,7 @@ export async function getGradleDependencies(
 
     errors.push({
       source: 'gradle-parser',
-      message: `Gradle license plugin did not generate ${GRADLE_LICENSE_REPORT_PATH}; dependency evidence unavailable`,
+      message: `Gradle ran but did not write its license report (${GRADLE_LICENSE_REPORT_PATH}), so the dependencies could not be listed.`,
       error: new Error('Gradle license report missing')
     });
     return { dependencies: [], errors, warnings };
@@ -189,7 +214,7 @@ export async function getGradleDependencies(
   } catch (error) {
     errors.push({
       source: 'gradle-parser',
-      message: 'Failed to extract Gradle dependencies',
+      message: 'Gradle could not list the dependencies',
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

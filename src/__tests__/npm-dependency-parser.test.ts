@@ -202,7 +202,7 @@ describe('npm-dependency-parser', () => {
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain('Failed to extract npm dependencies');
+      expect(result.errors[0].message).toContain('npm could not list the dependencies');
     });
 
     it('should handle license-checker failure', async () => {
@@ -359,7 +359,7 @@ describe('npm-dependency-parser', () => {
       expect(result.dependencies).toHaveLength(0);
       expect(result.warnings).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain('Failed to extract npm dependencies');
+      expect(result.errors[0].message).toContain('npm could not list the dependencies');
       expect(result.errors[0].message).toContain('license-checker command not found');
     });
 

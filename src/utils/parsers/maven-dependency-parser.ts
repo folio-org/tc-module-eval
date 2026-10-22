@@ -37,7 +37,7 @@ import { parseStringPromise } from 'xml2js';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { safeReadFile, validateRepoPath } from './common';
+import { commandError, readRepoTextFile, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
@@ -45,6 +45,7 @@ import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 // Maven-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
 const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
+const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
@@ -65,13 +66,11 @@ const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb'
  */
 async function getMavenPackaging(repoPath: string): Promise<string> {
   try {
-    const pomPath = path.join(repoPath, 'pom.xml');
-    if (!fs.existsSync(pomPath)) {
-      getLogger().warn('pom.xml not found, defaulting to jar packaging');
+    const pomContent = readRepoTextFile(repoPath, 'pom.xml', MAX_POM_BYTES);
+    if (pomContent === null) {
+      getLogger().warn('pom.xml not found in the repository, defaulting to jar packaging');
       return 'jar';
     }
-
-    const pomContent = fs.readFileSync(pomPath, 'utf-8');
 
     // Parse XML using xml2js for robust handling of XML variations
     const parsed = await parseStringPromise(pomContent, {
@@ -348,7 +347,10 @@ export async function getMavenDependencies(
       args: [
         mavenGoal,
         '-Dlicense.outputDirectory=target/licenses',
-        '-Dlicense.includeTransitiveDependencies=true'
+        '-Dlicense.includeTransitiveDependencies=true',
+        // ASF policy covers what the module distributes; test-scoped libraries are not shipped.
+        // `system` is the plugin's default exclusion and is kept.
+        '-Dlicense.excludedScopes=test,system'
       ],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,
@@ -360,11 +362,7 @@ export async function getMavenDependencies(
     getLogger().info('Maven license plugin output:', commandResult.stdout);
 
     if (commandResult.status !== 'success') {
-      errors.push({
-        source: 'maven-parser',
-        message: `Failed to extract Maven dependencies: ${commandResult.errorMessage ?? commandResult.status}`,
-        error: new Error(commandResult.stderr || commandResult.errorMessage || commandResult.status)
-      });
+      errors.push(commandError('maven-parser', 'Maven', commandResult));
       return { dependencies: [], errors, warnings };
     }
 
@@ -385,9 +383,8 @@ export async function getMavenDependencies(
 
     warnings.push({
       source: 'maven-parser',
-      message: 'Maven license plugin did not generate THIRD-PARTY.txt file. ' +
-               'This typically means the project has no third-party dependencies. ' +
-               `Expected location: ${MAVEN_THIRD_PARTY_PATH}`
+      message: `Maven ran but did not write a third-party license list (${MAVEN_THIRD_PARTY_PATH}). ` +
+               'This usually means the module has no third-party dependencies.'
     });
 
     return { dependencies: [], errors, warnings };
@@ -399,7 +396,7 @@ export async function getMavenDependencies(
 
     errors.push({
       source: 'maven-parser',
-      message: `Failed to extract Maven dependencies: ${errorMessage}`,
+      message: `Maven could not list the dependencies: ${errorMessage}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };
