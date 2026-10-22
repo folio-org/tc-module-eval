@@ -59,8 +59,8 @@ The report lists each finding by file, line, kind (`[secret]`, `[token]`, `[api-
 Gitleaks runs with its default rules and `--ignore-gitleaks-allow`, so a `.gitleaks.toml` or `gitleaks:allow` comment in the evaluated repository cannot hide findings. A value marked as made up, including inside a camelCase or snake_case word such as `dummyToken`, counts as a test or example value and cannot fail S006. The built-in secret-assignment check skips:
 
 - comparisons (`==`, `===`) and arrow functions (`=>`);
-- unquoted values in program source (Java, Kotlin, Groovy, Gradle, JavaScript, TypeScript, Python, Ruby, and Jenkinsfiles), which are code rather than committed values, unless they sit inside a string literal such as a JDBC URL;
-- a `${VAR}` reference that starts a shell value, as in `PGPASSWORD=${DB_PASSWORD} psql …`;
+- unquoted values in program source (Java, Kotlin, Groovy, Gradle, JavaScript, TypeScript, Python, Ruby, and Jenkinsfiles), which are code rather than committed values, unless they sit inside a string literal (including a multiline one) such as a JDBC URL;
+- an unquoted `${VAR}` reference followed by a command in a shell script or Dockerfile, as in `PGPASSWORD=${DB_PASSWORD} psql …`;
 - `%s`, `%d`, and `{}` format placeholders.
 
 Java `import` and `import static` lines, and identifiers such as `Constants.LOCAL_ERROR`, are never host names.

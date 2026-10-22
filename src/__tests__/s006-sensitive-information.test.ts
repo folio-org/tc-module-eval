@@ -1308,7 +1308,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       materiallyWeakened: false
     });
     expect(result.classification.status).toBe(EvaluationStatus.PASS);
-    expect(result.classification.reason).toBe('No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read 2 files with no coverage gaps.');
+    expect(result.classification.reason).toBe('No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read 2 files; nothing it skipped affects the result.');
   });
 
   it('returns manual with coverage-warning evidence when material truncation weakens a no-finding scan', async () => {
@@ -1676,7 +1676,7 @@ describe('S006 report formatting and criterion details', () => {
     expect(analysis.classification.status).toBe(EvaluationStatus.PASS);
     expect(rendered.details).toContain('Gitleaks: ran and reported 0 possible secrets');
     expect(rendered.details).toContain(`Built-in scan: read ${MAX_S006_SCAN_CANDIDATE_FILES} of ${MAX_S006_SCAN_CANDIDATE_FILES + 3} files`);
-    expect(rendered.details).toContain('Complete: yes');
+    expect(rendered.details).toContain('Complete: no, but nothing left out affects the result; see Skipped');
     expect(rendered.details).not.toContain('Coverage gaps:');
     expect(rendered.details).toContain([
       'Skipped (does not affect the result):',
@@ -1997,6 +1997,41 @@ describe('S006 analysis corrections', () => {
     const result = await analyzeWithoutGitleaksFindings();
 
     expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['src/test/java/org/folio/edge/MainTest.java:4']);
+  });
+
+  it('keeps secrets inside multiline string literals in program source', async () => {
+    writeRepoFile(repoPath, 'src/db.ts', 'const dsn = `\npassword=localpass\n`;\nconst token = getToken();\n');
+    writeRepoFile(repoPath, 'src/config.py', 'dsn = \"\"\"\npassword=localpass\n\"\"\"\nsecret = load_secret()\n');
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`).sort()).toEqual(['src/config.py:2', 'src/db.ts:2']);
+  });
+
+  it('keeps text after a variable reference outside unquoted shell script values', async () => {
+    writeRepoFile(repoPath, '.env.production', 'DB_PASSWORD="${PREFIX} localpass"\n');
+    writeRepoFile(repoPath, 'config/app.properties', 'DB_PASSWORD=${PREFIX} localpass\n');
+    writeRepoFile(repoPath, 'scripts/db.sh', 'PGPASSWORD="${PREFIX} localpass" psql\n');
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => finding.path).sort()).toEqual(['.env.production', 'config/app.properties', 'scripts/db.sh']);
+  });
+
+  it('scans long dotted lines for host names without slow backtracking', async () => {
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', [
+      `key: ${'folio.'.repeat(1500)}LOCAL_ERROR`,
+      `other: ${'db.'.repeat(3000)}x`,
+      'url: https://{environment}-okapi.ci.folio.org'
+    ].join('\n'));
+
+    const started = Date.now();
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(result.findings.filter(finding => finding.detectorId === 'tenant-host-endpoint').map(finding => finding.excerpt.text)).toEqual([
+      'okapi.ci.folio.org'
+    ]);
   });
 
   it('orders Gitleaks findings by file and line regardless of report order', async () => {

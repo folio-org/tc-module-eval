@@ -111,7 +111,10 @@ export function extractS006SensitiveInformationFindings(
     const context = classifyS006SourceContext(file.path, file.text);
 
     const lines = splitS006Lines(file.text);
+    let insideMultilineString = false;
     for (const line of lines) {
+      const startsInsideString = insideMultilineString;
+      insideMultilineString = togglesS006MultilineString(line.text) !== insideMultilineString;
       const occupiedLineRanges: Array<{ start: number; end: number }> = [];
       for (const { detector, pattern } of S006_LINE_DETECTORS) {
         pattern.lastIndex = 0;
@@ -128,7 +131,7 @@ export function extractS006SensitiveInformationFindings(
             continue;
           }
 
-          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text, matchStart)) {
+          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text, matchStart, startsInsideString)) {
             continue;
           }
 
@@ -253,16 +256,17 @@ function shouldSuppressS006LineFinding(
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
   lineText: string,
-  matchStart: number
+  matchStart: number,
+  startsInsideString: boolean
 ): boolean {
   if (detector.id === 'password-secret-assignment') {
-    return shouldSuppressS006SecretAssignment(filePath, detector, rawMatch, lineText.slice(0, matchStart));
+    return shouldSuppressS006SecretAssignment(filePath, detector, rawMatch, lineText.slice(0, matchStart), startsInsideString);
   }
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
   }
   if (detector.id === 'tenant-host-endpoint') {
-    return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText);
+    return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText, matchStart);
   }
   return false;
 }
@@ -276,15 +280,18 @@ function shouldSuppressS006SecretAssignment(
   filePath: string,
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
-  linePrefix: string
+  linePrefix: string,
+  startsInsideString: boolean
 ): boolean {
   if (detector.classifyValue(rawMatch) === 'placeholder') {
     return true;
   }
 
+  const rawValue = rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '');
   if (
     S006_PROGRAM_SOURCE_PATTERN.test(filePath) &&
-    !/^["']/.test(rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '')) &&
+    !/^["']/.test(rawValue) &&
+    !startsInsideString &&
     !isInsideS006StringLiteral(linePrefix)
   ) {
     return true;
@@ -295,11 +302,25 @@ function shouldSuppressS006SecretAssignment(
     return true;
   }
 
-  // An unquoted shell value ends at whitespace: PGPASSWORD=${DB_PASSWORD} psql ... assigns only the reference.
-  return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}(?:\s|$)/.test(value) ||
+  // In a shell script an unquoted value ends at whitespace: PGPASSWORD=${DB_PASSWORD} psql ... assigns
+  // only the reference. Quoted values and other file types keep the text after the reference.
+  if (S006_SHELL_SCRIPT_PATTERN.test(filePath) && /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}\s/.test(rawValue)) {
+    return true;
+  }
+
+  return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}$/.test(value) ||
     /^\$\{\{\s*(?:secrets|env|vars|github|inputs)\.[^}]+\}\}$/i.test(value) ||
     /^inherit$/i.test(value) ||
     /^(?:test|fake|mock|dummy)(?:[-_](?:password|secret|token|jwt|bearer))?$/i.test(value);
+}
+
+const S006_SHELL_SCRIPT_PATTERN = /\.(?:sh|bash|zsh)$|(?:^|\/)Dockerfile(?:\.[\w-]+)?$/i;
+
+// Whether the line opens or closes a multiline string ("""…""", '''…''', or a JS template literal).
+function togglesS006MultilineString(lineText: string): boolean {
+  const unescaped = lineText.replace(/\\./g, '');
+  const delimiters = (unescaped.match(/"""|'''/g)?.length ?? 0) + (unescaped.replace(/"""|'''/g, '').match(/`/g)?.length ?? 0);
+  return delimiters % 2 === 1;
 }
 
 function isInsideS006StringLiteral(linePrefix: string): boolean {
@@ -327,9 +348,15 @@ function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: str
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '[::1]';
 }
 
-function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string): boolean {
+function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string, matchStart: number): boolean {
   const normalizedMatch = rawMatch.toLowerCase();
   const trimmedLine = lineText.trim();
+
+  // A host name cannot continue with `_`: Constants.LOCAL_ERROR is an identifier. Checked here rather
+  // than in the pattern, where rejecting `_` makes long dotted lines backtrack polynomially.
+  if (lineText.charAt(matchStart + rawMatch.length) === '_') {
+    return true;
+  }
 
   if (/^(?:import\s+(?:static\s+)?|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,}(?:\.\*)?;?$/i.test(trimmedLine)) {
     return true;
@@ -724,7 +751,7 @@ function classifyS006DeterministicResult(
 
   return {
     status: EvaluationStatus.PASS,
-    reason: `No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read ${plural(coverage.scannedFiles, 'file', 'files')} with no coverage gaps.`,
+    reason: `No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read ${plural(coverage.scannedFiles, 'file', 'files')}; nothing it skipped affects the result.`,
     findingReferences,
     materiallyWeakenedCoverage: false
   };

@@ -202,7 +202,10 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'tenant-host-endpoint',
     category: 'tenant_or_host_endpoint',
     label: 'Tenant or host endpoint',
-    pattern: /\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db)[a-z0-9.-]*\.(?:edu|org|com|net|internal|local)(?![\w.-])(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
+    // Matches a whole host name (from its first letter or digit to the end of the run of host characters)
+    // that ends in one of the listed domains and has a label starting with a keyword. The run is matched once through a captured lookahead,
+    // because nested repetition over dotted labels backtracks cubically on long lines with no match.
+    pattern: /\b(?:https?:\/\/)?(?<![a-z0-9][a-z0-9.-]*?)(?=[a-z0-9.-]*?(?<![a-z0-9])(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db))(?=([a-z0-9.-]+))\1(?<=\.(?:edu|org|com|net|internal|local))(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'pass_neutral', medium: 'manual_candidate', high: 'manual_candidate' },

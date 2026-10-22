@@ -48,7 +48,7 @@ export function formatS006Evidence(
     'Coverage:',
     `  - Gitleaks: ${formatScannerSummary(analysis)}`,
     `  - Built-in scan: read ${analysis.coverage.scannedFiles} of ${analysis.coverage.candidateFiles} file${analysis.coverage.candidateFiles === 1 ? '' : 's'} (${formatKilobytes(analysis.coverage.scannedBytes)} read)`,
-    `  - Complete: ${analysis.coverage.materiallyWeakened ? 'no, see Coverage gaps' : 'yes'}`,
+    `  - Complete: ${analysis.coverage.complete ? 'yes' : analysis.coverage.materiallyWeakened ? 'no, see Coverage gaps' : 'no, but nothing left out affects the result; see Skipped'}`,
     ...formatCoverageGapLines(analysis),
     ...formatOtherLimitLines(analysis)
   ];
