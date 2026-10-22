@@ -54,11 +54,20 @@ const RUNTIME_CLASSPATH_INIT_SCRIPT = `allprojects { project ->
 }
 `;
 
-/** Writes the init script outside the repository, at a stable path so command identities stay stable. */
-function writeRuntimeClasspathInitScript(): string {
-  const scriptPath = path.join(os.tmpdir(), 'tc-module-eval-s003-runtime-classpath.gradle');
-  fs.writeFileSync(scriptPath, RUNTIME_CLASSPATH_INIT_SCRIPT, 'utf-8');
-  return scriptPath;
+/**
+ * Runs `command` with the init script in a fresh private temp directory outside the repository,
+ * so concurrent evaluations don't share it and no pre-existing path is written through.
+ * The directory is removed once the command finishes.
+ */
+async function withRuntimeClasspathInitScript<T>(command: (initScript: string) => Promise<T>): Promise<T> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-module-eval-s003-gradle-'));
+  try {
+    const initScript = path.join(dir, 'runtime-classpath.gradle');
+    fs.writeFileSync(initScript, RUNTIME_CLASSPATH_INIT_SCRIPT, { encoding: 'utf-8', flag: 'wx' });
+    return await command(initScript);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // Gradle build file patterns
@@ -168,14 +177,14 @@ export async function getGradleDependencies(
 
   try {
     const gradle = getGradleCommand(validatedPath);
-    const licenseCommand = await commandRunner.run({
+    const licenseCommand = await withRuntimeClasspathInitScript(initScript => commandRunner.run({
       command: gradle.command,
-      args: [...gradle.argsPrefix, '--init-script', writeRuntimeClasspathInitScript(), 'generateLicenseReport'],
+      args: [...gradle.argsPrefix, '--init-script', initScript, 'generateLicenseReport'],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,
       requiresIsolation: true,
       networkPolicy: GRADLE_NETWORK_POLICY
-    }, evaluationRun);
+    }, evaluationRun));
 
     getLogger().info('Gradle license plugin output:', licenseCommand.stdout);
 

@@ -354,19 +354,31 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-gradle-'));
     try {
       fs.writeFileSync(path.join(repo, 'build.gradle'), "plugins { id 'java' }");
+      const blockingRunner = new LocalCommandRunner(false);
+      let scriptWhileRunning = '';
       const evaluationRun = createEvaluationRun({
         repositoryPath: repo,
         language: 'java',
-        commandRunner: new LocalCommandRunner(false)
+        commandRunner: {
+          normalize: request => blockingRunner.normalize(request),
+          run: async (request, run) => {
+            const args = request.args ?? [];
+            scriptWhileRunning = fs.readFileSync(args[args.indexOf('--init-script') + 1], 'utf-8');
+            return blockingRunner.run(request, run);
+          }
+        }
       });
 
       await new ThirdPartyLicenseEvaluator().evaluate(repo, 'S003', evaluationRun);
 
       const [gradle] = Array.from(evaluationRun.commandObservations.values());
+      expect(gradle.args).toContain('--init-script');
       const initScript = gradle.args[gradle.args.indexOf('--init-script') + 1];
-      expect(gradle.args.indexOf('--init-script')).toBeGreaterThanOrEqual(0);
       expect(path.relative(repo, initScript).startsWith('..')).toBe(true);
-      expect(fs.readFileSync(initScript, 'utf-8')).toContain("licenseReport.configurations = ['runtimeClasspath']");
+      expect(scriptWhileRunning).toContain("licenseReport.configurations = ['runtimeClasspath']");
+      // Each run gets its own private directory, removed once Gradle finishes.
+      expect(path.basename(path.dirname(initScript))).toMatch(/^tc-module-eval-s003-gradle-/);
+      expect(fs.existsSync(path.dirname(initScript))).toBe(false);
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }
