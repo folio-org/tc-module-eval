@@ -36,7 +36,7 @@ Set environment variable ELASTICSEARCH_URL for production search.
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.classification.reason).toContain('requires reviewer judgment');
+    expect(result.classification.reason).toContain('concrete steps to install');
     expect(result.classification.filesConsidered).toEqual(['README.md']);
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('docker_runtime');
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('okapi_tenant_enablement');
@@ -67,6 +67,7 @@ Use docker compose up to start Kafka, PostgreSQL, and OpenSearch for the module.
 
     const rendered = formatS004Evidence(analysis, agentReview);
 
+    expect(rendered.details).toContain('Strongest examples:\n  - README.md:4 [run] Install, deploy, or run steps: ## Running with Docker Compose');
     expect(rendered.details).toContain('Agent review:');
     expect(rendered.details).toContain('Not available: OpenCode returned malformed JSON');
     expect(rendered.details).toContain('Adapter: opencode');
@@ -91,6 +92,15 @@ Install this UI module into platform-complete with the related backend modules e
     expect(result.classification.strongestSignals.map(signal => signal.group)).toContain('stripes_setup');
   });
 
+  it('keeps long excerpts on one report line', () => {
+    writeFile('README.md', `Configure the module. ${'Some long configuration prose. '.repeat(40)}`);
+    const result = analyzeS004Documentation(tempRoot);
+    const excerpt = result.candidates[0].signals[0].excerpt;
+    expect(excerpt).not.toContain('\n');
+    expect(excerpt).toMatch(/ …$/);
+    expect(Buffer.byteLength(excerpt)).toBeLessThanOrEqual(704);
+  });
+
   it('does not label backend tenant identifiers or Okapi URLs as frontend setup', () => {
     writeFile('README.md', 'Configure the Okapi URL and tenant ID before enabling this backend module.');
     const result = analyzeS004Documentation(tempRoot);
@@ -110,7 +120,7 @@ Configuration details are available in the FOLIO docs.
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.classification.reason).toContain('too thin');
+    expect(result.classification.reason).toContain('too briefly');
   });
 
   it('returns manual for developer build documentation', () => {
@@ -200,7 +210,7 @@ Build the module before launching it.
     const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
     expect(installSignal).toMatchObject({ strength: 'strong', line: 9 });
-    expect(result.classification.reason).toContain('strong installation');
+    expect(result.classification.reason).toContain('concrete steps to install');
   });
 
   it('does not mistake a Java runtime requirement for a command', () => {
@@ -214,7 +224,7 @@ The module requires Java 17.
     const runSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
     expect(runSignal).toMatchObject({ strength: 'candidate' });
-    expect(result.classification.reason).toContain('evidence is too thin');
+    expect(result.classification.reason).toContain('too briefly');
   });
 
   it.each([
@@ -237,7 +247,7 @@ ${prose}
     const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
     expect(installSignal).toMatchObject({ strength: 'candidate' });
-    expect(result.classification.reason).toContain('evidence is too thin');
+    expect(result.classification.reason).toContain('too briefly');
   });
 
   it.each([
@@ -258,7 +268,7 @@ ${prose}
     const installSignal = result.candidates[0].signals.find(signal => signal.group === 'install_deploy_run');
 
     expect(installSignal).toMatchObject({ strength: 'strong', line: 3 });
-    expect(result.classification.reason).toContain('strong installation');
+    expect(result.classification.reason).toContain('concrete steps to install');
   });
 
   it('does not treat a shell comment inside a fenced block as a new Markdown heading', () => {
@@ -276,7 +286,7 @@ docker build -t mod-example .
 
     expect(installSignal).toMatchObject({ strength: 'strong', line: 5 });
     expect(installSignal?.excerpt).toContain('docker build');
-    expect(result.classification.reason).toContain('strong installation');
+    expect(result.classification.reason).toContain('concrete steps to install');
   });
 
   it('does not count table-of-contents and troubleshooting lines as candidate documentation', () => {
@@ -292,7 +302,7 @@ Installation cannot run when local configuration is invalid.
 
     expect(result.candidates[0].signals).toEqual([]);
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
-    expect(result.classification.reason).toContain('No plausible developer build');
+    expect(result.classification.reason).toContain('README.md does not explain how to build, run, or configure the module.');
   });
 
   it('does not treat ordinary prose as a concrete target before a real command', () => {
@@ -320,7 +330,20 @@ mvn test
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
-    expect(result.classification.reason).toContain('No plausible developer build');
+    expect(result.classification.reason).toBe(
+      'README.md does not explain how to build, run, or configure the module. To fix this, add a section to README.md that shows how to build, start, and configure the module, including any services it needs (such as PostgreSQL or Kafka).'
+    );
+  });
+
+  it('fails a repository without documentation and says where it looked', () => {
+    writeFile('pom.xml', '<project/>');
+
+    const result = analyzeS004Documentation(tempRoot);
+    const rendered = formatS004Evidence(result);
+
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(rendered.evidence).toContain('S004 fail: No README or other documentation files were found. To fix this,');
+    expect(rendered.details).toContain('  - none (looked for README.md, INSTALL.md, INSTALLATION.md, DEPLOYMENT.md, RUNNING.md, and Markdown files in docs/, doc/, deployment/)');
   });
 
   it('follows repo-local documentation links and ignores external links', () => {
@@ -347,7 +370,21 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling the ten
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
-    expect(result.warnings.join('\n')).toContain('outside repository');
+    expect(result.warnings).toEqual([
+      'Did not follow a documentation link that points outside the repository: ../outside.md (linked from README.md).'
+    ]);
+  });
+
+  it('merges skipped symbolic links into one warning', () => {
+    writeFile('docs/real.md', 'Run docker compose up to start the module.');
+    fs.symlinkSync(path.join(tempRoot, 'docs/real.md'), path.join(tempRoot, 'docs/a.md'));
+    fs.symlinkSync(path.join(tempRoot, 'docs/real.md'), path.join(tempRoot, 'docs/b.md'));
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.warnings).toEqual([
+      'Did not read docs/a.md, docs/b.md because symbolic links in documentation folders are not followed.'
+    ]);
   });
 
   it('can represent agent metadata without changing final status', () => {
