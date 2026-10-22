@@ -20,18 +20,25 @@ const LIBRARY_NAMES = new Set([
   'stripes-testing'
 ]);
 
+export const S010_SOURCE_LIMITS = {
+  maxFiles: 1_500,
+  maxFileBytes: 192 * 1024,
+  maxTotalBytes: 6 * 1024 * 1024
+};
+
 const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md)$/i;
 const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
 const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
+const DATASTORE_CATEGORY = 'datastore clients (JDBC, Redis, MongoDB or Elasticsearch)';
 const UNSUPPORTED_PATTERNS = [
-  { category: 'dynamic runtime discovery', pattern: /java\.lang\.reflect|Class\.forName|ServiceLoader/i },
-  { category: 'generated or framework client', pattern: /generated[-_/ ]client|vertx|raml-module-builder/i },
-  { category: 'HTTP client wrapper', pattern: /URLConnection|FeignClient|Retrofit/i },
-  { category: 'datastore client', pattern: /JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i },
-  { category: 'messaging or RPC client', pattern: /RabbitTemplate|ManagedChannelBuilder/i },
+  { category: 'code loaded at runtime (reflection or ServiceLoader)', pattern: /java\.lang\.reflect|Class\.forName|ServiceLoader/i },
+  { category: 'Vert.x, RAML Module Builder or generated clients', pattern: /generated[-_/ ]client|vertx|raml-module-builder/i },
+  { category: 'HTTP client libraries (Feign, Retrofit or URLConnection)', pattern: /URLConnection|FeignClient|Retrofit/i },
+  { category: DATASTORE_CATEGORY, pattern: /JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i },
+  { category: 'RabbitMQ or gRPC clients', pattern: /RabbitTemplate|ManagedChannelBuilder/i },
   {
-    category: 'browser client wrapper',
+    category: 'Stripes or browser request helpers (stripes-connect, ky, axios or process.env)',
     pattern: /\baxios\b|\bky\s*\(|\bokapi\b|\bmutator\b|process\.env\[[^\]]+\]/i,
     javascriptOnly: true
   }
@@ -57,12 +64,7 @@ export async function collectS010Evidence(
   repoPath: string,
   language: CriterionLanguage
 ): Promise<S010Evidence> {
-  const snapshot = await readCommittedSource(repoPath, {
-    include: isDeterministicS010Path,
-    maxFiles: 1_500,
-    maxFileBytes: 192 * 1024,
-    maxTotalBytes: 6 * 1024 * 1024
-  });
+  const snapshot = await readCommittedSource(repoPath, { include: isDeterministicS010Path, ...S010_SOURCE_LIMITS });
   const diagnostics: S010Diagnostic[] = snapshot.diagnostics.map(item => ({ ...item }));
   const files = new Map(snapshot.files.map(file => [file.path, file]));
   const packageJson = parsePackageJson(files.get('package.json'), diagnostics);
@@ -90,12 +92,14 @@ export async function collectS010Evidence(
       scenario: 'configuration-absent',
       proof: clearFailFast ? 'clear-fail-fast' : 'unresolved',
       sourceReferences: [
-        { path: declaration.path, detail: `${declaration.required ? 'Required configuration input' : 'Configuration input not marked required'}; this declaration does not establish whether the service is optional` },
-        ...(binding ? [{ path: binding.path, line: lineOf(binding.content, '@Value'), detail: 'Spring configuration binding' }] : [])
+        { path: declaration.path, detail: declaration.required
+          ? 'Environment variable marked required'
+          : 'Environment variable not marked required (this does not show whether the service is optional)' },
+        ...(binding ? [{ path: binding.path, line: lineOf(binding.content, '@Value'), detail: 'Read with a Spring @Value binding' }] : [])
       ],
       boundedFailure: 'not-applicable',
       readiness: 'not-applicable',
-      ...(!clearFailFast ? { rationale: 'Static evidence does not prove the missing-configuration startup outcome.' } : {})
+      ...(!clearFailFast ? { rationale: 'The code does not show what happens at startup when this configuration is missing.' } : {})
     });
     if (!clearFailFast) semanticIncomplete = true;
   }
@@ -124,11 +128,11 @@ export async function collectS010Evidence(
       sourceReferences: searchFiles.map(file => ({
         path: file.path,
         line: lineAtOffset(file.content, JAVA_OPENSEARCH_PATTERN.exec(file.content)!.index),
-        detail: 'OpenSearch Java client reference; client presence does not establish outage handling'
+        detail: 'Uses an OpenSearch client'
       })),
       boundedFailure: 'unknown',
       readiness: 'unknown',
-      rationale: 'OpenSearch client usage is recognized. Verify operation-level failure bounds, startup or tenant-initialization effects, readiness, and recovery; client configuration or exception handling alone does not prove resilience.'
+      rationale: 'The module uses an OpenSearch client, but the tool does not follow its calls. Check that search calls have time limits, how an outage affects startup, tenant setup and readiness, and how the module recovers. A timeout setting or a catch block alone does not show this.'
     });
     semanticIncomplete = true;
   }
@@ -147,10 +151,10 @@ export async function collectS010Evidence(
       requirement: conditional ? 'optional' : 'unresolved',
       scenario: 'runtime-unavailable',
       proof: controlled ? 'controlled-degradation' : 'unresolved',
-      sourceReferences: [{ path: file.path, line: clientLine(file.content), detail: 'Runtime client operation' }],
+      sourceReferences: [{ path: file.path, line: clientLine(file.content), detail: 'Uses an HTTP, Kafka or S3 client' }],
       boundedFailure: bounded ? 'proven' : 'unknown',
       readiness: controlled ? 'preserved' : 'unknown',
-      ...(!controlled ? { rationale: 'Client operation, failure bound, handling, optionality, and readiness were not linked conclusively.' } : {})
+      ...(!controlled ? { rationale: 'The tool could not confirm that calls through the client have a time limit and error handling, whether the service is optional, or how an outage affects readiness.' } : {})
     });
     if (!controlled) semanticIncomplete = true;
   }
@@ -171,10 +175,10 @@ export async function collectS010Evidence(
           requirement: controlled ? 'optional' : 'unresolved',
           scenario: 'runtime-unavailable',
           proof: controlled ? 'controlled-degradation' : 'unresolved',
-          sourceReferences: [{ path: file.path, line: operationLine, detail: 'Direct browser request' }],
+          sourceReferences: [{ path: file.path, line: operationLine, detail: 'Sends a request to this host' }],
           boundedFailure: bounded ? 'proven' : 'unknown',
           readiness: controlled ? 'preserved' : 'unknown',
-          ...(!controlled ? { rationale: 'Direct browser dependency behavior is not bounded and feature-local in the available evidence.' } : {})
+          ...(!controlled ? { rationale: 'The tool could not confirm that this request has a time limit and error handling and only affects the feature that sends it.' } : {})
         });
         if (!controlled) semanticIncomplete = true;
       }
@@ -187,10 +191,10 @@ export async function collectS010Evidence(
         requirement: 'unresolved',
         scenario: 'runtime-unavailable',
         proof: 'unresolved',
-        sourceReferences: [{ path: 'package.json', detail: 'Declared FOLIO runtime interface' }],
+        sourceReferences: [{ path: 'package.json', detail: 'Lists the interfaces the UI needs' }],
         boundedFailure: 'unknown',
         readiness: 'unknown',
-        rationale: 'Interface declaration does not establish runtime failure handling.'
+        rationale: 'The UI needs these interfaces, but the tool does not follow how it behaves when the modules behind them are down.'
       });
       semanticIncomplete = true;
     }
@@ -200,12 +204,12 @@ export async function collectS010Evidence(
   for (const unsupported of UNSUPPORTED_PATTERNS) {
     const matchingPaths = productionCode
       .filter(file => !('javascriptOnly' in unsupported) || /\.[cm]?[jt]sx?$/.test(file.path))
-      .filter(file => unsupported.category !== 'datastore client'
+      .filter(file => unsupported.category !== DATASTORE_CATEGORY
         || !databaseFiles.some(databaseFile => databaseFile.path === file.path))
       .filter(file => {
         // Recognized OpenSearch files may use legacy elasticsearchClient field/setter names.
         // Keep diagnostics for other actual datastore types, not these identifiers.
-        const pattern = unsupported.category === 'datastore client' && searchFiles.includes(file)
+        const pattern = unsupported.category === DATASTORE_CATEGORY && searchFiles.includes(file)
           ? /\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/
           : unsupported.pattern;
         return pattern.test(file.content);
@@ -252,13 +256,15 @@ function collectJavaDatabaseScenario(
     ...(startupOwner ? [{
       path: startupOwner.path,
       line: databaseLine(startupOwner.content),
-      detail: 'Unconditional database startup lifecycle owner'
+      detail: 'Runs database setup (migrations) at startup'
     }] : [{
       path: databaseFiles[0].path,
       line: databaseLine(databaseFiles[0].content),
-      detail: `${databaseFiles.length} production file${databaseFiles.length === 1 ? '' : 's'} use database framework APIs`
+      detail: databaseFiles.length === 1
+        ? 'Uses the database'
+        : `Uses the database (first of ${databaseFiles.length} files that do)`
     }]),
-    ...(configFile ? [{ path: configFile.path, detail: 'Datasource configuration' }] : [])
+    ...(configFile ? [{ path: configFile.path, detail: 'Database connection settings' }] : [])
   ];
 
   if (startupOwner) {
@@ -274,8 +280,8 @@ function collectJavaDatabaseScenario(
       readiness: 'not-applicable',
       ...(!clearFailFast || !bounded ? {
         rationale: !clearFailFast
-          ? 'Database startup ownership is visible, but local evidence does not prove clear exception propagation.'
-          : 'Database startup failure propagates, but no complete finite connection and operation bound is visible.'
+          ? 'The module sets up the database at startup, but the code does not show that a failure stops startup with a clear error.'
+          : 'A database failure at startup stops the module, but the settings do not give both a connection timeout and a socket timeout, so startup could hang.'
       } : {})
     };
   }
@@ -291,7 +297,7 @@ function collectJavaDatabaseScenario(
     boundedFailure: bounded ? 'proven' : 'unknown',
     readiness: controlled ? 'preserved' : 'unknown',
     ...(!controlled ? {
-      rationale: 'Database usage is visible, but optionality, complete failure bounds, handling, and readiness were not linked conclusively.'
+      rationale: 'The module uses a database, but the tool could not confirm whether it is optional, whether calls have time limits and error handling, or how an outage affects readiness.'
     } : {})
   };
 }
@@ -420,7 +426,7 @@ function parsePackageJson(file: CommittedSourceFile | undefined, diagnostics: S0
   try {
     return JSON.parse(file.content) as PackageJson;
   } catch {
-    diagnostics.push({ code: 'package-json-invalid', message: 'Unable to parse committed package.json.', material: true, path: file.path });
+    diagnostics.push({ code: 'package-json-invalid', message: 'Not valid JSON, so the tool could not read it.', material: true, path: file.path });
     return undefined;
   }
 }
@@ -447,7 +453,7 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
         });
       }
     } catch {
-      diagnostics.push({ code: 'descriptor-invalid', message: 'Unable to parse a committed module descriptor.', material: true, path: file.path });
+      diagnostics.push({ code: 'descriptor-invalid', message: 'Not valid JSON, so the tool could not read its environment variables.', material: true, path: file.path });
     }
   }
   return declarations;
@@ -534,7 +540,7 @@ function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence)
     readiness,
     sourceReferences,
     ...(proof === 'unresolved' ? {
-      rationale: left.rationale ?? right.rationale ?? 'Conflicting repository evidence remains unresolved.'
+      rationale: left.rationale ?? right.rationale ?? 'The code gives conflicting evidence for this service.'
     } : {})
   };
 }
@@ -554,11 +560,11 @@ function isDeterministicS010Path(candidate: string): boolean {
 
 function unsupportedDiagnosticMessage(category: string, paths: string[]): string {
   if (paths.length === 1) {
-    return `A production file uses an unsupported ${category} pattern.`;
+    return `Uses ${category}, which the tool cannot analyse.`;
   }
   const representatives = paths.slice(0, 3).join(', ');
   const remainder = paths.length > 3 ? ` (+${paths.length - 3} more)` : '';
-  return `${paths.length} production files use unsupported ${category} patterns; representative paths: ${representatives}${remainder}.`;
+  return `${paths.length} files use ${category}, which the tool cannot analyse, for example ${representatives}${remainder}.`;
 }
 
 function isJavaScriptProductionSource(file: CommittedSourceFile): boolean {

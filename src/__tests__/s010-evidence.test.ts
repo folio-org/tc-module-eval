@@ -76,7 +76,7 @@ describe('S010 evidence collection', () => {
     expect(result.scenarios).toHaveLength(1);
     expect(result.scenarios[0].sourceReferences.map(ref => ref.path)).toEqual(['src/main/java/Mixed.java']);
     const diagnostic = result.diagnostics.find(item => item.code === 'unsupported-runtime-pattern');
-    expect(diagnostic?.message).toContain('3 production files');
+    expect(diagnostic?.message).toContain('3 files use datastore clients');
     for (const name of ['Mixed', 'Unknown', 'Elastic']) expect(diagnostic?.message).toContain(`${name}.java`);
   });
 
@@ -101,7 +101,7 @@ describe('S010 evidence collection', () => {
       ['search', 'unresolved', 'unresolved'],
       ['database', 'required', 'clear-fail-fast']
     ]);
-    expect(configuration[0].sourceReferences[0].detail).toContain('does not establish whether the service is optional');
+    expect(configuration[0].sourceReferences[0].detail).toContain('does not show whether the service is optional');
   });
 
   it('recognizes required Spring configuration with framework fail-fast semantics', async () => {
@@ -323,7 +323,7 @@ describe('S010 evidence collection', () => {
       readiness: 'not-applicable'
     })]);
     expect(result.diagnostics).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ message: expect.stringContaining('database or datastore') })
+      expect.objectContaining({ message: expect.stringContaining('datastore clients') })
     ]));
   });
 
@@ -534,7 +534,7 @@ describe('S010 evidence collection', () => {
       id: 'database/runtime-unavailable',
       requirement: 'unresolved',
       proof: 'unresolved',
-      sourceReferences: [expect.objectContaining({ detail: expect.stringContaining('2 production files') })]
+      sourceReferences: [expect.objectContaining({ detail: expect.stringContaining('first of 2 files') })]
     })]);
     expect(result.diagnostics.filter(item => item.code === 'unsupported-runtime-pattern')).toHaveLength(0);
     expect(result.diagnostics).not.toEqual(expect.arrayContaining([
