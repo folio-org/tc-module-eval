@@ -19,6 +19,7 @@ describe('S009 dependency evidence', () => {
       <project>
         <properties><folio.group>org.folio</folio.group></properties>
         <parent><groupId>org.folio</groupId><artifactId>parent</artifactId><version>1</version></parent>
+        <modules><module>child</module></modules>
         <dependencyManagement><dependencies>
           <dependency><groupId>org.folio</groupId><artifactId>managed-only</artifactId><version>1</version></dependency>
         </dependencies></dependencyManagement>
@@ -52,6 +53,94 @@ describe('S009 dependency evidence', () => {
       'org.folio:profile-lib:compile',
       'org.folio:provided-lib:provided',
       'org.folio:runtime-lib:runtime'
+    ]);
+  });
+
+  it('reads only the Maven build: the root POM, its modules, and the local parents they inherit', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 's009-outside-'));
+    try {
+      const folioDependency = (artifactId: string) =>
+        `<dependencies><dependency><groupId>org.folio</groupId><artifactId>${artifactId}</artifactId><version>1</version></dependency></dependencies>`;
+      await fs.outputFile(path.join(repo, 'pom.xml'), `
+        <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version>
+          <modules><module>service</module><module>missing</module><module>linked</module><module>../outside</module></modules>
+          <profiles><profile><id>extra</id><modules><module>extra/custom-pom.xml</module></modules></profile></profiles>
+        </project>
+      `);
+      await fs.outputFile(path.join(repo, 'service/pom.xml'), `
+        <project>
+          <parent><groupId>com.example</groupId><artifactId>shared-parent</artifactId><version>1</version><relativePath>../parent</relativePath></parent>
+          <artifactId>service</artifactId>${folioDependency('service-lib')}
+        </project>
+      `);
+      await fs.outputFile(path.join(repo, 'parent/pom.xml'), `
+        <project><groupId>com.example</groupId><artifactId>shared-parent</artifactId><version>1</version>${folioDependency('inherited-lib')}</project>
+      `);
+      await fs.outputFile(path.join(repo, 'extra/custom-pom.xml'), `<project><artifactId>extra</artifactId>${folioDependency('profile-module-lib')}</project>`);
+      await fs.outputFile(path.join(repo, 'src/test/resources/fixture/pom.xml'), `<project>${folioDependency('fixture-lib')}</project>`);
+      await fs.outputFile(path.join(repo, 'src/test/resources/broken/pom.xml'), '<project>');
+      await fs.outputFile(path.join(outside, 'pom.xml'), `<project>${folioDependency('outside-lib')}</project>`);
+      await fs.outputFile(path.join(outside, 'module/pom.xml'), `<project>${folioDependency('linked-lib')}</project>`);
+      await fs.symlink(path.join(outside, 'module'), path.join(repo, 'linked'));
+
+      const evidence = await collectS009DependencyEvidence(repo);
+
+      expect(evidence.observations.map(item => `${item.coordinate} ${item.sourcePath}`)).toEqual([
+        'org.folio:inherited-lib parent/pom.xml',
+        'org.folio:profile-module-lib extra/custom-pom.xml',
+        'org.folio:service-lib service/pom.xml'
+      ]);
+      expect(evidence.projectFiles).toEqual(['extra/custom-pom.xml', 'parent/pom.xml', 'pom.xml', 'service/pom.xml']);
+      expect(evidence.complete).toBe(false);
+      expect(evidence.diagnostics.map(item => `${item.code} ${item.message}`)).toEqual([
+        expect.stringMatching(/^maven_module_missing Module missing /),
+        expect.stringMatching(/^maven_module_missing Module linked /),
+        expect.stringMatching(/^maven_module_missing Module \.\.\/outside /)
+      ]);
+    } finally {
+      await fs.remove(outside);
+    }
+  });
+
+  it('checks Maven and Gradle dependencies in org.folio sub-groups such as org.folio.okapi', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version><dependencies>
+        <dependency><groupId>org.folio.okapi</groupId><artifactId>okapi-common</artifactId><version>7.0.0</version></dependency>
+        <dependency><groupId>org.folio.okapi</groupId><artifactId>okapi-testing</artifactId><version>7.0.0</version><scope>test</scope></dependency>
+        <dependency><groupId>org.folioxyz</groupId><artifactId>lookalike</artifactId><version>1</version></dependency>
+        <dependency><groupId>org.folio.okapi</groupId><artifactId>\${unset.name}</artifactId><version>1</version></dependency>
+      </dependencies></project>
+    `);
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      implementation 'org.folio.okapi:okapi-common:7.0.0'
+      api group: 'org.folio.rest', name: 'gradle-lib', version: '1'
+      implementation group: 'org.folioxyz', name: 'lookalike', version: '1'
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations.map(item => `${item.coordinate} ${item.sourcePath}`)).toEqual([
+      'org.folio.okapi:okapi-common build.gradle',
+      'org.folio.okapi:okapi-common pom.xml',
+      'org.folio.rest:gradle-lib build.gradle'
+    ]);
+    expect(evidence.diagnostics.map(item => item.code)).toEqual(['maven_coordinate_unresolved']);
+  });
+
+  it('reads the legacy Gradle compile and runtime configurations', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
+      compile 'org.folio:legacy-compile:1.0.0'
+      runtime "org.folio:legacy-runtime:1.0.0"
+      testCompile 'org.folio:legacy-test:1.0.0'
+      def runtime = Runtime.runtime
+    }`);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.diagnostics).toEqual([]);
+    expect(evidence.observations.map(item => `${item.coordinate}:${item.scope}`)).toEqual([
+      'org.folio:legacy-compile:compile',
+      'org.folio:legacy-runtime:runtime'
     ]);
   });
 
@@ -449,7 +538,6 @@ describe('S009 dependency evidence', () => {
   it('ignores unresolved Maven scopes and names only when the resolved group is outside FOLIO', async () => {
     await fs.outputFile(path.join(repo, 'pom.xml'), `
       <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version>
-        <modules><module>folio</module></modules>
         <dependencies>
           <dependency><groupId>\${project.groupId}</groupId><artifactId>other</artifactId><version>1</version><scope>\${unset.scope}</scope></dependency>
           <dependency><groupId>\${project.groupId}</groupId><artifactId>\${unset.name}</artifactId><version>1</version></dependency>
@@ -460,6 +548,8 @@ describe('S009 dependency evidence', () => {
     expect(outsideFolio.diagnostics).toEqual([]);
     expect(outsideFolio.complete).toBe(true);
 
+    const rootPom = await fs.readFile(path.join(repo, 'pom.xml'), 'utf8');
+    await fs.outputFile(path.join(repo, 'pom.xml'), rootPom.replace('<dependencies>', '<modules><module>folio</module></modules><dependencies>'));
     await fs.outputFile(path.join(repo, 'folio/pom.xml'), `
       <project><groupId>org.folio</groupId><artifactId>folio</artifactId><version>1</version>
         <dependencies>
@@ -479,7 +569,7 @@ describe('S009 dependency evidence', () => {
   it('treats a local POM that is not the declared parent like a parent outside the repository', async () => {
     await fs.outputFile(path.join(repo, 'pom.xml'), `
       <project><groupId>org.folio</groupId><artifactId>root</artifactId><version>2.0.0</version>
-        <modules><module>client</module></modules>
+        <modules><module>client</module><module>old-bom</module></modules>
       </project>
     `);
     await fs.outputFile(path.join(repo, 'client/pom.xml'), `

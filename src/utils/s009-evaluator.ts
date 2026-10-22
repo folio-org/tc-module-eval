@@ -60,7 +60,7 @@ export function evaluateS009(
         ? coordinateCount === 1
           ? 'The module declares 1 FOLIO library as a production dependency, and it is approved.'
           : `The module declares ${coordinateCount} FOLIO libraries as production dependencies, and all are approved.`
-        : 'The module declares no FOLIO library (org.folio or @folio package) as a production dependency.';
+        : 'The module declares no FOLIO library (org.folio, org.folio.*, or @folio package) as a production dependency.';
 
   return {
     ...base,

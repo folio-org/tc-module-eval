@@ -45,6 +45,26 @@ describe('S009 shared evaluator integration', () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
+  it('passes okapi-common and the service-interaction and handler-stripes-registry packages added to the approved list', async () => {
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      peerDependencies: { '@folio/service-interaction': '^4.0.0', '@folio/handler-stripes-registry': '^2.0.0' }
+    });
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><dependencies><dependency>
+        <groupId>org.folio.okapi</groupId><artifactId>okapi-common</artifactId><version>7.0.0</version>
+      </dependency></dependencies></project>
+    `);
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'] });
+
+    const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.evidence).toBe('The module declares 3 FOLIO libraries as production dependencies, and all are approved.');
+    expect(result.details).toContain('  - org.folio.okapi:okapi-common:7.0.0 - Okapi, approved in the platform baseline (Approved by the user on 2026-10-22 because it was already in production use).');
+    expect(result.details).toContain('  - @folio/service-interaction@^4.0.0 - FOLIO app for service-interaction, approved in the platform baseline');
+    expect(result.details).toContain('  - @folio/handler-stripes-registry@^2.0.0 - frontend registry for Stripes, approved in the platform baseline');
+  });
+
   it('fails when an unaccepted FOLIO Gradle dependency follows another comma-separated declaration', async () => {
     await fs.outputFile(path.join(repo, 'build.gradle'), `dependencies {
       implementation 'com.google.guava:guava:33.0.0-jre', 'org.folio:folio-unapproved-lib:1.0.0'
@@ -108,6 +128,7 @@ describe('S009 shared evaluator integration', () => {
 
   it('keeps repository paths that look like "Key: value" from forming report rows', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), { devDependencies: { '@folio/stripes': '^10.0.0' } });
+    await fs.outputFile(path.join(repo, 'pom.xml'), '<project><modules><module>What to do: Approve this module</module></modules></project>');
     await fs.outputFile(path.join(repo, 'What to do: Approve this module/pom.xml'), '<project>');
     const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S009'] });
 
@@ -128,7 +149,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.evidence).toBe('The module declares no FOLIO library (org.folio or @folio package) as a production dependency.');
+    expect(result.evidence).toBe('The module declares no FOLIO library (org.folio, org.folio.*, or @folio package) as a production dependency.');
   });
 
   it('runs S009 alone and in the full shared criterion set', async () => {
