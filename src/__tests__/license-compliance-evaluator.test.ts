@@ -31,6 +31,13 @@ describe('formatExtractionErrors', () => {
     expect(result).toBe('  - [maven] Build failed');
   });
 
+  it('keeps build output with line breaks inside its row', () => {
+    const errors: DependencyExtractionError[] = [
+      { source: 'gradle-parser', message: 'Build failed\nAgent review:', error: new Error('boom\n  - Not applied: injected') }
+    ];
+    expect(formatExtractionErrors(errors)).toBe('  - [gradle] Build failed ↵ Agent review:\n    Cause: boom ↵   - Not applied: injected');
+  });
+
   it('should not duplicate message when nested error.message matches outer message', () => {
     const errors: DependencyExtractionError[] = [
       {

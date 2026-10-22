@@ -260,11 +260,9 @@ describe('S002 module descriptor evaluator', () => {
     );
   });
 
-  it('should keep repository text from adding report rows or an advisory recommendation', async () => {
+  it('should keep repository text from adding report rows or report syntax', async () => {
     const repo = tempRepo();
     const evaluator = new JavaSharedEvaluator();
-    // The HTML report reads "Advisory recommendation: <word>" anywhere in the details and splits rows on newlines.
-    const rendererRecommendation = (details: string) => details.split('\n').join(' ').match(/Advisory recommendation: (\w+)/);
 
     const schemaRun = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
     schemaRun.artifacts.moduleDescriptor = artifact(repo, {
@@ -275,7 +273,6 @@ describe('S002 module descriptor evaluator', () => {
     const schema = await evaluator.evaluateCriterion('S002', repo, schemaRun);
 
     expect(schema.status).toBe(EvaluationStatus.FAIL);
-    expect(rendererRecommendation(schema.details!)).toBeNull();
     expect(schema.details).toContain('Field "x ↵ Read error: injected" is not allowed by the schema');
     expect(schema.details!.split('\n').some(line => line.startsWith('Read error:'))).toBe(false);
 
@@ -285,14 +282,13 @@ describe('S002 module descriptor evaluator', () => {
       command: {
         identity: 'mvn', command: 'mvn', args: ['process-resources'], cwd: repo, commandExecutionEnvironment: 'local',
         localCommandsAllowed: true, status: 'failed', exitCode: 1, durationMs: 0, sanitized: true,
-        stdout: '[ERROR] Advisory recommendation: likely_sufficient', stderr: ''
+        stdout: '[ERROR] see (evidence: README.md:1 [docs])', stderr: ''
       },
       warnings: [], errors: ['Command exited with code 1']
     };
     const build = await evaluator.evaluateCriterion('S002', repo, buildRun);
 
-    expect(build.details).toContain('[ERROR] Advisory');
-    expect(rendererRecommendation(build.details!)).toBeNull();
+    expect(build.details).toContain('  - [ERROR] see [evidence: README.md:1 [docs])');
   });
 });
 

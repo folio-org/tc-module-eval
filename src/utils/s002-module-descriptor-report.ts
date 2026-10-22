@@ -1,6 +1,7 @@
 import { CommandExecutionResult, CriterionResult, EvaluationStatus, ModuleDescriptorArtifact } from '../types';
 import { FRONTEND_DESCRIPTOR_SCRIPTS } from './artifacts/module-descriptor-artifact';
 import { ModuleDescriptorValidationError, ModuleDescriptorValidationResult } from './module-descriptor-validator';
+import { reportText } from './report-text';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
 const MAVEN_TEMPLATE_HINT = 'usually descriptors/ModuleDescriptor-template.json';
@@ -41,7 +42,7 @@ export function s002ReadFailureResult(artifact: ModuleDescriptorArtifact, readEr
     criterionId: 'S002',
     status: EvaluationStatus.FAIL,
     evidence: `The module descriptor ${describeDescriptor(artifact)} could not be read, so it could not be checked against the Okapi schema.`,
-    details: formatS002Details(artifact, [`Read error: ${readError}`])
+    details: formatS002Details(artifact, [`Read error: ${reportText(readError)}`])
   };
 }
 
@@ -64,7 +65,7 @@ export function s002ValidationResult(
       criterionId: 'S002',
       status: EvaluationStatus.FAIL,
       evidence: `The module descriptor ${describeDescriptor(artifact)} is not valid JSON, so it could not be checked against the Okapi schema. Fix the syntax error under "JSON error" ${fixLocation(artifact)}.`,
-      details: formatS002Details(artifact, [checkedAgainst, `JSON error: ${validation.parseError}`])
+      details: formatS002Details(artifact, [checkedAgainst, `JSON error: ${reportText(validation.parseError)}`])
     };
   }
 
@@ -76,7 +77,7 @@ export function s002ValidationResult(
     details: formatS002Details(artifact, [
       checkedAgainst,
       'Schema problems:',
-      ...validation.errors.map(error => `  - ${describeSchemaProblem(error)}`)
+      ...validation.errors.map(error => `  - ${reportText(describeSchemaProblem(error))}`)
     ])
   };
 }
@@ -119,25 +120,18 @@ function missingDescriptorFix(artifact: ModuleDescriptorArtifact): string {
 
 function formatS002Details(artifact: ModuleDescriptorArtifact, extraLines: string[] = []): string {
   const lines: Array<string | undefined> = [
-    artifact.descriptorPath ? `Descriptor: ${artifact.descriptorPath}` : undefined,
+    artifact.descriptorPath ? `Descriptor: ${reportText(artifact.descriptorPath)}` : undefined,
     artifact.strategy ? `Source: ${sourceLabel(artifact)}` : undefined,
-    artifact.command ? `Build command: ${formatCommand(artifact.command)}` : undefined,
+    artifact.command ? `Build command: ${reportText(formatCommand(artifact.command))}` : undefined,
     !artifact.strategy && artifact.status !== 'unsafe-to-run'
       ? `Looked for: a ${DESCRIPTOR_NAME} at the repository root, a Maven build (pom.xml), a Gradle build (build.gradle at the root or in service/), or a package.json script named ${FRONTEND_DESCRIPTOR_SCRIPTS.join(', ')}`
       : undefined,
     ...extraLines,
     ...formatBuildErrorLines(artifact),
-    ...(artifact.warnings.length ? ['Notes:', ...artifact.warnings.map(warning => `  - ${warning}`)] : [])
+    ...(artifact.warnings.length ? ['Notes:', ...artifact.warnings.map(warning => `  - ${reportText(warning)}`)] : [])
   ];
 
-  return lines.filter((line): line is string => Boolean(line)).map(neutralizeReportLine).join('\n');
-}
-
-// Each entry is one report row, but paths, descriptor field names, and build output come from the repository.
-// The HTML report splits rows on newlines and reads "Advisory recommendation: <word>" anywhere in the details,
-// so keep line breaks inside a row and break that phrase with a non-breaking space (it looks the same).
-function neutralizeReportLine(line: string): string {
-  return line.replace(/\r\n?|\n/g, ' ↵ ').replace(/Advisory recommendation/gi, match => match.replace(' ', '\u00a0'));
+  return lines.filter((line): line is string => Boolean(line)).join('\n');
 }
 
 // Runner output for failed builds; blocked commands are explained by the evidence instead.
@@ -181,7 +175,7 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
     : output.length > tail.length
       ? `Build error (last ${tail.length} of ${output.length} lines of build output${cutOff ? `; ${cutOffNote}` : ''}):`
       : cutOff ? `Build error (${cutOffNote}):` : 'Build error:';
-  return [heading, ...shown.map(line => `  - ${line}`)];
+  return [heading, ...shown.map(line => `  - ${reportText(line)}`)];
 }
 
 function isMeaningfulLine(line: string): boolean {

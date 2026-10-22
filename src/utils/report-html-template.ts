@@ -1,6 +1,8 @@
 import { EvaluationResult, S007AnalysisResult } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
 import { redactSensitiveText } from './redaction';
+import { reportText } from './report-text';
+import { citedTrackedFiles } from '../module-evaluator';
 
 const CRITERION_TITLES: Record<string, string> = {
   A001: 'Product Council approval',
@@ -83,8 +85,9 @@ function repositoryUrlWithoutCredentials(repositoryUrl: string): string {
 
 function diagnosticLines(values: string[]): string[] {
   const seen = new Set<string>();
+  // Review errors and warnings can quote repository text, so each stays on one row.
   return values
-    .map(value => value.trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, ''))
+    .map(value => reportText(value).trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, ''))
     .filter(value => value && !seen.has(value) && seen.add(value))
     .map(value => value.length > 500 ? `${value.slice(0, 497)}...` : value);
 }
@@ -178,12 +181,36 @@ function evidenceReferenceLists(
   return lists.filter(list => text.includes(`(evidence: ${list.references[0]}`));
 }
 
+// S003 dependencies grouped by license, from the structured dependency list rather than the evidence text,
+// whose license names may contain the separators the text uses.
+function dependencyLicenses(criterion: EvaluationResult['criteria'][number]) {
+  const dependencies = (criterion.criterionDetails as { dependencies?: Array<{ name: string; version: string; licenses: string[] }> } | undefined)
+    ?.dependencies;
+  if (criterion.criterionId !== 'S003' || !Array.isArray(dependencies)) return undefined;
+  const groups = new Map<string, string[]>();
+  for (const { name, version, licenses } of dependencies) {
+    // Merge only exact spellings of Apache 2.0 and MIT; other, combined, or unknown names stay verbatim.
+    let license = licenses.length ? licenses.join(', ') : 'No license reported';
+    if (/^(?:the )?apache(?: software)?(?: license)?[ ,-]*(?:version )?2(?:\.0)?$/i.test(license)) license = 'Apache 2.0';
+    else if (/^(?:the )?mit(?: license)?(?: \(mit\))?$/i.test(license)) license = 'MIT';
+    groups.set(license, [...(groups.get(license) ?? []), `${name}:${version}`]);
+  }
+  const count = dependencies.length;
+  return {
+    summary: `Found ${count === 1 ? '1 dependency' : `${count} dependencies`}. License groups are listed below the flagged items.`,
+    count,
+    groups: [...groups].map(([name, members]) => ({ name, dependencies: members }))
+      .sort((left, right) => right.dependencies.length - left.dependencies.length)
+  };
+}
+
 /** Builds the self-contained, file://-compatible interactive report. */
 export function createHtmlReport(result: EvaluationResult): string {
   const repositoryUrl = repositoryUrlWithoutCredentials(result.repositoryUrl);
   const reportInput = { ...result, repositoryUrl };
   const redactText = createReportRedactor([repositoryUrl, ...(result.provenance?.citedSourcePaths ?? [])]);
   const safeResult = reportSafeValue(reportInput, redactText);
+  const citedSourcePaths = safeResult.provenance?.citedSourcePaths ?? [];
   const report = {
     meta: {
       module: safeResult.moduleName,
@@ -195,9 +222,9 @@ export function createHtmlReport(result: EvaluationResult): string {
       evaluator: safeResult.provenance?.evaluator,
       agentReviewModel: safeResult.provenance?.agentReviewModel,
       sourceBase: pinnedSourceBase(reportInput),
-      citedSourcePaths: safeResult.provenance?.citedSourcePaths ?? []
+      citedSourcePaths
     },
-    items: safeResult.criteria.map(criterion => {
+    items: safeResult.criteria.map((criterion, index) => {
       const details = reportDetailLines(criterion);
       return {
         id: criterion.criterionId,
@@ -206,6 +233,10 @@ export function createHtmlReport(result: EvaluationResult): string {
         evidence: criterion.evidence,
         details,
         referenceLists: evidenceReferenceLists(criterion, details),
+        dependencyLicenses: dependencyLicenses(criterion),
+        // Rows link only to files this criterion cites in its structured data, so text copied from the
+        // repository (build output, license names) cannot link to a file another criterion cites.
+        citedSourcePaths: citedTrackedFiles([result.criteria[index]], citedSourcePaths),
         // The agent badge comes only from the structured review, never from details text.
         recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined
       };
@@ -315,13 +346,16 @@ export function createHtmlReport(result: EvaluationResult): string {
         node.children.forEach(function (child) {
           var match = !child.children.length && child.text.match(/^(.*)\(evidence: (.+)\)\s*$/s);
           if (match) {
-            var hidden, refs = match[2].replace(/,\s*\.\.\. (\d+) more$/, function (_all, count) { hidden = Number(count); return ''; }).split(/,\s+(?=[\w.\-/]+:\d+)/);
-            if (referenceLists.some(function (list) {
-              return list.count === refs.length + (hidden || 0) && refs.every(function (ref, index) { return list.references[index] === ref; });
-            })) {
+            var hidden = 0, listed = match[2].replace(/, \.\.\. (\d+) more$/, function (_all, count) { hidden = Number(count); return ''; });
+            // The listed text must be exactly the first (count - hidden) references of one structured list.
+            var refs = referenceLists.map(function (list) {
+              var shown = list.count - hidden;
+              return shown > 0 && shown <= list.references.length ? list.references.slice(0, shown) : [];
+            }).find(function (refs) { return refs.length && refs.join(', ') === listed; });
+            if (refs) {
               child.text = match[1].trimEnd();
               child.children = refs.map(function (text) { return {text:text,children:[]}; });
-              child.hidden = hidden;
+              child.hidden = hidden || undefined;
               child.unit = 'refs';
             }
           }
@@ -339,20 +373,6 @@ export function createHtmlReport(result: EvaluationResult): string {
         node.children.forEach(collapseOverflow);
       })(rootNode);
       return rootNode.children;
-    }
-
-    // Splits "name:version (licenses); ..." into [entry, name, licenses] matches, or null when parentheses are unbalanced.
-    function splitLicenseEntries(text) {
-      var entries = [], depth = 0, start = 0;
-      for (var index = 0; index < text.length; index++) {
-        var character = text.charAt(index);
-        if (character === '(') depth++;
-        else if (character === ')' && --depth < 0) return null;
-        else if (character === ';' && !depth) { entries.push(text.slice(start, index)); start = index + 1; }
-      }
-      if (depth) return null;
-      entries.push(text.slice(start));
-      return entries.map(function (entry) { return entry.trim().match(/^([^()]+?)\s+\((.+)\)$/s); });
     }
 
     function prepare(item) {
@@ -400,24 +420,12 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      var licenses = item.id === 'S003' && evidence.match(/^(Found (\d+) dependenc(?:y|ies)\.)\s*Licenses:\s*(.+)$/s);
-      // License names are repository-controlled and may contain ";", so split only outside parentheses.
-      // Group only when every entry parses and the entries match the dependency count; otherwise keep the raw evidence.
-      var entries = licenses ? splitLicenseEntries(licenses[3]) : null;
-      if (entries && entries.length === Number(licenses[2]) && entries.every(Boolean)) {
-        evidence = licenses[1] + ' License groups are listed below the flagged items.';
-        var licenseGroups = Object.create(null);
-        entries.forEach(function (match) {
-          // Merge only exact spellings of Apache 2.0 and MIT; other, combined, or unknown names stay verbatim.
-          var name = match[2];
-          if (/^(?:the )?apache(?: software)?(?: license)?[ ,\-]*(?:version )?2(?:\.0)?$/i.test(name)) name = 'Apache 2.0';
-          else if (/^(?:the )?mit(?: license)?(?: \(mit\))?$/i.test(name)) name = 'MIT';
-          (licenseGroups[name] = licenseGroups[name] || []).push({text:match[1],children:[]});
-        });
-        var children = Object.keys(licenseGroups).sort(function (a,b) { return licenseGroups[b].length-licenseGroups[a].length; }).map(function (name) {
-          return {text:name,children:licenseGroups[name],unit:licenseGroups[name].length === 1 ? 'dep' : 'deps'};
-        });
-        tree.push({text:'Dependency licenses',children:children,countText:licenses[2]});
+      var licenses = item.dependencyLicenses;
+      if (licenses) {
+        evidence = licenses.summary;
+        tree.push({text:'Dependency licenses',countText:String(licenses.count),children:licenses.groups.map(function (group) {
+          return {text:group.name,unit:group.dependencies.length === 1 ? 'dep' : 'deps',children:group.dependencies.map(function (text) { return {text:text,children:[]}; })};
+        })});
       }
       var allDetails = item.details.join(' ');
       return {
@@ -428,6 +436,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       };
     }
     var items = data.items.map(prepare);
+    var citedById = {}; data.items.forEach(function (item) { citedById[item.id] = item.citedSourcePaths; });
     var firstReview = items.find(function (item) { return item.triage === 'review'; });
     if (firstReview) state.cards[firstReview.id] = true;
 
@@ -506,17 +515,21 @@ export function createHtmlReport(result: EvaluationResult): string {
 
     function segments(text) {
       var lead='',tag='',remaining=text,match;
-      match=remaining.match(/^([\w.\-]+:[\w.\-]+:[\w.\-]+)(\s+-\s+|$)/)||remaining.match(/^((?:[\w.\-/]*\.[A-Za-z]\w*|[\w.\-/]+)(?::\d+(?:-\d+)?)?)(\s*\|\s*|\s+|$)/);
+      match=remaining.match(/^([\w.\-]+:[\w.\-]+:[\w.\-]+)(\s+-\s+|$)/)||remaining.match(/^((?:[\w.\-/%]*\.[A-Za-z]\w*|[\w.\-/%]+)(?::\d+(?:-\d+)?)?)(\s*\|\s*|\s+|$)/);
       if(match&&((/[.\/]/.test(match[1])||/:\d+(?:-\d+)?$/.test(match[1]))&&/[\/.:]/.test(match[1])&&!/^\w+\.$/.test(match[1])||/^\[[\w\/\-]+\]/.test(remaining.slice(match[0].length)))){lead=match[1];remaining=remaining.slice(match[0].length);}
       match=remaining.match(/^\[([\w\/\-]+)\]\s*/); if(match){tag=match[1];remaining=remaining.slice(match[0].length);} else if(!lead){match=remaining.match(/^([a-z_]+\/[a-z_]+):\s*/);if(match){tag=match[1];remaining=remaining.slice(match[0].length);}}
       return {lead:lead,tag:tag,text:remaining.replace(/\s\|\s/g,' · ')};
     }
-    function sourceHref(reference) {
+    function sourceHref(reference,cited) {
       if(!data.meta.sourceBase)return null;
       var match=reference.match(/^(.+?)(?::(\d+)(?:-(\d+))?)?$/),file=match&&match[1],line=match&&match[2],endLine=match&&match[3];
-      if(!file||file.charAt(0)==='/'||file.split('/').indexOf('..')>=0||data.meta.citedSourcePaths.indexOf(file)<0)return null;
+      // Criteria percent-encode unusual characters in paths (reportPath), so decode before matching cited files.
+      try{file=file&&decodeURIComponent(file);}catch(error){return null;}
+      if(!file||file.charAt(0)==='/'||file.split('/').indexOf('..')>=0||cited.indexOf(file)<0)return null;
       return data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'');
     }
+    // A path shortened to the reference budget names a different file than its cited prefix, so it gets no link.
+    function rowHref(parts,cited) { return /^\[truncated to \d+ bytes\]/.test(parts.text)?null:sourceHref(parts.lead,cited); }
     function clampedText(container,text,key,showFullText) {
       if(showFullText){container.appendChild(document.createTextNode(text));return;}
       var expanded=!!state.clamps[key],limit=220; container.appendChild(document.createTextNode(text.length>limit&&!expanded?text.slice(0,limit).trimEnd()+'…':text));
@@ -528,7 +541,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection||!!node.openByDefault;
         if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')));if(!node.hideCount)section.appendChild(h('span','count-chip',String(node.countText||kids)));section.appendChild(h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
-        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=sourceHref(parts.lead);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
+        else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var parts=segments(node.text.replace(/:$/,kids?'':':'));var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=rowHref(parts,citedById[prefix.split('/')[0]]);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
         if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden);
       });
       if(hidden){var omitted=h('div','item-row');omitted.style.setProperty('--indent',Math.max(0,depth-1)*22+'px');omitted.append(h('span','leaf'),h('span','more-text',hidden+' more not included in the report'));parent.appendChild(omitted);}

@@ -5,6 +5,7 @@ import {
   S007TechnologyFinding
 } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
+import { reportPath, reportText } from './report-text';
 
 interface S007FindingGroup {
   technologyId: string;
@@ -45,10 +46,10 @@ export function renderS007HumanDetails(
   }
 
   for (const diagnostic of analysis.policyDiagnostics) {
-    lines.push(`Policy diagnostic: ${diagnostic.message}`);
+    lines.push(`Policy diagnostic: ${reportText(diagnostic.message)}`);
   }
   for (const diagnostic of analysis.evidenceDiagnostics) {
-    lines.push(`Evidence diagnostic${diagnostic.path ? ` (${diagnostic.path})` : ''}: ${diagnostic.message}`);
+    lines.push(`Evidence diagnostic${diagnostic.path ? ` (${reportText(diagnostic.path)})` : ''}: ${reportText(diagnostic.message)}`);
   }
   if (analysis.findings.length === 0) {
     appendAgentReviewLines(lines, analysis, agentReview);
@@ -66,7 +67,7 @@ function appendAgentReviewLines(
     lines.push(...renderAgentReviewLines(agentReview, subjectNames));
     lines.push(`  - Deterministic result remains ${capitalize(analysis.status)}.`);
   } else if (analysis.agentReviewUnavailableReason) {
-    lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);
+    lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }
 }
 
@@ -103,7 +104,7 @@ function groupPriority(group: S007FindingGroup): number {
 
 function renderFindingGroup(group: S007FindingGroup): string[] {
   const isCoverage = group.technologyId === 'evidence-coverage';
-  const heading = isCoverage ? group.displayName : `${group.displayName} (${group.technologyId})`;
+  const heading = reportText(isCoverage ? group.displayName : `${group.displayName} (${group.technologyId})`);
   const impact = groupImpact(group);
   const summary = groupSummary(group);
   const lines = [`- ${heading}: ${summary}.${impact ? ` ${impact}.` : ''}`];
@@ -111,30 +112,30 @@ function renderFindingGroup(group: S007FindingGroup): string[] {
   consolidateConclusions(group.findings).forEach((finding, index) => {
     const observationLabel = findingLabel(finding, index, isCoverage);
     lines.push(
-      `  - ${observationLabel} — ${CLASSIFICATION_SUMMARIES[finding.classification]}`,
+      `  - ${reportText(observationLabel)} — ${CLASSIFICATION_SUMMARIES[finding.classification]}`,
       `    - Classification: ${finding.classification}`,
       `    - Result contribution: ${finding.contribution}`,
-      `    - Rationale: ${finding.rationale}`
+      `    - Rationale: ${reportText(finding.rationale)}`
     );
     if (finding.matchedPolicy) {
       lines.push(
         `    - Policy entry: ${finding.matchedPolicy.sectionId}/${finding.matchedPolicy.entryId}`,
         `    - Rule strength: ${finding.matchedPolicy.strength}`,
-        `    - Policy statement: ${finding.matchedPolicy.sourceStatement}`
+        `    - Policy statement: ${reportText(finding.matchedPolicy.sourceStatement)}`
       );
     } else {
       lines.push('    - Policy entry: no matched OST entry');
     }
     for (const advisory of finding.advisories) {
-      lines.push(`    - Advisory: ${advisory}`);
+      lines.push(`    - Advisory: ${reportText(advisory)}`);
     }
     if (finding.evidence.length > 0) {
       lines.push('    - Evidence:');
       for (const evidence of finding.evidence) {
-        lines.push(`      - ${evidence.path} — ${evidence.detail}`);
-        if (evidence.declaredVersion) lines.push(`        - Declared version: ${evidence.declaredVersion}`);
-        if (evidence.resolvedVersion) lines.push(`        - Resolved version: ${evidence.resolvedVersion}`);
-        if (evidence.versionSourcePath) lines.push(`        - Version source: ${evidence.versionSourcePath}`);
+        lines.push(`      - ${reportPath(evidence.path)} — ${reportText(evidence.detail)}`);
+        if (evidence.declaredVersion) lines.push(`        - Declared version: ${reportText(evidence.declaredVersion)}`);
+        if (evidence.resolvedVersion) lines.push(`        - Resolved version: ${reportText(evidence.resolvedVersion)}`);
+        if (evidence.versionSourcePath) lines.push(`        - Version source: ${reportText(evidence.versionSourcePath)}`);
         if (evidence.resolutionSource === 'maven-effective-pom') {
           lines.push('        - Resolution method: Maven effective POM');
         }

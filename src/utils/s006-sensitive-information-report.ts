@@ -17,6 +17,7 @@ import {
   strongestS006ReportFindings
 } from './s006-ranking';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { reportPath, reportText } from './report-text';
 import { buildFindingSummary, projectS006ReportFinding } from './s006-report-details';
 
 const MAX_REPORT_LIST_ITEMS = 8;
@@ -43,7 +44,7 @@ export function formatS006Evidence(
     agentReview?.available
       ? `  - Agent review: ${agentReview.recommendation ?? 'completed'}${agentReview.confidence ? ` (${agentReview.confidence} confidence)` : ''}`
       : analysis.classification.status === EvaluationStatus.MANUAL
-        ? `  - Agent review: not applied (${analysis.agentReviewUnavailableReason ?? 'disabled or unconfigured'})`
+        ? `  - Agent review: not applied (${reportText(analysis.agentReviewUnavailableReason ?? 'disabled or unconfigured')})`
         : undefined,
     '',
     'Why:',
@@ -88,7 +89,7 @@ function formatScannerSummary(analysis: S006SensitiveInformationAnalysisResult):
 
   const warning = analysis.scanner.warning;
   const warningText = warning
-    ? `; ${warning.kind}: ${warning.message}`
+    ? `; ${warning.kind}: ${reportText(warning.message)}`
     : '';
   return `Gitleaks unavailable; ${findingLabel}${warningText}`;
 }
@@ -260,12 +261,12 @@ function formatCompactFindingLines(findings: S006ReportFinding[]): string[] {
   }
 
   return findings.slice(0, MAX_REPORT_LIST_ITEMS).map(finding => {
-    const location = `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`;
+    const location = `${reportPath(finding.path)}${finding.line === undefined ? '' : `:${finding.line}`}`;
     const lineRange = finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
     const label = finding.disposition === 'deterministic_failure'
       ? 'deterministic failure'
       : 'scanner/pattern candidate';
-    return `  - ${location}${lineRange} | ${label} | rule ${finding.detectorId} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${finding.excerpt.text}`;
+    return `  - ${location}${lineRange} | ${label} | rule ${reportText(finding.detectorId)} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${reportText(finding.excerpt.text)}`;
   });
 }
 
@@ -304,7 +305,7 @@ function formatWarningLines(heading: string, warnings: S006ScanWarning[]): strin
   return [
     `  - ${heading}`,
     ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning =>
-      `    - ${warning.path ? `${warning.path} [${warning.kind}]` : `[${warning.kind}]`} ${warning.message}`
+      `    - ${warning.path ? `${reportPath(warning.path)} [${warning.kind}]` : `[${warning.kind}]`} ${reportText(warning.message)}`
     ),
     ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
   ];
@@ -318,7 +319,7 @@ function formatSkippedLines(heading: string, skippedFiles: S006SkippedFile[]): s
   return [
     `  - ${heading}`,
     ...skippedFiles.slice(0, MAX_REPORT_LIST_ITEMS).map(skippedFile =>
-      `    - ${skippedFile.path} [${skippedFile.reason}]${skippedFile.message ? ` ${skippedFile.message}` : ''}`
+      `    - ${reportPath(skippedFile.path)} [${skippedFile.reason}]${skippedFile.message ? ` ${reportText(skippedFile.message)}` : ''}`
     ),
     ...overflowLine(skippedFiles.length, MAX_REPORT_LIST_ITEMS)
   ];
@@ -335,10 +336,10 @@ function appendAgentReviewLines(
       'Agent review:',
       agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${redactSensitiveText(agentReview.summary)}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${redactSensitiveText(agentReview.rationale)}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${redactSensitiveText(agentReview.warnings.join('; '))}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${redactSensitiveText(agentReview.errors.join('; '))}` : undefined,
+      agentReview.summary ? `  - Summary: ${reportText(redactSensitiveText(agentReview.summary))}` : undefined,
+      agentReview.rationale ? `  - Rationale: ${reportText(redactSensitiveText(agentReview.rationale))}` : undefined,
+      agentReview.warnings.length ? `  - Warnings: ${reportText(redactSensitiveText(agentReview.warnings.join('; ')))}` : undefined,
+      agentReview.errors.length ? `  - Errors: ${reportText(redactSensitiveText(agentReview.errors.join('; ')))}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
     );
@@ -352,7 +353,7 @@ function appendAgentReviewLines(
   lines.push(
     '',
     'Agent review:',
-    `  - Not applied: ${analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`
+    `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured')}`
   );
 }
 

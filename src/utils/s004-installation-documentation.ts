@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { evidenceStrengthRank } from './evidence-strength';
+import { reportPath, reportText } from './report-text';
 
 const ROOT_DOC_NAMES = ['README.md', 'README.MD', 'readme.md'];
 const CONVENTIONAL_DOC_NAMES = ['INSTALL.md', 'INSTALLATION.md', 'DEPLOYMENT.md', 'RUNNING.md'];
@@ -163,15 +164,14 @@ export function formatS004Evidence(
   const lines: Array<string | undefined> = [
     'Documentation files checked:',
     ...(classification.filesConsidered.length
-      ? classification.filesConsidered.map(file => `  - ${displayPath(file)}`)
+      ? classification.filesConsidered.map(file => `  - ${reportPath(file)}`)
       : [`  - none (looked for ${[ROOT_DOC_NAMES[0], ...CONVENTIONAL_DOC_NAMES].join(', ')}, and Markdown files in ${CONVENTIONAL_DOC_DIRS.map(dir => `${dir}/`).join(', ')})`]),
     '',
     'Strongest examples:',
     ...(classification.strongestSignals.length
-      // Quoting the excerpt keeps repository text from ending the row with report syntax such as "(evidence: …)".
-      ? classification.strongestSignals.map(signal => `  - ${displayPath(signal.path)}${signal.line ? `:${signal.line}` : ''} [${SIGNAL_TAGS[signal.group]}] ${signal.label}: "${signal.excerpt}"`)
+      ? classification.strongestSignals.map(signal => `  - ${reportPath(signal.path)}${signal.line ? `:${signal.line}` : ''} [${SIGNAL_TAGS[signal.group]}] ${signal.label}: "${reportText(signal.excerpt)}"`)
       : ['  - none']),
-    ...(classification.warnings.length ? ['', 'Warnings:', ...classification.warnings.map(warning => `  - ${warning}`)] : [])
+    ...(classification.warnings.length ? ['', 'Warnings:', ...classification.warnings.map(warning => `  - ${reportText(warning)}`)] : [])
   ];
 
   if (agentReview) {
@@ -181,17 +181,17 @@ export function formatS004Evidence(
     lines.push(
       '',
       'Agent review:',
-      unavailableReason ? `  - Not available: ${unavailableReason}` : undefined,
+      unavailableReason ? `  - Not available: ${reportText(unavailableReason)}` : undefined,
       agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
       agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${agentReview.summary}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${agentReview.rationale}` : undefined,
+      agentReview.summary ? `  - Summary: ${reportText(agentReview.summary)}` : undefined,
+      agentReview.rationale ? `  - Rationale: ${reportText(agentReview.rationale)}` : undefined,
       agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined,
-      agentReview.available && agentReview.errors.length ? `  - Errors: ${agentReview.errors.join('; ')}` : undefined
+      agentReview.available && agentReview.errors.length ? `  - Errors: ${reportText(agentReview.errors.join('; '))}` : undefined
     );
   } else if (classification.status === EvaluationStatus.MANUAL) {
-    lines.push('', 'Agent review:', `  - Not applied: ${result.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`);
+    lines.push('', 'Agent review:', `  - Not applied: ${reportText(result.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured')}`);
   }
 
   return {
@@ -296,13 +296,8 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
   return candidates;
 }
 
-// File names come from the untrusted repository; a newline in one would start a new report section.
-function displayPath(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f]/g, character => JSON.stringify(character).slice(1, -1));
-}
-
 function describePaths(paths: string[]): string {
-  const shown = paths.slice(0, MAX_WARNING_PATHS).map(displayPath).join(', ');
+  const shown = paths.slice(0, MAX_WARNING_PATHS).join(', ');
   return paths.length > MAX_WARNING_PATHS ? `${shown}, and ${paths.length - MAX_WARNING_PATHS} more` : shown;
 }
 

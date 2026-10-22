@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
 import { isWithinRepo, realPath } from './repo-files';
+import { reportText } from './report-text';
 
 // Top-level LICENSE, LICENCE or COPYING files in any case, with an optional single suffix (LICENSE-2.0, LICENSE-MIT)
 // and extension (LICENSE.md, LICENSE-2.0.txt). Multi-word names such as LICENSE-THIRD-PARTY.txt or
@@ -384,9 +385,9 @@ async function readRepoFile(repoPath: string, name: string, maxBytes: number): P
   }
 }
 
-// Keeps repository-supplied text to one line and out of the report's "(evidence: ...)" list syntax.
+// Collapses whitespace in repository-supplied text; reportText keeps it to one row and out of report syntax.
 function display(text: string): string {
-  return text.replace(/[\u0000-\u001f\u007f\s]+/g, ' ').trim().replace(/\(\s*evidence:/gi, '[evidence:');
+  return reportText(text.replace(/[\u0000-\u001f\u007f\s]+/g, ' ').trim());
 }
 
 function textOf(value: unknown): string {

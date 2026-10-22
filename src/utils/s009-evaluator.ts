@@ -7,6 +7,7 @@ import {
   S009Finding
 } from '../types';
 import { displayPolicyPath } from './acceptance-ledger';
+import { reportPath, reportText } from './report-text';
 
 export function evaluateS009(
   ledgerLoad: S008PolicyLoadResult<AcceptanceLedger>,
@@ -115,7 +116,7 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
 
   if (analysis.evidence.projectFiles.length) {
     lines.push('  - Project files:');
-    for (const projectFile of analysis.evidence.projectFiles) lines.push(`    - ${inline(projectFile)}`);
+    for (const projectFile of analysis.evidence.projectFiles) lines.push(`    - ${reportPath(projectFile)}`);
   } else {
     lines.push('  - Project files: None found');
   }
@@ -129,7 +130,7 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
     lines.push('Library findings:');
     for (const observation of analysis.evidence.observations) {
       lines.push(
-        `  - ${inline(observation.coordinate)}:`,
+        `  - ${reportText(observation.coordinate)}:`,
         '    - Classification: Not evaluated because the acceptance ledger is unavailable'
       );
       appendObservation(lines, observation);
@@ -141,19 +142,19 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
   if (analysis.policyDiagnostics.length) {
     lines.push('Policy diagnostics:');
     for (const diagnostic of analysis.policyDiagnostics) {
-      lines.push(`  - ${inline(diagnostic.code)}:`, `    - Message: ${inline(diagnostic.message)}`);
-      if (diagnostic.path) lines.push(`    - Diagnostic path: ${inline(diagnostic.path)}`);
+      lines.push(`  - ${reportText(diagnostic.code)}:`, `    - Message: ${reportText(diagnostic.message)}`);
+      if (diagnostic.path) lines.push(`    - Diagnostic path: ${reportText(diagnostic.path)}`);
     }
   }
   if (analysis.evidence.diagnostics.length) {
     lines.push('Dependency diagnostics:');
     for (const diagnostic of analysis.evidence.diagnostics) {
       lines.push(
-        `  - ${inline(diagnostic.code)}:`,
-        `    - Message: ${inline(diagnostic.message)}`,
+        `  - ${reportText(diagnostic.code)}:`,
+        `    - Message: ${reportText(diagnostic.message)}`,
         `    - Material to coverage: ${diagnostic.material ? 'Yes' : 'No'}`
       );
-      if (diagnostic.path) lines.push(`    - Diagnostic path: ${inline(diagnostic.path)}`);
+      if (diagnostic.path) lines.push(`    - Diagnostic path: ${reportText(diagnostic.path)}`);
     }
   }
 
@@ -161,8 +162,8 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
   if (analysis.ledger) {
     lines.push(
       `  - Acceptance ledger: ${fileName(analysis.ledger.sourcePath)}`,
-      `    - Path: ${inline(analysis.ledger.sourcePath)}`,
-      `    - SHA-256 digest: ${inline(analysis.ledger.digest)}`
+      `    - Path: ${reportText(analysis.ledger.sourcePath)}`,
+      `    - SHA-256 digest: ${reportText(analysis.ledger.digest)}`
     );
   } else {
     lines.push('  - Acceptance ledger: Unavailable');
@@ -171,7 +172,7 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
   if (sourceHashes.length) {
     lines.push('  - Source hashes:');
     for (const [sourcePath, digest] of sourceHashes) {
-      lines.push(`    - ${inline(sourcePath)}:`, `      - SHA-256 digest: ${inline(digest)}`);
+      lines.push(`    - ${reportPath(sourcePath)}:`, `      - SHA-256 digest: ${reportText(digest)}`);
     }
   } else {
     lines.push('  - Source hashes: None recorded');
@@ -186,19 +187,19 @@ function appendFinding(lines: string[], item: S009Finding): void {
     'indeterminate-locality': 'Manual review: local resolution is ambiguous'
   };
   lines.push(
-    `  - ${inline(item.observation.coordinate)}:`,
+    `  - ${reportText(item.observation.coordinate)}:`,
     `    - Classification: ${classifications[item.classification]}`
   );
   if (item.familyId) {
-    const displayName = item.familyDisplayName ? ` (${inline(item.familyDisplayName)})` : '';
-    lines.push(`    - Family: ${inline(item.familyId)}${displayName}`);
+    const displayName = item.familyDisplayName ? ` (${reportText(item.familyDisplayName)})` : '';
+    lines.push(`    - Family: ${reportText(item.familyId)}${displayName}`);
   } else {
     lines.push('    - Family: No exact ledger mapping');
   }
   if (item.acceptance) {
     lines.push(
       `    - Acceptance: ${acceptanceLabel(item.acceptance.kind)}`,
-      `    - Decision reference: ${inline(item.acceptance.reference)}`
+      `    - Decision reference: ${reportText(item.acceptance.reference)}`
     );
     if (item.acceptance.kind === 'exception') lines.push(`    - Exception scope: ${item.acceptance.scope}`);
   } else {
@@ -218,10 +219,10 @@ function appendObservation(lines: string[], observation: S009DependencyEvidence[
   lines.push(
     '    - Evidence:',
     `      - Ecosystem: ${observation.ecosystem === 'maven' ? 'Maven' : 'npm'}`,
-    `      - Declared version: ${observation.declaredVersion ? inline(observation.declaredVersion) : 'Not declared'}`,
+    `      - Declared version: ${observation.declaredVersion ? reportText(observation.declaredVersion) : 'Not declared'}`,
     `      - Scope: ${scopeLabel(observation.scope)}`,
-    `      - Source file: ${inline(observation.sourcePath)}`,
-    `      - Declaration field: ${inline(observation.sourceField)}`
+    `      - Source file: ${reportText(observation.sourcePath)}`,
+    `      - Declaration field: ${reportText(observation.sourceField)}`
   );
 }
 
@@ -242,13 +243,9 @@ function scopeLabel(scope: string): string {
     optionalDependencies: 'Optional production dependency',
     peerDependencies: 'Peer dependency'
   };
-  return labels[scope] || inline(scope);
+  return labels[scope] || reportText(scope);
 }
 
 function fileName(sourcePath: string): string {
-  return inline(sourcePath).split(/[\\/]/).pop() || inline(sourcePath);
-}
-
-function inline(value: string): string {
-  return value.replace(/\r\n?|\n/g, ' ↵ ');
+  return reportText(sourcePath).split(/[\\/]/).pop() || reportText(sourcePath);
 }

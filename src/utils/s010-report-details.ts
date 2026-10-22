@@ -1,5 +1,6 @@
 import { CriterionAgentReviewResult, S010Analysis, S010Finding } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
+import { reportPath, reportText } from './report-text';
 
 export function renderS010HumanDetails(
   analysis: S010Analysis,
@@ -21,23 +22,23 @@ export function renderS010HumanDetails(
     const finding = group[0];
     const subjects = [...new Set(group.map(item => findingSubject(item)).filter(Boolean))];
     lines.push(
-      `  - ${finding.dependencyId}${subjects.length ? ` (${subjects.join(', ')})` : ''}${finding.scenario ? ` / ${finding.scenario}` : ''}: ${finding.outcome}`,
-      `    - ${finding.rationale}`,
+      `  - ${reportText(`${finding.dependencyId}${subjects.length ? ` (${subjects.join(', ')})` : ''}${finding.scenario ? ` / ${finding.scenario}` : ''}`)}: ${finding.outcome}`,
+      `    - ${reportText(finding.rationale)}`,
       `    - Status determining: ${finding.statusDetermining ? 'yes' : 'no'}`
     );
     for (const evidence of group.flatMap(item => item.evidence)) {
-      lines.push(`    - Evidence: ${evidence.path}${evidence.line ? `:${evidence.line}` : ''} — ${evidence.detail}`);
+      lines.push(`    - Evidence: ${reportPath(evidence.path)}${evidence.line ? `:${evidence.line}` : ''} — ${reportText(evidence.detail)}`);
     }
   }
   if (analysis.diagnostics.length) lines.push('Diagnostics:');
   for (const diagnostic of analysis.diagnostics) {
-    lines.push(`  - ${diagnostic.path ? `${diagnostic.path} — ` : ''}${diagnostic.message}`);
+    lines.push(`  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`);
   }
   if (agentReview?.available) {
     lines.push(...renderAgentReviewLines(agentReview));
     lines.push('  - Deterministic result remains Manual review.');
   } else if (analysis.agentReviewUnavailableReason) {
-    lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);
+    lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }
   return lines.join('\n');
 }
