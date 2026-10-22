@@ -2,6 +2,16 @@
 
 This file records criterion behavior not covered in the README.
 
+## S001 Open-Source License
+
+S001 reads up to 20 top-level license files: `LICENSE`, `LICENCE` and `COPYING` in any case, with an optional single suffix and extension such as `.md`, `-MIT` or `-2.0.txt` (multi-word names such as `LICENSE-THIRD-PARTY.txt` are notices, not the module's license). Only the first 64 KB of each is read. A file counts as the Apache License 2.0 only when a line among its first ten non-empty lines names it as the file's own license (the title and version, a "licensed/distributed under the Apache License, Version 2.0" notice, or an `Apache-2.0` SPDX id) before any line naming another license. Third-party notices appended after the Apache text do not matter; an MIT or other license file that merely mentions Apache-2.0 code does not pass.
+
+- `pass`: every license file is Apache 2.0. Without a license file, pass when `pom.xml` or the `package.json` `license` field declares only Apache 2.0 (`package.json` must use the exact SPDX id `Apache-2.0`).
+- `fail`: the license files are not Apache 2.0; or there is no license file and the declared licenses are not Apache 2.0, or nothing declares a license.
+- `manual`: license files disagree; a license file links outside the repository, or more than 20 license files exist; declarations list Apache 2.0 with another license (including SPDX `OR` expressions); there is no license file and `pom.xml` declares no license but has a `<parent>` that may supply one; or the check cannot read the repository.
+
+When a license file exists, `pom.xml` and `package.json` declarations are not consulted. Parent POMs are never resolved. Files that link outside the repository (or to nothing) are never read; such a license file makes the result `manual`, and such a `pom.xml` or `package.json` is ignored, as is one larger than 1 MB.
+
 ## S002 Descriptor Generation
 
 When no static descriptor exists, descriptor validation may run its build command. Enable local commands only for trusted repositories and runners.

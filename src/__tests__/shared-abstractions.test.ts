@@ -7,7 +7,7 @@ import { CatalogSectionEvaluator } from '../evaluators/base/catalog-section-eval
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import { createEvaluationRun } from '../utils/evaluation-run';
 
-// Mock fs-extra (needed by SharedEvaluator -> LicenseUtils)
+// Mock fs-extra (needed by SharedEvaluator criteria)
 jest.mock('fs-extra', () => ({
   pathExists: jest.fn().mockResolvedValue(false),
   readFile: jest.fn().mockResolvedValue('')
