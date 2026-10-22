@@ -707,6 +707,66 @@ describe('S007 static technology evidence', () => {
     ]));
   });
 
+  it('does not take the Grails version from GORM or the separately versioned testing support libraries', async () => {
+    await write('service/gradle.properties', 'grailsVersion=6.2.3\ngormVersion=8.0.3\ngrailsTestSupportVersion=2.6.1\n');
+    await write('service/build.gradle', `
+      buildscript { dependencies { classpath "org.grails:grails-gradle-plugin:$grailsVersion" } }
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      dependencies {
+        implementation "org.grails:grails-datastore-core:$gormVersion"
+        implementation "org.grails:grails-gorm-testing-support:$grailsTestSupportVersion"
+        implementation "org.grails:grails-web-testing-support:$grailsTestSupportVersion"
+      }
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const grails = result.observations.filter(observation => observation.identityCandidates[0] === 'grails');
+
+    expect(grails).toEqual([expect.objectContaining({ sourceDetail: 'org.grails:grails-gradle-plugin', declaredVersion: '6.2.3' })]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('follows a Maven parent relativePath that names a directory and a module that names a POM file', async () => {
+    await write('pom.xml', `
+      <project>
+        <parent><groupId>org.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>build-parent</relativePath></parent>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.2</version></dependency></dependencies>
+        <modules><module>tools/pom-tools.xml</module></modules>
+      </project>
+    `);
+    await write('build-parent/pom.xml', '<project><properties><java.version>21</java.version></properties></project>');
+    await write('tools/pom-tools.xml', `
+      <project><dependencies><dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.32</version></dependency></dependencies></project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(find(result, 'java')).toMatchObject({ declaredVersion: '21', versionSourcePath: 'build-parent/pom.xml' });
+    expect(find(result, 'lombok')).toMatchObject({ declaredVersion: '1.18.32', sourcePath: 'tools/pom-tools.xml' });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('does not take the Spring Framework version from other Spring projects', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.springframework</groupId><artifactId>spring-core</artifactId><version>7.0.1</version></dependency>
+          <dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka</artifactId><version>4.0.5</version></dependency>
+          <dependency><groupId>org.springframework.batch</groupId><artifactId>spring-batch-core</artifactId><version>6.0.3</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+    const spring = result.observations.filter(observation => observation.identityCandidates[0] === 'spring-framework');
+
+    expect(spring).toEqual([expect.objectContaining({ sourceDetail: 'org.springframework:spring-core', declaredVersion: '7.0.1' })]);
+    expect(result.diagnostics).toEqual([]);
+    // The effective-POM step must not report the suppressed projects as unchecked inherited dependencies.
+    expect(result.suppressedMavenDependencies?.map(item => item.dependency.artifactId).sort()).toEqual(['spring-batch-core', 'spring-kafka']);
+  });
+
   it('keeps Grails plugin artifacts as versionless presence evidence when no framework version is available', async () => {
     await write('build.gradle', `
       java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
@@ -1135,6 +1195,19 @@ describe('S007 static technology evidence', () => {
     } finally {
       await fs.remove(outsidePath);
     }
+  });
+
+  it.each([
+    ['a long whitespace run', ' '.repeat(100_000)],
+    ['a plugin id followed by whitespace', `plugins { id "org.grails.x"${' '.repeat(40_000)}}`],
+    ['an unclosed Java toolchain call', `java { toolchain { languageVersion = JavaLanguageVersion.of(${' '.repeat(20_000)}`]
+  ])('reads a build file with %s in linear time', async (_name, content) => {
+    await fs.writeFile(path.join(repoPath, 'build.gradle'), content);
+
+    const started = Date.now();
+    await collectS007TechnologyEvidence(repoPath, 'java');
+
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   async function write(relativePath: string, content: string): Promise<void> {

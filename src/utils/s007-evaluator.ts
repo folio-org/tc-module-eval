@@ -89,7 +89,8 @@ function evaluateObservation(
       declaredVersion: observation.declaredVersion,
       resolvedVersion: observation.resolvedVersion,
       versionSourcePath: observation.versionSourcePath,
-      resolutionSource: observation.resolutionSource
+      resolutionSource: observation.resolutionSource,
+      ownVersionLine: observation.versionResolutionEligible === false ? true as const : undefined
     }],
     advisories: [] as string[],
     statusDetermining: false
@@ -253,9 +254,12 @@ function normalizeExactVersion(value: string): string | undefined {
 }
 
 function translateMavenRange(value: string): string | undefined {
-  const match = /^([[(])\s*([^,]*)\s*,\s*([^\])]*?)\s*([\])])$/.exec(value);
+  // One unbounded group per part and trim afterwards: adjacent "\s*" and "[^,]*" runs made this cubic on long input.
+  const match = /^([[(])([^,]*),([^\])]*)([\])])$/.exec(value);
   if (!match) return undefined;
-  const [, lowerBracket, lowerRaw, upperRaw, upperBracket] = match;
+  const [, lowerBracket, lowerText, upperText, upperBracket] = match;
+  const lowerRaw = lowerText.trim();
+  const upperRaw = upperText.trim();
   const lower = lowerRaw ? normalizeExactVersion(lowerRaw) : undefined;
   const upper = upperRaw ? normalizeExactVersion(upperRaw) : undefined;
   if ((lowerRaw && !lower) || (upperRaw && !upper)) return undefined;

@@ -110,6 +110,17 @@ export async function enrichS007WithMavenEffectivePom(
   }
 
   if (!changed) return evidence;
+  // An imported BOM only supplies versions for dependencies declared without one. Once the effective POMs have
+  // resolved every such dependency, a BOM imported by a parent POM in the repository (which was not itself
+  // resolved because it declares none) can no longer change what S007 checks.
+  if (!observations.some(observation =>
+    observation.mavenDependency
+    && observation.versionResolutionEligible !== false
+    && !observation.declaredVersion
+    && !observation.resolvedVersion
+  )) {
+    diagnostics = diagnostics.filter(diagnostic => diagnostic.code !== 'maven_imported_bom');
+  }
   return finalizeS007TechnologyEvidence({
     ...evidence,
     observations,
@@ -149,8 +160,13 @@ async function produceEffectivePom(
     !fs.existsSync(pomPath) ||
     fs.lstatSync(pomPath).isSymbolicLink() ||
     !fs.statSync(pomPath).isFile() ||
+    fs.statSync(pomPath).size > MAX_EFFECTIVE_POM_BYTES ||
     !isWithinRepo(repoPath, pomPath)
   ) return undefined;
+  // Read the project identity before Maven runs: the build can rewrite repository files, for example replace
+  // pom.xml with a link to a file outside the repository.
+  const sourceProject = await parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true).catch(() => undefined);
+  if (!sourceProject) return undefined;
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 's007-effective-pom-'));
   const outputPath = path.join(workspace, 'effective-pom.xml');
@@ -176,11 +192,8 @@ async function produceEffectivePom(
 
     const stat = fs.lstatSync(outputPath, { throwIfNoEntry: false });
     if (!stat?.isFile() || stat.isSymbolicLink() || stat.size > MAX_EFFECTIVE_POM_BYTES) return undefined;
-    const [sourceProject, effectiveProject] = await Promise.all([
-      parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true),
-      parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false)
-    ]);
-    if (!sourceProject || !effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
+    const effectiveProject = await parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false);
+    if (!effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
       return undefined;
     }
     return { versions: effectiveProject.versions, dependencies: effectiveProject.dependencies };

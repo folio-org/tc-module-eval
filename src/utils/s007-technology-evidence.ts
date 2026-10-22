@@ -8,7 +8,7 @@ import {
   S007TechnologyEvidenceResult,
   S007TechnologyObservation
 } from '../types';
-import { isWithinRepo, relativePosixPath } from './repo-files';
+import { isDirectory, isWithinRepo, relativePosixPath } from './repo-files';
 import { findGradleProjectDir } from './parsers/gradle-dependency-parser';
 
 const MAX_MANIFEST_BYTES = 1024 * 1024;
@@ -17,6 +17,8 @@ const MAX_OBSERVATIONS = 1024;
 const MAX_MAVEN_PROPERTY_DEPTH = 16;
 const MAVEN_VERSION_NOT_SET = 'Versions not set in the repository (probably managed by a parent POM or BOM)';
 const GRADLE_JAVA_PROPERTY_MESSAGE = 'The Gradle Java version';
+const GRADLE_VERSIONED_PLUGIN_PATTERN =
+  /id(?:\s*\()?\s*["']([^"']+)["'](?:\s*\))?\s*version\s*((?:["'][^"']+["'])|(?:[A-Za-z][\w.]*))/g;
 
 interface EvidenceFinalizationContext {
   observations: S007TechnologyObservation[];
@@ -365,7 +367,7 @@ async function visitMavenPom(
     const relativePathValue = xmlText(project.parent.relativePath);
     const explicitlyRemote = project.parent.relativePath !== undefined && relativePathValue === '';
     const relativeParent = explicitlyRemote ? undefined : (relativePathValue || '../pom.xml');
-    const parentPath = relativeParent ? path.resolve(path.dirname(realPomPath), relativeParent) : undefined;
+    const parentPath = relativeParent ? mavenPomPath(path.resolve(path.dirname(realPomPath), relativeParent)) : undefined;
     if (parentPath && fs.existsSync(parentPath) && isWithinRepo(context.repoPath, parentPath)) {
       effective = await visitMavenPom(context, parentPath, effective);
     } else {
@@ -433,11 +435,16 @@ async function visitMavenPom(
       break;
     }
     context.mavenModuleCandidates += 1;
-    const modulePath = path.resolve(path.dirname(realPomPath), moduleName, 'pom.xml');
+    const modulePath = mavenPomPath(path.resolve(path.dirname(realPomPath), moduleName));
     await visitMavenPom(context, modulePath, effective);
   }
 
   return effective;
+}
+
+// Like Maven, a parent relativePath or a module may name a directory (read its pom.xml) or the POM file itself.
+function mavenPomPath(candidate: string): string {
+  return isDirectory(candidate) ? path.join(candidate, 'pom.xml') : candidate;
 }
 
 function collectMavenDependencies(
@@ -472,7 +479,7 @@ function collectMavenDependencies(
     }
     const coordinates = `${groupId}:${artifactId}`;
     const mavenDependency = resolveMavenDependencyKey(dependency, groupId, artifactId, effective, sourcePath);
-    if (isGrailsPluginArtifact(groupId)) {
+    if (isPresenceOnlyArtifact(groupId, artifactId)) {
       addPresenceOnlyObservation(context, {
         identityCandidates: [matched.id, coordinates, groupId],
         displayName: matched.displayName,
@@ -648,10 +655,10 @@ function collectGradleBuildFile(
   const properties = new Map(inheritedProperties);
   for (const match of gradleCodeMatches(
     staticContent,
-    /(?:def|val|var)?\s*([A-Za-z][\w.]*)\s*=\s*["']([^"']+)["']/g,
+    /(?<![\w.])([A-Za-z](?=([\w.]*))\2)\s*=\s*["']([^"']+)["']/g,
     codePositions
   )) {
-    properties.set(match[1], match[2]);
+    properties.set(match[1], match[3]);
   }
 
   const javaVersion = findGradleJavaVersion(staticContent, properties, codePositions);
@@ -678,27 +685,30 @@ function collectGradleBuildFile(
     );
   }
 
-  const configuration = '(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor|classpath)';
+  // Never put two optional whitespace runs next to each other ("\\s*(?:\\(\\s*)?"): on a long run of spaces the
+  // engine tries every split between them, which is quadratic in the build file size.
+  const configurationName = '(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor|classpath)';
+  const configuration = `${configurationName}(?:\\s*\\()?\\s*`;
   const mapDependencyPattern = new RegExp(
-    `${configuration}\\s*(?:\\(\\s*)?((?:(?:group|name|version)\\s*[:=]\\s*(?:["'][^"']+["']|[A-Za-z][\\w.]*)\\s*,?\\s*){2,3})\\)?`,
+    `${configuration}((?:(?:group|name|version)\\s*[:=]\\s*(?:["'][^"']+["']|[A-Za-z][\\w.]*)(?:\\s*,)?\\s*){2,3})\\)?`,
     'g'
   );
   for (const match of gradleCodeMatches(staticContent, mapDependencyPattern, codePositions)) {
     collectGradleMapDependency(context, sourcePath, match[1], properties);
   }
 
-  const dependencyPattern = new RegExp(`${configuration}\\s*(?:\\(\\s*)?(["'])([^"']+)\\1(?!\\s*\\+)`, 'g');
+  const dependencyPattern = new RegExp(`${configuration}(["'])([^"']+)\\1(?!\\s*\\+)`, 'g');
   for (const match of gradleCodeMatches(staticContent, dependencyPattern, codePositions)) {
     collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
   }
   const wrappedDependencyPattern = new RegExp(
-    `${configuration}\\s*(?:\\(\\s*)?(?:platform|enforcedPlatform)\\s*\\(\\s*(["'])([^"']+)\\1`,
+    `${configuration}(?:platform|enforcedPlatform)\\s*\\(\\s*(["'])([^"']+)\\1`,
     'g'
   );
   for (const match of gradleCodeMatches(staticContent, wrappedDependencyPattern, codePositions)) {
     collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
   }
-  const concatenatedPattern = new RegExp(`${configuration}\\s+["']([^"']+:)["']\\s*\\+\\s*([A-Za-z][\\w.]*)`, 'g');
+  const concatenatedPattern = new RegExp(`${configurationName}\\s+["']([^"']+:)["']\\s*\\+\\s*([A-Za-z][\\w.]*)`, 'g');
   for (const match of gradleCodeMatches(staticContent, concatenatedPattern, codePositions)) {
     const value = properties.get(match[2]);
     collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties);
@@ -708,7 +718,7 @@ function collectGradleBuildFile(
   }
 
   const variableDependencyPattern = new RegExp(
-    `${configuration}\\s*(?:\\(\\s*)?(?!(?:group|name|version)\\s*[:=])(?!(?:project|files|fileTree|platform|enforcedPlatform)\\s*\\()([A-Za-z][\\w.]*)`,
+    `${configuration}(?!(?:group|name|version)\\s*[:=])(?!(?:project|files|fileTree|platform|enforcedPlatform)\\s*\\()([A-Za-z][\\w.]*)`,
     'g'
   );
   for (const match of gradleCodeMatches(staticContent, variableDependencyPattern, codePositions)) {
@@ -726,7 +736,7 @@ function collectGradleBuildFile(
     }
   }
 
-  const pluginPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*((?:["'][^"']+["'])|(?:[A-Za-z][\w.]*))/g;
+  const pluginPattern = GRADLE_VERSIONED_PLUGIN_PATTERN;
   const versionedPluginIndexes = new Set<number>();
   for (const match of gradleCodeMatches(staticContent, pluginPattern, codePositions)) {
     versionedPluginIndexes.add(match.index ?? -1);
@@ -758,7 +768,7 @@ function collectGradleBuildFile(
     }
   }
 
-  const pluginIdPattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?/g;
+  const pluginIdPattern = /id(?:\s*\()?\s*["']([^"']+)["'](?:\s*\))?/g;
   for (const match of gradleCodeMatches(staticContent, pluginIdPattern, codePositions)) {
     if (versionedPluginIndexes.has(match.index ?? -1)) {
       continue;
@@ -792,7 +802,7 @@ function collectGradleBuildFile(
     }
   }
 
-  if (gradleCodeMatches(staticContent, /\bapply\s*(?:\(\s*)?from\s*[:=]/g, codePositions).length > 0) {
+  if (gradleCodeMatches(staticContent, /\bapply(?:\s*\()?\s*from\s*[:=]/g, codePositions).length > 0) {
     diagnostic(
       context,
       'gradle_build_logic',
@@ -814,8 +824,7 @@ function collectGradlePluginVersions(
 ): void {
   const staticContent = stripGradleComments(content);
   const codePositions = gradleCodePositions(staticContent);
-  const pattern = /id\s*(?:\(\s*)?["']([^"']+)["']\s*\)?\s*version\s*((?:["'][^"']+["'])|(?:[A-Za-z][\w.]*))/g;
-  for (const match of gradleCodeMatches(staticContent, pattern, codePositions)) {
+  for (const match of gradleCodeMatches(staticContent, GRADLE_VERSIONED_PLUGIN_PATTERN, codePositions)) {
     const version = resolveGradleVersionExpression(match[2], properties);
     if (version) {
       versions.set(match[1], version);
@@ -853,7 +862,7 @@ function collectGradleCoordinate(
     return;
   }
   const rawVersion = parts.slice(2).join(':');
-  if (isGrailsPluginArtifact(groupId)) {
+  if (isPresenceOnlyArtifact(groupId, artifactId)) {
     addPresenceOnlyObservation(context, {
       identityCandidates: [matched.id, `${groupId}:${artifactId}`, groupId],
       displayName: matched.displayName,
@@ -863,7 +872,8 @@ function collectGradleCoordinate(
       sourcePath,
       sourceDetail: `${groupId}:${artifactId}`,
       confidence: 'partial',
-      provenance: 'repository-static'
+      provenance: 'repository-static',
+      versionResolutionEligible: false
     });
     return;
   }
@@ -1017,7 +1027,7 @@ export function matchJavaIdentity(groupId: string, artifactId: string): S007Java
   }
   if (groupId === 'org.springframework.boot') return identity('spring-boot', 'Spring Boot', 'java', 'framework');
   if (groupId === 'org.springframework' || groupId.startsWith('org.springframework.')) return identity('spring-framework', 'Spring Framework', 'java', 'framework');
-  if (groupId === 'org.grails' || groupId.startsWith('org.grails.')) return identity('grails', 'Grails', 'java', 'framework');
+  if (isGrailsGroup(groupId)) return identity('grails', 'Grails', 'java', 'framework');
   if (groupId === 'io.vertx' || groupId.startsWith('io.vertx.')) return identity('vertx', 'Eclipse Vert.x', 'java', 'framework');
   if (groupId === 'software.amazon.awssdk') return identity('aws-sdk-java', 'AWS SDK for Java', 'java', 'library');
   if (groupId === 'io.quarkus' || groupId.startsWith('io.quarkus.')) return identity('quarkus', 'Quarkus', 'java', 'framework');
@@ -1029,14 +1039,32 @@ export function matchJavaIdentity(groupId: string, artifactId: string): S007Java
 function matchGradlePlugin(pluginId: string): Identity | undefined {
   if (pluginId === 'org.springframework.boot') return identity('spring-boot', 'Spring Boot', 'java', 'framework');
   if (pluginId === 'io.quarkus') return identity('quarkus', 'Quarkus', 'java', 'framework');
-  if (pluginId.startsWith('org.grails')) return identity('grails', 'Grails', 'java', 'framework');
+  // Grails 7 moved to the Apache Software Foundation and publishes under org.apache.grails.
+  if (pluginId.startsWith('org.grails') || pluginId.startsWith('org.apache.grails.')) return identity('grails', 'Grails', 'java', 'framework');
   if (pluginId.startsWith('io.micronaut')) return identity('micronaut', 'Micronaut', 'java', 'framework', true);
   if (pluginId.startsWith('io.helidon')) return identity('helidon', 'Helidon', 'java', 'framework', true);
   return undefined;
 }
 
-function isGrailsPluginArtifact(groupId: string): boolean {
-  return groupId === 'org.grails.plugins' || groupId.startsWith('org.grails.plugins.');
+function isGrailsGroup(groupId: string): boolean {
+  return groupId === 'org.grails' || groupId.startsWith('org.grails.')
+    || groupId === 'org.apache.grails' || groupId.startsWith('org.apache.grails.');
+}
+
+// Before Grails 7, only artifacts from the Grails core project carry the Grails version.
+const GRAILS_CORE_ARTIFACT =
+  /^(?!.*testing-support)grails-(?:bom|bootstrap|codecs|console|core|databinding|dependencies|docs|encoder|gradle-model|gradle-plugin|logging|shell|spring|test|plugin-[\w-]+|web(?:-[\w-]+)?)$/;
+
+/**
+ * Artifacts that show a framework is used but have their own version line, so their version is not the
+ * framework's: Grails plugins, other org.grails artifacts such as GORM (grails-datastore-*) and the testing
+ * support libraries, and Spring projects such as Spring Kafka, Spring Batch, Spring Data, and Spring Cloud.
+ * Grails 7 (org.apache.grails) publishes all its artifacts with the Grails version.
+ */
+function isPresenceOnlyArtifact(groupId: string, artifactId: string): boolean {
+  if (groupId.startsWith('org.grails.')) return true;
+  if (groupId === 'org.grails') return !GRAILS_CORE_ARTIFACT.test(artifactId);
+  return groupId.startsWith('org.springframework.') && groupId !== 'org.springframework.boot';
 }
 
 function addPresenceOnlyObservation(context: EvidenceContext, observation: S007TechnologyObservation): void {
@@ -1083,13 +1111,16 @@ function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext):
       presenceOnlyMessage(observation),
       true,
       observation.sourcePath,
-      { subject: observation.sourceDetail, listHeading: 'Show that Grails is used, but their versions are not the Grails version' }
+      {
+        subject: observation.sourceDetail,
+        listHeading: `Show that ${observation.displayName} is used, but their versions are not the ${observation.displayName} version`
+      }
     );
   }
 }
 
 function presenceOnlyMessage(observation: S007TechnologyObservation): string {
-  return `${observation.sourceDetail} shows that Grails is used, but its version is not the Grails version.`;
+  return `${observation.sourceDetail} shows that ${observation.displayName} is used, but its version is not the ${observation.displayName} version.`;
 }
 
 function markConflicts(context: EvidenceFinalizationContext): void {
@@ -1375,7 +1406,7 @@ function findGradleJavaVersion(
 ): { value?: string; sourceDetail: string; expression: string } | undefined {
   const toolchains = gradleCodeMatches(
     content,
-    /\blanguageVersion\b\s*(?:=\s*|\.\s*set\s*\(\s*)JavaLanguageVersion\.of\(\s*([^)\r\n]+)\s*\)/g,
+    /\blanguageVersion\b\s*(?:=|\.\s*set\s*\()\s*JavaLanguageVersion\.of\(([^)\r\n]+)\)/g,
     codePositions
   );
   const toolchainPositions = gradleJavaToolchainPositions(content, codePositions);
@@ -1394,7 +1425,7 @@ function findGradleJavaVersion(
     const declaration = firstGradleCodeMatch(
       content,
       new RegExp(
-        `\\b${setting}\\b\\s*(?:=\\s*)?(JavaVersion\\.VERSION_[0-9_]+|JavaVersion\\.toVersion\\([^\\r\\n)]*\\)|["']?\\d+["']?|[A-Za-z][\\w.]*)`,
+        `\\b${setting}\\b(?:\\s*=)?\\s*(JavaVersion\\.VERSION_[0-9_]+|JavaVersion\\.toVersion\\([^\\r\\n)]*\\)|["']?\\d+["']?|[A-Za-z][\\w.]*)`,
         'g'
       ),
       codePositions

@@ -163,6 +163,42 @@ describe('S007 Maven effective-POM evidence', () => {
     expect(enriched.complete).toBe(false);
   });
 
+  it('clears a parent POM BOM warning once the module effective POM resolves every missing version', async () => {
+    await fs.writeFile(path.join(repoPath, 'pom.xml'), `
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <groupId>org.folio</groupId><artifactId>mod-example-parent</artifactId><version>1.0.0</version>
+        <properties><java.version>21</java.version></properties>
+        <dependencyManagement><dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-stack-depchain</artifactId><version>5.0.4</version><type>pom</type><scope>import</scope></dependency>
+        </dependencies></dependencyManagement>
+        <modules><module>mod-example</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repoPath, 'mod-example/pom.xml'), `
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <parent><groupId>org.folio</groupId><artifactId>mod-example-parent</artifactId><version>1.0.0</version></parent>
+        <artifactId>mod-example</artifactId>
+        <dependencies><dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId></dependency></dependencies>
+      </project>
+    `);
+    const staticEvidence = await collectS007TechnologyEvidence(repoPath, 'java');
+    expect(staticEvidence.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'maven_imported_bom', path: 'pom.xml' })
+    ]));
+    const runner = new EffectivePomRunner(effectivePom([dependency('io.vertx', 'vertx-core', '5.0.4')]));
+
+    const enriched = await enrichS007WithMavenEffectivePom(repoPath, staticEvidence, run(runner), runner);
+
+    expect(runner.requests).toHaveLength(1);
+    expect(enriched.observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcePath: 'mod-example/pom.xml', resolvedVersion: '5.0.4' })
+    ]));
+    expect(enriched.diagnostics).toEqual([]);
+    expect(enriched.complete).toBe(true);
+  });
+
   it('marks a conflict introduced by an effective-POM version', async () => {
     const evidence = unresolvedEvidence(['org.grails:grails-datastore-core']);
     evidence.observations[0].identityCandidates = ['grails', 'org.grails:grails-datastore-core'];
@@ -301,6 +337,30 @@ describe('S007 Maven effective-POM evidence', () => {
     const enriched = await enrichS007WithMavenEffectivePom(repoPath, evidence, run(runner), runner);
 
     expect(enriched).toEqual(evidence);
+  });
+
+  it('reads the project identity from the POM before Maven runs, not through a link the build left behind', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 's007-outside-'));
+    const outsidePom = path.join(outside, 'pom.xml');
+    await fs.writeFile(outsidePom, effectivePom([], 'other-project', '9.9.9', 'org.example'));
+    class ReplacingRunner extends EffectivePomRunner {
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        await fs.remove(path.join(repoPath, 'pom.xml'));
+        await fs.symlink(outsidePom, path.join(repoPath, 'pom.xml'));
+        return super.run(request);
+      }
+    }
+    const runner = new ReplacingRunner(effectivePom([dependency('org.projectlombok', 'lombok', '1.18.42')]));
+
+    try {
+      const enriched = await enrichS007WithMavenEffectivePom(
+        repoPath, unresolvedEvidence(['org.projectlombok:lombok']), run(runner), runner
+      );
+
+      expect(enriched.observations[0]).toMatchObject({ resolvedVersion: '1.18.42' });
+    } finally {
+      await fs.remove(outside);
+    }
   });
 
   it('rejects an effective model for a different Maven project', async () => {

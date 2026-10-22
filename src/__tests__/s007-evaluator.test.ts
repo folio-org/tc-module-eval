@@ -346,6 +346,17 @@ describe('S007 deterministic evaluator', () => {
     });
   });
 
+  it('compares a long malformed Maven version range in linear time', () => {
+    const started = Date.now();
+    const result = evaluateS007(policy, evidence([
+      observation('java', '21', '21'),
+      observation('lombok', `[${' '.repeat(3000)}x`)
+    ]), 'java');
+
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(result.findings.find(finding => finding.technologyId === 'lombok')).toMatchObject({ classification: 'unresolved' });
+  });
+
   it('renders human details from the same structured findings', () => {
     const react = observation('react', '17.0.2', '17.0.2', 'package.json');
     react.versionSourcePath = 'yarn.lock';

@@ -163,13 +163,14 @@ function renderFindingGroup(group: S007FindingGroup): string[] {
     if (finding.evidence.length > 0) {
       // A rule without a version requirement needs no version, so "no version" would only add noise.
       const versionNeeded = Boolean(finding.matchedPolicy?.constraint) || finding.contribution !== 'pass';
-      lines.push('    - Found in:', ...finding.evidence.map(evidence => `      - ${evidenceLine(evidence, versionNeeded)}`));
+      lines.push('    - Found in:', ...finding.evidence.map(evidence =>
+        `      - ${evidenceLine(evidence, versionNeeded, finding.displayName)}`));
     }
   }
   return lines;
 }
 
-function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean): string {
+function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean, technology: string): string {
   const source = evidence.resolutionSource === 'maven-effective-pom'
     ? ' from the Maven effective POM'
     : evidence.versionSourcePath && evidence.versionSourcePath !== evidence.path
@@ -185,6 +186,8 @@ function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean): st
     version = `${declared}${source}`;
   } else if (evidence.resolvedVersion) {
     version = `version ${evidence.resolvedVersion}${source}`;
+  } else if (evidence.ownVersionLine) {
+    version = `its version is not the ${technology} version`;
   } else if (versionNeeded) {
     version = 'no version in the repository';
   }

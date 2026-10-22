@@ -229,6 +229,8 @@ export interface S007FindingEvidence {
   resolvedVersion?: string;
   versionSourcePath?: string;
   resolutionSource?: 'maven-effective-pom';
+  /** The artifact shows the technology is used, but its own version is not the technology's version. */
+  ownVersionLine?: true;
 }
 
 export interface S007TechnologyFinding {

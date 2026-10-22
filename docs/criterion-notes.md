@@ -83,6 +83,12 @@ S007 reads static, repository-local Maven, Gradle, and package metadata. A top-l
 
 Recommendations and deprecation notes remain visible but cannot cause failure on their own.
 
+Some artifacts show that a framework is used but have their own version line, so S007 does not compare their version with the framework rule: Grails plugins and other `org.grails` artifacts outside the Grails core project (GORM's `grails-datastore-*`, the `*-testing-support` libraries), and Spring projects in `org.springframework.*` groups other than Spring Boot (Spring Kafka, Spring Batch, Spring Data, Spring Cloud). If no other declaration gives the framework version, the version counts as missing. Grails 7 publishes under `org.apache.grails`, with one version for all its artifacts.
+
+With `--allow-local-commands`, once the effective POMs give a version for every dependency declared without one, BOMs imported by a parent POM in the repository no longer block a pass, because a BOM only supplies missing versions. In safe mode an imported BOM still requires manual review.
+
+The report lists each problem once under "Repository evidence coverage"; problems of the same kind in one file, such as dependencies without a version, are merged into one row.
+
 S012 build tools, S013 testing, infrastructure compatibility, live policy synchronization, and new-module applicability remain outside S007.
 
 ## S010 Third-Party System Resilience

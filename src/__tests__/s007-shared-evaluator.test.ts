@@ -337,6 +337,31 @@ describe('S007 shared evaluator', () => {
     ]));
   });
 
+  it('recognizes Grails 7 coordinates, so a Java 17 Grails module uses the Grails exception', async () => {
+    await write('gradle.properties', 'grailsVersion=7.0.1\n');
+    await write('build.gradle', `
+      plugins { id 'org.apache.grails.gradle.grails-web' }
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      dependencies {
+        implementation platform("org.apache.grails:grails-bom:$grailsVersion")
+        implementation 'org.apache.grails:grails-core'
+      }
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'grails',
+        classification: 'compliant',
+        evidence: [expect.objectContaining({ detail: 'org.apache.grails:grails-bom', declaredVersion: '7.0.1' })]
+      }),
+      expect.objectContaining({ technologyId: 'java', classification: 'compliant' })
+    ]));
+    expect(result.status).not.toBe(EvaluationStatus.FAIL);
+  });
+
   it('reuses shared static evidence without commands and keeps remote-derived evidence manual', async () => {
     await writeJson('package.json', { dependencies: { react: '~18.2.0' } });
     await write('yarn.lock', '"react@~18.2.0":\n  version "18.2.0"\n');
