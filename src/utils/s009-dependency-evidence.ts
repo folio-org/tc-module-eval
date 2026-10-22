@@ -88,7 +88,7 @@ export async function collectS009DependencyEvidence(repoPath: string): Promise<S
 }
 
 async function collectMaven(context: Context): Promise<void> {
-  const pomFiles = candidateFiles(context, file => path.basename(file) === 'pom.xml');
+  const pomFiles = candidateFiles(context, 'pom.xml', file => path.basename(file) === 'pom.xml');
   const projects = new Map<string, ParsedMavenProject>();
   for (const pomPath of pomFiles) {
     const sourcePath = relativePosixPath(context.repoPath, pomPath);
@@ -100,11 +100,11 @@ async function collectMaven(context: Context): Promise<void> {
     try {
       project = (await parseStringPromise(content, { explicitArray: false, trim: true }))?.project;
     } catch (error) {
-      diagnostic(context, 'maven_manifest_invalid', `Unable to parse ${sourcePath}: ${errorMessage(error)}`, sourcePath);
+      diagnostic(context, 'maven_manifest_invalid', `Not valid XML (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
       continue;
     }
     if (!project || typeof project !== 'object') {
-      diagnostic(context, 'maven_manifest_invalid', `${sourcePath} has no Maven project element.`, sourcePath);
+      diagnostic(context, 'maven_manifest_invalid', 'Has no <project> element, so its dependencies were not checked.', sourcePath);
       continue;
     }
     projects.set(fs.realpathSync(pomPath), { pomPath: fs.realpathSync(pomPath), sourcePath, project });
@@ -137,8 +137,8 @@ async function collectMaven(context: Context): Promise<void> {
         diagnostic(
           context,
           'maven_profile_management_unresolved',
-          'Profile dependency management may change production scope and is outside the bounded static Maven model.',
-          `${parsed.sourcePath}#profiles.profile[${profileIndex}].dependencyManagement`
+          `Profile ${profileIndex + 1} has its own <dependencyManagement>, which can change whether a dependency ships. The evaluator does not apply it.`,
+          parsed.sourcePath
         );
       }
       for (const name of Object.keys(profile?.properties ?? {})) {
@@ -147,8 +147,8 @@ async function collectMaven(context: Context): Promise<void> {
           diagnostic(
             context,
             'maven_profile_scope_unresolved',
-            `Profile property ${name} may change a managed dependency scope.`,
-            `${parsed.sourcePath}#profiles.profile[${profileIndex}].properties.${name}`
+            `Profile ${profileIndex + 1} sets property ${name}, which can change whether a managed dependency ships. The evaluator does not apply it.`,
+            parsed.sourcePath
           );
         }
       }
@@ -174,7 +174,7 @@ function resolveMavenProject(
   const cached = cache.get(parsed.pomPath);
   if (cached) return cached;
   if (visiting.has(parsed.pomPath)) {
-    diagnostic(context, 'maven_parent_cycle', `Local Maven parent cycle includes ${parsed.sourcePath}.`, parsed.sourcePath);
+    diagnostic(context, 'maven_parent_cycle', 'Its parent POMs in this repository form a cycle, so the properties and dependency management it inherits could not be read.', parsed.sourcePath);
     return undefined;
   }
   const nextVisiting = new Set(visiting).add(parsed.pomPath);
@@ -190,7 +190,7 @@ function resolveMavenProject(
       const candidate = resolveMavenProject(context, parentProject, projects, cache, nextVisiting);
       if (candidate && mavenParentMatches(parsed.project.parent, candidate)) parent = candidate;
       else if (candidate) {
-        diagnostic(context, 'maven_parent_mismatch', `Local Maven parent for ${parsed.sourcePath} does not match its declared GAV.`, parsed.sourcePath);
+        diagnostic(context, 'maven_parent_mismatch', 'The POM at its parent path is not the parent it declares (groupId, artifactId, and version differ), so the properties and dependency management it inherits could not be read.', parsed.sourcePath);
       }
     }
   }
@@ -302,7 +302,7 @@ function collectMavenDependencies(
     const scope = rawScope ? resolveMavenText(rawScope, effective.properties) : managed?.scope ? managedScope : 'compile';
     if (!scope) {
       if (rawGroupId === 'org.folio' || rawGroupId.includes('${')) {
-        diagnostic(context, 'maven_scope_unresolved', 'Maven dependency scope could not be resolved from local parent properties or dependency management.', `${sourcePath}#${field}`);
+        diagnostic(context, 'maven_scope_unresolved', `The scope of dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} uses a property that is not set in this repository's POMs, so the evaluator cannot tell whether it ships.`, sourcePath);
       }
       continue;
     }
@@ -312,8 +312,8 @@ function collectMavenDependencies(
         diagnostic(
           context,
           'maven_coordinate_unresolved',
-          `Maven dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} could not be resolved from local properties.`,
-          `${sourcePath}#${field}`
+          `Dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} uses a property that is not set in this repository's POMs, so the evaluator cannot tell whether it is a FOLIO library.`,
+          sourcePath
         );
       }
       continue;
@@ -354,7 +354,7 @@ function findMavenManagement(
 }
 
 function collectGradle(context: Context): void {
-  const buildFiles = candidateFiles(context, file => ['build.gradle', 'build.gradle.kts'].includes(path.basename(file))
+  const buildFiles = candidateFiles(context, 'Gradle build', file => ['build.gradle', 'build.gradle.kts'].includes(path.basename(file))
     && !relativePosixPath(context.repoPath, file).startsWith('buildSrc/')
     && !relativePosixPath(context.repoPath, file).startsWith('build-logic/'));
 
@@ -368,7 +368,7 @@ function collectGradle(context: Context): void {
       diagnostic(
         context,
         'gradle_external_script',
-        'An applied Gradle script may contain production dependency declarations that cannot be classified statically.',
+        'Applies another Gradle script (apply from), which may declare more dependencies. The evaluator does not read applied scripts.',
         sourcePath
       );
     }
@@ -425,7 +425,7 @@ function collectGradleDeclaration(
   diagnostic(
     context,
     'gradle_dependency_unresolved',
-    `Gradle ${declaration.scope} dependency declaration could not be resolved to a literal package coordinate.`,
+    'A dependency is not a plain "group:name:version" string (for example, a version catalog entry or a variable), so the evaluator cannot tell whether it is a FOLIO library.',
     `${sourcePath}:${line}`
   );
 }
@@ -439,12 +439,12 @@ function collectGradleCoordinate(
 ): void {
   const [groupId, artifactId, ...versionParts] = rawCoordinate.split(':');
   if (groupId.includes('$')) {
-    diagnostic(context, 'gradle_coordinate_unresolved', `Gradle coordinate ${rawCoordinate} has no concrete group.`, sourcePath);
+    diagnostic(context, 'gradle_coordinate_unresolved', `Dependency ${rawCoordinate} has a variable group, so the evaluator cannot tell whether it is a FOLIO library.`, sourcePath);
     return;
   }
   if (groupId !== 'org.folio') return;
   if (!artifactId || artifactId.includes('$')) {
-    diagnostic(context, 'gradle_coordinate_unresolved', `Gradle coordinate ${rawCoordinate} has no concrete artifact name.`, sourcePath);
+    diagnostic(context, 'gradle_coordinate_unresolved', `Dependency ${rawCoordinate} has a variable name, so the evaluator cannot tell which FOLIO library it is.`, sourcePath);
     return;
   }
   addObservation(context, {
@@ -606,7 +606,7 @@ function collectNpm(context: Context): void {
   } catch {
     return;
   }
-  const packageFiles = candidateFiles(context, file => path.basename(file) === 'package.json');
+  const packageFiles = candidateFiles(context, 'package.json', file => path.basename(file) === 'package.json');
   const root = readNpmManifest(context, rootPath);
   if (!root) return;
 
@@ -621,7 +621,7 @@ function collectNpm(context: Context): void {
     for (const pattern of patterns) {
       if (![...selected].some(packagePath => packagePath !== rootPath
         && workspacePattern(pattern).test(relativePosixPath(context.repoPath, path.dirname(packagePath))))) {
-        diagnostic(context, 'npm_workspace_missing', `Workspace pattern ${pattern} matched no package directories.`, 'package.json#/workspaces');
+        diagnostic(context, 'npm_workspace_missing', `Workspace pattern ${pattern} matches no package folder, so the evaluator cannot tell which workspaces exist.`, 'package.json');
       }
     }
   }
@@ -636,7 +636,7 @@ function collectNpm(context: Context): void {
     const name = parsed.manifest.name;
     if (typeof name !== 'string') continue;
     if (localWorkspaces.has(name)) {
-      diagnostic(context, 'npm_workspace_duplicate_name', `Multiple declared workspaces use package name ${name}.`, 'package.json#/workspaces');
+      diagnostic(context, 'npm_workspace_duplicate_name', `More than one workspace is named ${name}, so the evaluator cannot tell which one a dependency refers to.`, 'package.json');
       continue;
     }
     localWorkspaces.set(name, {
@@ -653,12 +653,12 @@ function collectNpm(context: Context): void {
       const dependencies = manifest[field];
       if (dependencies === undefined) continue;
       if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
-        diagnostic(context, 'npm_dependencies_invalid', `${field} must be an object<string,string>.`, `${sourcePath}#/${field}`);
+        diagnostic(context, 'npm_dependencies_invalid', `"${field}" is not an object of package names and versions, so it was not checked.`, sourcePath);
         continue;
       }
       for (const [declaredName, specifier] of Object.entries(dependencies)) {
         if (typeof specifier !== 'string') {
-          diagnostic(context, 'npm_dependency_invalid', `${field}.${declaredName} must be a string.`, `${sourcePath}#/${field}/${declaredName}`);
+          diagnostic(context, 'npm_dependency_invalid', `The version of ${declaredName} in "${field}" is not a string, so it was not checked.`, sourcePath);
           continue;
         }
         const packageName = npmTargetPackage(declaredName, specifier);
@@ -713,7 +713,7 @@ function collectBundledDependencies(
     if (bundled === undefined) continue;
     if (typeof bundled === 'boolean') continue;
     if (!Array.isArray(bundled) || bundled.some(value => typeof value !== 'string')) {
-      diagnostic(context, 'npm_bundled_dependencies_invalid', `${field} must be an array of package names.`, `${sourcePath}#/${field}`);
+      diagnostic(context, 'npm_bundled_dependencies_invalid', `"${field}" is not a list of package names, so it was not checked.`, sourcePath);
       continue;
     }
     for (const packageName of bundled as string[]) {
@@ -742,7 +742,7 @@ function readNpmManifest(
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('root value must be an object');
     return { sourcePath, manifest };
   } catch (error) {
-    diagnostic(context, 'npm_manifest_invalid', `Unable to parse ${sourcePath}: ${errorMessage(error)}`, sourcePath);
+    diagnostic(context, 'npm_manifest_invalid', `Not valid JSON (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
     return undefined;
   }
 }
@@ -755,7 +755,7 @@ function workspacePatterns(value: unknown, context: Context): string[] {
       ? (value as any).packages
       : undefined;
   if (!patterns || patterns.some((item: unknown) => typeof item !== 'string' || item.startsWith('!'))) {
-    diagnostic(context, 'npm_workspaces_invalid', 'workspaces must contain supported non-negated path patterns.', 'package.json#/workspaces');
+    diagnostic(context, 'npm_workspaces_invalid', '"workspaces" is not a list of folder patterns, or uses ! exclusions, which the evaluator does not support. Workspaces were not checked.', 'package.json');
     return [];
   }
   return patterns as string[];
@@ -778,10 +778,10 @@ function npmTargetPackage(declaredName: string, specifier: string): string {
   return separator === -1 ? target : target.slice(0, separator);
 }
 
-function candidateFiles(context: Context, include: (file: string) => boolean): string[] {
+function candidateFiles(context: Context, label: string, include: (file: string) => boolean): string[] {
   const candidates = findCandidateFiles(context.repoPath, context.repoPath, include, SKIPPED_DIRECTORIES).sort();
   if (candidates.length > MAX_MANIFESTS) {
-    diagnostic(context, 'manifest_limit', `Found ${candidates.length} candidate manifests; only the first ${MAX_MANIFESTS} were analyzed.`);
+    diagnostic(context, 'manifest_limit', `The repository has ${candidates.length} ${label} files; only the first ${MAX_MANIFESTS} were checked.`);
   }
   return candidates.slice(0, MAX_MANIFESTS);
 }
@@ -791,14 +791,14 @@ function readManifest(context: Context, filePath: string): string | undefined {
   try {
     const stats = fs.statSync(filePath);
     if (stats.size > MAX_MANIFEST_BYTES) {
-      diagnostic(context, 'manifest_too_large', `${sourcePath} exceeds ${MAX_MANIFEST_BYTES} bytes.`, sourcePath);
+      diagnostic(context, 'manifest_too_large', 'Larger than 1 MiB, so it was not read.', sourcePath);
       return undefined;
     }
     const content = fs.readFileSync(filePath, 'utf8');
     context.fileHashes[sourcePath] = `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`;
     return content;
   } catch (error) {
-    diagnostic(context, 'manifest_read_error', `Unable to read ${sourcePath}: ${errorMessage(error)}`, sourcePath);
+    diagnostic(context, 'manifest_read_error', `Could not be read (${errorMessage(error)}).`, sourcePath);
     return undefined;
   }
 }

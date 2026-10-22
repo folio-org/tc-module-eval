@@ -20,9 +20,8 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.details).toContain('@folio/example:');
-    expect(result.details).toContain('Classification: Not accepted for S009');
-    expect(result.details).toContain('Declared version: 1.0.0');
+    expect(result.evidence).toBe('1 FOLIO library is not approved: @folio/example. Remove it or ask the Technical Council to approve it.');
+    expect(result.details).toContain('Not approved:\n  - @folio/example@1.0.0 - Not on the approved list. Declared as a dependency in package.json.');
     expect(result.details).toMatch(/sha256:[0-9a-f]{64}/);
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -40,11 +39,9 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('javascript').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('@folio/stripes:');
-    expect(result.details).toContain('Declared version: ^10.1.0');
-    expect(result.details).toContain('org.folio:edge-common:');
-    expect(result.details).toContain('Declared version: 5.1.1');
-    expect(result.details?.match(/Classification: Accepted for S009/g)).toHaveLength(2);
+    expect(result.evidence).toBe('The module depends on 2 FOLIO libraries, and all are approved.');
+    expect(result.details).toContain('  - @folio/stripes@^10.1.0 - Stripes Framework, approved in the platform baseline');
+    expect(result.details).toContain('  - org.folio:edge-common:5.1.1 - Edge Common, approved in the platform baseline');
     expect(runner.run).not.toHaveBeenCalled();
   });
 
@@ -58,7 +55,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.details).toContain('org.folio:folio-unapproved-lib:');
+    expect(result.details).toContain('  - org.folio:folio-unapproved-lib:1.0.0 - Not on the approved list. Declared as an implementation dependency in build.gradle.');
     expect(runner.run).not.toHaveBeenCalled();
   });
 
@@ -73,7 +70,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details?.match(/Classification: Accepted for S009/g)).toHaveLength(2);
+    expect(result.evidence).toBe('The module depends on 2 FOLIO libraries, and all are approved.');
     expect(runner.run).not.toHaveBeenCalled();
   });
 
@@ -105,7 +102,7 @@ describe('S009 shared evaluator integration', () => {
     const result = await new TestEvaluator('java').evaluateCriterion('S009', repo, run);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Manual review: local resolution is ambiguous');
+    expect(result.details).toContain('Also built in this repository (needs review):');
     expect(runner.run).not.toHaveBeenCalled();
   });
 

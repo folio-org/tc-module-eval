@@ -1779,8 +1779,8 @@
     {
       "criterionId": "S009",
       "status": "pass",
-      "evidence": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
-      "details": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
+      "evidence": "The module depends on 3 FOLIO libraries, and all are approved.",
+      "details": "The module depends on 3 FOLIO libraries, and all are approved.",
       "criterionDetails": {
         "projectFileCount": 1,
         "observationCount": 3,
