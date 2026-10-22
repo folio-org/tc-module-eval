@@ -157,7 +157,7 @@ describe('S007 Maven effective-POM evidence', () => {
       expect.objectContaining({
         code: 'effective_model_unrepresented',
         material: true,
-        message: expect.stringContaining('inherited S007-relevant dependency io.vertx:vertx-core')
+        message: expect.stringContaining('adds io.vertx:vertx-core 4.5.0 from a parent POM outside the repository')
       })
     ]));
     expect(enriched.complete).toBe(false);
@@ -214,7 +214,7 @@ describe('S007 Maven effective-POM evidence', () => {
     });
     evidence.diagnostics.push({
       code: 'version_unresolved',
-      message: 'The org.grails.plugins:database-migration artifact proves Grails presence but not the Grails framework version.',
+      message: 'org.grails.plugins:database-migration shows that Grails is used, but its version is not the Grails version.',
       material: true,
       path: 'pom.xml'
     });
@@ -413,9 +413,11 @@ function unresolvedEvidence(coordinates: string[], sourcePath = 'pom.xml'): S007
       { code: 'maven_remote_parent', message: 'remote parent', material: true, path: sourcePath },
       ...coordinates.map(coordinate => ({
         code: 'version_unresolved' as const,
-        message: `Version for ${coordinate} could not be resolved from local Maven metadata.`,
+        message: `No version for ${coordinate} is set in the repository; it probably comes from a parent POM or BOM.`,
         material: true,
-        path: sourcePath
+        path: sourcePath,
+        subject: coordinate,
+        listHeading: 'Versions not set in the repository (probably managed by a parent POM or BOM)'
       }))
     ],
     manifestPaths: [sourcePath],

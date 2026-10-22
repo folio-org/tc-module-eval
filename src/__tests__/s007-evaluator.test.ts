@@ -105,7 +105,7 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings.some(finding => finding.classification === 'coverage-incomplete')).toBe(true);
     if (version === '21') {
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.findings[0].advisories.join(' ')).toContain('every possible exception');
+      expect(result.findings[0].advisories.join(' ')).toContain('the result is the same either way');
     }
   });
 
@@ -242,9 +242,12 @@ describe('S007 deterministic evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings.map(finding => finding.contribution)).toEqual(expect.arrayContaining(['fail', 'manual']));
-    expect(details).toContain('react (react): Violates a mandatory rule. Determines overall result: Fail.');
-    expect(details).toContain('angular (angular): Needs review: technology is not listed in policy.');
-    expect(details.indexOf('react (react)')).toBeLessThan(details.indexOf('angular (angular)'));
+    expect(result.summary).toBe(
+      'S007 fail: react 17.0.2 in pom.xml (the policy allows "React ^18.2.0") is not an officially supported version. Upgrade it to a version the policy allows.'
+    );
+    expect(details).toContain('- react: Fails: not an officially supported version.');
+    expect(details).toContain('- angular: Needs review: not in the supported technologies list.');
+    expect(details.indexOf('- react:')).toBeLessThan(details.indexOf('- angular:'));
   });
 
   it('returns manual for a partially overlapping declared range without an exact resolution', () => {
@@ -351,20 +354,34 @@ describe('S007 deterministic evaluator', () => {
       react
     ]), 'javascript');
     const details = renderS007HumanDetails(analysis);
-    const finding = analysis.findings[0];
+    const finding = analysis.findings.find(candidate => candidate.technologyId === 'react')!;
 
     expect(analysis.policyFormatVersion).toBe('1.0');
     expect(details).not.toContain('Policy format:');
     expect(details).not.toContain(analysis.summary);
-    expect(details).toContain(finding.displayName);
-    expect(details).toContain(finding.classification);
-    expect(details).toContain(finding.contribution);
-    expect(details).toContain(finding.evidence[0].path);
-    expect(details).toContain('Declared version: 17.0.2');
-    expect(details).toContain('Resolved version: 17.0.2');
-    expect(details).toContain('Version source: yarn.lock');
-    expect(details).toContain(finding.matchedPolicy!.entryId);
-    expect(details).toContain(finding.matchedPolicy!.strength);
+    expect(details).toContain(`- ${finding.displayName}: Fails: not an officially supported version.`);
+    expect(details).toContain(`    - Why: ${finding.rationale}`);
+    expect(details).toContain('Version 17.0.2 is not allowed by the policy rule "React ^18.2.0".');
+    expect(details).toContain(`    - Policy rule: ${finding.matchedPolicy!.sourceStatement}\n`);
+    expect(details).toContain('      - package.json — react, version 17.0.2 in yarn.lock');
+    // Internal keys stay in the JSON details, not the readable text.
+    expect(details).not.toMatch(/Classification:|Result contribution:|normative|frontend-third-party-frameworks/);
+  });
+
+  it('keeps repository text on its own row', () => {
+    const vertx = observation('vertx', '4.5.0\n- injected: row', undefined, 'mod a/pom.xml');
+    vertx.sourceDetail = 'io.vertx:vertx-core (evidence: fake.java:1)';
+    const result = evaluateS007(policy, {
+      ...evidence([vertx]),
+      diagnostics: [{ code: 'version_unresolved', message: 'Has\nno version.', material: true, path: 'mod a/pom.xml' }],
+      complete: false
+    }, 'java');
+    const details = renderS007HumanDetails(result);
+
+    expect(details).not.toMatch(/^\s*- injected/m);
+    expect(details).not.toContain('(evidence:');
+    expect(details).toContain('      - mod%20a/pom.xml — io.vertx:vertx-core [evidence: fake.java:1), range 4.5.0 ↵ - injected: row');
+    expect(details).toContain('  - mod%20a/pom.xml — Has ↵ no version.');
   });
 
   it('groups repeated technology observations while retaining each declaration', () => {
@@ -375,13 +392,13 @@ describe('S007 deterministic evaluator', () => {
     const analysis = evaluateS007(policy, evidence([web, validation]), 'java');
     const details = renderS007HumanDetails(analysis);
 
-    expect(details.match(/^- spring-boot \(spring-boot\):/gm)).toHaveLength(1);
-    expect(details).toContain('Needs review: policy wording is contested or time-bound.');
-    expect(details).toContain('org.springframework.boot:spring-boot-starter-web (+1 more declarations) — Needs review: policy wording is contested or time-bound');
-    expect(details.match(/Classification: contested/g)).toHaveLength(1);
-    expect(details).toContain('Result contribution: manual');
-    expect(details).toContain('first/pom.xml — org.springframework.boot:spring-boot-starter-web');
-    expect(details).toContain('second/pom.xml — org.springframework.boot:spring-boot-starter-validation');
+    expect(details.match(/^- spring-boot:/gm)).toHaveLength(1);
+    expect(details).toContain('- spring-boot: Needs review: the policy rule is time-bound or disputed.');
+    expect(details).toContain('  - org.springframework.boot:spring-boot-starter-web and 1 more — needs review');
+    expect(details.match(/Why: /g)).toHaveLength(1);
+    expect(details).toContain('Policy rule: Spring Boot 4.0 required at Trillium GA (time-bound or disputed)');
+    expect(details).toContain('first/pom.xml — org.springframework.boot:spring-boot-starter-web, no version in the repository');
+    expect(details).toContain('second/pom.xml — org.springframework.boot:spring-boot-starter-validation, no version in the repository');
   });
 
   it('summarizes mixed findings without hiding fail precedence', () => {
@@ -393,10 +410,8 @@ describe('S007 deterministic evaluator', () => {
     const details = renderS007HumanDetails(analysis);
 
     expect(analysis.status).toBe(EvaluationStatus.FAIL);
-    expect(details.match(/^- react \(react\):/gm)).toHaveLength(1);
-    expect(details).toContain(
-      'Mixed results: 1 violates a mandatory rule, 1 needs review, 1 complies. Determines overall result: Fail.'
-    );
+    expect(details.match(/^- react:/gm)).toHaveLength(1);
+    expect(details).toContain('- react: Mixed results: 1 fails, 1 needs review, 1 meets the policy.');
     expect(details).toContain('unsupported/package.json');
     expect(details).toContain('unresolved/package.json');
     expect(details).toContain('supported/package.json');

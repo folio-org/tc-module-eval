@@ -126,8 +126,8 @@ describe('S007 shared evaluator', () => {
         matchedPolicy: expect.objectContaining({ entryId: 'react' })
       })
     ]));
-    expect(result.details).toContain('frontend-third-party-frameworks/react');
-    expect(result.details).toContain('package.json');
+    expect(result.details).toContain('Policy rule: React ^18.2.0');
+    expect(result.details).toContain('package.json — dependencies.react');
   });
 
   it('keeps deterministic evidence before an unavailable advisory note', async () => {
@@ -181,7 +181,7 @@ describe('S007 shared evaluator', () => {
       expect.objectContaining({ code: 'version_unresolved' })
     ]));
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Resolution method: Maven effective POM');
+    expect(result.details).toContain('pom.xml — org.projectlombok:lombok, version 1.18.42 from the Maven effective POM');
   });
 
   it('attaches an available advisory end to end without changing manual status', async () => {
@@ -233,7 +233,7 @@ describe('S007 shared evaluator', () => {
     expect(result.details).toContain('Vue is explicitly declared.');
     expect(result.details).toContain('Findings:');
     expect(result.details).toContain('What to verify:');
-    expect(result.details).toContain('Deterministic result remains Manual.');
+    expect(result.details).toContain('Advisory only; the criterion status is unchanged.');
   });
 
   it.each(['quarkus', 'constructor'])('preserves deterministic findings when review discovers %s outside the analyzer inventory', async technologyId => {

@@ -1,11 +1,15 @@
 import {
   CriterionAgentReviewResult,
   S007AnalysisResult,
+  S007EvidenceDiagnostic,
   S007FindingClassification,
+  S007FindingEvidence,
+  S007RuleStrength,
   S007TechnologyFinding
 } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
 import { reportPath, reportText } from './report-text';
+import { isRangeText } from './s007-evaluator';
 
 interface S007FindingGroup {
   technologyId: string;
@@ -14,17 +18,27 @@ interface S007FindingGroup {
   firstIndex: number;
 }
 
+const COVERAGE_ID = 'evidence-coverage';
+
+// The HTML report keys S007 groups off "Technology findings:" and the "Repository evidence coverage:" prefix.
 const CLASSIFICATION_SUMMARIES: Record<S007FindingClassification, string> = {
-  compliant: 'Complies with applicable policy',
-  'normative-violation': 'Violates a mandatory rule',
-  'advisory-only': 'Needs review: policy guidance is advisory',
-  'advisory-mismatch': 'Needs review: differs from advisory guidance',
-  provisional: 'Needs review: policy guidance is provisional',
-  contested: 'Needs review: policy wording is contested or time-bound',
-  'unlisted-framework': 'Needs review: technology is not listed in policy',
-  unresolved: 'Needs review: evidence or policy applicability is unresolved',
-  conflicting: 'Needs review: repository declarations conflict',
-  'coverage-incomplete': 'Needs review: repository evidence coverage is incomplete'
+  compliant: 'Meets the policy',
+  'normative-violation': 'Fails: not an officially supported version',
+  'advisory-only': 'Needs review: the policy only recommends a version',
+  'advisory-mismatch': 'Needs review: differs from the version the policy recommends',
+  provisional: 'Needs review: the policy rule is provisional',
+  contested: 'Needs review: the policy rule is time-bound or disputed',
+  'unlisted-framework': 'Needs review: not in the supported technologies list',
+  unresolved: 'Needs review: the version could not be checked',
+  conflicting: 'Needs review: different versions are declared',
+  'coverage-incomplete': 'Needs review: the tool could not read everything it needs'
+};
+
+const RULE_STRENGTHS: Record<S007RuleStrength, string> = {
+  normative: '',
+  advisory: ' (recommendation only)',
+  provisional: ' (provisional)',
+  contested: ' (time-bound or disputed)'
 };
 
 export function buildS007CriterionDetails(analysis: S007AnalysisResult): S007AnalysisResult {
@@ -40,19 +54,20 @@ export function renderS007HumanDetails(
   if (analysis.findings.length > 0) {
     lines.push('Technology findings:');
     for (const group of groupFindings(analysis.findings)) {
-      lines.push(...renderFindingGroup(group));
+      lines.push(...(group.technologyId === COVERAGE_ID
+        ? renderCoverageGroup(group, analysis.evidenceDiagnostics)
+        : renderFindingGroup(group)));
     }
-    appendAgentReviewLines(lines, analysis, agentReview);
   }
+  appendAgentReviewLines(lines, analysis, agentReview);
 
-  for (const diagnostic of analysis.policyDiagnostics) {
-    lines.push(`Policy diagnostic: ${reportText(diagnostic.message)}`);
+  if (analysis.policyDiagnostics.length > 0) {
+    lines.push('Problems with the officially supported technologies list:');
+    lines.push(...analysis.policyDiagnostics.map(diagnostic => `  - ${reportText(diagnostic.message)}`));
   }
-  for (const diagnostic of analysis.evidenceDiagnostics) {
-    lines.push(`Evidence diagnostic${diagnostic.path ? ` (${reportText(diagnostic.path)})` : ''}: ${reportText(diagnostic.message)}`);
-  }
-  if (analysis.findings.length === 0) {
-    appendAgentReviewLines(lines, analysis, agentReview);
+  // Without findings (the policy did not load) the diagnostics have no coverage group to sit in.
+  if (analysis.findings.length === 0 && analysis.evidenceDiagnostics.length > 0) {
+    lines.push('What the tool could not read:', ...diagnosticLines(analysis.evidenceDiagnostics, '  '));
   }
   return lines.join('\n');
 }
@@ -65,14 +80,10 @@ function appendAgentReviewLines(
   if (agentReview?.available) {
     const subjectNames = Object.fromEntries(analysis.findings.map(finding => [finding.technologyId, finding.displayName]));
     lines.push(...renderAgentReviewLines(agentReview, subjectNames));
-    lines.push(`  - Deterministic result remains ${capitalize(analysis.status)}.`);
+    lines.push('  - Advisory only; the criterion status is unchanged.');
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }
-}
-
-function capitalize(value: string): string {
-  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
 function groupFindings(findings: S007TechnologyFinding[]): S007FindingGroup[] {
@@ -102,47 +113,87 @@ function groupPriority(group: S007FindingGroup): number {
   return 2;
 }
 
-function renderFindingGroup(group: S007FindingGroup): string[] {
-  const isCoverage = group.technologyId === 'evidence-coverage';
-  const heading = reportText(isCoverage ? group.displayName : `${group.displayName} (${group.technologyId})`);
-  const impact = groupImpact(group);
-  const summary = groupSummary(group);
-  const lines = [`- ${heading}: ${summary}.${impact ? ` ${impact}.` : ''}`];
+function renderCoverageGroup(group: S007FindingGroup, diagnostics: S007EvidenceDiagnostic[]): string[] {
+  return [
+    `- Repository evidence coverage: Needs review. ${reportText(group.findings.map(finding => finding.rationale).join(' '))}`,
+    ...diagnosticLines(diagnostics, '  ')
+  ];
+}
 
-  consolidateConclusions(group.findings).forEach((finding, index) => {
-    const observationLabel = findingLabel(finding, index, isCoverage);
+// One row per problem, with per-dependency problems from the same file merged into one list.
+function diagnosticLines(diagnostics: S007EvidenceDiagnostic[], indent: string): string[] {
+  const lines: string[] = [];
+  const lists = new Map<string, { index: number; diagnostics: S007EvidenceDiagnostic[] }>();
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.subject && diagnostic.listHeading) {
+      const key = JSON.stringify([diagnostic.path, diagnostic.listHeading]);
+      const list = lists.get(key);
+      if (list) {
+        list.diagnostics.push(diagnostic);
+        continue;
+      }
+      lists.set(key, { index: lines.length, diagnostics: [diagnostic] });
+    }
+    lines.push(`${indent}- ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`);
+  }
+  for (const { index, diagnostics: listed } of lists.values()) {
+    if (listed.length > 1) {
+      const [first] = listed;
+      lines[index] = `${indent}- ${first.path ? `${reportPath(first.path)} — ` : ''}${first.listHeading}: `
+        + `${reportText(listed.map(item => item.subject).join(', '))}.`;
+    }
+  }
+  return lines;
+}
+
+function renderFindingGroup(group: S007FindingGroup): string[] {
+  const lines = [`- ${reportText(group.displayName)}: ${groupSummary(group)}.`];
+
+  for (const finding of consolidateConclusions(group.findings)) {
     lines.push(
-      `  - ${reportText(observationLabel)} — ${CLASSIFICATION_SUMMARIES[finding.classification]}`,
-      `    - Classification: ${finding.classification}`,
-      `    - Result contribution: ${finding.contribution}`,
-      `    - Rationale: ${reportText(finding.rationale)}`
+      `  - ${reportText(findingLabel(finding))} — ${shortStatus(finding)}`,
+      `    - Why: ${reportText(finding.rationale)}`
     );
     if (finding.matchedPolicy) {
-      lines.push(
-        `    - Policy entry: ${finding.matchedPolicy.sectionId}/${finding.matchedPolicy.entryId}`,
-        `    - Rule strength: ${finding.matchedPolicy.strength}`,
-        `    - Policy statement: ${reportText(finding.matchedPolicy.sourceStatement)}`
-      );
-    } else {
-      lines.push('    - Policy entry: no matched OST entry');
+      lines.push(`    - Policy rule: ${reportText(finding.matchedPolicy.sourceStatement)}${RULE_STRENGTHS[finding.matchedPolicy.strength]}`);
     }
     for (const advisory of finding.advisories) {
-      lines.push(`    - Advisory: ${reportText(advisory)}`);
+      lines.push(`    - Policy note: ${reportText(advisory)}`);
     }
     if (finding.evidence.length > 0) {
-      lines.push('    - Evidence:');
-      for (const evidence of finding.evidence) {
-        lines.push(`      - ${reportPath(evidence.path)} — ${reportText(evidence.detail)}`);
-        if (evidence.declaredVersion) lines.push(`        - Declared version: ${reportText(evidence.declaredVersion)}`);
-        if (evidence.resolvedVersion) lines.push(`        - Resolved version: ${reportText(evidence.resolvedVersion)}`);
-        if (evidence.versionSourcePath) lines.push(`        - Version source: ${reportText(evidence.versionSourcePath)}`);
-        if (evidence.resolutionSource === 'maven-effective-pom') {
-          lines.push('        - Resolution method: Maven effective POM');
-        }
-      }
+      // A rule without a version requirement needs no version, so "no version" would only add noise.
+      const versionNeeded = Boolean(finding.matchedPolicy?.constraint) || finding.contribution !== 'pass';
+      lines.push('    - Found in:', ...finding.evidence.map(evidence => `      - ${evidenceLine(evidence, versionNeeded)}`));
     }
-  });
+  }
   return lines;
+}
+
+function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean): string {
+  const source = evidence.resolutionSource === 'maven-effective-pom'
+    ? ' from the Maven effective POM'
+    : evidence.versionSourcePath && evidence.versionSourcePath !== evidence.path
+      ? ` in ${evidence.versionSourcePath}`
+      : '';
+  const declared = evidence.declaredVersion
+    ? `${isRangeText(evidence.declaredVersion) ? 'range' : 'version'} ${evidence.declaredVersion}`
+    : undefined;
+  let version: string | undefined;
+  if (declared && evidence.resolvedVersion && evidence.declaredVersion !== evidence.resolvedVersion) {
+    version = `${declared}, resolved to ${evidence.resolvedVersion}${source}`;
+  } else if (declared) {
+    version = `${declared}${source}`;
+  } else if (evidence.resolvedVersion) {
+    version = `version ${evidence.resolvedVersion}${source}`;
+  } else if (versionNeeded) {
+    version = 'no version in the repository';
+  }
+  return `${reportPath(evidence.path)} — ${reportText(`${evidence.detail}${version ? `, ${version}` : ''}`)}`;
+}
+
+function shortStatus(finding: S007TechnologyFinding): string {
+  if (finding.contribution === 'fail') return 'fails';
+  return finding.contribution === 'pass' ? 'meets the policy' : 'needs review';
 }
 
 function consolidateConclusions(findings: S007TechnologyFinding[]): S007TechnologyFinding[] {
@@ -163,21 +214,12 @@ function consolidateConclusions(findings: S007TechnologyFinding[]): S007Technolo
   return [...conclusions.values()];
 }
 
-function findingLabel(finding: S007TechnologyFinding, index: number, isCoverage: boolean): string {
-  if (isCoverage) return 'Coverage limitation';
+function findingLabel(finding: S007TechnologyFinding): string {
   const declarations = [...new Set(finding.evidence.map(evidence => evidence.detail).filter(Boolean))];
-  if (declarations.length === 0) return `Observation ${index + 1}`;
+  if (declarations.length === 0) return finding.displayName;
   return declarations.length === 1
     ? declarations[0]
-    : `${declarations[0]} (+${declarations.length - 1} more declarations)`;
-}
-
-function groupImpact(group: S007FindingGroup): string | undefined {
-  const determining = group.findings.filter(finding => finding.statusDetermining);
-  if (determining.some(finding => finding.contribution === 'fail')) return 'Determines overall result: Fail';
-  if (determining.some(finding => finding.contribution === 'manual')) return 'Determines overall result: Manual review';
-  if (determining.some(finding => finding.contribution === 'pass')) return 'Supports overall result: Pass';
-  return undefined;
+    : `${declarations[0]} and ${declarations.length - 1} more`;
 }
 
 function groupSummary(group: S007FindingGroup): string {
@@ -190,9 +232,9 @@ function groupSummary(group: S007FindingGroup): string {
     pass: group.findings.filter(finding => finding.contribution === 'pass').length
   };
   const parts = [
-    counts.fail ? (counts.fail === 1 ? '1 violates a mandatory rule' : `${counts.fail} violate mandatory rules`) : undefined,
-    counts.manual ? (counts.manual === 1 ? '1 needs review' : `${counts.manual} need review`) : undefined,
-    counts.pass ? (counts.pass === 1 ? '1 complies' : `${counts.pass} comply`) : undefined
+    counts.fail ? `${counts.fail} ${counts.fail === 1 ? 'fails' : 'fail'}` : undefined,
+    counts.manual ? `${counts.manual} ${counts.manual === 1 ? 'needs' : 'need'} review` : undefined,
+    counts.pass ? `${counts.pass} ${counts.pass === 1 ? 'meets' : 'meet'} the policy` : undefined
   ].filter((part): part is string => Boolean(part));
   return `Mixed results: ${parts.join(', ')}`;
 }

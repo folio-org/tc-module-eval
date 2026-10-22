@@ -26,8 +26,8 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
     return failure(policyPath, {
       code: missing ? 'policy_missing' : 'policy_read_error',
       message: missing
-        ? `Officially supported technologies policy not found: ${policyPath}`
-        : `Unable to read officially supported technologies policy: ${errorMessage(error)}`,
+        ? `The officially supported technologies list was not found at ${policyPath}.`
+        : `The officially supported technologies list could not be read: ${errorMessage(error)}`,
       path: policyPath
     });
   }
@@ -38,7 +38,7 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
   } catch (error) {
     return failure(policyPath, {
       code: 'policy_parse_error',
-      message: `Officially supported technologies policy is not valid JSON: ${errorMessage(error)}`,
+      message: `The officially supported technologies list is not valid JSON: ${errorMessage(error)}`,
       path: policyPath
     });
   }
@@ -85,7 +85,7 @@ function toSchemaDiagnostic(error: ErrorObject): S007PolicyDiagnostic {
   const instancePath = error.instancePath || '/';
   return {
     code: 'policy_schema_error',
-    message: `Policy schema validation failed at ${instancePath}: ${error.message ?? 'invalid value'}`,
+    message: `The officially supported technologies list has an invalid value at ${instancePath}: ${error.message ?? 'invalid value'}.`,
     path: instancePath,
     schemaPath: error.schemaPath
   };

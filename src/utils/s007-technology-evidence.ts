@@ -15,6 +15,8 @@ const MAX_MANIFEST_BYTES = 1024 * 1024;
 const MAX_MANIFESTS = 64;
 const MAX_OBSERVATIONS = 1024;
 const MAX_MAVEN_PROPERTY_DEPTH = 16;
+const MAVEN_VERSION_NOT_SET = 'Versions not set in the repository (probably managed by a parent POM or BOM)';
+const GRADLE_JAVA_PROPERTY_MESSAGE = 'The Gradle Java version';
 
 interface EvidenceFinalizationContext {
   observations: S007TechnologyObservation[];
@@ -108,7 +110,7 @@ export async function collectS007TechnologyEvidence(
   finalizePresenceOnlyObservations(context);
   markConflicts(context);
   if (context.observations.length === 0) {
-    diagnostic(context, 'insufficient_evidence', 'No S007-relevant repository evidence was found.', true);
+    diagnostic(context, 'insufficient_evidence', 'No language or framework the tool recognizes was found in the build or package files.', true);
   }
 
   return {
@@ -151,7 +153,7 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
   const content = readManifest(context, packagePath);
   if (content === undefined) {
     if (!fs.existsSync(packagePath)) {
-      diagnostic(context, 'manifest_missing', 'package.json was not found.', true, 'package.json');
+      diagnostic(context, 'manifest_missing', 'Not found at the repository root.', true, 'package.json');
     }
     return;
   }
@@ -163,7 +165,7 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
     diagnostic(
       context,
       'manifest_malformed',
-      `Unable to parse package.json: ${errorMessage(error)}`,
+      `Not valid JSON: ${errorMessage(error)}`,
       true,
       'package.json'
     );
@@ -244,7 +246,7 @@ function collectYarnClassicVersions(
 
   const lockPath = path.join(context.repoPath, 'yarn.lock');
   if (!fs.existsSync(lockPath)) {
-    diagnostic(context, 'yarn_lock_missing', 'Top-level Yarn Classic lockfile was not found.', true, 'yarn.lock');
+    diagnostic(context, 'yarn_lock_missing', 'Not found at the repository root, so the installed versions are not known.', true, 'yarn.lock');
     return versions;
   }
 
@@ -253,14 +255,14 @@ function collectYarnClassicVersions(
     return versions;
   }
   if (/^__metadata:/m.test(content)) {
-    diagnostic(context, 'yarn_lock_unsupported', 'Yarn Berry lockfiles are not supported for S007 resolution.', true, 'yarn.lock');
+    diagnostic(context, 'yarn_lock_unsupported', 'This is a Yarn 2+ lockfile, which the tool cannot read; only Yarn 1 lockfiles are supported.', true, 'yarn.lock');
     return versions;
   }
 
   try {
     const parsed = parseYarnLock(content) as { type: string; object?: Record<string, { version?: string }> };
     if (parsed.type !== 'success' || !parsed.object) {
-      diagnostic(context, 'yarn_lock_malformed', 'Yarn Classic lockfile could not be parsed.', true, 'yarn.lock');
+      diagnostic(context, 'yarn_lock_malformed', 'Could not be read as a Yarn 1 lockfile.', true, 'yarn.lock');
       return versions;
     }
 
@@ -279,14 +281,15 @@ function collectYarnClassicVersions(
         diagnostic(
           context,
           'version_unresolved',
-          `No Yarn Classic resolution was found for ${selector}.`,
+          `Has no entry for ${selector}.`,
           true,
-          'yarn.lock'
+          'yarn.lock',
+          { subject: selector, listHeading: 'Not found in yarn.lock' }
         );
       }
     }
   } catch (error) {
-    diagnostic(context, 'yarn_lock_malformed', `Yarn Classic lockfile could not be parsed: ${errorMessage(error)}`, true, 'yarn.lock');
+    diagnostic(context, 'yarn_lock_malformed', `Could not be read as a Yarn 1 lockfile: ${errorMessage(error)}`, true, 'yarn.lock');
   }
 
   return versions;
@@ -307,7 +310,7 @@ async function collectMavenEvidence(context: EvidenceContext): Promise<void> {
     diagnostic(
       context,
       'version_unresolved',
-      'The Maven Java version could not be established from local properties or maven-compiler-plugin configuration.',
+      'No Java version was found (maven.compiler.release, java.version, or the maven-compiler-plugin settings).',
       true,
       'pom.xml'
     );
@@ -319,7 +322,7 @@ async function visitMavenPom(
   pomPath: string,
   inherited: MavenContext
 ): Promise<MavenContext> {
-  const realPomPath = safeManifestPath(context, pomPath, 'local_module');
+  const realPomPath = safeManifestPath(context, pomPath);
   if (!realPomPath) {
     return inherited;
   }
@@ -339,11 +342,11 @@ async function visitMavenPom(
     const parsed = await parseStringPromise(content, { explicitArray: false, trim: true });
     project = parsed?.project;
   } catch (error) {
-    diagnostic(context, 'manifest_malformed', `Unable to parse ${sourcePath}: ${errorMessage(error)}`, true, sourcePath);
+    diagnostic(context, 'manifest_malformed', `Not valid XML: ${errorMessage(error)}`, true, sourcePath);
     return inherited;
   }
   if (!project || typeof project !== 'object') {
-    diagnostic(context, 'manifest_malformed', `Maven manifest ${sourcePath} has no project element.`, true, sourcePath);
+    diagnostic(context, 'manifest_malformed', 'Has no <project> element.', true, sourcePath);
     return inherited;
   }
 
@@ -351,7 +354,7 @@ async function visitMavenPom(
     diagnostic(
       context,
       'version_unresolved',
-      `Maven profiles in ${sourcePath} are outside the bounded static model and may change S007-relevant evidence.`,
+      'Has Maven profiles, which the tool does not evaluate; a profile can change versions or dependencies.',
       true,
       sourcePath
     );
@@ -366,7 +369,7 @@ async function visitMavenPom(
     if (parentPath && fs.existsSync(parentPath) && isWithinRepo(context.repoPath, parentPath)) {
       effective = await visitMavenPom(context, parentPath, effective);
     } else {
-      diagnostic(context, 'maven_remote_parent', `Maven parent for ${sourcePath} is not available inside the repository.`, true, sourcePath);
+      diagnostic(context, 'maven_remote_parent', 'The parent POM is not in the repository, so the versions and settings it provides could not be read.', true, sourcePath);
     }
   }
 
@@ -409,7 +412,14 @@ async function visitMavenPom(
       effective.dependencyManagement.set(coordinates, { rawValue: rawVersion, ...resolvedVersion });
     }
     if (xmlText(dependency.type) === 'pom' && xmlText(dependency.scope) === 'import') {
-      diagnostic(context, 'maven_imported_bom', `Imported BOM ${coordinates} requires remote model resolution.`, true, sourcePath);
+      diagnostic(
+        context,
+        'maven_imported_bom',
+        `Imports the BOM ${coordinates} from outside the repository; the versions it manages could not be read.`,
+        true,
+        sourcePath,
+        { subject: coordinates, listHeading: 'BOMs imported from outside the repository (the versions they manage could not be read)' }
+      );
     }
   }
 
@@ -419,7 +429,7 @@ async function visitMavenPom(
 
   for (const moduleName of asArray(project.modules?.module).map(xmlText).filter(Boolean)) {
     if (context.mavenModuleCandidates >= MAX_MANIFESTS) {
-      diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} declared Maven module candidates.`, true, sourcePath);
+      diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} Maven modules; the rest were not read.`, true, sourcePath);
       break;
     }
     context.mavenModuleCandidates += 1;
@@ -448,7 +458,7 @@ function collectMavenDependencies(
       diagnostic(
         context,
         'version_unresolved',
-        `Maven dependency coordinates ${rawGroupId}:${rawArtifactId} could not be resolved from local properties.`,
+        `The dependency ${rawGroupId}:${rawArtifactId} uses a property that is not defined in the repository.`,
         true,
         sourcePath
       );
@@ -503,7 +513,14 @@ function collectMavenDependencies(
       unlistedFrameworkCandidate: matched.unlisted
     });
     if (!resolved) {
-      diagnostic(context, 'version_unresolved', `Version for ${coordinates} could not be resolved from local Maven metadata.`, true, sourcePath);
+      diagnostic(
+        context,
+        'version_unresolved',
+        `No version for ${coordinates} is set in the repository; it probably comes from a parent POM or BOM.`,
+        true,
+        sourcePath,
+        { subject: coordinates, listHeading: MAVEN_VERSION_NOT_SET }
+      );
     }
   }
 }
@@ -539,11 +556,11 @@ function collectGradleEvidence(context: EvidenceContext): void {
 
   const versionCatalog = path.join(projectDir, 'gradle', 'libs.versions.toml');
   if (fs.existsSync(versionCatalog)) {
-    diagnostic(context, 'gradle_version_catalog', 'Gradle version catalogs are not statically resolved for S007.', true, relativePosixPath(context.repoPath, versionCatalog));
+    diagnostic(context, 'gradle_version_catalog', 'The build uses a Gradle version catalog, which the tool does not read.', true, relativePosixPath(context.repoPath, versionCatalog));
   }
   for (const directory of ['buildSrc', 'build-logic']) {
     if (fs.existsSync(path.join(projectDir, directory))) {
-      diagnostic(context, 'gradle_build_logic', `Gradle ${directory} build logic is outside bounded S007 resolution.`, true, relativePosixPath(context.repoPath, path.join(projectDir, directory)));
+      diagnostic(context, 'gradle_build_logic', 'Holds Gradle build logic, which the tool does not read; it can change versions or dependencies.', true, relativePosixPath(context.repoPath, path.join(projectDir, directory)));
     }
   }
 
@@ -563,27 +580,27 @@ function collectGradleEvidence(context: EvidenceContext): void {
     if (settings !== undefined) {
       for (const moduleName of parseGradleIncludes(settings)) {
         if (context.gradleModuleCandidates >= MAX_MANIFESTS) {
-          diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} declared Gradle module candidates.`, true, relativePosixPath(context.repoPath, settingsPath));
+          diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} Gradle modules; the rest were not read.`, true, relativePosixPath(context.repoPath, settingsPath));
           break;
         }
         context.gradleModuleCandidates += 1;
         const normalized = moduleName.replace(/^:/, '').replace(/:/g, path.sep);
         const declaredModuleDir = path.resolve(projectDir, normalized);
         if (!isPathLexicallyInside(context.repoPath, declaredModuleDir)) {
-          diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} resolves outside the repository.`, true, relativePosixPath(context.repoPath, settingsPath));
+          diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} points outside the repository and was not read.`, true, relativePosixPath(context.repoPath, settingsPath));
           continue;
         }
         if (!fs.existsSync(declaredModuleDir)) {
-          diagnostic(context, 'local_module_missing', `Gradle module ${moduleName} was declared but not found.`, true, relativePosixPath(context.repoPath, settingsPath));
+          diagnostic(context, 'local_module_missing', `Gradle module ${moduleName} is included, but its folder does not exist.`, true, relativePosixPath(context.repoPath, settingsPath));
           continue;
         }
         if (fs.lstatSync(declaredModuleDir).isSymbolicLink()) {
-          diagnostic(context, 'local_module_symlink', `Gradle module ${moduleName} is a symlink and was not followed.`, true, relativePosixPath(context.repoPath, declaredModuleDir));
+          diagnostic(context, 'local_module_symlink', `Gradle module ${moduleName} is a symbolic link and was not followed.`, true, relativePosixPath(context.repoPath, declaredModuleDir));
           continue;
         }
         const moduleDir = fs.realpathSync(declaredModuleDir);
         if (!isPathLexicallyInside(context.repoPath, moduleDir)) {
-          diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} resolves outside the repository.`, true, relativePosixPath(context.repoPath, settingsPath));
+          diagnostic(context, 'local_module_outside_repository', `Gradle module ${moduleName} points outside the repository and was not read.`, true, relativePosixPath(context.repoPath, settingsPath));
           continue;
         }
         const moduleProperties = new Map([...properties, ...readGradleProperties(context, path.join(moduleDir, 'gradle.properties'))]);
@@ -602,13 +619,13 @@ function collectGradleEvidence(context: EvidenceContext): void {
     gradleObservations.some(observation => observation.identityCandidates[0] !== 'java')
     && !gradleObservations.some(observation => observation.identityCandidates[0] === 'java')
     && !context.diagnostics.some(item =>
-      item.code === 'version_unresolved' && item.message.startsWith('Gradle Java version')
+      item.code === 'version_unresolved' && item.message.startsWith(GRADLE_JAVA_PROPERTY_MESSAGE)
     )
   ) {
     diagnostic(
       context,
       'version_unresolved',
-      'The Gradle Java version could not be established from local properties, toolchain, or compatibility settings.',
+      'No Java version was found (Java toolchain, sourceCompatibility, or targetCompatibility).',
       true,
       relativePosixPath(context.repoPath, rootFiles[0])
     );
@@ -655,7 +672,7 @@ function collectGradleBuildFile(
     diagnostic(
       context,
       'version_unresolved',
-      `Gradle Java version expression ${javaVersion.expression} could not be resolved from local properties.`,
+      `${GRADLE_JAVA_PROPERTY_MESSAGE} (${javaVersion.expression}) uses a property that is not defined in the repository.`,
       true,
       sourcePath
     );
@@ -686,7 +703,7 @@ function collectGradleBuildFile(
     const value = properties.get(match[2]);
     collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties);
     if (!value) {
-      diagnostic(context, 'gradle_dynamic_expression', `Gradle property ${match[2]} could not be resolved locally.`, true, sourcePath);
+      diagnostic(context, 'gradle_dynamic_expression', `The Gradle property ${match[2]} is not defined in the repository.`, true, sourcePath);
     }
   }
 
@@ -702,7 +719,7 @@ function collectGradleBuildFile(
       diagnostic(
         context,
         'gradle_dynamic_expression',
-        `Gradle dependency expression ${match[1]} could not be resolved locally.`,
+        `The Gradle dependency ${match[1]} refers to a variable that is not defined in the repository.`,
         true,
         sourcePath
       );
@@ -733,7 +750,7 @@ function collectGradleBuildFile(
         diagnostic(
           context,
           'gradle_dynamic_expression',
-          `Gradle plugin ${match[1]} version expression ${match[2]} could not be resolved locally.`,
+          `The version of Gradle plugin ${match[1]} (${match[2]}) is not defined in the repository.`,
           true,
           sourcePath
         );
@@ -768,7 +785,7 @@ function collectGradleBuildFile(
       diagnostic(
         context,
         'gradle_dynamic_expression',
-        `Gradle plugin ${match[1]} has no locally resolved version.`,
+        `Gradle plugin ${match[1]} has no version in the repository.`,
         true,
         sourcePath
       );
@@ -779,14 +796,14 @@ function collectGradleBuildFile(
     diagnostic(
       context,
       'gradle_build_logic',
-      'Applied Gradle scripts are outside the bounded S007 static model.',
+      'Applies another Gradle script (apply from), which the tool does not read.',
       true,
       sourcePath
     );
   }
 
   if (gradleCodeMatches(staticContent, /\blibs\.[A-Za-z]/g, codePositions).length > 0) {
-    diagnostic(context, 'gradle_dynamic_expression', 'Gradle version-catalog references require resolution outside the bounded static reader.', true, sourcePath);
+    diagnostic(context, 'gradle_dynamic_expression', 'Refers to a Gradle version catalog (libs.…), which the tool does not read.', true, sourcePath);
   }
 }
 
@@ -820,7 +837,7 @@ function collectGradleCoordinate(
     diagnostic(
       context,
       'gradle_dynamic_expression',
-      `Gradle dependency coordinate ${coordinate} could not be resolved locally.`,
+      `The Gradle dependency ${coordinate} uses a property that is not defined in the repository.`,
       true,
       sourcePath
     );
@@ -866,7 +883,14 @@ function collectGradleCoordinate(
     unlistedFrameworkCandidate: matched.unlisted
   });
   if (!version) {
-    diagnostic(context, 'version_unresolved', `Version for ${groupId}:${artifactId} could not be resolved from local Gradle metadata.`, true, sourcePath);
+    diagnostic(
+      context,
+      'version_unresolved',
+      `No version for ${groupId}:${artifactId} is set in the repository; it probably comes from a Gradle plugin or platform.`,
+      true,
+      sourcePath,
+      { subject: `${groupId}:${artifactId}`, listHeading: 'Versions not set in the repository (probably managed by a Gradle plugin or platform)' }
+    );
   }
 }
 
@@ -884,7 +908,7 @@ function collectGradleMapDependency(
     diagnostic(
       context,
       'gradle_dynamic_expression',
-      'Gradle map-style dependency coordinates could not be resolved locally.',
+      'A dependency written as group:/name: uses values that are not defined in the repository.',
       true,
       sourcePath
     );
@@ -1045,7 +1069,7 @@ function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext):
         }
       }
       context.observations = context.observations.filter(candidate => candidate !== observation);
-      const message = `The ${observation.sourceDetail} artifact proves Grails presence but not the Grails framework version.`;
+      const message = presenceOnlyMessage(observation);
       context.diagnostics = context.diagnostics.filter(diagnostic =>
         diagnostic.code !== 'version_unresolved'
         || diagnostic.path !== observation.sourcePath
@@ -1056,11 +1080,16 @@ function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext):
     diagnostic(
       context,
       'version_unresolved',
-      `The ${observation.sourceDetail} artifact proves Grails presence but not the Grails framework version.`,
+      presenceOnlyMessage(observation),
       true,
-      observation.sourcePath
+      observation.sourcePath,
+      { subject: observation.sourceDetail, listHeading: 'Show that Grails is used, but their versions are not the Grails version' }
     );
   }
+}
+
+function presenceOnlyMessage(observation: S007TechnologyObservation): string {
+  return `${observation.sourceDetail} shows that Grails is used, but its version is not the Grails version.`;
 }
 
 function markConflicts(context: EvidenceFinalizationContext): void {
@@ -1069,7 +1098,7 @@ function markConflicts(context: EvidenceFinalizationContext): void {
     const id = observation.identityCandidates[0];
     groups.set(id, [...(groups.get(id) ?? []), observation]);
   }
-  for (const [id, observations] of groups) {
+  for (const observations of groups.values()) {
     const installed = observations.filter(item => !item.sourceDetail.startsWith('peerDependencies.'));
     const comparable = installed.length > 0 ? installed : observations;
     const versions = new Set(comparable.map(item => item.resolvedVersion ?? item.declaredVersion).filter(Boolean));
@@ -1081,7 +1110,12 @@ function markConflicts(context: EvidenceFinalizationContext): void {
       observation.conflictPaths = paths;
       observation.confidence = 'partial';
     }
-    diagnostic(context, 'conflicting_versions', `Conflicting ${id} versions were found in ${paths.join(', ')}.`, true);
+    diagnostic(
+      context,
+      'conflicting_versions',
+      `Different ${observations[0].displayName} versions (${[...versions].join(', ')}) are declared in ${paths.join(', ')}.`,
+      true
+    );
   }
 }
 
@@ -1090,11 +1124,11 @@ function readManifest(context: EvidenceContext, filePath: string): string | unde
   try {
     const stats = fs.lstatSync(filePath);
     if (stats.isSymbolicLink()) {
-      diagnostic(context, 'local_module_symlink', `Symlinked manifest was not read: ${requestedSourcePath}.`, true, requestedSourcePath);
+      diagnostic(context, 'local_module_symlink', 'Is a symbolic link and was not read.', true, requestedSourcePath);
       return undefined;
     }
     if (stats.size > MAX_MANIFEST_BYTES) {
-      diagnostic(context, 'manifest_too_large', `Manifest exceeds ${MAX_MANIFEST_BYTES} bytes.`, true, requestedSourcePath);
+      diagnostic(context, 'manifest_too_large', `Is larger than ${MAX_MANIFEST_BYTES / 1024 / 1024} MB and was not read.`, true, requestedSourcePath);
       return undefined;
     }
     const realPath = fs.realpathSync(filePath);
@@ -1103,7 +1137,7 @@ function readManifest(context: EvidenceContext, filePath: string): string | unde
       return cached;
     }
     if (context.manifestContents.size >= MAX_MANIFESTS) {
-      diagnostic(context, 'traversal_limit', `Stopped after ${MAX_MANIFESTS} unique local manifests.`, true);
+      diagnostic(context, 'traversal_limit', `Stopped after reading ${MAX_MANIFESTS} build and package files; the rest were not read.`, true);
       return undefined;
     }
     const sourcePath = relativePosixPath(context.repoPath, realPath);
@@ -1112,27 +1146,27 @@ function readManifest(context: EvidenceContext, filePath: string): string | unde
     context.manifestContents.set(realPath, content);
     return content;
   } catch (error) {
-    diagnostic(context, 'manifest_malformed', `Unable to read ${requestedSourcePath}: ${errorMessage(error)}`, true, requestedSourcePath);
+    diagnostic(context, 'manifest_malformed', `Could not be read: ${errorMessage(error)}`, true, requestedSourcePath);
     return undefined;
   }
 }
 
-function safeManifestPath(context: EvidenceContext, candidatePath: string, label: string): string | undefined {
+function safeManifestPath(context: EvidenceContext, candidatePath: string): string | undefined {
   const resolved = path.resolve(candidatePath);
   if (!isPathLexicallyInside(context.repoPath, resolved)) {
-    diagnostic(context, 'local_module_outside_repository', `${label} resolves outside the repository.`, true);
+    diagnostic(context, 'local_module_outside_repository', 'A Maven module or parent POM points outside the repository and was not read.', true);
     return undefined;
   }
   if (!fs.existsSync(resolved)) {
-    diagnostic(context, 'local_module_missing', `${label} was declared but not found: ${relativePosixPath(context.repoPath, resolved)}.`, true);
+    diagnostic(context, 'local_module_missing', 'Is listed as a Maven module or parent POM, but does not exist.', true, relativePosixPath(context.repoPath, resolved));
     return undefined;
   }
   if (fs.lstatSync(resolved).isSymbolicLink()) {
-    diagnostic(context, 'local_module_symlink', `${label} is a symlink and was not followed.`, true, relativePosixPath(context.repoPath, resolved));
+    diagnostic(context, 'local_module_symlink', 'Is a symbolic link and was not followed.', true, relativePosixPath(context.repoPath, resolved));
     return undefined;
   }
   if (!isWithinRepo(context.repoPath, resolved)) {
-    diagnostic(context, 'local_module_outside_repository', `${label} resolves outside the repository.`, true);
+    diagnostic(context, 'local_module_outside_repository', 'A Maven module or parent POM points outside the repository and was not read.', true);
     return undefined;
   }
   return fs.realpathSync(resolved);
@@ -1150,7 +1184,7 @@ function addObservation(context: EvidenceContext, observation: S007TechnologyObs
     return;
   }
   if (context.observations.length >= MAX_OBSERVATIONS) {
-    diagnostic(context, 'traversal_limit', `Stopped after ${MAX_OBSERVATIONS} S007 technology observations.`, true);
+    diagnostic(context, 'traversal_limit', `Stopped after ${MAX_OBSERVATIONS} technology declarations; the rest were not checked.`, true);
     return;
   }
   context.observationKeys.add(key);
@@ -1162,9 +1196,10 @@ function diagnostic(
   code: S007EvidenceDiagnostic['code'],
   message: string,
   material: boolean,
-  pathValue?: string
+  pathValue?: string,
+  list?: Pick<S007EvidenceDiagnostic, 'subject' | 'listHeading'>
 ): void {
-  const item: S007EvidenceDiagnostic = { code, message, material, path: pathValue };
+  const item: S007EvidenceDiagnostic = { code, message, material, path: pathValue, ...list };
   if (!context.diagnostics.some(existing => existing.code === code && existing.message === message && existing.path === pathValue)) {
     context.diagnostics.push(item);
   }
@@ -1223,7 +1258,7 @@ function findMavenCompilerVersion(
     diagnostic(
       evidenceContext,
       'version_unresolved',
-      `Maven compiler pluginManagement in ${sourcePath} requires effective-model resolution.`,
+      'Sets the Java version in maven-compiler-plugin pluginManagement, which the tool does not evaluate.',
       true,
       sourcePath
     );
@@ -1244,7 +1279,7 @@ function findMavenCompilerVersion(
     diagnostic(
       evidenceContext,
       'version_unresolved',
-      `Conflicting Maven compiler settings in ${sourcePath} require effective-model resolution.`,
+      'The maven-compiler-plugin settings give different Java versions (release, source, or target).',
       true,
       sourcePath
     );

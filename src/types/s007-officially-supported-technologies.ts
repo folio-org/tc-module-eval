@@ -182,6 +182,10 @@ export interface S007EvidenceDiagnostic {
   message: string;
   material: boolean;
   path?: string;
+  /** The dependency or selector the message is about, so the report can list several in one row. */
+  subject?: string;
+  /** Row heading for that combined list, e.g. "Not found in yarn.lock". */
+  listHeading?: string;
 }
 
 export interface S007TechnologyEvidenceResult {

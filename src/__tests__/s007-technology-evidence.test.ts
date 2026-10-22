@@ -231,7 +231,7 @@ describe('S007 static technology evidence', () => {
       expect.objectContaining({
         code: 'version_unresolved',
         material: true,
-        message: expect.stringContaining('Conflicting Maven compiler settings')
+        message: expect.stringContaining('maven-compiler-plugin settings give different Java versions')
       })
     ]));
     expect(result.complete).toBe(false);
@@ -348,7 +348,7 @@ describe('S007 static technology evidence', () => {
       expect.objectContaining({
         code: 'version_unresolved',
         path: 'pom.xml',
-        message: expect.stringContaining('Maven Java version')
+        message: expect.stringContaining('No Java version was found')
       })
     ]));
     expect(result.complete).toBe(false);
@@ -721,7 +721,7 @@ describe('S007 static technology evidence', () => {
       expect.objectContaining({
         code: 'version_unresolved',
         material: true,
-        message: expect.stringContaining('proves Grails presence but not the Grails framework version')
+        message: expect.stringContaining('shows that Grails is used, but its version is not the Grails version')
       })
     ]));
     expect(result.complete).toBe(false);

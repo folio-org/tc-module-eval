@@ -474,7 +474,7 @@ describe('CLI Integration Tests', () => {
           expect.objectContaining({
             technologyId: 'java', classification: 'compliant', contribution: 'pass', statusDetermining: false,
             advisories: expect.arrayContaining([
-              'Exception applicability is unresolved, but the base rule and every possible exception give the same version-compliance outcome.'
+              'The tool could not tell whether the policy exception applies, but the result is the same either way.'
             ])
           })
         ]) });
@@ -752,7 +752,7 @@ describe('CLI Integration Tests', () => {
 
         expect(evaluation.criteria).toHaveLength(1);
         expect(s007?.status).toBe(EvaluationStatus.PASS);
-        expect(s007?.details).toContain('frontend-third-party-frameworks/react');
+        expect(s007?.details).toContain('Policy rule: React ^18.2.0');
         expect(s007?.details).not.toMatch(/policy selector|policy release|flower release/i);
 
         const reports = await new ReportGenerator(testOutputDir).generateReports(evaluation);
@@ -763,7 +763,7 @@ describe('CLI Integration Tests', () => {
         expect(jsonS007.status).toBe('pass');
         expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
         expect(embeddedReportData(html).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'S007' })]));
-        expect(html).toContain('Result contribution: pass');
+        expect(html).toContain('Policy rule: React ^18.2.0');
         expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
       } finally {
         await fs.remove(localRepo);

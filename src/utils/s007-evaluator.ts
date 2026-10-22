@@ -24,7 +24,7 @@ export function evaluateS007(
     return {
       criterionId: 'S007',
       status: EvaluationStatus.MANUAL,
-      summary: 'S007 manual: the current OST policy could not be loaded and validated.',
+      summary: 'S007 manual: The officially supported technologies list (config/officially-supported-technologies.json) could not be loaded, so no technology was checked. Fix the file and run the evaluation again.',
       findings: [],
       policyDiagnostics: policyLoad.diagnostics,
       evidenceDiagnostics: evidence.diagnostics
@@ -39,24 +39,19 @@ export function evaluateS007(
   );
 
   if (evidence.observations.length === 0) {
-    findings.push(coverageFinding('No S007-relevant technology evidence was found.'));
+    findings.push(coverageFinding('No language or framework the tool recognizes was found in the build or package files.'));
   } else {
-    const material = evidence.diagnostics.filter(diagnostic => diagnostic.material);
-    const missingKinds = [
+    const reasons = [
       evidence.observations.some(observation => observation.technologyType === 'language')
         ? undefined
-        : 'no implementation language evidence was found',
+        : language === 'java' ? 'No Java version was found.' : 'No JavaScript or TypeScript indicator was found.',
       evidence.observations.some(observation => observation.technologyType === 'framework')
         ? undefined
-        : 'no framework evidence was found'
+        : 'No framework was found.',
+      evidence.complete ? undefined : 'Some versions or build settings could not be read from the repository.'
     ].filter((message): message is string => Boolean(message));
-    if (!evidence.complete || missingKinds.length > 0) {
-      const reasons = [...missingKinds, ...material.map(item => item.message)];
-      findings.push(coverageFinding(
-        reasons.length > 0
-          ? `Static evidence coverage is incomplete: ${reasons.join(' ')}`
-          : 'Static evidence coverage is incomplete.'
-      ));
+    if (reasons.length > 0) {
+      findings.push(coverageFinding(reasons.join(' ')));
     }
   }
 
@@ -71,7 +66,7 @@ export function evaluateS007(
   return {
     criterionId: 'S007',
     status,
-    summary: summaryFor(status),
+    summary: summaryFor(status, findings),
     policyFormatVersion: policyLoad.policy.formatVersion,
     findings,
     policyDiagnostics: [],
@@ -106,8 +101,8 @@ function evaluateObservation(
       classification: observation.unlistedFrameworkCandidate ? 'unlisted-framework' : 'unresolved',
       contribution: 'manual',
       rationale: observation.unlistedFrameworkCandidate
-        ? 'An explicit framework indicator is present, but the framework is not listed in the current OST policy.'
-        : 'The technology could not be matched to an applicable OST entry.'
+        ? 'This framework is not in the officially supported technologies list, so a reviewer must decide whether it is acceptable.'
+        : 'This technology does not match any entry in the officially supported technologies list for this kind of module.'
     };
   }
 
@@ -122,7 +117,7 @@ function evaluateObservation(
 
   if (observation.conflictPaths?.length) {
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
-      `Conflicting declarations were found in ${observation.conflictPaths.join(', ')}.`);
+      `Different versions are declared in ${observation.conflictPaths.join(', ')}, so it is not clear which one is used.`);
   }
   const baseComparison = compareObservationToConstraint(observation, entry.constraint);
   const exceptionOutcomeAgrees = applicableRule.unresolved
@@ -133,52 +128,49 @@ function evaluateObservation(
     );
   if (applicableRule.unresolved && !exceptionOutcomeAgrees) {
     return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
-      'The applicability of a policy exception could not be established from the available repository evidence.');
+      `The policy makes an exception (${(entry.exceptions ?? []).map(exception => `"${exception.sourceStatement}"`).join(', ')}), and the repository does not show whether it applies here.`);
   }
   if (exceptionOutcomeAgrees) {
-    advisories.push('Exception applicability is unresolved, but the base rule and every possible exception give the same version-compliance outcome.');
+    advisories.push('The tool could not tell whether the policy exception applies, but the result is the same either way.');
   }
   if (applicableRule.strength === 'contested') {
     return finding(base, matchedPolicy, advisories, 'contested', 'manual',
-      'The matched OST statement is contested or time-bound and requires reviewer judgment.');
+      'The policy rule is time-bound or disputed, so a reviewer must decide whether it applies now.');
   }
   if (applicableRule.strength === 'provisional' || entry.provisional) {
     return finding(base, matchedPolicy, advisories, 'provisional', 'manual',
-      'The matched OST entry is provisional and cannot determine compliance automatically.');
+      'The policy rule is provisional, so the tool does not pass or fail the module on it.');
   }
   if (
     observation.provenance !== 'repository-static' &&
     observation.resolutionSource !== 'maven-effective-pom'
   ) {
     return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
-      'The available version came from remote resolution and is diagnostic only; local repository evidence is required for deterministic status.');
+      'The version was found only outside the repository, so it is shown for information and does not decide the result.');
   }
 
   const comparison = compareObservationToConstraint(observation, applicableRule.constraint);
   if (applicableRule.strength === 'advisory') {
     return comparison === 'noncompliant'
       ? finding(base, matchedPolicy, advisories, 'advisory-mismatch', 'manual',
-        'Repository evidence differs from advisory OST guidance; advisory wording cannot cause failure.')
+        `${versionSubject(observation)} differs from what the policy recommends. A recommendation cannot fail the module, but a reviewer should check it.`)
       : finding(base, matchedPolicy, advisories, 'advisory-only', 'manual',
-        'The technology is covered only by advisory OST guidance and requires reviewer judgment.');
+        'The policy only recommends a version for this technology, so a reviewer must decide.');
   }
 
   if (!applicableRule.constraint) {
     return finding(base, matchedPolicy, advisories, 'compliant', 'pass',
-      'The technology is listed by a definitive OST rule with no version comparison required.');
+      'The policy supports this technology without a version requirement.');
   }
   if (comparison === 'compliant') {
     return finding(base, matchedPolicy, advisories, 'compliant', 'pass',
-      'Repository evidence complies with the matched normative OST rule.');
+      `${versionSubject(observation)} meets the policy rule.`);
   }
   if (comparison === 'noncompliant') {
     return finding(base, matchedPolicy, advisories, 'normative-violation', 'fail',
-      `Repository version ${displayVersion(observation)} violates ${applicableRule.sourceStatement}.`);
+      `${versionSubject(observation)} is not allowed by the policy rule "${applicableRule.sourceStatement}". Upgrade to a version the rule allows.`);
   }
-  return finding(base, matchedPolicy, advisories, 'unresolved', 'manual',
-    comparison === 'overlap'
-      ? 'The declared range overlaps both compliant and noncompliant versions and no exact local version resolves it.'
-      : 'The relevant version or version semantics could not be resolved confidently from repository evidence.');
+  return finding(base, matchedPolicy, advisories, 'unresolved', 'manual', unresolvedRationale(observation, comparison, applicableRule.constraint));
 }
 
 function compareObservationToConstraint(
@@ -394,17 +386,75 @@ function classifyStatus(findings: S007TechnologyFinding[]): EvaluationStatus {
   return findings.length > 0 ? EvaluationStatus.PASS : EvaluationStatus.MANUAL;
 }
 
-function summaryFor(status: EvaluationStatus): string {
-  switch (status) {
-    case EvaluationStatus.FAIL:
-      return 'S007 fail: at least one detected technology conclusively violates a normative OST rule.';
-    case EvaluationStatus.PASS:
-      return 'S007 pass: all detected relevant technologies comply with the current OST policy.';
-    default:
-      return 'S007 manual: current repository evidence or policy semantics require reviewer judgment.';
+const REVIEW_REASONS: Partial<Record<S007TechnologyFinding['classification'], string>> = {
+  'advisory-only': 'the policy only recommends a version',
+  'advisory-mismatch': 'differs from the recommended version',
+  provisional: 'the policy rule is provisional',
+  contested: 'the policy rule is time-bound or disputed',
+  'unlisted-framework': 'not in the supported technologies list',
+  unresolved: 'the version could not be checked',
+  conflicting: 'different versions are declared',
+  'coverage-incomplete': 'the tool could not read everything it needs'
+};
+
+function summaryFor(status: EvaluationStatus, findings: S007TechnologyFinding[]): string {
+  if (status === EvaluationStatus.FAIL) {
+    const failing = findings.filter(finding => finding.contribution === 'fail');
+    const items = failing.map(finding => {
+      const evidence = finding.evidence[0];
+      const version = evidence?.resolvedVersion ?? evidence?.declaredVersion;
+      return `${finding.displayName}${version ? ` ${version}` : ''}${evidence ? ` in ${evidence.path}` : ''}`
+        + ` (the policy allows "${finding.matchedPolicy?.sourceStatement}")`;
+    });
+    return failing.length === 1
+      ? `S007 fail: ${items[0]} is not an officially supported version. Upgrade it to a version the policy allows.`
+      : `S007 fail: ${listText(items)} are not officially supported versions. Upgrade them to versions the policy allows.`;
   }
+  if (status === EvaluationStatus.PASS) {
+    return `S007 pass: Every technology found is officially supported: ${listText([...new Set(findings.map(finding => finding.displayName))])}.`;
+  }
+  const reviewItems = new Map<string, string>();
+  for (const finding of findings.filter(candidate => candidate.contribution === 'manual')) {
+    if (!reviewItems.has(finding.technologyId)) {
+      reviewItems.set(finding.technologyId, finding.technologyId === 'evidence-coverage'
+        ? 'gaps in what the tool could read from the repository'
+        : `${finding.displayName} (${REVIEW_REASONS[finding.classification]})`);
+    }
+  }
+  return `S007 manual: No technology breaks a policy rule, but a reviewer needs to check ${listText([...reviewItems.values()])}.`;
 }
 
-function displayVersion(observation: S007TechnologyObservation): string {
-  return observation.resolvedVersion ?? observation.declaredVersion ?? 'unresolved';
+function listText(items: string[]): string {
+  const shown = items.length > 4 ? [...items.slice(0, 3), `${items.length - 3} more`] : items;
+  if (shown.length <= 2) return shown.join(' and ');
+  return `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`;
+}
+
+function versionSubject(observation: S007TechnologyObservation): string {
+  if (observation.resolvedVersion) return `Version ${observation.resolvedVersion}`;
+  if (!observation.declaredVersion) return 'The version';
+  return isRangeText(observation.declaredVersion)
+    ? `The declared range ${observation.declaredVersion}`
+    : `Version ${observation.declaredVersion}`;
+}
+
+/** True for npm or Maven version ranges such as ^18.2.0, >=16 or [1.0,2.0), as opposed to one version. */
+export function isRangeText(version: string): boolean {
+  return !/^v?\d[\w.+-]*$/.test(version.trim()) || /(?:^|\.)[xX*](?:\.|$)/.test(version.trim());
+}
+
+function unresolvedRationale(
+  observation: S007TechnologyObservation,
+  comparison: VersionComparison,
+  constraint?: S007VersionConstraint
+): string {
+  if (comparison === 'overlap') {
+    return `The declared range ${observation.declaredVersion} allows both supported and unsupported versions, and no lockfile or exact version shows which one is used.`;
+  }
+  if (!observation.resolvedVersion && !observation.declaredVersion) {
+    return 'No version was found in the repository, so it cannot be compared with the policy.';
+  }
+  return constraint?.kind === 'latest-lts'
+    ? `The tool cannot tell whether ${versionSubject(observation).toLowerCase()} is a long-term support (LTS) release.`
+    : `${versionSubject(observation)} could not be compared with the policy rule.`;
 }

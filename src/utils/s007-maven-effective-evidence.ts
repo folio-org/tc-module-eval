@@ -77,9 +77,17 @@ export async function enrichS007WithMavenEffectivePom(
       const [groupId, artifactId] = dependency.coordinates.split(':');
       if (!matchJavaIdentity(groupId, artifactId)) continue;
       if (representedKeys.has(dependency.key)) continue;
-      const message = `Effective Maven model for ${sourcePath} includes inherited S007-relevant dependency ${dependency.coordinates} (${dependency.key}) that was not represented by static repository evidence.`;
+      const subject = `${dependency.coordinates}${dependency.key === `${dependency.coordinates}:jar:` ? '' : ` (${dependency.key})`} ${dependency.version}`;
+      const message = `Maven's effective POM adds ${subject} from a parent POM outside the repository; the tool did not check it.`;
       if (!diagnostics.some(diagnostic => diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message)) {
-        diagnostics = [...diagnostics, { code: 'effective_model_unrepresented', message, material: true, path: sourcePath }];
+        diagnostics = [...diagnostics, {
+          code: 'effective_model_unrepresented',
+          message,
+          material: true,
+          path: sourcePath,
+          subject,
+          listHeading: 'Added by a parent POM outside the repository and not checked'
+        }];
         changed = true;
       }
     }
@@ -92,9 +100,8 @@ export async function enrichS007WithMavenEffectivePom(
       }
       if (
         diagnostic.code === 'version_unresolved' &&
-        [...resolvedCoordinates].some(coordinates =>
-          diagnostic.message === `Version for ${coordinates} could not be resolved from local Maven metadata.`
-        )
+        diagnostic.subject !== undefined &&
+        resolvedCoordinates.has(diagnostic.subject)
       ) {
         return false;
       }
