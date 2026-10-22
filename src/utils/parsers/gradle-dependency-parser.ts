@@ -31,6 +31,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { isNonEmptyString, isValidDependency } from '../type-guards';
@@ -42,6 +43,23 @@ import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 // Gradle-specific constants
 const COMMAND_TIMEOUT = 60000; // 60 seconds
 const GRADLE_LICENSE_REPORT_PATH = path.join('build', 'reports', 'dependency-license', 'index.json');
+
+// ASF policy covers what the module distributes. This init script limits the project's license report
+// to the runtime classpath, so test configurations are not checked. It runs after the build script so
+// it overrides any configurations the project sets itself.
+const RUNTIME_CLASSPATH_INIT_SCRIPT = `allprojects { project ->
+  project.plugins.withId('com.github.jk1.dependency-license-report') {
+    project.afterEvaluate { project.licenseReport.configurations = ['runtimeClasspath'] as String[] }
+  }
+}
+`;
+
+/** Writes the init script outside the repository, at a stable path so command identities stay stable. */
+function writeRuntimeClasspathInitScript(): string {
+  const scriptPath = path.join(os.tmpdir(), 'tc-module-eval-s003-runtime-classpath.gradle');
+  fs.writeFileSync(scriptPath, RUNTIME_CLASSPATH_INIT_SCRIPT, 'utf-8');
+  return scriptPath;
+}
 
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
@@ -152,7 +170,7 @@ export async function getGradleDependencies(
     const gradle = getGradleCommand(validatedPath);
     const licenseCommand = await commandRunner.run({
       command: gradle.command,
-      args: [...gradle.argsPrefix, 'generateLicenseReport'],
+      args: [...gradle.argsPrefix, '--init-script', writeRuntimeClasspathInitScript(), 'generateLicenseReport'],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,
       requiresIsolation: true,

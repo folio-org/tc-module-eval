@@ -61,99 +61,27 @@ function isLGPLLicense(license: string): boolean {
   return lower.includes('lgpl') || lower.includes('lesser general public');
 }
 
-/**
- * Get documentation keywords for a license name
- * @param licenseName - License name to get keywords for
- * @returns Array of keywords that indicate this license is documented
- */
-function getLicenseDocumentationKeywords(licenseName: string): string[] {
-  if (!isNonEmptyString(licenseName)) {
-    return [];
-  }
-
-  const lowerLicense = licenseName.toLowerCase();
-  const keywords: string[] = [];
-
-  // LGPL family
-  if (lowerLicense.includes('lgpl') || lowerLicense.includes('lesser general public')) {
-    keywords.push('lgpl', 'lesser general public license');
-  }
-
-  // MPL family (Mozilla Public License)
-  if (lowerLicense.includes('mpl') || lowerLicense.includes('mozilla')) {
-    keywords.push('mpl', 'mozilla public license', 'mozilla');
-  }
-
-  // EPL family (Eclipse Public License)
-  if (lowerLicense.includes('epl') || lowerLicense.includes('eclipse')) {
-    keywords.push('epl', 'eclipse public license', 'eclipse');
-  }
-
-  // CDDL family (Common Development and Distribution License)
-  if (lowerLicense.includes('cddl') || lowerLicense.includes('common development')) {
-    keywords.push('cddl', 'common development', 'common development and distribution license');
-  }
-
-  return keywords;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Check if any of the dependency's licenses are Category B and documented in README
- * @param dependency - Dependency to check
- * @param readmeContent - README content to search
- * @returns True if any Category B licenses are documented
- */
-function isCategoryBLicenseDocumented(dependency: Dependency, readmeContent: string): boolean {
-  if (!dependency.licenses || !Array.isArray(dependency.licenses) || !isNonEmptyString(readmeContent)) {
-    return false;
-  }
-
-  const content = readmeContent.toLowerCase();
-
-  // Check each of the dependency's licenses
-  for (const license of dependency.licenses) {
-    if (!isNonEmptyString(license)) {
-      continue;
-    }
-
-    // Check if this license is Category B or B_WCL
-    const normalizedLicense = getLicenseCategoryNormalized(license);
-    if (normalizedLicense === LicenseCategory.B || normalizedLicense === LicenseCategory.B_WCL) {
-      // Get documentation keywords for this license
-      const keywords = getLicenseDocumentationKeywords(license);
-
-      // Check if any keywords are documented in README
-      if (keywords.some(keyword => content.includes(keyword.toLowerCase()))) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check if a dependency is documented in the README file
- * Looks for mentions of Category B license families or the specific dependency name
+ * Check if the README names a dependency. Per the ASF policy, a README label must identify the
+ * product, so the README has to name the dependency itself: its full name or, for Maven and
+ * Gradle coordinates, its artifactId. A license family keyword alone does not count.
  * @param dependency - Dependency to check
  * @param readmeContent - Content of README file
- * @returns True if dependency is documented
+ * @returns True if the README names the dependency
  */
 function isDocumentedInReadme(dependency: Dependency, readmeContent: string): boolean {
   if (!isValidDependency(dependency) || typeof readmeContent !== 'string') {
     return false;
   }
 
-  const content = readmeContent.toLowerCase();
-  const depName = dependency.name.toLowerCase();
-
-  // Check for specific dependency name mention
-  if (content.includes(depName)) {
-    return true;
-  }
-
-  // Check for Category B license documentation using dynamic detection
-  return isCategoryBLicenseDocumented(dependency, readmeContent);
+  const names = new Set([dependency.name, dependency.name.split(':').pop()!].filter(isNonEmptyString));
+  return [...names].some(name =>
+    new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-])`, 'i').test(readmeContent)
+  );
 }
 
 /**
@@ -206,13 +134,7 @@ function evaluateMultipleLicenses(
       };
     } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
       // Category B - check documentation
-      // Create a temporary dependency with just this single license for documentation check
-      const singleLicenseDep: Dependency = {
-        ...dependency,
-        licenses: [license]
-      };
-
-      if (isDocumentedInReadme(singleLicenseDep, readmeContent)) {
+      if (isDocumentedInReadme(dependency, readmeContent)) {
         evaluations.push({
           license,
           category,
@@ -231,13 +153,7 @@ function evaluateMultipleLicenses(
     } else if (category === LicenseCategory.X) {
       // Category X - check for LGPL special exceptions
       if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
-        // Create a temporary dependency with just this single license for documentation check
-        const singleLicenseDep: Dependency = {
-          ...dependency,
-          licenses: [license]
-        };
-
-        if (isDocumentedInReadme(singleLicenseDep, readmeContent)) {
+        if (isDocumentedInReadme(dependency, readmeContent)) {
           evaluations.push({
             license,
             category,

@@ -148,7 +148,7 @@ describe('Dependency Utils', () => {
       expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
     });
 
-    it('should pass with documented Category B licenses', () => {
+    it('should pass when the README names the Category B dependency', () => {
       const dependencies: Dependency[] = [
         {
           name: 'some.lgpl:library',
@@ -156,10 +156,10 @@ describe('Dependency Utils', () => {
           licenses: ['LGPL-2.1']
         }
       ];
-      
-      const readmeContent = 'This project uses LGPL libraries that are properly documented.';
+
+      const readmeContent = 'Third-party notices: some.lgpl:library is used under the LGPL-2.1.';
       const result = checkLicenseCompliance(dependencies, readmeContent);
-      
+
       expect(result.compliant).toBe(true);
       expect(result.issues).toHaveLength(0);
     });
@@ -202,177 +202,54 @@ describe('Dependency Utils', () => {
 
     // Comprehensive Category B license tests
     describe('Category B License Documentation Tests', () => {
-      it('should pass with documented MPL (Mozilla Public License) dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'org.mozilla:rhino',
-            version: '1.7.14',
-            licenses: ['MPL-2.0']
-          }
-        ];
+      const categoryBDependencies: Dependency[] = [
+        { name: 'org.mozilla:rhino', version: '1.7.14', licenses: ['MPL-2.0'] },
+        { name: 'org.eclipse.angus:angus-activation', version: '2.0.3', licenses: ['EPL-2.0'] },
+        { name: 'javax.mail:mail', version: '1.4.7', licenses: ['CDDL-1.0'] }
+      ];
 
-        const readmeContent = 'This project uses Mozilla Public License libraries.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
+      it('should not accept a license family keyword as a README mention of the dependency', () => {
+        // Each line used to count: "eclipse"/"epl" (also inside "deployment"), "mozilla"/"mpl" (inside "example"),
+        // and "common development". None of them names a dependency.
+        const readmeContent = [
+          'This project uses Mozilla Public License, Eclipse Public License and',
+          'Common Development and Distribution License libraries.',
+          'See the deployment example for details.'
+        ].join('\n');
+        const result = checkLicenseCompliance(categoryBDependencies, readmeContent);
+
+        expect(result.compliant).toBe(false);
+        expect(result.issues.map(issue => issue.dependency.name)).toEqual(categoryBDependencies.map(dep => dep.name));
+        expect(result.issues.every(issue => issue.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B)).toBe(true);
+      });
+
+      it('should accept a README that names the dependency by artifactId or full name, in any case', () => {
+        const readmeContent = [
+          '## Third-party licenses',
+          '- Rhino (MPL-2.0)',
+          '- angus-activation, under the EPL-2.0',
+          '- javax.mail:mail (CDDL-1.0)'
+        ].join('\n');
+        const result = checkLicenseCompliance(categoryBDependencies, readmeContent);
 
         expect(result.compliant).toBe(true);
         expect(result.issues).toHaveLength(0);
       });
 
-      it('should pass with documented MPL using "mozilla" keyword', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'org.mozilla:rhino',
-            version: '1.7.14',
-            licenses: ['Mozilla Public License 2.0']
-          }
-        ];
-
-        const readmeContent = 'This project includes mozilla libraries that are documented here.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
-      });
-
-      it('should fail with undocumented MPL dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'com.example:test-library',
-            version: '1.7.14',
-            licenses: ['MPL-2.0']
-          }
-        ];
-
-        const readmeContent = 'This README does not document any third-party license information.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
+      it('should not count a longer name that only contains the artifactId', () => {
+        const dependencies: Dependency[] = [{ name: 'org.mozilla:rhino', version: '1.7.14', licenses: ['MPL-2.0'] }];
+        const result = checkLicenseCompliance(dependencies, 'Uses rhino-engine and myrhino.');
 
         expect(result.compliant).toBe(false);
         expect(result.issues).toHaveLength(1);
-        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
       });
 
-      it('should pass with documented EPL (Eclipse Public License) dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'org.eclipse.jdt:core',
-            version: '3.18.0',
-            licenses: ['EPL-2.0']
-          }
-        ];
-
-        const readmeContent = 'This project uses Eclipse Public License libraries.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
-      });
-
-      it('should pass with documented EPL using "eclipse" keyword', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'org.eclipse.core:runtime',
-            version: '3.20.0',
-            licenses: ['Eclipse Public License 1.0']
-          }
-        ];
-
-        const readmeContent = 'This project includes eclipse foundation libraries.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
-      });
-
-      it('should fail with undocumented EPL dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'com.example:test-library',
-            version: '3.18.0',
-            licenses: ['EPL-2.0']
-          }
-        ];
-
-        const readmeContent = 'This README does not document any third-party license information.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
+      it('should fail with undocumented Category B dependencies', () => {
+        const result = checkLicenseCompliance(categoryBDependencies, 'This README does not document any third-party license information.');
 
         expect(result.compliant).toBe(false);
-        expect(result.issues).toHaveLength(1);
+        expect(result.issues).toHaveLength(3);
         expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
-      });
-
-      it('should pass with documented CDDL (Common Development and Distribution License) dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'javax.activation:activation',
-            version: '1.1.1',
-            licenses: ['CDDL-1.0']
-          }
-        ];
-
-        const readmeContent = 'This project uses CDDL licensed libraries.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
-      });
-
-      it('should pass with documented CDDL using full license name', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'javax.mail:mail',
-            version: '1.4.7',
-            licenses: ['Common Development and Distribution License 1.0']
-          }
-        ];
-
-        const readmeContent = 'This project includes Common Development and Distribution License libraries.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
-      });
-
-      it('should fail with undocumented CDDL dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'com.example:test-library',
-            version: '1.1.1',
-            licenses: ['CDDL-1.0']
-          }
-        ];
-
-        const readmeContent = 'This README does not document any third-party license information.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(false);
-        expect(result.issues).toHaveLength(1);
-        expect(result.issues[0].reason).toContain('neither it nor this dependency is mentioned in the README');
-      });
-
-      it('should handle mixed Category B dependencies', () => {
-        const dependencies: Dependency[] = [
-          {
-            name: 'org.lgpl:library',
-            version: '1.0.0',
-            licenses: ['LGPL-2.1']
-          },
-          {
-            name: 'org.mozilla:rhino',
-            version: '1.7.14',
-            licenses: ['MPL-2.0']
-          },
-          {
-            name: 'org.eclipse:core',
-            version: '3.18.0',
-            licenses: ['EPL-2.0']
-          }
-        ];
-
-        const readmeContent = 'This project uses LGPL, Mozilla, and Eclipse libraries that are documented here.';
-        const result = checkLicenseCompliance(dependencies, readmeContent);
-
-        expect(result.compliant).toBe(true);
-        expect(result.issues).toHaveLength(0);
       });
     });
 
@@ -508,7 +385,7 @@ describe('Dependency Utils', () => {
         }
       ];
 
-      const readmeContent = 'This project uses MPL licensed libraries.';
+      const readmeContent = 'This project bundles dual-b-lib under the MPL-2.0.';
       const result = checkLicenseCompliance(dependencies, readmeContent);
 
       // ANY Category B documented = pass

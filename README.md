@@ -14,7 +14,7 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 See [Criterion Notes](docs/criterion-notes.md) for criterion-specific behavior, runtime requirements, and review boundaries.
 
-**Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
+**Note**: Dependency analysis covers the dependencies a module distributes, including transitive ones, for Maven, Gradle, and npm projects; test-only and development dependencies are excluded.  Go modules are not supported yet.
 
 ## Security
 

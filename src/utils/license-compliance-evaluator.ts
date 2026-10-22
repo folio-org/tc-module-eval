@@ -109,15 +109,13 @@ export function findReadmeContent(repoPath: string): string {
  * Build an evidence summary string from a list of dependencies.
  */
 export function buildEvidenceSummary(dependencies: Dependency[]): string {
-  const dependencyCount = dependencies.length;
+  // Every dependency is listed, so the HTML report's license groups add up to the count.
+  // The report parses this exact "Found N dependencies. Licenses: name:version (license); ..." form.
   const licenseInfo = dependencies
-    .filter(d => d.licenses && d.licenses.length > 0)
-    .map(d => `${d.name}:${d.version} (${d.licenses!.join(', ')})`)
+    .map(d => `${d.name}:${d.version} (${d.licenses?.length ? d.licenses.join(', ') : 'No license reported'})`)
     .join('; ');
-
-  // The HTML report groups licenses from the exact "Found N dependencies. Licenses: ..." form.
-  return `Found ${dependencyCount} dependencies. ` +
-    (licenseInfo ? `Licenses: ${licenseInfo}` : 'None of them reported a license.');
+  const count = dependencies.length === 1 ? '1 dependency' : `${dependencies.length} dependencies`;
+  return `Found ${count}. Licenses: ${licenseInfo}`;
 }
 
 /**
@@ -127,21 +125,11 @@ export function determineComplianceStatus(
   criterionId: string,
   complianceResult: ComplianceResult,
   evidence: string,
-  warnings: DependencyExtractionError[],
-  hasFallbackWarning: boolean
+  warnings: DependencyExtractionError[]
 ): CriterionResult {
   const warningInfo = formatWarnings(warnings);
 
   if (complianceResult.compliant) {
-    if (hasFallbackWarning) {
-      return {
-        criterionId,
-        status: EvaluationStatus.MANUAL,
-        evidence,
-        details: `All checked dependencies have allowed licenses, but only direct dependencies were checked: the build tool did not report their transitive dependencies.\nWhat to do: Check the licenses of the transitive dependencies by hand.${warningInfo}`
-      };
-    }
-
     return {
       criterionId,
       status: EvaluationStatus.PASS,
@@ -219,8 +207,7 @@ export class ThirdPartyLicenseEvaluator {
         criterionId,
         complianceResult,
         evidence,
-        warnings,
-        this.hasFallbackWarning(warnings)
+        warnings
       ), commandObservations);
     } catch (error) {
       getLogger().warn(`Error evaluating ${criterionId}:`, error);
@@ -264,14 +251,6 @@ export class ThirdPartyLicenseEvaluator {
       details: 'No third-party dependencies were found. This is unusual for a FOLIO module: it may be a library or configuration-only project, or the build files may not have been recognized.\n' +
         `What to do: Confirm that the module really has no third-party dependencies.${formatWarnings(warnings)}`
     };
-  }
-
-  private hasFallbackWarning(warnings: DependencyExtractionError[]): boolean {
-    return warnings.some(w =>
-      w.message.includes('transitive dependencies unavailable') ||
-      w.message.includes('fallback') ||
-      w.message.includes('Fallback mode')
-    );
   }
 
   private getNewCommandObservations(

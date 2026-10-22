@@ -348,7 +348,10 @@ export async function getMavenDependencies(
       args: [
         mavenGoal,
         '-Dlicense.outputDirectory=target/licenses',
-        '-Dlicense.includeTransitiveDependencies=true'
+        '-Dlicense.includeTransitiveDependencies=true',
+        // ASF policy covers what the module distributes; test-scoped libraries are not shipped.
+        // `system` is the plugin's default exclusion and is kept.
+        '-Dlicense.excludedScopes=test,system'
       ],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,

@@ -84,22 +84,13 @@ describe('formatExtractionErrors', () => {
 describe('determineComplianceStatus', () => {
   const evidence = 'Found 5 dependencies. Licenses: foo:1.0 (MIT)';
 
-  it('should return PASS when compliant with no fallback warning', () => {
+  it('should return PASS when compliant', () => {
     const complianceResult: ComplianceResult = { compliant: true, issues: [] };
-    const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
+    const result = determineComplianceStatus('S003', complianceResult, evidence, []);
 
     expect(result.criterionId).toBe('S003');
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.details).toContain('Every dependency has a license that the ASF 3rd Party License Policy allows');
-  });
-
-  it('should return MANUAL when compliant but has fallback warning', () => {
-    const complianceResult: ComplianceResult = { compliant: true, issues: [] };
-    const result = determineComplianceStatus('S003', complianceResult, evidence, [], true);
-
-    expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('only direct dependencies were checked');
-    expect(result.details).toContain('What to do: Check the licenses of the transitive dependencies by hand.');
   });
 
   it('should return FAIL when Category X violation is present', () => {
@@ -111,7 +102,7 @@ describe('determineComplianceStatus', () => {
         issueType: LicenseIssueType.CATEGORY_X_VIOLATION
       }]
     };
-    const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
+    const result = determineComplianceStatus('S003', complianceResult, evidence, []);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.details).toBe(
@@ -138,7 +129,7 @@ describe('determineComplianceStatus', () => {
         }
       ]
     };
-    const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
+    const result = determineComplianceStatus('S003', complianceResult, evidence, []);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.details).toContain('No prohibited licenses were found, but some dependencies need a reviewer to check their licenses.');
@@ -165,7 +156,7 @@ describe('determineComplianceStatus', () => {
         }
       ]
     };
-    const result = determineComplianceStatus('S003', complianceResult, evidence, [], false);
+    const result = determineComplianceStatus('S003', complianceResult, evidence, []);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     // Sections follow severity order, not input order; each row keeps "name:version - reason" for the HTML report.
@@ -185,7 +176,7 @@ describe('determineComplianceStatus', () => {
     const warnings: DependencyExtractionError[] = [
       { source: 'gradle-parser', message: 'No Gradle wrapper found' }
     ];
-    const result = determineComplianceStatus('S003', complianceResult, evidence, warnings, false);
+    const result = determineComplianceStatus('S003', complianceResult, evidence, warnings);
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.details).toContain('\n\nWarnings:\n  - [gradle] No Gradle wrapper found');
@@ -193,7 +184,7 @@ describe('determineComplianceStatus', () => {
 
   it('should use the provided criterionId', () => {
     const complianceResult: ComplianceResult = { compliant: true, issues: [] };
-    const result = determineComplianceStatus('CUSTOM01', complianceResult, evidence, [], false);
+    const result = determineComplianceStatus('CUSTOM01', complianceResult, evidence, []);
 
     expect(result.criterionId).toBe('CUSTOM01');
   });
@@ -258,11 +249,25 @@ describe('ThirdPartyLicenseEvaluator', () => {
     const result = await evaluator.evaluate('/repo');
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.evidence).toBe('Found 1 dependencies. Licenses: example-lib:1.0.0 (MIT)');
+    expect(result.evidence).toBe('Found 1 dependency. Licenses: example-lib:1.0.0 (MIT)');
     expect(result.details).toContain('Every dependency has a license that the ASF 3rd Party License Policy allows');
   });
 
-  it('should return MANUAL when compliant dependencies came from fallback extraction', async () => {
+  it('should list dependencies without a license in the evidence so the license groups add up to the count', async () => {
+    const evaluator = createEvaluator({
+      dependencies: [dependency, { name: 'mystery-lib', version: '0.1' }, { name: 'empty-lib', version: '2.0', licenses: [] }],
+      errors: [],
+      warnings: []
+    });
+
+    const result = await evaluator.evaluate('/repo');
+
+    expect(result.evidence).toBe(
+      'Found 3 dependencies. Licenses: example-lib:1.0.0 (MIT); mystery-lib:0.1 (No license reported); empty-lib:2.0 (No license reported)'
+    );
+  });
+
+  it('should not lower a compliant result to manual review because of a warning that mentions a fallback', async () => {
     const evaluator = createEvaluator({
       dependencies: [dependency],
       errors: [],
@@ -271,8 +276,7 @@ describe('ThirdPartyLicenseEvaluator', () => {
 
     const result = await evaluator.evaluate('/repo');
 
-    expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('only direct dependencies were checked');
+    expect(result.status).toBe(EvaluationStatus.PASS);
   });
 
   it('should return FAIL when Category X violations are present', async () => {
@@ -338,6 +342,31 @@ describe('ThirdPartyLicenseEvaluator', () => {
       expect(result.details).toContain('What to do: Rerun the evaluation with --allow-local-commands on a trusted machine, or check the dependency licenses by hand.');
       expect(result.details).toContain('Why the dependencies could not be listed:\n  - [maven] Maven could not list the dependencies: build commands are turned off for this evaluation\n\nBuild commands:');
       expect(result.details).toContain('Build commands:\n  - Not run: mvn license:add-third-party ');
+      // Test-scoped libraries are not distributed, so the license report must leave them out.
+      const [maven] = Array.from(evaluationRun.commandObservations.values());
+      expect(maven.args).toContain('-Dlicense.excludedScopes=test,system');
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('should limit the Gradle license report to the runtime classpath', async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-gradle-'));
+    try {
+      fs.writeFileSync(path.join(repo, 'build.gradle'), "plugins { id 'java' }");
+      const evaluationRun = createEvaluationRun({
+        repositoryPath: repo,
+        language: 'java',
+        commandRunner: new LocalCommandRunner(false)
+      });
+
+      await new ThirdPartyLicenseEvaluator().evaluate(repo, 'S003', evaluationRun);
+
+      const [gradle] = Array.from(evaluationRun.commandObservations.values());
+      const initScript = gradle.args[gradle.args.indexOf('--init-script') + 1];
+      expect(gradle.args.indexOf('--init-script')).toBeGreaterThanOrEqual(0);
+      expect(path.relative(repo, initScript).startsWith('..')).toBe(true);
+      expect(fs.readFileSync(initScript, 'utf-8')).toContain("licenseReport.configurations = ['runtimeClasspath']");
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }

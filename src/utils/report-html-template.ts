@@ -345,7 +345,7 @@ export function createHtmlReport(result: EvaluationResult): string {
         });
       }
       if (agentIndex > 0) tree.unshift(tree.splice(agentIndex,1)[0]);
-      var licenses = evidence.match(/^(Found (\d+) dependencies\.)\s*Licenses:\s*(.+)$/s);
+      var licenses = evidence.match(/^(Found (\d+) dependenc(?:y|ies)\.)\s*Licenses:\s*(.+)$/s);
       if (licenses) {
         evidence = licenses[1] + ' License groups are listed below the flagged items.';
         var licenseGroups = Object.create(null);
@@ -357,7 +357,7 @@ export function createHtmlReport(result: EvaluationResult): string {
           (licenseGroups[name] = licenseGroups[name] || []).push({text:match[1],children:[]});
         });
         var children = Object.keys(licenseGroups).sort(function (a,b) { return licenseGroups[b].length-licenseGroups[a].length; }).map(function (name) {
-          return {text:name,children:licenseGroups[name],unit:'deps'};
+          return {text:name,children:licenseGroups[name],unit:licenseGroups[name].length === 1 ? 'dep' : 'deps'};
         });
         tree.push({text:'Dependency licenses',children:children,countText:licenses[2]});
       }

@@ -3,6 +3,7 @@ import { EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types
 import { renderS007HumanDetails } from '../utils/s007-report-details';
 import { agentReviewReport } from './helpers/agent-review-report';
 import { runInNewContext } from 'vm';
+import { buildEvidenceSummary } from '../utils/license-compliance-evaluator';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -478,6 +479,31 @@ describe('EvaluationReportRenderer', () => {
     expect(prepared.recommendation).toBeUndefined();
     expect(findings.children[0]).toMatchObject({ text: '@folio/not-accepted:', hideCount: true });
     expect(findings.children[0].children.find((node: any) => node.text === 'Evidence:')).toMatchObject({ hideCount: true });
+  });
+
+  it('groups S003 dependency licenses so every counted dependency is listed, with singular units', () => {
+    const renderer = new EvaluationReportRenderer();
+    const prepare = (evidence: string) => preparedItems(renderer.renderHtml({
+      ...result,
+      criteria: [{ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' }]
+    }))[0];
+
+    const single = prepare(buildEvidenceSummary([{ name: 'org.example:only', version: '1.0', licenses: ['MIT'] }]));
+    expect(single.summary).toBe('Found 1 dependency. License groups are listed below the flagged items.');
+    expect(single.tree.find((node: any) => node.text === 'Dependency licenses').children)
+      .toEqual([expect.objectContaining({ text: 'MIT', unit: 'dep' })]);
+
+    const mixed = prepare(buildEvidenceSummary([
+      { name: 'org.example:a', version: '1.0', licenses: ['Apache-2.0'] },
+      { name: 'org.example:b', version: '2.0', licenses: ['Apache-2.0'] },
+      { name: 'org.example:mystery', version: '0.1' }
+    ]));
+    const groups = mixed.tree.find((node: any) => node.text === 'Dependency licenses');
+    expect(groups.countText).toBe('3');
+    expect(groups.children.map((node: any) => [node.text, node.children.length, node.unit])).toEqual([
+      ['Apache 2.0', 2, 'deps'],
+      ['No license reported', 1, 'dep']
+    ]);
   });
 
   it('turns "... N more" overflow markers into hidden counts instead of list entries', () => {
