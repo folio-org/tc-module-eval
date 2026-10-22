@@ -18,7 +18,7 @@ describe('S008 shared evaluator integration', () => {
     const runner: CommandRunner = { run: jest.fn(), normalize: jest.fn() };
     const result = await new TestEvaluator().evaluateCriterion('S008', repo, createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S008'], commandRunner: runner }));
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('Channel: official');
+    expect(result.details).toContain('Catalog channel: official');
     expect(result.details).toContain('R1-2026.27');
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -28,9 +28,19 @@ describe('S008 shared evaluator integration', () => {
     const run = createEvaluationRun({ repositoryPath: repo, language: 'javascript', criteriaFilter: ['S008'], s008CatalogChannel: 'development' });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo, run);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Channel: development');
+    expect(result.details).toContain('Catalog channel: development');
     expect(result.details).toContain('Problems with the evaluator\'s catalog or ledger:');
     expect(result.criterionDetails).toMatchObject({ policyDiagnostics: [expect.objectContaining({ code: 'policy_missing' })] });
+  });
+
+  it('accepts mod-circulation-bff interfaces from the checked-in catalog and ledger', async () => {
+    // mod-circulation-bff moved to app-requests-ecs, which R1-2026.27 does not include; the user accepted it.
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      name: 'ui-example', stripes: { okapiInterfaces: { 'circulation-bff-loans': '1.6' }, optionalOkapiInterfaces: { 'circulation-bff-users': '1.0' } }
+    });
+    const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo);
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.details).toContain('circulation-bff-loans [required] Needs 1.6; mod-circulation-bff-1.2.3 provides 1.6.');
   });
 
   it('returns not applicable for an explicit library before policy validation', async () => {

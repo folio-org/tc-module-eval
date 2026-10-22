@@ -10,7 +10,7 @@ import {
   S008PolicyLoadResult,
   S008ProviderCandidate
 } from '../types';
-import { isEurekaInterfaceCompatible } from './eureka-interface-compatibility';
+import { compareEurekaInterfaces, isEurekaInterfaceCompatible } from './eureka-interface-compatibility';
 import { displayPolicyPath } from './acceptance-ledger';
 import { reportPath, reportText } from './report-text';
 
@@ -42,15 +42,23 @@ export function evaluateS008(
   }
 
   const findings = declarations.declarations.map(declaration => finding(declaration, ledgerLoad.value, catalogLoad.value));
-  const failures = findings.filter(item => item.classification !== 'satisfied');
-  const status = failures.length ? EvaluationStatus.FAIL : !declarations.complete ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
+  const failures = findings.filter(item => effect(item) === 'fail');
+  const reviews = findings.filter(item => effect(item) === 'review');
+  const status = failures.length ? EvaluationStatus.FAIL
+    : reviews.length || !declarations.complete ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
   const catalogName = `${channel} catalog (${catalogLoad.value.baseline.descriptorVersion})`;
   // With unreadable declarations, the count covers only the interfaces that could be read.
   const declared = declarations.complete ? 'the module declares' : 'that could be read';
   const summary = failures.length
     ? `${failures.length === findings.length
       ? findings.length === 1 ? `The one interface ${declared} is not` : `None of the ${findings.length} interfaces ${declared} is`
-      : `${failures.length} of the ${findings.length} interfaces ${declared} ${failures.length === 1 ? 'is' : 'are'} not`} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.`
+      : `${failures.length} of the ${findings.length} interfaces ${declared} ${failures.length === 1 ? 'is' : 'are'} not`} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.${reviews.length
+        ? ` ${reviews.length} more ${reviews.length === 1 ? 'needs' : 'need'} a reviewer: ${nameList(sortProblems(reviews))}.`
+        : ''}`
+    : reviews.length
+      ? `${reviews.length === findings.length
+        ? findings.length === 1 ? `The one interface ${declared} needs` : `All ${findings.length} interfaces ${declared} need`
+        : `${reviews.length} of the ${findings.length} interfaces ${declared} ${reviews.length === 1 ? 'needs' : 'need'}`} a reviewer: ${nameList(sortProblems(reviews))}.${declarations.complete ? '' : ' Some declarations could not be read either.'}`
     : !declarations.complete
       ? declarations.sourcePaths.length && findings.length
         ? `No problems were found in the ${findings.length} interface${findings.length === 1 ? '' : 's'} that could be read, but some declarations could not be read, so a reviewer must check them.`
@@ -75,13 +83,17 @@ export function evaluateS008(
 }
 
 function finding(declaration: S008DeclarationResult['declarations'][number], ledger: Readonly<AcceptanceLedger>, catalog: Readonly<S008Catalog>): S008Finding {
+  // Like mgr-tenant-entitlements, system interfaces (_tenant, _timer, ...) never satisfy a requirement.
   const candidates = catalog.providers.flatMap(provider => provider.provides
-    .filter(provided => provided.id === declaration.id)
+    .filter(provided => provided.id === declaration.id && provided.interfaceType !== 'system')
     .map(provided => candidate(provider, provided, declaration, ledger, catalog)));
   const satisfied = candidates.some(item => item.eligible && item.compatible);
+  // -2: same major version, older minor version. An accepted provider may offer the newer one in a later release.
+  const newerMinor = candidates.some(item => item.eligible && compareEurekaInterfaces({ id: declaration.id, version: item.version }, declaration) === -2);
   const classification = satisfied ? 'satisfied'
-    : candidates.some(item => item.compatible && !item.eligible) ? 'unaccepted'
-      : candidates.length ? 'incompatible' : 'missing';
+    : newerMinor ? 'newer-minor'
+      : candidates.some(item => item.compatible && !item.eligible) ? 'unaccepted'
+        : candidates.length ? 'incompatible' : 'missing';
   return { declaration, classification, candidates: candidates.sort((a, b) => `${a.moduleId}\0${a.version}`.localeCompare(`${b.moduleId}\0${b.version}`)) };
 }
 
@@ -118,6 +130,13 @@ const PROBLEM_SECTIONS: Array<[S008Finding['classification'], string]> = [
   ['unaccepted', 'Provided only by modules that are not accepted:']
 ];
 const MAX_SUMMARY_NAMES = 5;
+
+// A reviewer decides when an accepted provider may offer the newer minor version, or when an optional interface
+// is missing: the module still works without it.
+function effect(item: S008Finding): 'pass' | 'review' | 'fail' {
+  if (item.classification === 'satisfied') return 'pass';
+  return item.classification === 'newer-minor' || (item.classification === 'missing' && item.declaration.optional) ? 'review' : 'fail';
+}
 
 // Required interfaces first: they block the module from being enabled, optional ones only limit it.
 function sortProblems(findings: S008Finding[]): S008Finding[] {
@@ -156,6 +175,11 @@ function findingLine(item: S008Finding): string {
     const offered = candidates.map(candidate => `${candidate.version} (${provider(candidate)}${candidate.eligible ? '' : ', not accepted'})`);
     return `${head}, but the catalog only has ${offered.join(', ')}.`;
   }
+  if (item.classification === 'newer-minor') {
+    const accepted = candidates.filter(candidate => candidate.eligible);
+    return `${head}, but accepted modules in the catalog only have ${accepted.map(candidate => `${candidate.version} (${provider(candidate)})`).join(', ')}.`;
+  }
+  if (item.classification === 'missing' && declaration.optional) return `${head}; no module in the catalog provides it.`;
   if (item.classification === 'unaccepted') {
     const providers = candidates.filter(candidate => candidate.compatible && !candidate.eligible).map(candidate => candidate.moduleId);
     return providers.length === 1
@@ -165,19 +189,39 @@ function findingLine(item: S008Finding): string {
   return `${head}.`;
 }
 
+function reviewAdvice(analysis: S008AnalysisResult): Array<string | undefined> {
+  const reviews = analysis.findings.filter(item => effect(item) === 'review');
+  const release = analysis.catalog?.baseline.descriptorVersion;
+  return [
+    reviews.some(item => item.classification === 'newer-minor')
+      ? `A reviewer must check that an accepted module provides the newer versions listed under "Needs a reviewer"; the catalog is based on ${release} and may not have newer releases of those modules.`
+      : undefined,
+    reviews.some(item => item.classification === 'missing')
+      ? 'A reviewer must check whether an accepted module provides the optional interfaces listed under "Needs a reviewer" that no module in the catalog provides.'
+      : undefined
+  ];
+}
+
 function whatToDo(analysis: S008AnalysisResult): string | undefined {
   if (analysis.status === EvaluationStatus.FAIL) {
-    const failures = analysis.findings.filter(item => item.classification !== 'satisfied');
+    const failures = analysis.findings.filter(item => effect(item) === 'fail');
     const has = (classification: S008Finding['classification']) => failures.some(item => item.classification === classification);
     return [
       has('missing') ? 'Stop using interfaces that no module in the catalog provides, or have the module that provides them accepted by the Technical Council and released in the platform.' : undefined,
       has('incompatible') ? 'Require a version that an accepted module in the catalog provides; a newer version counts only once a platform release that includes it is added to the catalog.' : undefined,
       has('unaccepted') ? 'Use interfaces from accepted modules, or have the module that provides them accepted by the Technical Council.' : undefined,
       failures.some(item => item.declaration.optional) ? 'This applies to optional interfaces too.' : undefined,
+      ...reviewAdvice(analysis),
       analysis.declarations.complete ? undefined : 'Also fix the problems under "Declarations that could not be read", or check those interfaces by hand.'
     ].filter(Boolean).join(' ');
   }
   if (analysis.status !== EvaluationStatus.MANUAL) return undefined;
+  if (analysis.findings.some(item => effect(item) === 'review')) {
+    return [
+      ...reviewAdvice(analysis),
+      analysis.declarations.complete ? undefined : 'Also fix the problems under "Declarations that could not be read", or check those interfaces by hand.'
+    ].filter(Boolean).join(' ');
+  }
   if (analysis.moduleKind.kind === 'ambiguous') {
     return 'Decide whether this repository is a deployable module. If it is, check by hand that every interface it declares is provided by an accepted module.';
   }
@@ -201,19 +245,22 @@ export function renderS008HumanDetails(analysis: S008AnalysisResult): string {
     lines.push(`Repository kind: ${analysis.moduleKind.kind === 'library' ? 'library' : 'could not be determined'}${reason}`);
     return lines.join('\n');
   }
-  if (analysis.declarations.sourcePaths.length) lines.push(`Declarations read from: ${analysis.declarations.sourcePaths.map(reportPath).join(', ')}`);
 
   const section = (title: string, rows: string[]) => { if (rows.length) lines.push(...(lines.length ? [''] : []), title, ...rows); };
   for (const [classification, title] of PROBLEM_SECTIONS) {
-    section(title, sortProblems(analysis.findings.filter(item => item.classification === classification)).map(findingLine));
+    section(title, sortProblems(analysis.findings.filter(item => item.classification === classification && effect(item) === 'fail')).map(findingLine));
   }
+  section('Needs a reviewer:', sortProblems(analysis.findings.filter(item => effect(item) === 'review')).map(findingLine));
   section('Provided by accepted modules:', analysis.findings.filter(item => item.classification === 'satisfied').map(findingLine));
   section('Declarations that could not be read:', analysis.declarations.diagnostics.map(diagnosticLine));
   section('Problems with the evaluator\'s catalog or ledger:', analysis.policyDiagnostics.map(diagnosticLine));
 
   const catalog = analysis.catalog;
-  section('Catalog used:', [
-    `  - Channel: ${analysis.channel}`,
+  // "Declarations read from" sits here, not at the top, so the details have at most eight top-level rows and sections:
+  // the HTML report shows only six of nine or more.
+  section('Sources:', [
+    ...(analysis.declarations.sourcePaths.length ? [`  - Declarations read from: ${analysis.declarations.sourcePaths.map(reportPath).join(', ')}`] : []),
+    `  - Catalog channel: ${analysis.channel}`,
     ...(catalog ? [
       `  - Platform release: ${catalog.baseline.descriptorVersion} (${catalog.baseline.platformRepository} at commit ${catalog.baseline.platformCommit})`,
       `  - Catalog file: ${catalog.sourcePath}`

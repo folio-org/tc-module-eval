@@ -871,6 +871,17 @@
       }
     },
     {
+      "id": "mod-circulation-bff",
+      "displayName": "Folio mod-circulation-bff module",
+      "canonicalRepositories": [
+        "folio-org/mod-circulation-bff"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "Accepted by user decision on 2026-10-22 (tc-module-eval S008 review): mod-circulation-bff was in app-platform-complete through 1.1.89 and moved to app-requests-ecs, which R1-2026.27 does not include; its absence from the catalog was not intended."
+      }
+    },
+    {
       "id": "mod-circulation-item",
       "displayName": "Circulation Item API module",
       "canonicalRepositories": [],
@@ -2357,6 +2368,10 @@
     {
       "identity": "mod-circulation",
       "familyId": "mod-circulation"
+    },
+    {
+      "identity": "mod-circulation-bff",
+      "familyId": "mod-circulation-bff"
     },
     {
       "identity": "mod-circulation-item",

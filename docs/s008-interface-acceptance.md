@@ -8,6 +8,10 @@ Use `--s008-catalog official` (the default) or explicitly select `--s008-catalog
 
 `config/acceptance-ledger.json` is shared with S009. TC review is required for every change. Family acceptance does not automatically approve Maven or npm packages: each library coordinate is explicit. Module renames, forks, and splits likewise need explicit reviewed `moduleIdentities` mappings. S009's exact package allowlist is documented separately in the [library baseline](s009-library-baseline.md); it does not affect S008 interface evidence.
 
+## Additions outside the platform release
+
+The official catalog also lists `mod-circulation-bff-1.2.3`, from `app-requests-ecs-2.0.6` in FAR. mod-circulation-bff was in `app-platform-complete` through 1.1.89 and then moved to `app-requests-ecs`, which the R1-2026.27 Platform does not include, so acquisition does not find it. It was added by a user decision recorded in the ledger's `mod-circulation-bff` family. A catalog refresh drops it; re-add it, with its descriptor hash computed the way the importer computes it, unless the new Platform release includes it.
+
 ## Catalog refresh
 
 Normal evaluation never accesses the network. Catalog acquisition is a separate maintainer-only command and requires an explicit immutable Platform LSP commit:
