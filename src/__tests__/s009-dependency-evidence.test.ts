@@ -102,6 +102,113 @@ describe('S009 dependency evidence', () => {
     }
   });
 
+  it('does not let a module listed only in a profile prove that a dependency is built locally', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><groupId>org.folio</groupId><artifactId>root</artifactId><version>1</version>
+        <modules><module>server</module></modules>
+        <profiles><profile><id>optional-client</id><modules><module>client</module></modules></profile></profiles>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><groupId>org.folio</groupId><artifactId>unapproved-client</artifactId><version>1</version></project>
+    `);
+    await fs.outputFile(path.join(repo, 'server/pom.xml'), `
+      <project><groupId>org.folio</groupId><artifactId>server</artifactId><version>1</version><dependencies>
+        <dependency><groupId>org.folio</groupId><artifactId>unapproved-client</artifactId><version>1</version></dependency>
+      </dependencies></project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations).toEqual([
+      expect.objectContaining({ coordinate: 'org.folio:unapproved-client', locality: 'ambiguous' })
+    ]);
+  });
+
+  it('reports symbolic links in the root POM and parent paths instead of treating them as absent', async () => {
+    await fs.outputFile(path.join(repo, 'parents/pom.xml'), `
+      <project><groupId>com.example</groupId><artifactId>base</artifactId><version>1</version><dependencies>
+        <dependency><groupId>org.folio</groupId><artifactId>unapproved</artifactId><version>1</version></dependency>
+      </dependencies></project>
+    `);
+    await fs.symlink(path.join(repo, 'parents'), path.join(repo, 'parent-link'));
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><parent><groupId>com.example</groupId><artifactId>base</artifactId><version>1</version><relativePath>parent-link</relativePath></parent>
+        <artifactId>root</artifactId></project>
+    `);
+    const symlinkedParent = await collectS009DependencyEvidence(repo);
+    expect(symlinkedParent.complete).toBe(false);
+    expect(symlinkedParent.diagnostics).toEqual([expect.objectContaining({ code: 'maven_parent_unreadable', path: 'pom.xml' })]);
+
+    await fs.move(path.join(repo, 'pom.xml'), path.join(repo, 'real/pom.xml'));
+    await fs.symlink(path.join(repo, 'real/pom.xml'), path.join(repo, 'pom.xml'));
+    const symlinkedRoot = await collectS009DependencyEvidence(repo);
+    expect(symlinkedRoot.hasDependencyProject).toBe(true);
+    expect(symlinkedRoot.complete).toBe(false);
+    expect(symlinkedRoot.diagnostics).toEqual([expect.objectContaining({ code: 'maven_manifest_unreadable', path: 'pom.xml' })]);
+  });
+
+  it('resolves Maven module paths the way Maven does and checks every path component for symbolic links', async () => {
+    const folioDependency = (artifactId: string) =>
+      `<project><artifactId>${artifactId}-module</artifactId><dependencies><dependency><groupId>org.folio</groupId><artifactId>${artifactId}</artifactId><version>1</version></dependency></dependencies></project>`;
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version>
+        <modules><module>service\\app</module><module>link/../other</module><module>missing</module><module>missing</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'service/app/pom.xml'), folioDependency('backslash-module-lib'));
+    await fs.outputFile(path.join(repo, 'service\\app/pom.xml'), '<project><artifactId>fixture</artifactId></project>');
+    await fs.outputFile(path.join(repo, 'other/pom.xml'), folioDependency('through-link-lib'));
+    await fs.outputFile(path.join(repo, 'target-dir/keep'), '');
+    await fs.symlink(path.join(repo, 'target-dir'), path.join(repo, 'link'));
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations.map(item => `${item.coordinate} ${item.sourcePath}`)).toEqual([
+      'org.folio:backslash-module-lib service/app/pom.xml'
+    ]);
+    expect(evidence.diagnostics.map(item => item.message)).toEqual([
+      expect.stringMatching(/^Module link\/\.\.\/other /),
+      expect.stringMatching(/^Module missing /)
+    ]);
+  });
+
+  it('does not decide whether a parent declared with a version range is the local parent POM', async () => {
+    await fs.outputFile(path.join(repo, 'parents/pom.xml'), `
+      <project><groupId>com.example</groupId><artifactId>base</artifactId><version>1</version><packaging>pom</packaging><dependencies>
+        <dependency><groupId>org.folio</groupId><artifactId>unapproved</artifactId><version>1</version></dependency>
+      </dependencies></project>
+    `);
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><parent><groupId>com.example</groupId><artifactId>base</artifactId><version>[1,2)</version><relativePath>parents/pom.xml</relativePath></parent>
+        <artifactId>root</artifactId><version>1</version></project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(false);
+    expect(evidence.diagnostics).toEqual([expect.objectContaining({ code: 'maven_parent_unresolved', material: true })]);
+  });
+
+  it('reports Gradle map declarations whose FOLIO group or name is a variable', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `
+      def subgroup = 'okapi'
+      dependencies {
+        implementation group: "org.folio.\${subgroup}", name: 'okapi-common', version: '7.0.0'
+        implementation group: 'org.folio', name: "\${libraryName}", version: '1'
+        implementation group: 'com.example', name: "\${other}", version: '1'
+      }
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.observations).toEqual([]);
+    expect(evidence.diagnostics.map(item => item.message)).toEqual([
+      'Dependency org.folio.${subgroup}:okapi-common has a variable group, so the evaluator cannot tell which FOLIO library it is.',
+      'Dependency org.folio:${libraryName} has a variable name, so the evaluator cannot tell which FOLIO library it is.'
+    ]);
+  });
+
   it('checks Maven and Gradle dependencies in org.folio sub-groups such as org.folio.okapi', async () => {
     await fs.outputFile(path.join(repo, 'pom.xml'), `
       <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version><dependencies>
