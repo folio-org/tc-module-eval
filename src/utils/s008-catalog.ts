@@ -49,7 +49,7 @@ export async function loadS008Catalog(
       if (!isSupportedEurekaVersionExpression(provided.version, true)) {
         diagnostics.push({
           code: 'catalog_invalid_interface_version',
-          message: `The catalog says ${provider.moduleId} provides ${provided.id} with the version "${provided.version}", which Eureka cannot read.`,
+          message: `The catalog says ${provider.moduleId} provides ${provided.id} with the version "${provided.version}", which S008 cannot check.`,
           path: `/providers/${providerIndex}/provides/${interfaceIndex}/version`
         });
       }

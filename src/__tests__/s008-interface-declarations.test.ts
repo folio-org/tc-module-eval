@@ -69,6 +69,9 @@ describe('S008 static declaration collector', () => {
     expect(evidence.complete).toBe(false);
     expect(evidence.declarations).toEqual([]);
     expect(evidence.diagnostics.map(item => item.code)).toEqual(expect.arrayContaining(['incomplete_declaration', 'unsupported_version_syntax']));
+    // S008's check is stricter than Eureka, which can still match some of these, so the message must not blame Eureka.
+    expect(evidence.diagnostics.find(item => item.code === 'unsupported_version_syntax')?.message)
+      .toBe('generated.json gives bad (requires[1]) the version "^1.0", which S008 cannot check. Use major.minor (such as 1.2), with several versions separated by single spaces.');
   });
 
   it('reads frontend required/optional maps and treats absent sections as complete empty declarations', async () => {

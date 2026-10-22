@@ -45,10 +45,12 @@ export function evaluateS008(
   const failures = findings.filter(item => item.classification !== 'satisfied');
   const status = failures.length ? EvaluationStatus.FAIL : !declarations.complete ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
   const catalogName = `${channel} catalog (${catalogLoad.value.baseline.descriptorVersion})`;
+  // With unreadable declarations, the count covers only the interfaces that could be read.
+  const declared = declarations.complete ? 'the module declares' : 'that could be read';
   const summary = failures.length
     ? `${failures.length === findings.length
-      ? findings.length === 1 ? 'The one interface the module declares is not' : `None of the ${findings.length} interfaces the module declares is`
-      : `${failures.length} of the ${findings.length} interfaces the module declares ${failures.length === 1 ? 'is' : 'are'} not`} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.`
+      ? findings.length === 1 ? `The one interface ${declared} is not` : `None of the ${findings.length} interfaces ${declared} is`
+      : `${failures.length} of the ${findings.length} interfaces ${declared} ${failures.length === 1 ? 'is' : 'are'} not`} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.`
     : !declarations.complete
       ? declarations.sourcePaths.length && findings.length
         ? `No problems were found in the ${findings.length} interface${findings.length === 1 ? '' : 's'} that could be read, but some declarations could not be read, so a reviewer must check them.`
@@ -129,10 +131,13 @@ function nameList(findings: S008Finding[]): string {
   return more > 0 ? `${names.join(', ')}, and ${more} more` : names.join(', ');
 }
 
-// Okapi lists acceptable versions separated by spaces ("1.0 2.0").
+// Okapi lists acceptable versions separated by spaces ("1.0 2.0"). The first one with the provider's major version
+// decides, so they read as "or" only when their major versions differ; "1.6 1.4" stays as written.
 function versions(expression: string): string {
   const alternatives = expression.split(' ').filter(Boolean);
-  return alternatives.length > 1 ? `${alternatives.slice(0, -1).join(', ')} or ${alternatives[alternatives.length - 1]}` : expression;
+  if (alternatives.length < 2) return expression;
+  if (new Set(alternatives.map(version => version.split('.')[0])).size < alternatives.length) return `"${expression}"`;
+  return `${alternatives.slice(0, -1).join(', ')} or ${alternatives[alternatives.length - 1]}`;
 }
 
 function provider(candidate: S008ProviderCandidate): string {
@@ -166,9 +171,10 @@ function whatToDo(analysis: S008AnalysisResult): string | undefined {
     const has = (classification: S008Finding['classification']) => failures.some(item => item.classification === classification);
     return [
       has('missing') ? 'Stop using interfaces that no module in the catalog provides, or have the module that provides them accepted by the Technical Council and released in the platform.' : undefined,
-      has('incompatible') ? 'Require a version that the catalog\'s provider offers; a newer version counts only once a platform release that includes it is added to the catalog.' : undefined,
+      has('incompatible') ? 'Require a version that an accepted module in the catalog provides; a newer version counts only once a platform release that includes it is added to the catalog.' : undefined,
       has('unaccepted') ? 'Use interfaces from accepted modules, or have the module that provides them accepted by the Technical Council.' : undefined,
-      failures.some(item => item.declaration.optional) ? 'This applies to optional interfaces too.' : undefined
+      failures.some(item => item.declaration.optional) ? 'This applies to optional interfaces too.' : undefined,
+      analysis.declarations.complete ? undefined : 'Also fix the problems under "Declarations that could not be read", or check those interfaces by hand.'
     ].filter(Boolean).join(' ');
   }
   if (analysis.status !== EvaluationStatus.MANUAL) return undefined;

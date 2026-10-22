@@ -90,7 +90,7 @@ describe('S008 analyzer', () => {
     evidence.declarations.push(
       { id: 'bff', version: '1.6', optional: true, sourcePath: 'descriptor.json', sourceField: 'optional[0]' },
       { id: 'notes', version: '4.0', optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[1]' },
-      { id: 'login', version: '7.0 7.3', optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[2]' }
+      { id: 'login', version: '6.0 7.0', optional: false, sourcePath: 'descriptor.json', sourceField: 'requires[2]' }
     );
     const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(value), evidence);
     expect(result.status).toBe(EvaluationStatus.FAIL);
@@ -102,8 +102,33 @@ describe('S008 analyzer', () => {
     expect(details).toContain('Not provided by any module in the catalog:\n  - bff [optional] Needs 1.6.');
     expect(details).toContain('Needed version not in the catalog:\n  - users [required] Needs 16.5, but the catalog only has 16.4 (accepted-1.0.0).');
     expect(details).toContain('Provided only by modules that are not accepted:\n  - notes [required] Needs 4.0. Only other-1.0.0 provides it, and the Technical Council has not accepted that module.');
-    expect(details).toContain('Provided by accepted modules:\n  - login [required] Needs 7.0 or 7.3; accepted-1.0.0 provides 7.3.');
+    expect(details).toContain('Provided by accepted modules:\n  - login [required] Needs 6.0 or 7.0; accepted-1.0.0 provides 7.3.');
     expect(details).not.toMatch(/sha256|satisfied|incompatible|eligib/);
+  });
+
+  it('asks for a version from an accepted module when the only other version is not accepted', () => {
+    const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('other', 'users', '1.0')), declarations('users', '2.0'));
+    expect(result.findings[0].classification).toBe('incompatible');
+    const details = renderS008HumanDetails(result);
+    expect(details).toContain('users [required] Needs 2.0, but the catalog only has 1.0 (other-1.0.0, not accepted).');
+    expect(details).toContain('What to do: Require a version that an accepted module in the catalog provides;');
+  });
+
+  it('counts only readable interfaces in a failure when other declarations could not be read', () => {
+    const evidence = declarations('users', '99.0');
+    evidence.complete = false;
+    evidence.diagnostics.push({ code: 'incomplete_declaration', message: 'descriptor.json has an entry requires[1] without a concrete interface id and version.', material: true });
+    const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), evidence);
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.summary).toBe('The one interface that could be read is not available from an accepted module in the official catalog (R1): users 99.0.');
+    expect(renderS008HumanDetails(result)).toMatch(/What to do: .*Also fix the problems under "Declarations that could not be read"/);
+  });
+
+  it('shows versions with a repeated major version as written, since only the first of them is compared', () => {
+    // Against 1.5, "1.6 1.4" fails: 1.6 has the provider's major version and decides; 1.4 is never tried.
+    const result = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.5')), declarations('users', '1.6 1.4'));
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(renderS008HumanDetails(result)).toContain('users [required] Needs "1.6 1.4", but the catalog only has 1.5 (accepted-1.0.0).');
   });
 
   function analyze(id: string, version: string, decision: any, scope?: any) {

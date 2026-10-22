@@ -150,7 +150,7 @@ function parseInterfaceMap(value: unknown, optional: boolean, field: string, dia
 
 function declaration(id: string, version: string, optional: boolean, sourcePath: string, sourceField: string, diagnostics: S008DeclarationDiagnostic[]): S008Declaration[] {
   if (!isSupportedEurekaVersionExpression(version)) {
-    diagnostics.push({ code: 'unsupported_version_syntax', message: `${sourcePath} gives ${id} (${sourceField}) the version "${version}", which Eureka cannot read. Use major.minor (such as 1.2), with several versions separated by single spaces.`, path: `${sourcePath}#${sourceField}`, material: true });
+    diagnostics.push({ code: 'unsupported_version_syntax', message: `${sourcePath} gives ${id} (${sourceField}) the version "${version}", which S008 cannot check. Use major.minor (such as 1.2), with several versions separated by single spaces.`, path: `${sourcePath}#${sourceField}`, material: true });
     return [];
   }
   return [{ id, version, optional, sourcePath, sourceField }];
