@@ -189,6 +189,20 @@ remain unresolved for agent and human review. Nearby timeouts, catch blocks, or 
 conditions do not establish resilience. Other unsupported datastore clients remain
 diagnosed even when they share a file with a recognized OpenSearch client.
 
+Stripes interfaces are read from `stripes.okapiInterfaces` and `stripes.optionalOkapiInterfaces`
+in `package.json`, whether written as an object of interface versions or as a list. Each one is a
+dependency that needs review. Browser `fetch` calls with a literal `https://` address are followed
+to their host; `fetch` with a computed or relative URL, `XMLHttpRequest`, `WebSocket`, and
+`EventSource` are reported as requests the tool cannot follow. Co-located tests (`*.test.js`,
+`*.spec.ts`) and `__mocks__` are not production code.
+
+Java clients the tool recognizes but does not trace are reported as warnings and keep the result
+`manual`, so a module using only them cannot pass as having no dependencies: Spring HTTP interfaces
+(`@HttpExchange`, `@GetExchange`, ...), `RestClient`, Feign, Retrofit, OkHttp, Apache HttpClient,
+Kafka listeners and consumers, JMS, RabbitMQ, gRPC, and S3, MinIO or `FolioS3Client` object
+storage. A JDBC `DataSource` type counts as a datastore client only as a type name such as
+`HikariDataSource`; `dataSource` variables and names like `DataSourceResolver` do not.
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

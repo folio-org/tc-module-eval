@@ -1801,7 +1801,10 @@
         "findingOutcomes": {
           "unresolved": 22
         },
-        "diagnosticCodes": [],
+        "diagnosticCodes": [
+          "unsupported-runtime-pattern",
+          "unsupported-runtime-pattern"
+        ],
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
       }
     },

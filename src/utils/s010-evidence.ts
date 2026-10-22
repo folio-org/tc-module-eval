@@ -26,20 +26,52 @@ export const S010_SOURCE_LIMITS = {
   maxTotalBytes: 6 * 1024 * 1024
 };
 
+const MAX_SCENARIOS = 1_000;
+
 const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md)$/i;
 const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
 const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
-const DATASTORE_CATEGORY = 'datastore clients (JDBC, Redis, MongoDB or Elasticsearch)';
-const UNSUPPORTED_PATTERNS = [
-  { category: 'code loaded at runtime (reflection or ServiceLoader)', pattern: /java\.lang\.reflect|Class\.forName|ServiceLoader/i },
-  { category: 'Vert.x, RAML Module Builder or generated clients', pattern: /generated[-_/ ]client|vertx|raml-module-builder/i },
-  { category: 'HTTP client libraries (Feign, Retrofit or URLConnection)', pattern: /URLConnection|FeignClient|Retrofit/i },
-  { category: DATASTORE_CATEGORY, pattern: /JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i },
-  { category: 'RabbitMQ or gRPC clients', pattern: /RabbitTemplate|ManagedChannelBuilder/i },
+// A browser fetch call whose URL is a literal absolute address; the host is captured.
+const LITERAL_FETCH_PATTERN = /(?<![\w$])fetch\s*\(\s*['"`]https?:\/\/([^/'"`?#$\s]+)/g;
+// Each entry lists patterns any of which marks a file; `searchFilePatterns` replace them in files with a
+// recognized OpenSearch client, whose RestClient and elasticsearchClient names are already covered.
+// Quantifiers stay bounded so repository content cannot make matching slow.
+const UNSUPPORTED_PATTERNS: Array<{
+  category: string;
+  patterns: RegExp[];
+  searchFilePatterns?: RegExp[];
+  javascriptOnly?: boolean;
+  excludeDatabaseFiles?: boolean;
+}> = [
+  { category: 'code loaded at runtime (reflection or ServiceLoader)', patterns: [/java\.lang\.reflect|Class\.forName|ServiceLoader/i] },
+  { category: 'Vert.x, RAML Module Builder or generated clients', patterns: [/generated[-_/ ]client|vertx|raml-module-builder/i] },
+  {
+    category: 'HTTP clients (Spring HTTP interfaces, RestClient, Feign, Retrofit, OkHttp, Apache HttpClient or URLConnection)',
+    patterns: [/URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i, /\bRestClient\b/],
+    searchFilePatterns: [/URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i]
+  },
+  {
+    category: 'datastore clients (JDBC, Redis, MongoDB or Elasticsearch)',
+    // Plain DataSource is the database recognizer's; here only type names such as HikariDataSource count, not
+    // dataSource props, MetadataSource or DataSourceResolver.
+    patterns: [/JdbcTemplate|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i, /\b[A-Z][A-Za-z0-9]*DataSource\b/],
+    searchFilePatterns: [/\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/],
+    excludeDatabaseFiles: true
+  },
+  { category: 'object storage clients (AWS S3, MinIO or the FOLIO S3 client)', patterns: [/\b(?:AmazonS3|S3AsyncClient|MinioClient|MinioAsyncClient|FolioS3Client)\b/] },
+  {
+    category: 'messaging or RPC clients (Kafka listeners and consumers, JMS, RabbitMQ or gRPC)',
+    patterns: [/RabbitTemplate|ManagedChannelBuilder|@KafkaListener\b|\bKafkaConsumer\b|\bKafkaProducer\b|@RabbitListener\b|\bJmsTemplate\b|@JmsListener\b/i]
+  },
   {
     category: 'Stripes or browser request helpers (stripes-connect, ky, axios or process.env)',
-    pattern: /\baxios\b|\bky\s*\(|\bokapi\b|\bmutator\b|process\.env\[[^\]]+\]/i,
+    patterns: [/\baxios\b|\bky\s*\(|\bokapi\b|\bmutator\b|process\.env\[[^\]]{1,256}\]/i],
+    javascriptOnly: true
+  },
+  {
+    category: 'browser requests the tool cannot follow (fetch with a computed or relative URL, XMLHttpRequest, WebSocket or EventSource)',
+    patterns: [/(?<![\w$])fetch\s*\(\s*(?!['"`]https?:\/\/[^/'"`?#$\s])|\bXMLHttpRequest\b|\bnew\s+(?:WebSocket|EventSource)\s*\(|\bsendBeacon\s*\(/],
     javascriptOnly: true
   }
 ];
@@ -53,6 +85,7 @@ interface PackageJson {
 
 interface EnvDeclaration {
   name: string;
+  line?: number;
   dependencyId: string;
   required: boolean;
   hasDefault: boolean;
@@ -76,14 +109,10 @@ export async function collectS010Evidence(
 
   const declarations = collectEnvDeclarations(snapshot.files, diagnostics);
   const javaFiles = snapshot.files.filter(file => file.path.endsWith('.java') && isProductionSource(file.path));
+  const bindings = springBindings(javaFiles);
   for (const declaration of declarations) {
-    const binding = javaFiles.find(file => springBinding(file.content, declaration));
-    const clearFailFast = Boolean(
-      declaration.required
-      && !declaration.hasDefault
-      && binding
-      && springPlaceholder(binding.content, declaration, false)
-    );
+    const binding = bindings.get(declaration.name);
+    const clearFailFast = Boolean(declaration.required && !declaration.hasDefault && binding?.withoutDefault);
     scenarios.push({
       id: `${declaration.dependencyId}:${declaration.name}/configuration-absent`,
       dependencyId: declaration.dependencyId,
@@ -92,10 +121,10 @@ export async function collectS010Evidence(
       scenario: 'configuration-absent',
       proof: clearFailFast ? 'clear-fail-fast' : 'unresolved',
       sourceReferences: [
-        { path: declaration.path, detail: declaration.required
-          ? 'Environment variable marked required'
-          : 'Environment variable not marked required (this does not show whether the service is optional)' },
-        ...(binding ? [{ path: binding.path, line: lineOf(binding.content, '@Value'), detail: 'Read with a Spring @Value binding' }] : [])
+        { path: declaration.path, ...(declaration.line ? { line: declaration.line } : {}), detail: declaration.required
+          ? `${declaration.name} is marked required`
+          : `${declaration.name} is not marked required (this does not show whether the service is optional)` },
+        ...(binding ? [{ path: binding.path, line: binding.line, detail: `Reads ${declaration.name} with a Spring @Value binding` }] : [])
       ],
       boundedFailure: 'not-applicable',
       readiness: 'not-applicable',
@@ -161,9 +190,10 @@ export async function collectS010Evidence(
 
   if (runtimeKind === 'stripes-react') {
     for (const file of snapshot.files.filter(isJavaScriptProductionSource)) {
-      for (const match of file.content.matchAll(/fetch\s*\(\s*['"]https?:\/\/([^/'"?]+)/g)) {
+      const lineAt = lineLookup(file.content);
+      for (const match of file.content.matchAll(LITERAL_FETCH_PATTERN)) {
         const dependencyId = match[1].toLowerCase();
-        const operationLine = lineAtOffset(file.content, match.index ?? 0);
+        const operationLine = lineAt(match.index ?? 0);
         const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
         const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
         const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
@@ -203,16 +233,11 @@ export async function collectS010Evidence(
   const productionCode = snapshot.files.filter(file => isProductionCode(file.path));
   for (const unsupported of UNSUPPORTED_PATTERNS) {
     const matchingPaths = productionCode
-      .filter(file => !('javascriptOnly' in unsupported) || /\.[cm]?[jt]sx?$/.test(file.path))
-      .filter(file => unsupported.category !== DATASTORE_CATEGORY
-        || !databaseFiles.some(databaseFile => databaseFile.path === file.path))
+      .filter(file => !unsupported.javascriptOnly || /\.[cm]?[jt]sx?$/.test(file.path))
+      .filter(file => !unsupported.excludeDatabaseFiles || !databaseFiles.includes(file))
       .filter(file => {
-        // Recognized OpenSearch files may use legacy elasticsearchClient field/setter names.
-        // Keep diagnostics for other actual datastore types, not these identifiers.
-        const pattern = unsupported.category === DATASTORE_CATEGORY && searchFiles.includes(file)
-          ? /\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/
-          : unsupported.pattern;
-        return pattern.test(file.content);
+        const patterns = searchFiles.includes(file) ? unsupported.searchFilePatterns ?? unsupported.patterns : unsupported.patterns;
+        return patterns.some(pattern => pattern.test(file.content));
       })
       .map(file => file.path);
     if (matchingPaths.length === 0) continue;
@@ -225,6 +250,16 @@ export async function collectS010Evidence(
     semanticIncomplete = true;
   }
 
+  // Keep the report proportionate to the module, not to however many calls a repository repeats.
+  const uniqueScenarios = deduplicateScenarios(scenarios);
+  if (uniqueScenarios.length > MAX_SCENARIOS) {
+    diagnostics.push({
+      code: 'scenario-limit',
+      message: `Found ${uniqueScenarios.length} dependency checks; only the first ${MAX_SCENARIOS} are listed.`,
+      material: true
+    });
+  }
+
   return {
     moduleKind,
     runtimeKind,
@@ -234,7 +269,7 @@ export async function collectS010Evidence(
       : semanticIncomplete || diagnostics.some(item => item.material)
         ? 'incomplete'
         : 'complete',
-    scenarios: deduplicateScenarios(scenarios),
+    scenarios: uniqueScenarios.slice(0, MAX_SCENARIOS),
     diagnostics
   };
 }
@@ -310,8 +345,8 @@ function isDatabaseStartupOwner(content: string): boolean {
 }
 
 function databaseStartupPropagates(content: string): boolean {
-  return /afterPropertiesSet\s*\([^)]*\)\s*throws\b/.test(content)
-    || /\b(?:run|migrate)\s*\([^)]*\)\s*throws\b/.test(content);
+  return /afterPropertiesSet\s*\([^()]{0,256}\)\s*throws\b/.test(content)
+    || /\b(?:run|migrate)\s*\([^()]{0,256}\)\s*throws\b/.test(content);
 }
 
 function hasGlobalDatabaseFailureBound(files: CommittedSourceFile[], startup: boolean): boolean {
@@ -347,12 +382,12 @@ function databaseConfiguration(file: CommittedSourceFile): string {
     }
     if (!line.trim() || /^\s*#/.test(line)) continue;
 
-    const mapping = /^(\s*)([^:#][^:]*):(?:\s*(.*))?$/.exec(line);
+    const mapping = /^(\s*)([^\s:#][^:]*):(?:\s*(.*))?$/.exec(line);
     if (!mapping) continue;
     while (parents.length > 0 && parents[parents.length - 1].indentation >= indentation) parents.pop();
 
     const key = mapping[2].trim().replace(/^['"]|['"]$/g, '');
-    const value = (mapping[3] ?? '').replace(/\s+#.*$/, '').trim();
+    const value = (mapping[3] ?? '').replace(/(?<!\s)\s+#.*$/, '').trim();
     const path = [...parents.map(parent => parent.key), key].join('.');
     if (/^(?:(?:[&!]\S+)\s+)*[>|](?:[1-9][+-]?|[+-][1-9]?)?$/.test(value)) {
       scalarIndentation = indentation;
@@ -439,12 +474,14 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
       const launch = descriptor.launchDescriptor as Record<string, unknown> | undefined;
       const env = (launch?.env ?? descriptor.env) as unknown;
       if (!Array.isArray(env)) continue;
+      const nameLines = jsonNameLines(file.content);
       for (const value of env) {
         if (!value || typeof value !== 'object') continue;
         const entry = value as Record<string, unknown>;
         if (typeof entry.name !== 'string' || !EXTERNAL_CONFIG_PATTERN.test(entry.name)) continue;
         declarations.push({
           name: entry.name,
+          line: nameLines.get(entry.name),
           dependencyId: dependencyFromConfig(entry.name),
           required: entry.required === true,
           hasDefault: typeof entry.value === 'string' && entry.value.length > 0,
@@ -459,18 +496,44 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
   return declarations;
 }
 
-function springBinding(content: string, declaration: EnvDeclaration): boolean {
-  return springPlaceholder(content, declaration, false) || springPlaceholder(content, declaration, true);
+interface SpringBinding {
+  path: string;
+  line: number;
+  withoutDefault: boolean;
 }
 
-function springPlaceholder(content: string, declaration: EnvDeclaration, withDefault: boolean): boolean {
-  const name = escapeRegExp(declaration.name);
-  const suffix = withDefault ? ':[^}]*' : '';
-  return new RegExp(`@Value\\s*\\(\\s*["']\\$\\{${name}${suffix}\\}["']\\s*\\)`).test(content);
+// One pass over each file, instead of one regular expression per declaration and file. A placeholder
+// belongs to the first file that binds it; that file proves fail-fast if it binds it without a default.
+function springBindings(files: CommittedSourceFile[]): Map<string, SpringBinding> {
+  const bindings = new Map<string, SpringBinding>();
+  for (const file of files) {
+    const lineAt = lineLookup(file.content);
+    const inFile = new Map<string, SpringBinding>();
+    for (const match of file.content.matchAll(/@Value\s*\(\s*["']\$\{([^}:"'\s]{1,256})(:[^}]{0,1024})?\}["']\s*\)/g)) {
+      const existing = inFile.get(match[1]);
+      if (!existing || (!match[2] && !existing.withoutDefault)) {
+        inFile.set(match[1], { path: file.path, line: lineAt(match.index ?? 0), withoutDefault: !match[2] });
+      }
+    }
+    for (const [name, binding] of inFile) {
+      if (!bindings.has(name)) bindings.set(name, binding);
+    }
+  }
+  return bindings;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Line of the last `"name": "<value>"` member for each value; env entries follow the descriptor's other names.
+function jsonNameLines(content: string): Map<string, number> {
+  const lines = new Map<string, number>();
+  const lineAt = lineLookup(content);
+  for (const match of content.matchAll(/"name"\s*:\s*("(?:[^"\\\n]|\\.){0,1024}")/g)) {
+    try {
+      lines.set(JSON.parse(match[1]) as string, lineAt(match.index ?? 0));
+    } catch {
+      // Not a JSON string; the declaration is cited without a line.
+    }
+  }
+  return lines;
 }
 
 function dependencyFromConfig(name: string): string {
@@ -500,10 +563,11 @@ function clientLine(content: string): number {
 function packageStripesInterfaces(packageJson: PackageJson | undefined): string[] {
   const stripes = packageJson?.stripes;
   if (!stripes) return [];
+  // Stripes declares interfaces as an object of interface → version; older packages use a list of "id version".
   const values = [stripes.okapiInterfaces, stripes.optionalOkapiInterfaces];
-  return values.flatMap(value => Array.isArray(value) ? value : [])
+  return values.flatMap(value => Array.isArray(value) ? value : value && typeof value === 'object' ? Object.keys(value) : [])
     .flatMap(value => typeof value === 'string' ? [value] : [])
-    .map(value => value.split(/\s+/)[0])
+    .map(value => value.trim().split(/\s+/)[0])
     .filter(Boolean);
 }
 
@@ -546,7 +610,8 @@ function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence)
 }
 
 function isProductionSource(filePath: string): boolean {
-  return !/(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?|docs?|target|dist|build)(?:\/|$)/i.test(filePath);
+  return !/(?:^|\/)(?:test|tests|__tests__|__mocks__|fixtures?|examples?|docs?|target|dist|build)(?:\/|$)/i.test(filePath)
+    && !/\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(filePath);
 }
 
 function isProductionCode(filePath: string): boolean {
@@ -571,8 +636,20 @@ function isJavaScriptProductionSource(file: CommittedSourceFile): boolean {
   return isProductionCode(file.path) && /\.[cm]?[jt]sx?$/.test(file.path);
 }
 
-function lineOf(content: string, needle: string): number {
-  return lineAtOffset(content, Math.max(0, content.indexOf(needle)));
+// Line numbers for many offsets in one file, without rescanning the file for each offset.
+function lineLookup(content: string): (offset: number) => number {
+  const starts = [0];
+  for (let index = content.indexOf('\n'); index !== -1; index = content.indexOf('\n', index + 1)) starts.push(index + 1);
+  return offset => {
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle] <= offset) low = middle;
+      else high = middle - 1;
+    }
+    return low + 1;
+  };
 }
 
 function lineAtOffset(content: string, offset: number): number {

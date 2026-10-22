@@ -541,4 +541,144 @@ describe('S010 evidence collection', () => {
       expect.objectContaining({ path: expect.stringMatching(/swagger|README/) })
     ]));
   });
+  it('reads Stripes interfaces declared as an object of interface versions', async () => {
+    const root = repository({
+      'package.json': JSON.stringify({
+        name: '@folio/notes',
+        dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' },
+        stripes: { okapiInterfaces: { notes: '4.0', users: '16.0' }, optionalOkapiInterfaces: { tags: '1.0' } }
+      }),
+      'src/index.js': 'export default function Notes() { return null; }'
+    });
+
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.scenarios.map(scenario => scenario.dependencyId)).toEqual([
+      'folio-interface:notes', 'folio-interface:users', 'folio-interface:tags'
+    ]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('does not read co-located tests and mocks as production code', async () => {
+    const root = repository({
+      'package.json': JSON.stringify({ name: '@folio/x', dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' }, stripes: {} }),
+      'src/Users.test.js': 'import axios from "axios"; fetch(url);',
+      'src/Users.spec.tsx': 'const okapi = { url: "" };',
+      'src/__mocks__/stripes.js': 'export const mutator = {};',
+      'src/Users.js': 'export const Users = () => null;'
+    });
+
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.diagnostics).toEqual([]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('diagnoses browser requests whose target is not a literal address', async () => {
+    const root = repository({
+      'package.json': JSON.stringify({ name: '@folio/x', dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' }, stripes: {} }),
+      'src/lookup.js': 'export const lookup = term => fetch(`https://api.example.org/search?q=${term}`);',
+      'src/users.js': 'export const users = url => fetch(`${url}/users`);',
+      'src/upload.js': 'export const upload = () => new XMLHttpRequest();',
+      'src/hooks.js': 'export const reload = query => refetch(query);'
+    });
+
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.scenarios.map(scenario => scenario.dependencyId)).toEqual(['api.example.org']);
+    expect(result.diagnostics).toEqual([expect.objectContaining({
+      code: 'unsupported-runtime-pattern',
+      message: expect.stringMatching(/^2 files use browser requests the tool cannot follow .* for example src\/upload\.js, src\/users\.js\.$/)
+    })]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('diagnoses Java clients it cannot analyse instead of reporting no dependencies', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-example</artifactId></project>',
+      'src/main/java/Listener.java': 'class Listener { @KafkaListener(topics = "t") void on(String event) {} }',
+      'src/main/java/Exports.java': 'class Exports { private final FolioS3Client s3; }',
+      'src/main/java/UsersClient.java': '@HttpExchange("users") interface UsersClient { @GetExchange User get(); }',
+      'src/main/java/Pool.java': 'class Pool { HikariDataSource pool; }',
+      'src/main/java/RulesMapper.java': 'class RulesMapper { DataSourceResolver resolver; Object rule() { return rule.getDataSource(); } }'
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios).toEqual([]);
+    expect(Object.fromEntries(result.diagnostics.map(item => [item.message.replace(/ \(.*/, ''), item.path]))).toEqual({
+      'Uses HTTP clients': 'src/main/java/UsersClient.java',
+      'Uses datastore clients': 'src/main/java/Pool.java',
+      'Uses object storage clients': 'src/main/java/Exports.java',
+      'Uses messaging or RPC clients': 'src/main/java/Listener.java'
+    });
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('cites the descriptor line of each environment variable and the line of its Spring binding', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-example</artifactId></project>',
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({
+        id: 'mod-example-1.0.0',
+        launchDescriptor: { env: [{ name: 'DB_HOST', value: 'postgres' }, { name: 'SEARCH_URL', required: true }] }
+      }, null, 2),
+      'src/main/java/Config.java': [
+        'class Config {',
+        '  @Value("${server.port}") int port;',
+        '  @Value("${SEARCH_URL}") String url;',
+        '}'
+      ].join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(result.scenarios.map(scenario => scenario.sourceReferences)).toEqual([
+      [{ path: 'descriptors/ModuleDescriptor-template.json', line: 6,
+        detail: 'DB_HOST is not marked required (this does not show whether the service is optional)' }],
+      [
+        { path: 'descriptors/ModuleDescriptor-template.json', line: 10, detail: 'SEARCH_URL is marked required' },
+        { path: 'src/main/java/Config.java', line: 3, detail: 'Reads SEARCH_URL with a Spring @Value binding' }
+      ]
+    ]);
+    expect(result.scenarios[1].proof).toBe('clear-fail-fast');
+  });
+
+  it('stays fast on repository content built to make pattern matching slow', async () => {
+    const root = repository({
+      'pom.xml': '<project><artifactId>mod-example</artifactId></project>',
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({
+        id: 'mod-example-1.0.0',
+        launchDescriptor: { env: Array(3).fill({ name: 'DB_URL', required: true }) }
+      }),
+      'src/main/java/Config.java': '@Value("${DB_URL:'.repeat(11_000),
+      'src/main/java/Migrations.java': `class Migrations implements InitializingBean { Flyway flyway; ${'run('.repeat(45_000)} }`,
+      'src/main/resources/application.yml': [
+        'spring:',
+        '  datasource:',
+        `    url: jdbc${' '.repeat(40_000)}x`,
+        `${' '.repeat(60_000)}x`
+      ].join('\n'),
+      'src/main/js/env.js': 'process.env['.repeat(16_000)
+    });
+
+    const started = Date.now();
+    const result = await collectS010Evidence(root, 'java');
+
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(result.scenarios.map(scenario => scenario.id)).toContain('database/startup-unavailable');
+  }, 120_000);
+  it('lists at most 1,000 dependency checks and says the list was cut', async () => {
+    const root = repository({
+      'package.json': JSON.stringify({ name: '@folio/x', dependencies: { react: '^18.2.0', '@folio/stripes-core': '^10.0.0' }, stripes: {} }),
+      'src/hosts.js': Array.from({ length: 1_100 }, (_, index) => `fetch("https://host${index}.example.org/");`).join('\n')
+    });
+
+    const result = await collectS010Evidence(root, 'javascript');
+
+    expect(result.scenarios).toHaveLength(1_000);
+    expect(result.diagnostics).toEqual([expect.objectContaining({
+      code: 'scenario-limit', message: 'Found 1100 dependency checks; only the first 1000 are listed.', material: true
+    })]);
+    expect(evaluateS010(result).status).toBe(EvaluationStatus.MANUAL);
+  });
 });
