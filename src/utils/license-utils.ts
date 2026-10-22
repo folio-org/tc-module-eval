@@ -1,18 +1,25 @@
-import { promises as fs } from 'fs';
+import { constants as fsConstants, promises as fs } from 'fs';
 import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
 import { isWithinRepo, realPath } from './repo-files';
 
-// Top-level LICENSE, LICENCE or COPYING files in any case, with or without a suffix (LICENSE.md, LICENSE-2.0.txt).
-const LICENSE_FILE_PATTERN = /^(licen[cs]e|copying)([-._].*)?$/i;
+// Top-level LICENSE, LICENCE or COPYING files in any case, with an optional single suffix (LICENSE-2.0, LICENSE-MIT)
+// and extension (LICENSE.md, LICENSE-2.0.txt). Multi-word names such as LICENSE-THIRD-PARTY.txt or
+// LICENSE_LIST_MANAGEMENT.md are notices or documentation, not the module's license.
+const LICENSE_FILE_PATTERN = /^(?:licen[cs]e|copying)(?:[-_][a-z0-9]+(?:\.[0-9]+)*)?(?:\.[a-z0-9]+)?$/i;
 const NO_LICENSE_FILE_ROW = 'License file: none (looked for top-level LICENSE, LICENCE and COPYING files in any case, with any extension)';
 // A license file must name its license in these first non-empty lines; later text may be appended third-party notices.
 const LICENSE_HEADER_LINES = 10;
-const APACHE_2_TITLE = /apache license,?\s*(?:version\s*2\.0|v?2\.0)|\bapache-2\.0\b/i;
-const OTHER_LICENSE_TITLE = /\bMIT License\b|\bGeneral Public License\b|\bBSD(?:[- ]\d-Clause)? License\b|\bMozilla Public License\b|\bEclipse Public License\b|\bISC License\b|\bCreative Commons\b|\bThe Unlicense\b|SPDX-License-Identifier:\s*(?!Apache-2\.0\b)\S/i;
+// A header line (joined with the next one, for titles split over two lines) that names Apache 2.0 as the file's own license.
+const APACHE_2_HEADER = /^(?:the\s+)?apache\s+(?:software\s+)?license,?\s*(?:version\s*)?v?2\.0\b|^SPDX-License-Identifier:\s*Apache-2\.0\s*$|^Apache-2\.0$|\b(?:licensed|distributed)\s+under\s+(?:the\s+terms\s+of\s+)?the\s+apache\s+license,?\s*(?:version\s*)?2\.0\b/i;
+const OTHER_LICENSE_HEADER = /\bMIT License\b|Permission is hereby granted, free of charge|\bGeneral Public License\b|\bBSD(?:[- ]\d-Clause)? License\b|\bMozilla Public License\b|\bEclipse Public License\b|\bISC License\b|\bCreative Commons\b|\bThe Unlicense\b|\bapache\s+(?:software\s+)?license,?\s*(?:version\s*)?v?1\.\d|SPDX-License-Identifier:\s*(?!Apache-2\.0\s*$)\S/i;
 const MAX_FIRST_LINE_LENGTH = 120;
 const MAX_ERROR_LENGTH = 200;
+// Bounds for untrusted repositories: only the start of a license file is needed to classify it.
+const MAX_LICENSE_FILES = 20;
+const MAX_LICENSE_FILE_BYTES = 64 * 1024;
+const MAX_BUILD_FILE_BYTES = 1024 * 1024;
 
 export interface LicenseFileFinding {
   name: string;
@@ -63,24 +70,35 @@ export class LicenseUtils {
       .sort();
 
     const findings: LicenseFileFinding[] = [];
-    for (const name of names) {
-      const file = await readRepoFile(repoPath, name);
+    for (const name of names.slice(0, MAX_LICENSE_FILES)) {
+      const file = await readRepoFile(repoPath, name, MAX_LICENSE_FILE_BYTES);
       if (file.status === 'missing') continue;
       if (file.status === 'not_read') {
-        findings.push({ name, isApache2: false, firstLine: '', notRead: file.reason });
+        findings.push({ name: display(name), isApache2: false, firstLine: '', notRead: file.reason });
         continue;
       }
       const content = file.content;
-      const firstLine = content.split('\n').map(line => line.trim()).find(Boolean) ?? '';
-      findings.push({ name, isApache2: this.isApache2License(content), firstLine: bound(firstLine, MAX_FIRST_LINE_LENGTH) });
+      const firstLine = display(content.split('\n').find(line => display(line)) ?? '');
+      findings.push({ name: display(name), isApache2: this.isApache2License(content), firstLine: bound(firstLine, MAX_FIRST_LINE_LENGTH) });
+    }
+    if (names.length > MAX_LICENSE_FILES) {
+      findings.push({
+        name: `${names.length - MAX_LICENSE_FILES} more`,
+        isApache2: false,
+        firstLine: '',
+        notRead: `only the first ${MAX_LICENSE_FILES} license files are read`
+      });
     }
     return findings;
   }
 
   static async checkMavenLicense(repoPath: string): Promise<BuildFileFinding> {
-    const file = await readRepoFile(repoPath, 'pom.xml');
+    const file = await readRepoFile(repoPath, 'pom.xml', MAX_BUILD_FILE_BYTES);
     if (file.status !== 'read') {
       return { file: 'pom.xml', ...file };
+    }
+    if (file.truncated) {
+      return { file: 'pom.xml', status: 'not_read', reason: 'it is larger than 1 MB' };
     }
     const content = file.content;
 
@@ -98,7 +116,7 @@ export class LicenseUtils {
     if (!licenses.length) {
       const parent = project.parent?.[0];
       const parentId = parent
-        ? [parent.groupId?.[0], parent.artifactId?.[0], parent.version?.[0]].filter(Boolean).join(':') || 'unnamed parent'
+        ? display([textOf(parent.groupId), textOf(parent.artifactId), textOf(parent.version)].filter(Boolean).join(':')) || 'unnamed parent'
         : undefined;
       return { file: 'pom.xml', status: 'no_license', parent: parentId };
     }
@@ -106,14 +124,21 @@ export class LicenseUtils {
     return {
       file: 'pom.xml',
       status: 'declared',
-      licenses: licenses.map(license => declaredLicense(textOf(license?.name), textOf(license?.url)))
+      licenses: licenses.map(license => {
+        const name = textOf(license?.name);
+        const url = textOf(license?.url);
+        return declaredLicense(name, url, this.isApache2LicenseDeclaration(name, url));
+      })
     };
   }
 
   static async checkPackageJsonLicense(repoPath: string): Promise<BuildFileFinding> {
-    const file = await readRepoFile(repoPath, 'package.json');
+    const file = await readRepoFile(repoPath, 'package.json', MAX_BUILD_FILE_BYTES);
     if (file.status !== 'read') {
       return { file: 'package.json', ...file };
+    }
+    if (file.truncated) {
+      return { file: 'package.json', status: 'not_read', reason: 'it is larger than 1 MB' };
     }
     const content = file.content;
 
@@ -126,15 +151,18 @@ export class LicenseUtils {
 
     const licenses: DeclaredLicense[] = [];
     const { license, licenses: legacyLicenses } = packageJson ?? {};
+    // package.json uses SPDX ids, so only the exact Apache-2.0 id counts (not e.g. LicenseRef-Commercial-Apache-2.0).
+    const spdxLicense = (id: string, url: string) =>
+      declaredLicense(id, url, /^apache-2\.0$/i.test(id) || /^https?:\/\/(?:www\.)?apache\.org\/licenses\/license-2\.0(?:\.txt|\.html)?$/i.test(url));
     if (typeof license === 'string' && license.trim()) {
       // SPDX expression such as "Apache-2.0" or "(MIT OR Apache-2.0)"; each named license counts.
       license.replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+/i).map(part => part.trim()).filter(Boolean)
-        .forEach(part => licenses.push(declaredLicense(part, '')));
+        .forEach(part => licenses.push(spdxLicense(part, '')));
     } else if (license && typeof license === 'object') {
-      licenses.push(declaredLicense(textOf(license.type), textOf(license.url)));
+      licenses.push(spdxLicense(textOf(license.type), textOf(license.url)));
     }
     if (Array.isArray(legacyLicenses)) {
-      legacyLicenses.forEach(entry => licenses.push(declaredLicense(textOf(entry?.type), textOf(entry?.url))));
+      legacyLicenses.forEach(entry => licenses.push(spdxLicense(textOf(entry?.type), textOf(entry?.url))));
     }
 
     return licenses.length
@@ -143,15 +171,22 @@ export class LicenseUtils {
   }
 
   /**
-   * True when the top of a license file names the Apache License 2.0 (its title and version, or an
-   * Apache-2.0 SPDX id) before any other license. Mentions further down, such as notices for bundled
-   * third-party code, do not count.
+   * True when the top of a license file names the Apache License 2.0 as its own license (its title and
+   * version, the standard "licensed under" notice, or an Apache-2.0 SPDX id) before any other license.
+   * Other mentions of Apache-2.0, such as notices for bundled third-party code, do not count.
    */
   static isApache2License(content: string): boolean {
-    const header = content.split('\n').map(line => line.trim()).filter(Boolean).slice(0, LICENSE_HEADER_LINES).join(' ');
-    const apache = header.search(APACHE_2_TITLE);
-    const other = header.search(OTHER_LICENSE_TITLE);
-    return apache >= 0 && (other < 0 || apache < other);
+    const header: string[] = [];
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed) header.push(trimmed);
+      if (header.length > LICENSE_HEADER_LINES) break;
+    }
+    for (let index = 0; index < Math.min(header.length, LICENSE_HEADER_LINES); index++) {
+      if (APACHE_2_HEADER.test(header[index]) || APACHE_2_HEADER.test(`${header[index]} ${header[index + 1] ?? ''}`)) return true;
+      if (OTHER_LICENSE_HEADER.test(header[index])) return false;
+    }
+    return false;
   }
 
   static isApache2LicenseDeclaration(name: string, url: string): boolean {
@@ -176,14 +211,15 @@ export class LicenseUtils {
     ).join('\n');
     const apache = files.filter(file => file.isApache2).map(file => file.name);
     const other = files.filter(file => !file.isApache2 && !file.notRead).map(file => file.name);
-    const unread = files.filter(file => file.notRead).map(file => file.name);
+    const unread = files.filter(file => file.notRead);
 
     // An unread file could hold any license, so the result cannot be decided automatically.
     if (unread.length) {
+      const reasons = [...new Set(unread.map(file => file.notRead))].join('; ');
       return {
         criterionId,
         status: EvaluationStatus.MANUAL,
-        evidence: `The license ${unread.length === 1 ? 'file' : 'files'} ${joinNames(unread)} ${unread.length === 1 ? 'was' : 'were'} not read because ${unread.length === 1 ? 'it links' : 'they link'} outside the repository or to a missing file. A reviewer must check the license; replace ${unread.length === 1 ? 'the link' : 'the links'} with a top-level LICENSE file containing the Apache License 2.0 text.`,
+        evidence: `Some top-level license files were not read (${reasons}). A reviewer must check the license; a FOLIO module needs one top-level LICENSE file containing the Apache License 2.0 text.`,
         details
       };
     }
@@ -281,8 +317,9 @@ export class LicenseUtils {
   }
 }
 
-function declaredLicense(name: string, url: string): DeclaredLicense {
-  return { name: name || url || '(no name given)', url: url || undefined, isApache2: LicenseUtils.isApache2LicenseDeclaration(name, url) };
+// Names and URLs come from the untrusted repository; display() keeps them to one report row.
+function declaredLicense(name: string, url: string, isApache2: boolean): DeclaredLicense {
+  return { name: display(name || url) || '(no name given)', url: display(url) || undefined, isApache2 };
 }
 
 function describeBuildFile(finding: BuildFileFinding): string {
@@ -305,21 +342,51 @@ function describeBuildFile(finding: BuildFileFinding): string {
   }
 }
 
-type RepoFile = { status: 'read'; content: string } | { status: 'missing' } | { status: 'not_read'; reason: string };
+type RepoFile =
+  | { status: 'read'; content: string; truncated: boolean }
+  | { status: 'missing' }
+  | { status: 'not_read'; reason: string };
 
-// The evaluated repository is untrusted: never follow a link out of it, or its target's text could reach the report.
-async function readRepoFile(repoPath: string, name: string): Promise<RepoFile> {
+// The evaluated repository is untrusted: never follow a link out of it, or its target's text could reach the
+// report, and never read more than maxBytes. The opened file itself is checked, so a link swapped after the
+// containment check cannot redirect the read.
+async function readRepoFile(repoPath: string, name: string, maxBytes: number): Promise<RepoFile> {
   const filePath = path.join(repoPath, name);
+  let handle: fs.FileHandle;
   try {
-    await fs.lstat(filePath);
+    // O_NONBLOCK keeps a FIFO from blocking the open; it does not affect regular files.
+    handle = await fs.open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NONBLOCK ?? 0));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing' };
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return await fs.lstat(filePath).then(() => true, () => false)
+        ? { status: 'not_read', reason: 'it is a broken link' }
+        : { status: 'missing' };
+    }
+    if (code === 'ELOOP') return { status: 'not_read', reason: 'it is a broken link' };
     throw error;
   }
-  if (!realPath(filePath)) return { status: 'not_read', reason: 'it is a broken link' };
-  if (!isWithinRepo(repoPath, filePath)) return { status: 'not_read', reason: 'it links outside the repository' };
-  if (!(await fs.stat(filePath)).isFile()) return { status: 'missing' };
-  return { status: 'read', content: await fs.readFile(filePath, 'utf-8') };
+
+  try {
+    const opened = await handle.stat();
+    const resolved = realPath(filePath);
+    const current = resolved ? await fs.stat(resolved).catch(() => undefined) : undefined;
+    if (!resolved || !current || current.dev !== opened.dev || current.ino !== opened.ino || !isWithinRepo(repoPath, resolved)) {
+      return { status: 'not_read', reason: 'it links outside the repository' };
+    }
+    if (!opened.isFile()) return { status: 'missing' };
+
+    const buffer = Buffer.alloc(Math.min(maxBytes, opened.size));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return { status: 'read', content: buffer.subarray(0, bytesRead).toString('utf-8'), truncated: opened.size > maxBytes };
+  } finally {
+    await handle.close();
+  }
+}
+
+// Keeps repository-supplied text to one line and out of the report's "(evidence: ...)" list syntax.
+function display(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f\s]+/g, ' ').trim().replace(/\(\s*evidence:/gi, '[evidence:');
 }
 
 function textOf(value: unknown): string {
@@ -333,7 +400,7 @@ function joinNames(names: string[]): string {
 
 function errorText(error: unknown): string {
   const message = (error instanceof Error ? error.message : String(error)).split('\n')[0];
-  return bound(message, MAX_ERROR_LENGTH);
+  return bound(display(message), MAX_ERROR_LENGTH);
 }
 
 function bound(text: string, max: number): string {
