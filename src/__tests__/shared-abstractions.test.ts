@@ -108,7 +108,7 @@ describe('SharedEvaluator', () => {
 
     expect(result.criterionId).toBe('S002');
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('Module descriptor artifact stage returned unsafe-to-run');
+    expect(result.evidence).toBe('The evaluator could not safely look for the module descriptor. The repository path is not valid: /fake/path. A reviewer needs to check it by hand.');
   });
 });
 

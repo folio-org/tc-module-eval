@@ -14,7 +14,7 @@ import { validateRepoPath } from '../parsers/common';
 import { findCandidateFiles, isWithinRepo, relativePosixPath, walkDirectories } from '../repo-files';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
-const FRONTEND_DESCRIPTOR_SCRIPTS = ['build-mod-descriptor', 'build-module-descriptor', 'generate-module-descriptor'];
+export const FRONTEND_DESCRIPTOR_SCRIPTS = ['build-mod-descriptor', 'build-module-descriptor', 'generate-module-descriptor'];
 
 export async function produceModuleDescriptorArtifact(
   repoPath: string,
@@ -24,7 +24,7 @@ export async function produceModuleDescriptorArtifact(
   const validatedPath = validateRepoPath(repoPath);
   if (!validatedPath) {
     return artifact('unsafe-to-run', {
-      errors: [`Invalid repository path: ${repoPath}`]
+      errors: [`The repository path is not valid: ${repoPath}.`]
     });
   }
 
@@ -79,8 +79,8 @@ async function runMavenDescriptorStrategy(
       strategy: 'maven-generation',
       command,
       errors: candidates.length > 1
-        ? [`Ambiguous generated descriptors: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}`]
-        : ['Maven descriptor generation completed but no final ModuleDescriptor.json was found under a target/ directory']
+        ? [`The Maven build generated several ModuleDescriptor.json files, and none could be matched to this module: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}.`]
+        : ['The Maven build ran, but it did not generate a ModuleDescriptor.json under a target/ directory.']
     });
   }
 
@@ -125,7 +125,7 @@ async function runFrontendDescriptorStrategy(
     return artifact('missing', {
       strategy: 'frontend-script',
       command,
-      errors: [`Frontend script ${scriptName} completed but did not produce ${DESCRIPTOR_NAME}`]
+      errors: [`The ${scriptName} script ran, but it did not create ${DESCRIPTOR_NAME} at the repository root.`]
     });
   }
 
@@ -141,12 +141,12 @@ function discoverStaticRootDescriptor(repoPath: string): ModuleDescriptorArtifac
   const templates = findTemplateCandidates(repoPath);
   if (templates.length > 0) {
     return artifact('invalid-candidate', {
-      errors: [`Only descriptor templates were found: ${templates.map(candidate => relative(repoPath, candidate)).join(', ')}`]
+      errors: [`Only descriptor templates were found (${templates.map(candidate => relative(repoPath, candidate)).join(', ')}), and nothing generates a ${DESCRIPTOR_NAME} from them.`]
     });
   }
 
   return artifact('missing', {
-    errors: [`No final ${DESCRIPTOR_NAME} was produced or discovered`]
+    errors: [`No ${DESCRIPTOR_NAME} was found at the repository root, and there is no Maven build or package.json script to generate one.`]
   });
 }
 
@@ -222,7 +222,7 @@ function selectedArtifact(
   const relativePath = relative(repoPath, descriptorPath);
   const warnings = strategy === 'static-root' || before.has(relativePath)
     ? []
-    : [`Descriptor written during evaluation: ${relativePath}`];
+    : [`${relativePath} was generated during this evaluation; it is not committed to the repository.`];
   return artifact(strategy === 'static-root' ? 'discovered' : 'produced', {
     strategy,
     descriptorPath: relativePath,

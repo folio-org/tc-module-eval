@@ -106,7 +106,7 @@ describe('module-descriptor-artifact', () => {
     expect(result.strategy).toBe('maven-generation');
     expect(result.descriptorPath).toBe('target/ModuleDescriptor.json');
     expect(result.command?.command).toBe('mvn');
-    expect(result.warnings.join('\n')).toContain('Descriptor written during evaluation');
+    expect(result.warnings.join('\n')).toContain('target/ModuleDescriptor.json was generated during this evaluation');
   });
 
   it('should select a nested Maven module descriptor generated under target', async () => {
@@ -138,7 +138,7 @@ describe('module-descriptor-artifact', () => {
     const result = await produceModuleDescriptorArtifact(repo, undefined, runner);
 
     expect(result.status).toBe('ambiguous-candidates');
-    expect(result.errors.join('\n')).toContain('Ambiguous generated descriptors');
+    expect(result.errors.join('\n')).toContain('none could be matched to this module: a/target/ModuleDescriptor.json, b/target/ModuleDescriptor.json');
   });
 
   it('should match the generated descriptor whose id contains the Maven artifactId', async () => {

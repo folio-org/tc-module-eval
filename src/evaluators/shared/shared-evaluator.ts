@@ -3,7 +3,6 @@ import {
   CriterionResult,
   EvaluationRun,
   EvaluationStatus,
-  ModuleDescriptorArtifact,
   ModuleKindResult
 } from '../../types';
 import { CriterionLanguage } from '../../criteria-definitions';
@@ -13,6 +12,12 @@ import { evaluateS003ThirdPartyLicenses } from '../../utils/license-compliance-e
 import { produceModuleDescriptorArtifact } from '../../utils/artifacts/module-descriptor-artifact';
 import { createEvaluationRun } from '../../utils/evaluation-run';
 import { validateModuleDescriptorJson } from '../../utils/module-descriptor-validator';
+import {
+  s002ArtifactFailureResult,
+  s002MissingPathResult,
+  s002ReadFailureResult,
+  s002ValidationResult
+} from '../../utils/s002-module-descriptor-report';
 import { analyzeS004Documentation, formatS004Evidence } from '../../utils/s004-installation-documentation';
 import { classifyModuleKind } from '../../utils/module-kind';
 import { reviewS004WithAgent } from '../../utils/s004-agent-review';
@@ -86,57 +91,21 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     const artifact = await run.getOrCreateArtifact('moduleDescriptor', () => produceModuleDescriptorArtifact(repoPath, run));
 
     if (artifact.status !== 'produced' && artifact.status !== 'discovered') {
-      return this.artifactFailureResult(artifact);
+      return s002ArtifactFailureResult(artifact);
     }
 
     if (!artifact.absolutePath || !artifact.descriptorPath) {
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.FAIL,
-        evidence: 'Module descriptor artifact did not include a selected descriptor path',
-        details: this.formatArtifactDetails(artifact)
-      };
+      return s002MissingPathResult(artifact);
     }
 
     let descriptorContent: string;
     try {
       descriptorContent = fs.readFileSync(artifact.absolutePath, 'utf-8');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.FAIL,
-        evidence: `Unable to read module descriptor ${artifact.descriptorPath}`,
-        details: `${this.formatArtifactDetails(artifact)}\n\nRead error: ${message}`
-      };
+      return s002ReadFailureResult(artifact, error instanceof Error ? error.message : String(error));
     }
 
-    const validation = validateModuleDescriptorJson(descriptorContent);
-    const evidence = validation.valid
-      ? `Module descriptor ${artifact.descriptorPath} validates against Okapi schema baseline ${validation.schemaBaseline}`
-      : `Module descriptor ${artifact.descriptorPath} does not validate against Okapi schema baseline ${validation.schemaBaseline}`;
-
-    if (validation.valid) {
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.PASS,
-        evidence,
-        details: this.formatArtifactDetails(artifact)
-      };
-    }
-
-    const validationDetails = validation.parseError
-      ? `Parse error: ${validation.parseError}`
-      : validation.errors
-          .map(error => `${error.instancePath || '/'} ${error.keyword} ${error.message} (${error.schemaPath})`)
-          .join('\n');
-
-    return {
-      criterionId: 'S002',
-      status: EvaluationStatus.FAIL,
-      evidence,
-      details: `${this.formatArtifactDetails(artifact)}\n\nValidation errors:\n${validationDetails}`
-    };
+    return s002ValidationResult(artifact, validateModuleDescriptorJson(descriptorContent));
   }
 
   private async evaluateS004(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
@@ -375,35 +344,6 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       criterionDetails: analysis,
       agentReview
     };
-  }
-
-  private artifactFailureResult(artifact: ModuleDescriptorArtifact): CriterionResult {
-    const uncertainStatuses = new Set<ModuleDescriptorArtifact['status']>([
-      'ambiguous-candidates',
-      'unsafe-to-run',
-      'command-failed'
-    ]);
-
-    return {
-      criterionId: 'S002',
-      status: uncertainStatuses.has(artifact.status) ? EvaluationStatus.MANUAL : EvaluationStatus.FAIL,
-      evidence: `Module descriptor artifact stage returned ${artifact.status}`,
-      details: this.formatArtifactDetails(artifact)
-    };
-  }
-
-  private formatArtifactDetails(artifact: ModuleDescriptorArtifact): string {
-    const lines = [
-      `Artifact status: ${artifact.status}`,
-      artifact.strategy ? `Strategy: ${artifact.strategy}` : undefined,
-      artifact.descriptorPath ? `Descriptor path: ${artifact.descriptorPath}` : undefined,
-      artifact.command ? `Command: ${artifact.command.command} ${artifact.command.args.join(' ')} (${artifact.command.status})` : undefined,
-      artifact.command ? `Command execution environment: ${artifact.command.commandExecutionEnvironment}` : undefined,
-      artifact.warnings.length ? `Warnings:\n${artifact.warnings.map(warning => `  - ${warning}`).join('\n')}` : undefined,
-      artifact.errors.length ? `Errors:\n${artifact.errors.map(error => `  - ${error}`).join('\n')}` : undefined
-    ];
-
-    return lines.filter((line): line is string => Boolean(line)).join('\n');
   }
 
   private formatModuleKindDetails(heading: string, moduleKind: ModuleKindResult): string {
