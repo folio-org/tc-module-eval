@@ -173,6 +173,13 @@ describe('License Name Normalization', () => {
       expect(unnamed.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B })]);
     });
 
+    test.each(['(MIT) AND (GPL-3.0)', '(MIT)|GPL-3.0'])('should still report %s as an unsplit expression', license => {
+      // Normalizing either one would keep only "MIT" (Category A).
+      const result = checkLicenseCompliance([{ name: 'org.example:lib', version: '1.0', licenses: [license] }], '');
+
+      expect(result.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.PARSER_ERROR })]);
+    });
+
     // Test normalization fallback
     test('should fall back to normalization when exact match fails', () => {
       expect(getLicenseCategoryNormalized('Apache License Version 2.0')).toBe(LicenseCategory.A);

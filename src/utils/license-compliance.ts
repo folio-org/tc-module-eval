@@ -23,6 +23,7 @@ import { Dependency, ComplianceResult, ComplianceIssue, EvaluationStatus, Licens
 import {
   LicenseCategory,
   getLicenseCategoryNormalized,
+  isListedLicenseName,
   isSpecialException
 } from './license-policy';
 import { isNonEmptyString, isValidDependency } from './type-guards';
@@ -274,8 +275,8 @@ export function checkLicenseCompliance(
     // Check for common separators: | (Maven), OR (npm/SPDX), AND (SPDX)
     // Note: Only check uppercase OR/AND to avoid false positives with license names like
     // "Common Development and Distribution License" that contain lowercase "and".
-    // A license the policy lists, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
-    const unsplitLicenses = allLicenses.filter(license => !getLicenseCategoryNormalized(license) && (
+    // A name the policy lists exactly, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
+    const unsplitLicenses = allLicenses.filter(license => !isListedLicenseName(license) && (
       license.includes('|') ||
       license.includes(' OR ') ||
       license.includes(' AND ') ||

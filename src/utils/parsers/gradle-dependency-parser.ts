@@ -38,7 +38,7 @@ import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtrac
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { commandError, safeReadFile, validateRepoPath } from './common';
 import { isWithinRepo } from '../repo-files';
-import { normalizeLicenseName } from '../license-policy';
+import { isListedLicenseName, normalizeLicenseName } from '../license-policy';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
@@ -46,6 +46,8 @@ import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 // Gradle-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes), as for Maven: the first run downloads Gradle and all dependencies
 const LICENSE_REPORT_DIR_PROPERTY = 'tcModuleEval.licenseReportDir';
+// A license name combining several licenses, which normalization would cut down to its first part.
+const LICENSE_EXPRESSION = /\||\s(?:OR|AND|WITH)\s/;
 
 // Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
@@ -132,7 +134,10 @@ function parseGradleLicenseReportDependency(dep: any): Dependency | null {
   const licenseNames: unknown[] = Array.isArray(dep.moduleLicenses)
     ? dep.moduleLicenses.map((license: any) => license?.moduleLicense)
     : [dep.moduleLicense];
-  const licenses = [...new Set(licenseNames.filter(isNonEmptyString).map(license => normalizeLicenseName(license.trim())))];
+  // Expressions are kept as reported so the compliance check flags them instead of passing their first license.
+  const licenses = [...new Set(licenseNames.filter(isNonEmptyString).map(license => license.trim()).map(license =>
+    LICENSE_EXPRESSION.test(license) && !isListedLicenseName(license) ? license : normalizeLicenseName(license)
+  ))];
 
   return {
     name: name.trim(),
@@ -229,7 +234,12 @@ export async function getGradleDependencies(
     const { licenseCommand, licenseContent } = await withLicenseReportInitScript(async (initScript, reportDir) => {
       const licenseCommand = await commandRunner.run({
         command: gradle.command,
-        args: [...gradle.argsPrefix, '--init-script', initScript, `-D${LICENSE_REPORT_DIR_PROPERTY}=${reportDir}`, 'generateLicenseReport'],
+        // The init script registers the root task in projectsEvaluated, which configure-on-demand runs only
+        // after selecting tasks. Only the root report (covering all projects) is the evaluator's.
+        args: [
+          ...gradle.argsPrefix, '--init-script', initScript, `-D${LICENSE_REPORT_DIR_PROPERTY}=${reportDir}`,
+          '--no-configure-on-demand', ':generateLicenseReport'
+        ],
         cwd: projectDir,
         timeoutMs: COMMAND_TIMEOUT,
         requiresIsolation: true,

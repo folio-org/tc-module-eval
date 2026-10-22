@@ -38,6 +38,12 @@ const JK1_REPORT = {
     },
     { moduleName: 'com.k_int.okapi:grails-okapi', moduleVersion: '8.1.1', moduleUrls: [], moduleLicenses: [] },
     {
+      moduleName: 'org.example:dual',
+      moduleVersion: '1.0',
+      moduleUrls: [],
+      moduleLicenses: [{ moduleLicense: '(MIT) AND (GPL-3.0)', moduleLicenseUrl: null }]
+    },
+    {
       moduleName: 'org.postgresql:postgresql',
       moduleUrl: 'https://jdbc.postgresql.org',
       moduleVersion: '42.7.11',
@@ -112,7 +118,9 @@ describe('getGradleDependencies', () => {
     const result = await getGradleDependencies(repo, undefined, runner);
 
     expect(runner.request).toMatchObject({ command: path.join(service, 'gradlew'), cwd: service });
-    expect(runner.request?.args).toContain('generateLicenseReport');
+    // Configure-on-demand would select tasks before the init script registers the root report task.
+    expect(runner.request?.args).toEqual(expect.arrayContaining(['--no-configure-on-demand', ':generateLicenseReport']));
+    expect(runner.request?.args).not.toContain('generateLicenseReport');
     const initScriptPath = runner.request!.args![runner.request!.args!.indexOf('--init-script') + 1];
     for (const evaluatorPath of [initScriptPath, runner.reportDir!]) {
       expect(evaluatorPath.startsWith(repo)).toBe(false);
@@ -132,6 +140,8 @@ describe('getGradleDependencies', () => {
       { name: 'com.github.ben-manes.caffeine:caffeine', version: '2.9.3', licenses: ['Apache License 2.0'] },
       { name: 'javax.servlet:javax.servlet-api', version: '4.0.1', licenses: ['CDDL-1.0'] },
       { name: 'com.k_int.okapi:grails-okapi', version: '8.1.1', licenses: [] },
+      // Normalizing would cut the expression down to "MIT"; it must reach the compliance check whole.
+      { name: 'org.example:dual', version: '1.0', licenses: ['(MIT) AND (GPL-3.0)'] },
       { name: 'org.postgresql:postgresql', version: '42.7.11', licenses: ['BSD-2-Clause'] }
     ]);
   });
