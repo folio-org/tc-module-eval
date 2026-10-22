@@ -7,6 +7,7 @@ const MAVEN_TEMPLATE_HINT = 'usually descriptors/ModuleDescriptor-template.json'
 const MAX_BUILD_ERROR_LINES = 40;
 const MAX_BUILD_ERROR_LINE_LENGTH = 500;
 const LOG_LEVEL_TAG = /^\s*\[[A-Z]+\]/;
+const TRUNCATION_MARKER = /^\[output truncated to \d+ bytes\]$/;
 // Maven "[ERROR]", yarn/npm "error"/"ERR!", and Node exception lines such as "TypeError: ...".
 const ERROR_LINE = /^\s*(?:\[(?:ERROR|FATAL)\]|(?:npm )?ERR!|error\b|\w*Error:)/i;
 const UNCERTAIN_ARTIFACT_STATUSES = new Set<ModuleDescriptorArtifact['status']>([
@@ -126,7 +127,14 @@ function formatS002Details(artifact: ModuleDescriptorArtifact, extraLines: strin
     ...(artifact.warnings.length ? ['Notes:', ...artifact.warnings.map(warning => `  - ${warning}`)] : [])
   ];
 
-  return lines.filter((line): line is string => Boolean(line)).join('\n');
+  return lines.filter((line): line is string => Boolean(line)).map(neutralizeReportLine).join('\n');
+}
+
+// Each entry is one report row, but paths, descriptor field names, and build output come from the repository.
+// The HTML report splits rows on newlines and reads "Advisory recommendation: <word>" anywhere in the details,
+// so keep line breaks inside a row and break that phrase with a non-breaking space (it looks the same).
+function neutralizeReportLine(line: string): string {
+  return line.replace(/\r\n?|\n/g, ' ↵ ').replace(/Advisory recommendation/gi, match => match.replace(' ', '\u00a0'));
 }
 
 // Runner output for failed builds; blocked commands are explained by the evidence instead.
@@ -140,27 +148,41 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
   const streams = artifact.strategy === 'maven-generation'
     ? [command?.stderr, command?.stdout]
     : [command?.stdout, command?.stderr];
-  const output = streams
+  const printed = streams
     .flatMap(stream => (stream ?? '').split('\n'))
     .map(line => line.trimEnd())
-    .filter(line => /[A-Za-z0-9]/.test(line.replace(LOG_LEVEL_TAG, '')));
+    .filter(line => !TRUNCATION_MARKER.test(line));
+  // A build that could not start (for example "spawn mvn ENOENT") prints nothing; show the runner's error instead.
+  const output = (printed.some(isMeaningfulLine)
+    ? printed
+    : artifact.errors.map(error => error.replace(/^Command exited with code \S+(?::\s*|$)/, '')).flatMap(error => error.split('\n'))
+  ).filter(isMeaningfulLine);
   if (!output.length) {
     return [];
   }
+  const cutOff = Boolean(command?.stdoutTruncated || command?.stderrTruncated);
 
-  // The runner keeps up to 64 KB per stream; the end of the output usually holds the actual failure.
+  // The end of the output usually holds the actual failure.
   // The report shows long lists collapsed to their first few items, so list only the error lines when there are any.
   const tail = output.slice(-MAX_BUILD_ERROR_LINES);
   const errorLines = tail.filter(line => ERROR_LINE.test(line));
   const shown = (errorLines.length ? errorLines : tail).map(line =>
     line.length > MAX_BUILD_ERROR_LINE_LENGTH ? `${line.slice(0, MAX_BUILD_ERROR_LINE_LENGTH)}… (line shortened)` : line
   );
+  // The runner keeps the start of each stream, so when it cut the output off, the true end of the build is missing.
+  const cutOffNote = 'the build printed more than the evaluator keeps, so the final lines are missing';
   const heading = errorLines.length
-    ? 'Build error (error lines from the end of the build output):'
+    ? cutOff
+      ? `Build error (error lines from the build output; ${cutOffNote}):`
+      : 'Build error (error lines from the end of the build output):'
     : output.length > tail.length
-      ? `Build error (last ${tail.length} of ${output.length} lines of build output):`
-      : 'Build error:';
+      ? `Build error (last ${tail.length} of ${output.length} lines of build output${cutOff ? `; ${cutOffNote}` : ''}):`
+      : cutOff ? `Build error (${cutOffNote}):` : 'Build error:';
   return [heading, ...shown.map(line => `  - ${line}`)];
+}
+
+function isMeaningfulLine(line: string): boolean {
+  return /[A-Za-z0-9]/.test(line.replace(LOG_LEVEL_TAG, ''));
 }
 
 function describeDescriptor(artifact: ModuleDescriptorArtifact): string {

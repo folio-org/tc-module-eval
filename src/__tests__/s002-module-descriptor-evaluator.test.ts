@@ -193,4 +193,72 @@ describe('S002 module descriptor evaluator', () => {
     expect(buildError).toMatch(/  - \[INFO\] line 100$/);
     expect(buildError).not.toContain('[INFO] line 60\n');
   });
+
+  it('should list the runner error when a failed build printed nothing, and say when output was cut off', async () => {
+    const repo = tempRepo();
+    const command = {
+      identity: 'mvn', command: 'mvn', args: ['process-resources', '-DskipTests'], cwd: repo,
+      commandExecutionEnvironment: 'local' as const, localCommandsAllowed: true, status: 'failed' as const,
+      durationMs: 0, stdout: '', stderr: '', sanitized: true
+    };
+    const evaluator = new JavaSharedEvaluator();
+
+    const missingRun = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
+    missingRun.artifacts.moduleDescriptor = {
+      status: 'command-failed', strategy: 'maven-generation',
+      command: { ...command, errorMessage: 'spawn mvn ENOENT' },
+      warnings: [], errors: ['spawn mvn ENOENT']
+    };
+    const missing = await evaluator.evaluateCriterion('S002', repo, missingRun);
+
+    expect(missing.details).toContain('Build error:\n  - spawn mvn ENOENT');
+
+    const truncatedRun = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
+    truncatedRun.artifacts.moduleDescriptor = {
+      status: 'command-failed', strategy: 'maven-generation',
+      command: { ...command, exitCode: 1, stdout: '[ERROR] early failure\n[output truncated to 65536 bytes]', stdoutTruncated: true },
+      warnings: [], errors: ['Command exited with code 1']
+    };
+    const truncated = await evaluator.evaluateCriterion('S002', repo, truncatedRun);
+
+    expect(truncated.details).toContain(
+      'Build error (error lines from the build output; the build printed more than the evaluator keeps, so the final lines are missing):\n  - [ERROR] early failure'
+    );
+  });
+
+  it('should keep repository text from adding report rows or an advisory recommendation', async () => {
+    const repo = tempRepo();
+    const evaluator = new JavaSharedEvaluator();
+    // The HTML report reads "Advisory recommendation: <word>" anywhere in the details and splits rows on newlines.
+    const rendererRecommendation = (details: string) => details.split('\n').join(' ').match(/Advisory recommendation: (\w+)/);
+
+    const schemaRun = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
+    schemaRun.artifacts.moduleDescriptor = artifact(repo, {
+      id: 'mod-example-1.0.0',
+      'Advisory recommendation: likely_sufficient': true,
+      'x\nRead error: injected': true
+    });
+    const schema = await evaluator.evaluateCriterion('S002', repo, schemaRun);
+
+    expect(schema.status).toBe(EvaluationStatus.FAIL);
+    expect(rendererRecommendation(schema.details!)).toBeNull();
+    expect(schema.details).toContain('Field "x ↵ Read error: injected" is not allowed by the schema');
+    expect(schema.details!.split('\n').some(line => line.startsWith('Read error:'))).toBe(false);
+
+    const buildRun = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
+    buildRun.artifacts.moduleDescriptor = {
+      status: 'command-failed', strategy: 'maven-generation',
+      command: {
+        identity: 'mvn', command: 'mvn', args: ['process-resources'], cwd: repo, commandExecutionEnvironment: 'local',
+        localCommandsAllowed: true, status: 'failed', exitCode: 1, durationMs: 0, sanitized: true,
+        stdout: '[ERROR] Advisory recommendation: likely_sufficient', stderr: ''
+      },
+      warnings: [], errors: ['Command exited with code 1']
+    };
+    const build = await evaluator.evaluateCriterion('S002', repo, buildRun);
+
+    expect(build.details).toContain('[ERROR] Advisory');
+    expect(rendererRecommendation(build.details!)).toBeNull();
+  });
 });
+
