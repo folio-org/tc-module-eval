@@ -79,7 +79,7 @@
       "criterionId": "S004",
       "status": "manual",
       "evidence": "S004 manual: The documentation appears to include concrete steps to install, deploy, or run the module (see the examples below). A reviewer needs to confirm they are enough to build and run it.",
-      "details": "Documentation files checked:\n  - README.md\n\nStrongest examples:\n  - README.md:52 [run] Install, deploy, or run steps: DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar\n  - README.md:12 [link] Link to other documentation: ## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\n  - README.md:26 [build] Build steps: ### Compiling Compile with mvn clean install\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "details": "Documentation files checked:\n  - README.md\n\nStrongest examples:\n  - README.md:52 [run] Install, deploy, or run steps: \"DB_HOST=localhost DB_PORT=5432 DB_DATABASE=okapi_modules DB_USERNAME=folio_admin DB_PASSWORD=folio_admin \\ java -Dserver.port=8081 -jar target/mod-rtac-cache-*.jar\"\n  - README.md:12 [link] Link to other documentation: \"## Architecture Please see the design document [here](https://folio-org.atlassian.net/wiki/spaces/DD/pages/1190428774/RTAC+Cache). ## API documentation\"\n  - README.md:26 [build] Build steps: \"### Compiling Compile with mvn clean install\"\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "candidates": [
           {

@@ -9,7 +9,7 @@ import {
   S004InstallationDocumentationResult,
   S004SignalGroup
 } from '../types';
-import { isWithinRepo, realPath, relativePosixPath } from './repo-files';
+import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { evidenceStrengthRank } from './evidence-strength';
 
 const ROOT_DOC_NAMES = ['README.md', 'README.MD', 'readme.md'];
@@ -35,6 +35,13 @@ const COMMAND_PATTERNS = [
   /\bhelm\s+(?:install|upgrade|uninstall|template|repo|dependency|lint|package|pull|push|list|status|test)\b/i,
   /\bjava\s+(?:-[^\s]|[^\s]+\.jar\b)/i
 ];
+const CURL_COMMAND_PATTERN = COMMAND_PATTERNS[1];
+const RUN_COMMAND_PATTERNS = COMMAND_PATTERNS.filter(pattern => pattern !== CURL_COMMAND_PATTERN);
+// Only Okapi or tenant steps count: Okapi admin endpoints (/_/proxy, /_/discovery, /_/tenant), --okapi or
+// --tenant flags, posting or deploying to Okapi, or enabling the module for a tenant. Mentions of "tenant" or
+// "Okapi" in prose, API examples (including curl calls with an X-Okapi-Tenant header), or configuration tables
+// do not. Every alternative is anchored on a literal and bounded, so long untrusted lines stay linear.
+const OKAPI_STEP_PATTERN = /\/_\/(?:proxy|discovery|deployment|tenant)\b|--(?:okapi|tenant)\b|\b(?:post|deploy|register|install)\w*\b.{0,80}\b(?:to|with|through|into|onto|in)\s+okapi\b|\benabl\w*\s+(?:the\s+|this\s+)?(?:module|mod-[\w-]+|ui-[\w-]+|it)\b.{0,60}\bfor\s+(?:a|the|each|every|your)?\s*tenants?\b/i;
 const INSTRUCTION_PATTERN = /\b(set|export|configure|create|post|enable|deploy|install|start|run|execute|use)\b/i;
 const ENVIRONMENT_VARIABLE_PATTERN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b|(?:^|[\s`])(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/;
 const CONCRETE_TARGET_PATTERN = /--[\w-]+|\bhttps?:\/\/|\b[^\s]+\.(?:ya?ml|json|properties|jar)\b|\b(?:ModuleDescriptor|Okapi|tenant)\b/i;
@@ -56,10 +63,7 @@ const SIGNAL_RULES: SignalRule[] = [
   { group: 'install_deploy_run', label: 'Install, deploy, or run steps', pattern: /\b(install|installation|deploy|deployment|running|run locally|start the module|enable the module)\b/i, strength: 'strong' },
   { group: 'docker_runtime', label: 'Docker or required services', pattern: /\b(docker|docker compose|compose\.ya?ml|container|kafka|postgres|elasticsearch|opensearch|runtime dependenc)/i, strength: 'strong' },
   { group: 'env_configuration', label: 'Configuration settings', pattern: /\b(environment variable|env var|configuration|configure|settings|system property|yaml|properties)\b/i, strength: 'candidate' },
-  // Only Okapi or tenant steps count: Okapi admin endpoints (/_/proxy, /_/discovery, /_/tenant), --okapi or
-  // --tenant flags, curl calls to Okapi, posting or deploying to Okapi, or enabling the module for a tenant.
-  // Mentions of "tenant" or "Okapi" in prose, API examples, or configuration tables do not.
-  { group: 'okapi_tenant_enablement', label: 'Okapi or tenant setup', pattern: /\/_\/(?:proxy|discovery|deployment|tenant)\b|--(?:okapi|tenant)\b|\bcurl\b.*\b(?:okapi|tenants?)\b|\b(?:post|deploy|register|install)\w*\b.{0,80}\b(?:to|with|through|into|onto|in)\s+okapi\b|\benabl\w*\s+(?:the\s+|this\s+)?(?:module|mod-[\w-]+|ui-[\w-]+|it)\b.{0,60}\bfor\s+(?:a|the|each|every|your)?\s*tenants?\b/i, strength: 'strong' },
+  { group: 'okapi_tenant_enablement', label: 'Okapi or tenant setup', pattern: OKAPI_STEP_PATTERN, strength: 'strong' },
   { group: 'stripes_setup', label: 'Stripes UI setup', pattern: /\b(stripes|yarn start|ui module|platform-complete)\b/i, strength: 'strong' },
   { group: 'build_test', label: 'Build steps', pattern: /\b(compile|package|assemble|mvn\s+(clean\s+)?(install|package)|gradle(w)?\s+(build|assemble)|npm\s+run\s+build|yarn\s+build|pnpm\s+build)\b/i, strength: 'candidate' },
   { group: 'external_reference', label: 'Link to other documentation', pattern: /https?:\/\/[^\s)]+/i, strength: 'candidate' }
@@ -159,12 +163,13 @@ export function formatS004Evidence(
   const lines: Array<string | undefined> = [
     'Documentation files checked:',
     ...(classification.filesConsidered.length
-      ? classification.filesConsidered.map(file => `  - ${file}`)
+      ? classification.filesConsidered.map(file => `  - ${displayPath(file)}`)
       : [`  - none (looked for ${[ROOT_DOC_NAMES[0], ...CONVENTIONAL_DOC_NAMES].join(', ')}, and Markdown files in ${CONVENTIONAL_DOC_DIRS.map(dir => `${dir}/`).join(', ')})`]),
     '',
     'Strongest examples:',
     ...(classification.strongestSignals.length
-      ? classification.strongestSignals.map(signal => `  - ${signal.path}${signal.line ? `:${signal.line}` : ''} [${SIGNAL_TAGS[signal.group]}] ${signal.label}: ${signal.excerpt}`)
+      // Quoting the excerpt keeps repository text from ending the row with report syntax such as "(evidence: …)".
+      ? classification.strongestSignals.map(signal => `  - ${displayPath(signal.path)}${signal.line ? `:${signal.line}` : ''} [${SIGNAL_TAGS[signal.group]}] ${signal.label}: "${signal.excerpt}"`)
       : ['  - none']),
     ...(classification.warnings.length ? ['', 'Warnings:', ...classification.warnings.map(warning => `  - ${warning}`)] : [])
   ];
@@ -202,6 +207,7 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
   const outsideFiles: string[] = [];
   const outsideLinks: string[] = [];
   const symlinks: string[] = [];
+  const truncatedFiles: string[] = [];
 
   for (const name of ROOT_DOC_NAMES) {
     enqueueIfFile(queue, path.join(repoPath, name), 'root-readme', 0);
@@ -211,7 +217,17 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
   }
   for (const directory of CONVENTIONAL_DOC_DIRS) {
     const absoluteDir = path.join(repoPath, directory);
-    if (!fs.existsSync(absoluteDir)) {
+    let stats: fs.Stats;
+    try {
+      stats = fs.lstatSync(absoluteDir);
+    } catch {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      symlinks.push(directory);
+      continue;
+    }
+    if (!stats.isDirectory()) {
       continue;
     }
     collectMarkdownFiles(absoluteDir, repoPath, queue, symlinks);
@@ -233,7 +249,7 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
 
     const stats = fs.statSync(next.absolutePath);
     const relativePath = relativePosixPath(repoPath, next.absolutePath);
-    const content = readBounded(next.absolutePath, warnings, relativePath);
+    const content = readBounded(next.absolutePath, relativePath, truncatedFiles);
     const signals = extractSignals(relativePath, content);
     candidates.push({
       path: relativePath,
@@ -254,6 +270,11 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
     }
   }
 
+  if (truncatedFiles.length) {
+    warnings.push(truncatedFiles.length === 1
+      ? `Only the first ${MAX_DOC_BYTES / 1024} KB of ${describePaths(truncatedFiles)} was checked; the rest of the file was not read.`
+      : `Only the first ${MAX_DOC_BYTES / 1024} KB of each of ${describePaths(truncatedFiles)} was checked; the rest of those files was not read.`);
+  }
   if (outsideFiles.length) {
     warnings.push(`Did not read ${describePaths(outsideFiles)} because ${outsideFiles.length === 1 ? 'it is a link' : 'they are links'} to files outside the repository.`);
   }
@@ -261,7 +282,7 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
     warnings.push(`Did not follow ${outsideLinks.length === 1 ? 'a documentation link' : `${outsideLinks.length} documentation links`} that ${outsideLinks.length === 1 ? 'points' : 'point'} outside the repository: ${describePaths(outsideLinks)}.`);
   }
   if (symlinks.length) {
-    warnings.push(`Did not read ${describePaths(symlinks)} because symbolic links in documentation folders are not followed.`);
+    warnings.push(`Did not read ${describePaths(symlinks)} because symbolic links are not followed.`);
   }
   // The queue can hold files already read, queued twice, or outside the repository; count only files that would be read.
   const unreadFiles = new Set(queue
@@ -275,14 +296,21 @@ function discoverDocumentationCandidates(repoPath: string, warnings: string[]): 
   return candidates;
 }
 
+// File names come from the untrusted repository; a newline in one would start a new report section.
+function displayPath(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, character => JSON.stringify(character).slice(1, -1));
+}
+
 function describePaths(paths: string[]): string {
-  const shown = paths.slice(0, MAX_WARNING_PATHS).join(', ');
+  const shown = paths.slice(0, MAX_WARNING_PATHS).map(displayPath).join(', ');
   return paths.length > MAX_WARNING_PATHS ? `${shown}, and ${paths.length - MAX_WARNING_PATHS} more` : shown;
 }
 
 function extractSignals(relativePath: string, content: string): S004DocumentationSignal[] {
   const lines = content.split(/\r?\n/);
   const fencedLines = markdownFenceMap(lines);
+  const okapiAdminLines = okapiAdminLineMap(lines);
+  const ignoredRunLine = (index: number) => isDevelopmentInstallLine(lines[index]) || okapiAdminLines[index];
   const bestByGroup = new Map<S004SignalGroup, S004DocumentationSignal>();
 
   for (let index = 0; index < lines.length; index++) {
@@ -294,10 +322,10 @@ function extractSignals(relativePath: string, content: string): S004Documentatio
       if (rule.group === 'okapi_tenant_enablement' && isTableRow(line)) {
         continue;
       }
-      // A developer build such as "mvn clean install" is build evidence, not an install or run step,
-      // whether it is the matched line or the command found below an "Installation" heading.
-      const ignoredLine = rule.group === 'install_deploy_run' ? isDevelopmentInstallLine : undefined;
-      if (ignoredLine?.(line)) {
+      // Neither a developer build such as "mvn clean install" nor an Okapi or tenant admin step is an install
+      // or run step, whether it is the matched line or the command found below an "Installation" heading.
+      const ignoredLine = rule.group === 'install_deploy_run' ? ignoredRunLine : undefined;
+      if (ignoredLine?.(index)) {
         continue;
       }
       const strength = contextualSignalStrength(lines, fencedLines, index, rule.strength, ignoredLine);
@@ -328,7 +356,7 @@ function contextualSignalStrength(
   fencedLines: boolean[],
   index: number,
   configured: S004DocumentationSignal['strength'],
-  ignoredLine?: (line: string) => boolean
+  ignoredLine?: (index: number) => boolean
 ): S004DocumentationSignal['strength'] {
   const line = lines[index].trim();
   if (isTableOfContentsLine(line) || /\b(error|failed|failure|cannot|unable to|troubleshoot)/i.test(line)) {
@@ -345,7 +373,7 @@ function localInstructionBlock(
   lines: string[],
   fencedLines: boolean[],
   index: number,
-  ignoredLine?: (line: string) => boolean
+  ignoredLine?: (index: number) => boolean
 ): string {
   const block = [lines[index]];
   const distance = instructionBlockDistance(lines[index], fencedLines[index]);
@@ -353,7 +381,7 @@ function localInstructionBlock(
     if (startsNewInstructionSection(lines[index], fencedLines[index], lines[next], fencedLines[next])) {
       break;
     }
-    if (!ignoredLine?.(lines[next])) {
+    if (!ignoredLine?.(next)) {
       block.push(lines[next]);
     }
   }
@@ -364,14 +392,14 @@ function concreteInstructionIndex(
   lines: string[],
   fencedLines: boolean[],
   index: number,
-  ignoredLine?: (line: string) => boolean
+  ignoredLine?: (index: number) => boolean
 ): number {
   const distance = instructionBlockDistance(lines[index], fencedLines[index]);
   for (let candidate = index; candidate < lines.length && candidate <= index + distance; candidate++) {
     if (candidate > index && startsNewInstructionSection(lines[index], fencedLines[index], lines[candidate], fencedLines[candidate])) {
       break;
     }
-    if (!ignoredLine?.(lines[candidate]) && isConcreteInstruction(lines[candidate])) {
+    if (!ignoredLine?.(candidate) && isConcreteInstruction(lines[candidate])) {
       return candidate;
     }
   }
@@ -457,6 +485,24 @@ function hasActionableExcerpt(signals: S004DocumentationSignal[]): boolean {
   return signals.some(signal => /\b(okapi|curl|docker|java|npm|yarn|pnpm|mvn|gradle|helm|kubectl|enable|install|deploy|run|configure|tenant)\b/i.test(signal.excerpt));
 }
 
+// Marks lines of commands (joined across trailing-backslash continuations) that are Okapi or tenant admin
+// steps and do not also run a build or run tool, e.g. a multi-line curl POST to /_/discovery/modules.
+function okapiAdminLineMap(lines: string[]): boolean[] {
+  const marks = lines.map(() => false);
+  for (let start = 0; start < lines.length;) {
+    let end = start;
+    while (end + 1 < lines.length && /\\\s*$/.test(lines[end])) {
+      end++;
+    }
+    const command = lines.slice(start, end + 1).join(' ');
+    if (OKAPI_STEP_PATTERN.test(command) && !RUN_COMMAND_PATTERNS.some(pattern => pattern.test(command))) {
+      marks.fill(true, start, end + 1);
+    }
+    start = end + 1;
+  }
+  return marks;
+}
+
 function isTableRow(line: string): boolean {
   return /^\s*\|/.test(line);
 }
@@ -493,12 +539,12 @@ function enqueueIfFile(queue: QueuedDoc[], absolutePath: string, source: QueuedD
   }
 }
 
-function readBounded(absolutePath: string, warnings: string[], relativePath: string): string {
-  const buffer = fs.readFileSync(absolutePath);
+function readBounded(absolutePath: string, relativePath: string, truncatedFiles: string[]): string {
+  const buffer = readBoundedFileBytes(absolutePath, MAX_DOC_BYTES + 1);
   if (buffer.length <= MAX_DOC_BYTES) {
     return buffer.toString('utf-8');
   }
-  warnings.push(`Only the first ${MAX_DOC_BYTES / 1024} KB of ${relativePath} was checked; the rest of the file was not read.`);
+  truncatedFiles.push(relativePath);
   return buffer.subarray(0, MAX_DOC_BYTES).toString('utf-8');
 }
 
@@ -516,12 +562,17 @@ function extractMarkdownLinks(content: string): string[] {
   return links;
 }
 
+function isTableSeparator(line: string): boolean {
+  const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+  return line.includes('-') && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+}
+
 function excerptAround(lines: string[], index: number): string {
   const start = Math.max(0, index - EXCERPT_RADIUS);
   const end = Math.min(lines.length, index + EXCERPT_RADIUS + 1);
   // Drop code fences and table pipes so the example reads as text.
   const excerpt = lines.slice(start, end)
-    .filter(line => !/^\s*(?:`{3,}|~{3,})/.test(line) && !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{0,}:?\s*$/.test(line))
+    .filter(line => !/^\s*(?:`{3,}|~{3,})/.test(line) && !isTableSeparator(line))
     .map(line => isTableRow(line)
       ? line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim()).filter(Boolean).join('; ')
       : line)

@@ -67,7 +67,7 @@ Use docker compose up to start Kafka, PostgreSQL, and OpenSearch for the module.
 
     const rendered = formatS004Evidence(analysis, agentReview);
 
-    expect(rendered.details).toContain('Strongest examples:\n  - README.md:4 [run] Install, deploy, or run steps: ## Running with Docker Compose');
+    expect(rendered.details).toContain('Strongest examples:\n  - README.md:4 [run] Install, deploy, or run steps: "## Running with Docker Compose');
     expect(rendered.details).toContain('Agent review:');
     expect(rendered.details).toContain('Not available: OpenCode returned malformed JSON');
     expect(rendered.details).toContain('Adapter: opencode');
@@ -363,7 +363,7 @@ ${prose}
     'npm run build',
     'yarn start',
     'helm install mod-search charts/mod-search',
-    'curl -X POST https://example.invalid/_/tenant',
+    'curl -X POST http://localhost:8081/admin/health',
     'kubectl apply -f deployment.yml'
   ])('recognizes a concrete tool command: %s', command => {
     writeFile('README.md', `
@@ -504,8 +504,108 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling the ten
     const result = analyzeS004Documentation(tempRoot);
 
     expect(result.warnings).toEqual([
-      'Did not read docs/a.md, docs/b.md because symbolic links in documentation folders are not followed.'
+      'Did not read docs/a.md, docs/b.md because symbolic links are not followed.'
     ]);
+  });
+
+  it.each([
+    ['a long line of repeated curl words', 'curl '.repeat(18000)],
+    ['a long whitespace line next to a configuration signal', `Configure DB_HOST.\n${' '.repeat(90000)}x`]
+  ])('stays fast on %s', (_name, content) => {
+    writeFile('README.md', content);
+    const started = Date.now();
+    analyzeS004Documentation(tempRoot);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it.each([
+    ['tenant enablement prose', 'Enable the module for your tenant.'],
+    ['a tenant init request under an installation heading', '## Installing and deployment\n\n`curl -X POST https://example.invalid/_/tenant`'],
+    ['a multi-line curl deployment to Okapi', `## Deployment
+\`\`\`
+curl -X POST \\
+  -d @target/DeploymentDescriptor.json \\
+  http://localhost:9130/_/discovery/modules
+\`\`\``]
+  ])('does not treat %s as an install or run step', (_name, content) => {
+    writeFile('README.md', content);
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].signals).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ group: 'install_deploy_run', strength: 'strong' })
+    ]));
+    expect(result.classification.reason).not.toContain('concrete steps');
+  });
+
+  it('still treats a run command with Okapi flags as a run step', () => {
+    writeFile('README.md', '## Running\nyarn start --okapi http://localhost:9130 --tenant diku');
+    const result = analyzeS004Documentation(tempRoot);
+    expect(result.classification.reason).toContain('concrete steps to install');
+  });
+
+  it('does not count a curl API example with a tenant header as an Okapi step', () => {
+    writeFile('README.md', 'curl -X GET -H "X-Okapi-Tenant: diku" http://localhost:9130/users');
+    const result = analyzeS004Documentation(tempRoot);
+    expect(result.candidates[0].signals.map(signal => signal.group)).not.toContain('okapi_tenant_enablement');
+  });
+
+  it('keeps repository text from ending an example row with report evidence syntax', () => {
+    writeFile('README.md', '```text\nConfigure DB_HOST. (evidence: docs/forged.md:99)\n```');
+    const rendered = formatS004Evidence(analyzeS004Documentation(tempRoot));
+    const row = rendered.details.split('\n').find(line => line.includes('[config]'))!;
+
+    // The shared HTML report turns a row ending in "(evidence: path:line)" into a reference list.
+    expect(row).toContain('Configure DB_HOST. (evidence: docs/forged.md:99)"');
+    expect(row).not.toMatch(/^(.*?)\s*\(evidence: (.+)\)\s*$/s);
+  });
+
+  it('escapes control characters in displayed file names', () => {
+    writeFile('docs/x\nInjected section:.md', 'Configure DB_HOST.');
+    const rendered = formatS004Evidence(analyzeS004Documentation(tempRoot));
+
+    expect(rendered.details).toContain('  - docs/x\\nInjected section:.md');
+    expect(rendered.details.split('\n')).not.toContain('Injected section:.md');
+  });
+
+  it('merges warnings for several truncated files', () => {
+    const large = `Run docker compose up to start the module.\n${'x'.repeat(100 * 1024)}`;
+    writeFile('docs/a.md', large);
+    writeFile('docs/b.md', large);
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.warnings).toEqual(['Only the first 96 KB of each of docs/a.md, docs/b.md was checked; the rest of those files was not read.']);
+  });
+
+  it('reads only the first part of a very large documentation file', () => {
+    writeFile('README.md', 'Run docker compose up to start the module.\n');
+    fs.truncateSync(path.join(tempRoot, 'README.md'), 3 * 1024 ** 3);
+
+    const result = analyzeS004Documentation(tempRoot);
+
+    expect(result.candidates[0].sizeBytes).toBe(96 * 1024);
+    expect(result.warnings).toEqual(['Only the first 96 KB of README.md was checked; the rest of the file was not read.']);
+  });
+
+  it('does not follow a documentation folder that is a symbolic link', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 's004-outside-'));
+    try {
+      fs.writeFileSync(path.join(outside, 'install.md'), 'Run docker compose up to start the module.');
+      fs.symlinkSync(outside, path.join(tempRoot, 'docs'));
+
+      const result = analyzeS004Documentation(tempRoot);
+
+      expect(result.candidates).toEqual([]);
+      expect(result.warnings).toEqual(['Did not read docs because symbolic links are not followed.']);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a documentation folder name that is a regular file', () => {
+    writeFile('docs', 'not a folder');
+    writeFile('README.md', 'Run docker compose up to start the module.');
+    expect(analyzeS004Documentation(tempRoot).classification.filesConsidered).toEqual(['README.md']);
   });
 
   it('can represent agent metadata without changing final status', () => {

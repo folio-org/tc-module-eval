@@ -32,7 +32,7 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling it for 
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.evidence).not.toContain('evaluation logic not yet implemented');
-    expect(result.evidence).toContain('A reviewer needs to confirm');
+    expect(result.evidence).toContain('A reviewer needs to check it');
   });
 
   it('keeps S004 in the canonical shared criteria position', () => {
