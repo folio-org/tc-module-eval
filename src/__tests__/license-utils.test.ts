@@ -42,7 +42,8 @@ describe('LicenseUtils', () => {
       const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
 
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.evidence).toContain('Apache 2.0 license found in LICENSE');
+      expect(result.evidence).toBe('The LICENSE file is the Apache License 2.0.');
+      expect(result.details).toBe('License file: LICENSE');
       expect(result.criterionId).toBe('S001');
     });
 
@@ -61,7 +62,9 @@ describe('LicenseUtils', () => {
       const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
-      expect(result.evidence).toContain('Non-Apache 2.0 license found in LICENSE');
+      expect(result.evidence).toContain('The LICENSE file is not the Apache License 2.0.');
+      expect(result.evidence).toContain('replace LICENSE with the Apache License 2.0 text');
+      expect(result.details).toContain('File starts with: MIT License');
       expect(result.criterionId).toBe('S001');
     });
 
@@ -89,7 +92,8 @@ describe('LicenseUtils', () => {
       const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
 
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.evidence).toContain('Apache 2.0 license found in pom.xml');
+      expect(result.evidence).toBe('pom.xml declares the Apache License 2.0. There is no top-level LICENSE file.');
+      expect(result.details).toContain('Declared license: Apache License, Version 2.0');
       expect(result.criterionId).toBe('S001');
     });
 
@@ -99,7 +103,9 @@ describe('LicenseUtils', () => {
       const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
-      expect(result.evidence).toContain('No Apache 2.0 license found');
+      expect(result.evidence).toContain('No license found');
+      expect(result.evidence).toContain('Add a top-level LICENSE file with the Apache License 2.0 text.');
+      expect(result.details).toContain('License file: none (looked for LICENSE, LICENSE.txt, LICENSE.md, LICENCE, LICENCE.txt)');
       expect(result.criterionId).toBe('S001');
     });
 
@@ -109,7 +115,8 @@ describe('LicenseUtils', () => {
       const result = await LicenseUtils.checkApache2License(mockRepoPath, 'S001');
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.evidence).toContain('License evaluation failed');
+      expect(result.evidence).toContain('could not run');
+      expect(result.details).toContain('Error: File system error');
       expect(result.criterionId).toBe('S001');
     });
   });

@@ -146,7 +146,7 @@ describe('JavaEvaluator', () => {
       // Find S001 criterion result
       const licenseResult = results.find(r => r.criterionId === 'S001');
       expect(licenseResult?.status).toBe(EvaluationStatus.PASS);
-      expect(licenseResult?.evidence).toContain('Apache 2.0 license found in LICENSE');
+      expect(licenseResult?.evidence).toContain('The LICENSE file is the Apache License 2.0.');
     });
 
     it('should return FAIL for non-Apache license', async () => {
@@ -177,7 +177,7 @@ describe('JavaEvaluator', () => {
       // Find S001 criterion result
       const licenseResult = results.find(r => r.criterionId === 'S001');
       expect(licenseResult?.status).toBe(EvaluationStatus.FAIL);
-      expect(licenseResult?.evidence).toContain('Non-Apache 2.0 license found');
+      expect(licenseResult?.evidence).toContain('is not the Apache License 2.0');
     });
 
     it('should return FAIL for missing license', async () => {
@@ -202,7 +202,7 @@ describe('JavaEvaluator', () => {
       // Find S001 criterion result
       const licenseResult = results.find(r => r.criterionId === 'S001');
       expect(licenseResult?.status).toBe(EvaluationStatus.FAIL);
-      expect(licenseResult?.evidence).toContain('No Apache 2.0 license found');
+      expect(licenseResult?.evidence).toContain('No license found');
     });
 
     it('should return PASS for Apache 2.0 license in pom.xml', async () => {
@@ -236,7 +236,7 @@ describe('JavaEvaluator', () => {
       // Find S001 criterion result
       const licenseResult = results.find(r => r.criterionId === 'S001');
       expect(licenseResult?.status).toBe(EvaluationStatus.PASS);
-      expect(licenseResult?.evidence).toContain('Apache 2.0 license found in pom.xml');
+      expect(licenseResult?.evidence).toContain('pom.xml declares the Apache License 2.0');
     });
   });
 });

@@ -3,6 +3,10 @@ import * as path from 'path';
 import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
 
+const LICENSE_FILES = ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'LICENCE', 'LICENCE.txt'];
+const NO_LICENSE_FILE_ROW = `License file: none (looked for ${LICENSE_FILES.join(', ')})`;
+const MAX_FIRST_LINE_LENGTH = 120;
+
 /**
  * Result of a license check operation
  */
@@ -46,8 +50,8 @@ export class LicenseUtils {
       // No license found
       return this.createFailResult(
         criterionId,
-        'No Apache 2.0 license found in LICENSE file or build configuration',
-        'License sources checked: LICENSE files, Maven pom.xml'
+        'No license found: there is no top-level LICENSE file, and no license is declared in pom.xml. Add a top-level LICENSE file with the Apache License 2.0 text.',
+        `${NO_LICENSE_FILE_ROW}\nAlso checked: licenses declared in pom.xml (none found)`
       );
     } catch (error) {
       return this.createErrorResult(criterionId, error);
@@ -61,19 +65,25 @@ export class LicenseUtils {
    * @returns Promise<LicenseCheckResult | null> Result or null if no license files found
    */
   static async checkLicenseFiles(repoPath: string): Promise<LicenseCheckResult | null> {
-    const licenseFiles = ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'LICENCE', 'LICENCE.txt'];
-
-    for (const fileName of licenseFiles) {
+    for (const fileName of LICENSE_FILES) {
       const filePath = path.join(repoPath, fileName);
       if (await fs.pathExists(filePath)) {
         const content = await fs.readFile(filePath, 'utf-8');
         const isApache2 = this.isApache2License(content);
 
+        // The first line usually names the license, which tells a reviewer what the file is instead.
+        const firstLine = content.split('\n').map(line => line.trim()).find(Boolean);
+        const startsWith = !firstLine
+          ? '(empty file)'
+          : firstLine.length > MAX_FIRST_LINE_LENGTH ? `${firstLine.slice(0, MAX_FIRST_LINE_LENGTH - 3)}...` : firstLine;
+
         return {
           found: true,
           isApache2,
           source: fileName,
-          details: `License file: ${fileName}`
+          details: isApache2
+            ? `License file: ${fileName}`
+            : `License file: ${fileName}\nFile starts with: ${startsWith}`
         };
       }
     }
@@ -114,7 +124,7 @@ export class LicenseUtils {
             found: true,
             isApache2: true,
             source: 'pom.xml',
-            details: `License name: ${name}, URL: ${url}`
+            details: [NO_LICENSE_FILE_ROW, `Declared license: ${name || '(no name given)'}`, ...(url ? [`License URL: ${url}`] : [])].join('\n')
           };
         }
       }
@@ -125,7 +135,7 @@ export class LicenseUtils {
         found: true,
         isApache2: false,
         source: 'pom.xml',
-        details: `Non-Apache 2.0 licenses: ${licenseNames}`
+        details: `${NO_LICENSE_FILE_ROW}\nDeclared licenses: ${licenseNames || '(no name given)'}`
       };
     } catch (error) {
       // Unable to parse pom.xml
@@ -177,18 +187,23 @@ export class LicenseUtils {
    * @returns CriterionResult
    */
   private static createResult(criterionId: string, licenseResult: LicenseCheckResult): CriterionResult {
+    const fromPom = licenseResult.source === 'pom.xml';
     if (licenseResult.isApache2) {
       return {
         criterionId,
         status: EvaluationStatus.PASS,
-        evidence: `Apache 2.0 license found in ${licenseResult.source}`,
+        evidence: fromPom
+          ? 'pom.xml declares the Apache License 2.0. There is no top-level LICENSE file.'
+          : `The ${licenseResult.source} file is the Apache License 2.0.`,
         details: licenseResult.details
       };
     } else {
       return {
         criterionId,
         status: EvaluationStatus.FAIL,
-        evidence: `Non-Apache 2.0 license found in ${licenseResult.source}`,
+        evidence: fromPom
+          ? 'There is no top-level LICENSE file, and pom.xml declares a license other than Apache 2.0. Add a top-level LICENSE file with the Apache License 2.0 text and declare Apache 2.0 in pom.xml.'
+          : `The ${licenseResult.source} file is not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace ${licenseResult.source} with the Apache License 2.0 text.`,
         details: licenseResult.details
       };
     }
@@ -221,8 +236,8 @@ export class LicenseUtils {
     return {
       criterionId,
       status: EvaluationStatus.MANUAL,
-      evidence: `License evaluation failed: ${errorMessage}`,
-      details: 'Manual review required due to evaluation error'
+      evidence: 'The license check could not run, so a reviewer must check the license by hand.',
+      details: `Error: ${errorMessage}\nWhat to check: the repository has a top-level LICENSE file with the Apache License 2.0 text`
     };
   }
 }

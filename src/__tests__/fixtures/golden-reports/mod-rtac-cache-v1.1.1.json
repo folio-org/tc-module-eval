@@ -60,7 +60,7 @@
     {
       "criterionId": "S001",
       "status": "pass",
-      "evidence": "Apache 2.0 license found in LICENSE",
+      "evidence": "The LICENSE file is the Apache License 2.0.",
       "details": "License file: LICENSE"
     },
     {
