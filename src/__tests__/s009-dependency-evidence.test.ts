@@ -375,7 +375,7 @@ describe('S009 dependency evidence', () => {
     expect(evidence.observations).toEqual([]);
   });
 
-  it('always includes the root package manifest even when recursive discovery is capped', async () => {
+  it('caps only package manifests that match declared workspaces', async () => {
     await fs.writeJson(path.join(repo, 'package.json'), {
       dependencies: { '@folio/not-approved': '1.0.0' }
     });
@@ -383,17 +383,109 @@ describe('S009 dependency evidence', () => {
       await fs.outputJson(path.join(repo, `a-${String(index).padStart(3, '0')}/package.json`), { private: true });
     }
 
-    const evidence = await collectS009DependencyEvidence(repo);
-
-    expect(evidence.hasDependencyProject).toBe(true);
-    expect(evidence.complete).toBe(false);
-    expect(evidence.projectFiles).toContain('package.json');
-    expect(evidence.observations).toEqual([
+    const withoutWorkspaces = await collectS009DependencyEvidence(repo);
+    expect(withoutWorkspaces.complete).toBe(true);
+    expect(withoutWorkspaces.diagnostics).toEqual([]);
+    expect(withoutWorkspaces.observations).toEqual([
       expect.objectContaining({ coordinate: '@folio/not-approved' })
     ]);
-    expect(evidence.diagnostics).toEqual(expect.arrayContaining([
+
+    await fs.writeJson(path.join(repo, 'package.json'), { workspaces: ['packages/*'] });
+    await fs.outputJson(path.join(repo, 'packages/app/package.json'), {
+      name: '@folio/app', dependencies: { '@folio/workspace-dependency': '^1.0.0' }
+    });
+    const fixturesSortFirst = await collectS009DependencyEvidence(repo);
+    expect(fixturesSortFirst.complete).toBe(true);
+    expect(fixturesSortFirst.observations).toEqual([
+      expect.objectContaining({ coordinate: '@folio/workspace-dependency', sourcePath: 'packages/app/package.json' })
+    ]);
+
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      workspaces: ['a-*'], dependencies: { '@folio/not-approved': '1.0.0' }
+    });
+    const capped = await collectS009DependencyEvidence(repo);
+    expect(capped.complete).toBe(false);
+    expect(capped.projectFiles).toContain('package.json');
+    expect(capped.observations).toEqual([
+      expect.objectContaining({ coordinate: '@folio/not-approved' })
+    ]);
+    expect(capped.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'manifest_limit', material: true })
     ]));
+  });
+
+  it('reads a Gradle dependency followed by closing braces on the same line', async () => {
+    await fs.outputFile(path.join(repo, 'build.gradle'), `
+      dependencies { implementation 'org.folio:one-line:1.0.0' }
+      subprojects { dependencies { runtimeOnly "org.folio:nested:2.0.0" } }
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.diagnostics).toEqual([]);
+    expect(evidence.observations.map(item => `${item.coordinate}:${item.declaredVersion}`)).toEqual([
+      'org.folio:nested:2.0.0',
+      'org.folio:one-line:1.0.0'
+    ]);
+  });
+
+  it('ignores unresolved Maven scopes and names only when the resolved group is outside FOLIO', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><groupId>com.example</groupId><artifactId>root</artifactId><version>1</version>
+        <modules><module>folio</module></modules>
+        <dependencies>
+          <dependency><groupId>\${project.groupId}</groupId><artifactId>other</artifactId><version>1</version><scope>\${unset.scope}</scope></dependency>
+          <dependency><groupId>\${project.groupId}</groupId><artifactId>\${unset.name}</artifactId><version>1</version></dependency>
+        </dependencies>
+      </project>
+    `);
+    const outsideFolio = await collectS009DependencyEvidence(repo);
+    expect(outsideFolio.diagnostics).toEqual([]);
+    expect(outsideFolio.complete).toBe(true);
+
+    await fs.outputFile(path.join(repo, 'folio/pom.xml'), `
+      <project><groupId>org.folio</groupId><artifactId>folio</artifactId><version>1</version>
+        <dependencies>
+          <dependency><groupId>\${project.groupId}</groupId><artifactId>scoped</artifactId><version>1</version><scope>\${unset.scope}</scope></dependency>
+          <dependency><groupId>\${project.groupId}</groupId><artifactId>\${unset.name}</artifactId><version>1</version></dependency>
+        </dependencies>
+      </project>
+    `);
+    const insideFolio = await collectS009DependencyEvidence(repo);
+    expect(insideFolio.complete).toBe(false);
+    expect(insideFolio.diagnostics.map(item => `${item.code} ${item.path}`)).toEqual([
+      'maven_scope_unresolved folio/pom.xml',
+      'maven_coordinate_unresolved folio/pom.xml'
+    ]);
+  });
+
+  it('treats a local POM that is not the declared parent like a parent outside the repository', async () => {
+    await fs.outputFile(path.join(repo, 'pom.xml'), `
+      <project><groupId>org.folio</groupId><artifactId>root</artifactId><version>2.0.0</version>
+        <modules><module>client</module></modules>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'client/pom.xml'), `
+      <project><parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>2.0.0</version></parent>
+        <artifactId>client</artifactId>
+      </project>
+    `);
+    await fs.outputFile(path.join(repo, 'old-bom/pom.xml'), `
+      <project><parent><groupId>org.folio</groupId><artifactId>root</artifactId><version>1.0.0</version></parent>
+        <artifactId>old-bom</artifactId>
+        <dependencies><dependency><groupId>org.folio</groupId><artifactId>published</artifactId><version>3</version></dependency></dependencies>
+      </project>
+    `);
+
+    const evidence = await collectS009DependencyEvidence(repo);
+
+    expect(evidence.complete).toBe(true);
+    expect(evidence.diagnostics).toEqual([
+      expect.objectContaining({ code: 'maven_parent_mismatch', path: 'old-bom/pom.xml', material: false })
+    ]);
+    expect(evidence.observations).toEqual([
+      expect.objectContaining({ coordinate: 'org.folio:published', sourcePath: 'old-bom/pom.xml' })
+    ]);
   });
 
   it('marks unresolved production dependency syntax incomplete and distinguishes no project', async () => {

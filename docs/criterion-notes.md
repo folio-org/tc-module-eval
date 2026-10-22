@@ -110,6 +110,14 @@ S008 checks every interface the module requires or optionally uses against the c
 - `manual`: an accepted module in the catalog has the interface with the same major version but an older minor version (the catalog has only one platform release, so a reviewer must check that an accepted module now provides the newer version); no module in the catalog provides an optional interface; some declarations could not be read (no descriptor, invalid JSON, placeholders, or version formats S008 cannot check); the catalog or acceptance ledger could not be loaded; or the repository kind is unclear. A failure takes precedence over all of these.
 - `not_applicable`: the repository is an explicit FOLIO library.
 
+## S009 Library Acceptance
+
+S009 checks that every direct production dependency on a FOLIO library (Maven `org.folio:*`, npm `@folio/*`) is on the Technical Council's approved list, the `libraryCoordinates` in `config/acceptance-ledger.json`. [S009 library acceptance](s009-library-acceptance.md) describes the rules. The report lists each library under "Not approved", "Also built in this repository (needs review)", or "Approved", with the reason and where it is declared.
+
+- Maven: a POM whose parent path holds a different POM (another groupId, artifactId, or version) is read like a POM whose parent is published outside the repository. The report notes it, but it does not make the evidence incomplete. An unresolved property in a dependency's scope or name matters only when its group is, or may be, `org.folio`.
+- Gradle: a dependency written without parentheses ends at the end of the line, a `;`, or a `}` that closes the enclosing block, so `dependencies { implementation 'org.folio:lib:1.0' }` on one line is read.
+- npm and Yarn: only `package.json` files matched by the root `workspaces` patterns are read, at most 128; other `package.json` files, such as test fixtures, are ignored.
+
 ## S010 Third-Party System Resilience
 
 S010 applies to deployable Java and Stripes/React modules and covers every runtime

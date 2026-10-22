@@ -8,7 +8,7 @@ Acceptance is family-level, not version-level. Declared versions and ranges are 
 
 Normal evaluation is offline and never executes repository code or performs network requests. It scans:
 
-- every Maven `pom.xml`: `compile` (including the default), `runtime`, and `provided` dependencies, including dependencies in profiles; local parent properties, project/parent aliases, and dependency-management scopes are resolved when their POMs are available in the repository;
+- every Maven `pom.xml`: `compile` (including the default), `runtime`, and `provided` dependencies, including dependencies in profiles; local parent properties, project/parent aliases, and dependency-management scopes are resolved when their POMs are available in the repository (a local POM that is not the declared parent is treated like a parent outside the repository);
 - every root and subproject `build.gradle` or `build.gradle.kts`: `api`, `implementation`, `compileOnly`, and `runtimeOnly` declarations that can be resolved statically; and
 - the root npm/Yarn `package.json` plus declared workspaces: `dependencies`, `optionalDependencies`, `peerDependencies`, `bundledDependencies`, and `bundleDependencies`.
 
@@ -16,7 +16,7 @@ Test/dev dependencies, Maven parents, dependency-management imports, build plugi
 
 S009 intentionally checks direct declarations only; lockfiles and transitive dependency graphs are not approval evidence, so a missing lockfile does not make the result incomplete. Reports retain each declaration as evidence, while summaries count distinct ecosystem-qualified coordinates.
 
-Unsupported or dynamic production declaration syntax, malformed manifests, unreadable or oversized manifests, unmatched workspace declarations, and traversal limits produce incomplete evidence. Source manifests are SHA-256 hashed in the report. Generated/dependency directories and symlinks are not traversed.
+Unsupported or dynamic production declaration syntax, malformed manifests, unreadable or oversized manifests, unmatched workspace declarations, and traversal limits (more than 128 POMs, Gradle build files, or workspace manifests) produce incomplete evidence. Unresolved Maven properties count only when the dependency's group is, or may be, `org.folio`. Source manifests are SHA-256 hashed in the report. Generated/dependency directories and symlinks are not traversed.
 
 ## Deterministic outcomes
 

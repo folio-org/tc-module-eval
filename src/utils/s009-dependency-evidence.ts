@@ -190,7 +190,14 @@ function resolveMavenProject(
       const candidate = resolveMavenProject(context, parentProject, projects, cache, nextVisiting);
       if (candidate && mavenParentMatches(parsed.project.parent, candidate)) parent = candidate;
       else if (candidate) {
-        diagnostic(context, 'maven_parent_mismatch', 'The POM at its parent path is not the parent it declares (groupId, artifactId, and version differ), so the properties and dependency management it inherits could not be read.', parsed.sourcePath);
+        // Maven then uses the published parent, so this is the same as a parent outside the repository.
+        diagnostic(
+          context,
+          'maven_parent_mismatch',
+          'The POM at its parent path is not the parent it declares, so Maven uses the published parent. As with any parent outside this repository, its properties and dependency management are not read.',
+          parsed.sourcePath,
+          false
+        );
       }
     }
   }
@@ -300,15 +307,16 @@ function collectMavenDependencies(
       : undefined;
     const managedScope = managed?.scope ? resolveMavenText(managed.scope, effective.properties) : undefined;
     const scope = rawScope ? resolveMavenText(rawScope, effective.properties) : managed?.scope ? managedScope : 'compile';
+    const maybeFolio = groupId ? groupId === 'org.folio' : rawGroupId.includes('${');
     if (!scope) {
-      if (rawGroupId === 'org.folio' || rawGroupId.includes('${')) {
+      if (maybeFolio) {
         diagnostic(context, 'maven_scope_unresolved', `The scope of dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} uses a property that is not set in this repository's POMs, so the evaluator cannot tell whether it ships.`, sourcePath);
       }
       continue;
     }
     if (!MAVEN_SCOPES.has(scope)) continue;
     if (!groupId || !artifactId) {
-      if (rawGroupId === 'org.folio' || rawGroupId.includes('${')) {
+      if (maybeFolio) {
         diagnostic(
           context,
           'maven_coordinate_unresolved',
@@ -499,8 +507,18 @@ function scanGradleDeclarations(content: string): GradleDeclaration[] {
         end = call.end;
       }
     } else if (expressionStart > index && !['=', '.', '{'].includes(content[expressionStart] ?? '')) {
+      // A call without parentheses ends at the line end, a semicolon, or a brace that closes an enclosing block.
       end = expressionStart;
-      while (end < content.length && content[end] !== '\n' && content[end] !== ';') end += 1;
+      let depth = 0;
+      while (end < content.length && content[end] !== '\n' && content[end] !== ';') {
+        if (content[end] === '"' || content[end] === "'") {
+          end = skipGradleQuoted(content, end);
+          continue;
+        }
+        if ('([{'.includes(content[end])) depth += 1;
+        else if (')]}'.includes(content[end]) && --depth < 0) break;
+        end += 1;
+      }
       expression = content.slice(expressionStart, end);
     }
     if (!expression?.trim()) continue;
@@ -606,21 +624,21 @@ function collectNpm(context: Context): void {
   } catch {
     return;
   }
-  const packageFiles = candidateFiles(context, 'package.json', file => path.basename(file) === 'package.json');
   const root = readNpmManifest(context, rootPath);
   if (!root) return;
 
   const selected = new Set([rootPath]);
-  const patterns = workspacePatterns(root.manifest.workspaces, context);
+  const patterns = workspacePatterns(root.manifest.workspaces, context).map(pattern => ({ pattern, regex: workspacePattern(pattern) }));
   if (patterns.length) {
-    for (const packagePath of packageFiles) {
-      if (packagePath === rootPath) continue;
-      const directory = relativePosixPath(context.repoPath, path.dirname(packagePath));
-      if (patterns.some(pattern => workspacePattern(pattern).test(directory))) selected.add(packagePath);
-    }
-    for (const pattern of patterns) {
-      if (![...selected].some(packagePath => packagePath !== rootPath
-        && workspacePattern(pattern).test(relativePosixPath(context.repoPath, path.dirname(packagePath))))) {
+    // Only workspace manifests count toward the limit; other package.json files (fixtures, examples) are never read.
+    const workspaceFiles = candidateFiles(context, 'workspace package.json', file => {
+      if (path.basename(file) !== 'package.json' || file === rootPath) return false;
+      const directory = relativePosixPath(context.repoPath, path.dirname(file));
+      return patterns.some(({ regex }) => regex.test(directory));
+    });
+    for (const packagePath of workspaceFiles) selected.add(packagePath);
+    for (const { pattern, regex } of patterns) {
+      if (!workspaceFiles.some(packagePath => regex.test(relativePosixPath(context.repoPath, path.dirname(packagePath))))) {
         diagnostic(context, 'npm_workspace_missing', `Workspace pattern ${pattern} matches no package folder, so the evaluator cannot tell which workspaces exist.`, 'package.json');
       }
     }
@@ -810,8 +828,8 @@ function addObservation(context: Context, observation: S009DependencyObservation
   context.observations.push(observation);
 }
 
-function diagnostic(context: Context, code: string, message: string, pathValue?: string): void {
-  context.diagnostics.push({ code, message, path: pathValue, material: true });
+function diagnostic(context: Context, code: string, message: string, pathValue?: string, material = true): void {
+  context.diagnostics.push({ code, message, path: pathValue, material });
 }
 
 function compareObservations(left: S009DependencyObservation, right: S009DependencyObservation): number {
