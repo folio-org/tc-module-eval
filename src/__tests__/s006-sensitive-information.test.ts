@@ -35,6 +35,7 @@ import {
   S006_DETECTOR_REGISTRY,
   runS006GitleaksScan
 } from '../utils/s006-sensitive-information';
+import { MAX_GITLEAKS_REPORT_BYTES } from '../utils/s006-gitleaks';
 
 function createTempRepo(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 's006-sensitive-'));
@@ -1880,6 +1881,162 @@ describe('S006 context labels and type exports', () => {
     expect(s006.criterionId).toBe('S006');
     const rootExportedDetails: RootS006ReportDetails = buildS006CriterionDetails(s006);
     expect(rootExportedDetails.criterionId).toBe('S006');
+  });
+});
+
+describe('S006 analysis corrections', () => {
+  let repoPath: string;
+
+  beforeEach(() => {
+    repoPath = createTempRepo();
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  });
+
+  // Isolates the built-in detectors from the fake Gitleaks, which reuses their patterns.
+  function analyzeWithoutGitleaksFindings(): Promise<S006SensitiveInformationAnalysisResult> {
+    return analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({ status: 'success', exitCode: 0, report: [] })
+    });
+  }
+
+  it('treats a Gitleaks secret marked as made up inside a camelCase word as synthetic', async () => {
+    writeRepoFile(repoPath, 'scripts/list.sh', 'curl --header "X-Okapi-Token: dummyToken" http://localhost:8080/erm/sas\n');
+    const result = await analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({
+        status: 'failed',
+        exitCode: 1,
+        report: [{
+          RuleID: 'curl-auth-header',
+          Description: 'Discovered a potential authorization token provided in a curl command header.',
+          File: 'scripts/list.sh',
+          StartLine: 1,
+          Match: 'curl --header "X-Okapi-Token: dummyToken"',
+          Secret: 'dummyToken',
+          Entropy: 3.12
+        }]
+      })
+    });
+
+    expect(result.findings.find(finding => finding.detectorId === 'bearer-or-jwt-token')).toMatchObject({
+      path: 'scripts/list.sh',
+      context: 'production_source_or_configuration',
+      valueClassification: 'synthetic',
+      statusImpact: 'manual_review'
+    });
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('does not report comparisons or arrow functions as secret assignments', async () => {
+    writeRepoFile(repoPath, 'deploy.sh', 'if [[ $DEPLOY_TOKEN == release2024x ]]; then\n  [ "$x" ] && API_TOKEN===fallback\nfi\n');
+    writeRepoFile(repoPath, 'README.md', 'Valid tokens: `tokens.filter(token => token.valid)`\n');
+    writeRepoFile(repoPath, 'Makefile', 'DEPLOY_TOKEN := k8Fz2LmQ9wXr\n');
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['Makefile:1']);
+  });
+
+  it('does not report unquoted code values in program source, but keeps secrets inside string literals', async () => {
+    writeRepoFile(repoPath, 'src/main/java/org/folio/Config.java', [
+      'class Config {',
+      '  String password = userInfo.substring(delimiter + 1);',
+      '  String token = ctx.request().getHeader(X_OKAPI_TOKEN);',
+      '  long TOKEN_TTL = 3600;',
+      '  String url = "jdbc:postgresql://db/folio?password=s3cretValue99";',
+      '  String apiKey = "Zq8vT3kL9mN2pR7x";',
+      '}'
+    ].join('\n'));
+    writeRepoFile(repoPath, 'src/components/Reset.js', 'const handleResetPassword = () => {};\nconst props = { setToken: jest.fn() };\n');
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual([
+      'src/main/java/org/folio/Config.java:5',
+      'src/main/java/org/folio/Config.java:6'
+    ]);
+  });
+
+  it('ends an unquoted shell value at whitespace when checking for variable references', async () => {
+    writeRepoFile(repoPath, 'database-setup/create-db.sh', [
+      'PGPASSWORD=${executing_password} psql -h ${host} -U ${executing_user}',
+      'PGPASSWORD=hunter2isLive psql -h localhost'
+    ].join('\n'));
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['database-setup/create-db.sh:2']);
+  });
+
+  it('does not report Java static imports or identifiers ending in .LOCAL_ as host names', async () => {
+    writeRepoFile(repoPath, 'src/main/java/org/folio/oaipmh/Errors.java', [
+      'import static org.folio.oaipmh.Constants.LOCAL_ERROR_FILE_NOT_FOUND;',
+      'import static org.folio.rest.jaxrs.model.HoldingsRecordsSource.Source.LOCAL;',
+      'import static org.folio.oaipmh.Constants.*;',
+      'class Errors { String m = org.folio.oaipmh.Constants.LOCAL_ERROR_FILE_GET_FAILED; String h = "https://okapi.library.edu"; }'
+    ].join('\n'));
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.detectorId} ${finding.excerpt.text}`)).toEqual([
+      'tenant-host-endpoint https://okapi.library.edu'
+    ]);
+  });
+
+  it('treats printf and log format placeholders as placeholder values', async () => {
+    writeRepoFile(repoPath, 'src/test/java/org/folio/edge/MainTest.java', [
+      'class MainTest {',
+      '  String url = String.format("/patron/account?apikey=%s", apiKey);',
+      '  void log() { logger.info("resumptionToken: {}", token); }',
+      '  String other = "/patron/account?apikey=Zq8vT3kL9mN2pR7x";',
+      '}'
+    ].join('\n'));
+
+    const result = await analyzeWithoutGitleaksFindings();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['src/test/java/org/folio/edge/MainTest.java:4']);
+  });
+
+  it('orders Gitleaks findings by file and line regardless of report order', async () => {
+    const finding = (file: string, line: number) => ({ RuleID: 'generic-api-key', File: file, StartLine: line, Secret: `s${line}`, Fingerprint: `${file}:generic-api-key:${line}` });
+    const runner = new StaticGitleaksRunner({
+      status: 'failed',
+      exitCode: 1,
+      report: [finding('b.yml', 5), finding('a.yml', 9), finding('a.yml', 2)]
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.findings.map(item => `${item.File}:${item.StartLine}`)).toEqual(['a.yml:2', 'a.yml:9', 'b.yml:5']);
+  });
+
+  it('reports an oversized Gitleaks report as a scanner problem instead of reading it', async () => {
+    const runner = new StaticGitleaksRunner({
+      status: 'failed',
+      exitCode: 1,
+      reportText: `[${' '.repeat(MAX_GITLEAKS_REPORT_BYTES)}]`
+    });
+
+    const result = await runS006GitleaksScan(repoPath, { commandRunner: runner });
+
+    expect(result.findings).toEqual([]);
+    expect(result.warnings).toEqual([expect.objectContaining({
+      kind: 'scanner-unavailable',
+      materialToCoverage: true,
+      message: expect.stringContaining('the report is larger than 32 MB')
+    })]);
+  });
+
+  realGitleaksIt('ignores scanner configuration and allow comments committed to the evaluated repository', async () => {
+    writeRepoFile(repoPath, '.gitleaks.toml', '[allowlist]\npaths = [".*"]\n');
+    writeRepoFile(repoPath, 'config/app.properties', 'github.token=ghp_Zq8vT3kL9mN2pR7xW4yB6cD1fG5hJ0aSzzzz # gitleaks:allow\n');
+
+    const result = await runS006GitleaksScan(repoPath);
+
+    expect(result.warnings).toEqual([]);
+    expect(result.findings).toEqual([expect.objectContaining({ RuleID: 'github-pat', File: 'config/app.properties' })]);
   });
 });
 

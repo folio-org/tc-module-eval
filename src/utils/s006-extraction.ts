@@ -13,6 +13,8 @@ import {
 } from '../types';
 import {
   boundS006ExcerptText,
+  hasS006SyntheticMarker,
+  s006AssignedValue,
   buildS006DetectorMatch,
   createS006FingerprintRun,
   getCompiledS006DetectorPattern,
@@ -126,7 +128,7 @@ export function extractS006SensitiveInformationFindings(
             continue;
           }
 
-          if (shouldSuppressS006LineFinding(context, detector, rawMatch, line.text)) {
+          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text, matchStart)) {
             continue;
           }
 
@@ -246,13 +248,15 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
 }
 
 function shouldSuppressS006LineFinding(
+  filePath: string,
   context: S006FindingContext,
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
-  lineText: string
+  lineText: string,
+  matchStart: number
 ): boolean {
   if (detector.id === 'password-secret-assignment') {
-    return shouldSuppressS006SecretAssignment(detector, rawMatch);
+    return shouldSuppressS006SecretAssignment(filePath, detector, rawMatch, lineText.slice(0, matchStart));
   }
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
@@ -263,20 +267,44 @@ function shouldSuppressS006LineFinding(
   return false;
 }
 
-function shouldSuppressS006SecretAssignment(detector: S006DetectorRegistryEntry, rawMatch: string): boolean {
+// Program source can only hard-code a secret as a string literal; an unquoted value there is code
+// (a variable, call, number, or function), not a committed secret. Inside a string literal, such as
+// "jdbc:...?password=abc", the unquoted value is still literal text.
+const S006_PROGRAM_SOURCE_PATTERN = /\.(?:java|kt|kts|groovy|gradle|js|jsx|mjs|cjs|ts|tsx|py|rb)$|(?:^|\/)Jenkinsfile$/i;
+
+function shouldSuppressS006SecretAssignment(
+  filePath: string,
+  detector: S006DetectorRegistryEntry,
+  rawMatch: string,
+  linePrefix: string
+): boolean {
   if (detector.classifyValue(rawMatch) === 'placeholder') {
     return true;
   }
 
-  const value = rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
+  if (
+    S006_PROGRAM_SOURCE_PATTERN.test(filePath) &&
+    !/^["']/.test(rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '')) &&
+    !isInsideS006StringLiteral(linePrefix)
+  ) {
+    return true;
+  }
+
+  const value = s006AssignedValue(rawMatch);
   if (isS006GitleaksOwnedSecretShape(value)) {
     return true;
   }
 
-  return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}$/.test(value) ||
+  // An unquoted shell value ends at whitespace: PGPASSWORD=${DB_PASSWORD} psql ... assigns only the reference.
+  return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}(?:\s|$)/.test(value) ||
     /^\$\{\{\s*(?:secrets|env|vars|github|inputs)\.[^}]+\}\}$/i.test(value) ||
     /^inherit$/i.test(value) ||
     /^(?:test|fake|mock|dummy)(?:[-_](?:password|secret|token|jwt|bearer))?$/i.test(value);
+}
+
+function isInsideS006StringLiteral(linePrefix: string): boolean {
+  const unescaped = linePrefix.replace(/\\./g, '');
+  return ['"', "'", '`'].some(quote => unescaped.split(quote).length % 2 === 0);
 }
 
 const S006_GITLEAKS_OWNED_SHAPE_PATTERNS = (['provider-api-key', 'bearer-or-jwt-token'] as const)
@@ -303,7 +331,7 @@ function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string
   const normalizedMatch = rawMatch.toLowerCase();
   const trimmedLine = lineText.trim();
 
-  if (/^(?:import\s+|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,};?$/i.test(trimmedLine)) {
+  if (/^(?:import\s+(?:static\s+)?|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,}(?:\.\*)?;?$/i.test(trimmedLine)) {
     return true;
   }
   if (isS006KnownJavaConfigReference(trimmedLine)) {
@@ -501,6 +529,9 @@ function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: str
     return 'synthetic';
   }
   if (/\b(?:example|sample|dummy|fake|test|fixture|mock|changeme|change[_-]?me|replace[_-]?me)\b/.test(valueText)) {
+    return 'synthetic';
+  }
+  if (source.Secret && hasS006SyntheticMarker(source.Secret)) {
     return 'synthetic';
   }
   return 'live-looking';
