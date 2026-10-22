@@ -2,14 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import {
+  CommandExecutionRequest,
   CommandExecutionResult,
   CommandRunner,
   EvaluationRun,
   ModuleDescriptorArtifact
 } from '../../types';
-import { MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from '../build-tool-policies';
+import { GRADLE_NETWORK_POLICY, MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from '../build-tool-policies';
 import { defaultCommandRunner } from '../command-runner';
 import { hasMavenProject } from '../parsers/maven-dependency-parser';
+import { findGradleProjectDir, getGradleCommand } from '../parsers/gradle-dependency-parser';
 import { validateRepoPath } from '../parsers/common';
 import { findCandidateFiles, isWithinRepo, relativePosixPath, walkDirectories } from '../repo-files';
 
@@ -29,7 +31,43 @@ export async function produceModuleDescriptorArtifact(
   }
 
   if (await hasMavenProject(validatedPath)) {
-    return runMavenDescriptorStrategy(validatedPath, evaluationRun, commandRunner);
+    return runBuildDescriptorStrategy(validatedPath, {
+      strategy: 'maven-generation',
+      tool: 'Maven',
+      outputDescription: 'a target/ directory',
+      findCandidates: () => findGeneratedDescriptorCandidates(validatedPath),
+      request: {
+        command: 'mvn',
+        args: ['process-resources', '-DskipTests'],
+        cwd: validatedPath,
+        timeoutMs: 300000,
+        maxOutputBytes: 64 * 1024,
+        requiresIsolation: true,
+        networkPolicy: MAVEN_NETWORK_POLICY
+      }
+    }, evaluationRun, commandRunner);
+  }
+
+  // FOLIO's Gradle (Grails) modules generate ModuleDescriptor.json from its template in processResources.
+  const gradleProjectDir = findGradleProjectDir(validatedPath);
+  if (gradleProjectDir) {
+    const gradle = getGradleCommand(gradleProjectDir);
+    const resourcesDir = path.join(gradleProjectDir, 'build', 'resources', 'main');
+    return runBuildDescriptorStrategy(validatedPath, {
+      strategy: 'gradle-generation',
+      tool: 'Gradle',
+      outputDescription: `${relative(validatedPath, resourcesDir)}/`,
+      findCandidates: () => findDescriptorCandidates(validatedPath, resourcesDir),
+      request: {
+        command: gradle.command,
+        args: [...gradle.argsPrefix, 'processResources'],
+        cwd: gradleProjectDir,
+        timeoutMs: 300000,
+        maxOutputBytes: 64 * 1024,
+        requiresIsolation: true,
+        networkPolicy: GRADLE_NETWORK_POLICY
+      }
+    }, evaluationRun, commandRunner);
   }
 
   const frontendScript = getFrontendDescriptorScript(validatedPath);
@@ -40,51 +78,54 @@ export async function produceModuleDescriptorArtifact(
   return discoverStaticRootDescriptor(validatedPath);
 }
 
-async function runMavenDescriptorStrategy(
+interface BuildDescriptorStrategy {
+  strategy: 'maven-generation' | 'gradle-generation';
+  tool: string;
+  /** Where the build writes the generated descriptor, for messages. */
+  outputDescription: string;
+  findCandidates: () => string[];
+  request: CommandExecutionRequest;
+}
+
+async function runBuildDescriptorStrategy(
   repoPath: string,
+  build: BuildDescriptorStrategy,
   evaluationRun: EvaluationRun | undefined,
   commandRunner: CommandRunner
 ): Promise<ModuleDescriptorArtifact> {
-  const before = snapshotGeneratedDescriptorPaths(repoPath);
-  const command = await commandRunner.run({
-    command: 'mvn',
-    args: ['process-resources', '-DskipTests'],
-    cwd: repoPath,
-    timeoutMs: 300000,
-    maxOutputBytes: 64 * 1024,
-    requiresIsolation: true,
-    networkPolicy: MAVEN_NETWORK_POLICY
-  }, evaluationRun);
+  const { strategy, tool, findCandidates } = build;
+  const before = new Set(findCandidates().map(candidate => relative(repoPath, candidate)));
+  const command = await commandRunner.run(build.request, evaluationRun);
 
   if (command.status === 'blocked') {
     return artifact('unsafe-to-run', {
-      strategy: 'maven-generation',
+      strategy,
       command,
-      errors: [command.errorMessage ?? 'Maven descriptor generation was blocked']
+      errors: [command.errorMessage ?? `${tool} descriptor generation was blocked`]
     });
   }
 
   if (command.status !== 'success') {
     return artifact('command-failed', {
-      strategy: 'maven-generation',
+      strategy,
       command,
-      errors: [command.errorMessage ?? `Maven descriptor generation ${command.status}`]
+      errors: [command.errorMessage ?? `${tool} descriptor generation ${command.status}`]
     });
   }
 
-  const candidates = findGeneratedDescriptorCandidates(repoPath);
+  const candidates = findCandidates();
   const selected = await selectGeneratedCandidate(repoPath, candidates);
   if (!selected) {
     return artifact(candidates.length > 1 ? 'ambiguous-candidates' : 'missing', {
-      strategy: 'maven-generation',
+      strategy,
       command,
       errors: candidates.length > 1
-        ? [`The Maven build generated several ModuleDescriptor.json files, and no single one could be matched to this module: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}.`]
-        : ['The Maven build ran, but it did not generate a ModuleDescriptor.json under a target/ directory.']
+        ? [`The ${tool} build generated several ModuleDescriptor.json files, and no single one could be matched to this module: ${candidates.map(candidate => relative(repoPath, candidate)).join(', ')}.`]
+        : [`The ${tool} build ran, but it did not generate a ModuleDescriptor.json under ${build.outputDescription}.`]
     });
   }
 
-  return selectedArtifact(repoPath, selected, 'maven-generation', command, before);
+  return selectedArtifact(repoPath, selected, strategy, command, before);
 }
 
 async function runFrontendDescriptorStrategy(
@@ -146,7 +187,7 @@ function discoverStaticRootDescriptor(repoPath: string): ModuleDescriptorArtifac
   }
 
   return artifact('missing', {
-    errors: [`No ${DESCRIPTOR_NAME} was found at the repository root, and there is no Maven build or package.json script to generate one.`]
+    errors: [`No ${DESCRIPTOR_NAME} was found at the repository root, and there is no Maven or Gradle build or package.json script to generate one.`]
   });
 }
 
@@ -276,10 +317,6 @@ function isTemplatePath(repoPath: string, candidatePath: string): boolean {
 
 function isDescriptorTemplateName(fileName: string): boolean {
   return /moduledescriptor.*\.json$/i.test(fileName);
-}
-
-function snapshotGeneratedDescriptorPaths(repoPath: string): Set<string> {
-  return new Set(findGeneratedDescriptorCandidates(repoPath).map(candidate => relative(repoPath, candidate)));
 }
 
 function snapshotRootDescriptorPath(repoPath: string): Set<string> {

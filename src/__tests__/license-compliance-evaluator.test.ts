@@ -458,9 +458,10 @@ describe('ThirdPartyLicenseEvaluator', () => {
       expect(gradle.args).toContain('--init-script');
       const initScript = gradle.args[gradle.args.indexOf('--init-script') + 1];
       expect(path.relative(repo, initScript).startsWith('..')).toBe(true);
-      expect(scriptWhileRunning).toContain("licenseReport.configurations = ['runtimeClasspath']");
       // Must run after the build's own afterEvaluate callbacks, which could otherwise add test configurations back.
-      expect(scriptWhileRunning).toMatch(/^gradle\.projectsEvaluated \{/);
+      // The only top-level statements are the initscript block, which loads the plugin, and this hook.
+      expect(scriptWhileRunning).toMatch(/\n\}\n\ngradle\.projectsEvaluated \{\n[\s\S]*licenseReport\.configurations = \['runtimeClasspath'\][\s\S]*\n\}\n$/);
+      expect(scriptWhileRunning).toMatch(/^initscript \{/);
       expect(scriptWhileRunning).not.toContain('afterEvaluate');
       // Each run gets its own private directory, removed once Gradle finishes.
       expect(path.basename(path.dirname(initScript))).toMatch(/^tc-module-eval-s003-gradle-/);

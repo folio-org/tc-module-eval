@@ -40,7 +40,9 @@ function hasBackendModuleMarker(repoPath: string, evidence: string[]): boolean {
   const descriptorDirs = [
     path.join(repoPath, 'descriptors'),
     repoPath,
-    path.join(repoPath, 'src/main/resources/descriptors')
+    path.join(repoPath, 'src/main/resources/descriptors'),
+    // FOLIO's Gradle (Grails) modules keep their descriptor templates here
+    path.join(repoPath, 'service/src/main/okapi')
   ];
   for (const descriptorDir of descriptorDirs) {
     if (!isDirectory(descriptorDir)) {

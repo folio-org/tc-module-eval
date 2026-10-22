@@ -118,7 +118,7 @@ export interface ModuleDescriptorArtifact {
     | 'ambiguous-candidates'
     | 'unsafe-to-run'
     | 'command-failed';
-  strategy?: 'maven-generation' | 'frontend-script' | 'static-root';
+  strategy?: 'maven-generation' | 'gradle-generation' | 'frontend-script' | 'static-root';
   descriptorPath?: string;
   absolutePath?: string;
   command?: CommandExecutionResult;
