@@ -273,14 +273,15 @@ export function checkLicenseCompliance(
     // Parsers MUST split licenses like "Apache-2.0|MIT" into ["Apache-2.0", "MIT"]
     // Check for common separators: | (Maven), OR (npm/SPDX), AND (SPDX)
     // Note: Only check uppercase OR/AND to avoid false positives with license names like
-    // "Common Development and Distribution License" that contain lowercase "and"
-    const unsplitLicenses = allLicenses.filter(license =>
+    // "Common Development and Distribution License" that contain lowercase "and".
+    // A license the policy lists, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
+    const unsplitLicenses = allLicenses.filter(license => !getLicenseCategoryNormalized(license) && (
       license.includes('|') ||
       license.includes(' OR ') ||
       license.includes(' AND ') ||
       (license.includes('(') && license.includes(')')) || // Unsplit complex expressions
       license.includes(' WITH ') // SPDX exceptions
-    );
+    ));
     if (unsplitLicenses.length > 0) {
       getLogger().error(
         `Parser contract violation for ${dependency.name}: ` +
