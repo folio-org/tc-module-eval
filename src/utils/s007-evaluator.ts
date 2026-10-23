@@ -11,9 +11,9 @@ import {
   S007TechnologyPolicyEntry,
   S007VersionConstraint
 } from '../types';
-import { normalizeS007PolicyVersionExpression } from './s007-policy';
+import { normalizeS007PolicyVersionExpression, policySections } from './s007-policy';
 
-type VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
+export type VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
 
 export function evaluateS007(
   policyLoad: S007PolicyLoadResult,
@@ -31,9 +31,7 @@ export function evaluateS007(
     };
   }
 
-  const applicableSections = policyLoad.policy.sections.filter(section =>
-    section.consumer === 's007' && section.area === (language === 'javascript' ? 'frontend' : 'backend')
-  );
+  const applicableSections = policySections(policyLoad.policy, 's007', language === 'javascript' ? 'frontend' : 'backend');
   const findings = evidence.observations.map(observation =>
     evaluateObservation(observation, applicableSections, evidence)
   );
@@ -204,8 +202,13 @@ function evaluateObservation(
   return finding(base, matchedPolicy, advisories, 'unresolved', 'manual', unresolvedRationale(observation, comparison, applicableRule.constraint));
 }
 
-function compareObservationToConstraint(
-  observation: S007TechnologyObservation,
+/**
+ * How an observed version compares with a policy constraint. A resolved version wins over the declared one; a plain
+ * number is an exact version (except in npm, where only a full version is), and a range is compliant only when every
+ * version it allows is.
+ */
+export function compareObservationToConstraint(
+  observation: Pick<S007TechnologyObservation, 'resolvedVersion' | 'declaredVersion' | 'ecosystem'>,
   constraint?: S007VersionConstraint
 ): VersionComparison {
   if (!constraint) {
@@ -260,7 +263,8 @@ function compareObservationToConstraint(
   return declaredComparison;
 }
 
-function constraintToRange(constraint: S007VersionConstraint): string | undefined {
+/** The semver range a policy constraint allows, or undefined when it has none (latest-lts) or cannot be read. */
+export function constraintToRange(constraint: S007VersionConstraint): string | undefined {
   switch (constraint.kind) {
     case 'exact': {
       const exact = normalizeExactVersion(constraint.expression);

@@ -4,8 +4,11 @@ import Ajv, { ErrorObject } from 'ajv';
 import policySchema from '../schemas/officially-supported-technologies.schema.json';
 import {
   S007OfficiallySupportedTechnologiesPolicy,
+  S007PolicyArea,
+  S007PolicyConsumer,
   S007PolicyDiagnostic,
-  S007PolicyLoadResult
+  S007PolicyLoadResult,
+  S007PolicySection
 } from '../types';
 
 export const DEFAULT_S007_POLICY_PATH = path.resolve(
@@ -57,6 +60,15 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
     sourcePath: policyPath,
     diagnostics: []
   };
+}
+
+/** The policy sections one criterion applies to one kind of module (frontend for JavaScript, backend for Java). */
+export function policySections(
+  policy: S007OfficiallySupportedTechnologiesPolicy,
+  consumer: S007PolicyConsumer,
+  area: S007PolicyArea
+): S007PolicySection[] {
+  return policy.sections.filter(section => section.consumer === consumer && section.area === area);
 }
 
 export function normalizeS007PolicyVersionExpression(expression: string): string {

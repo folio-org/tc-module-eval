@@ -1,7 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseStringPromise } from 'xml2js';
-import { parse as parseYarnLock } from '@yarnpkg/lockfile';
 import {
   S007Ecosystem,
   S007EvidenceDiagnostic,
@@ -10,6 +8,19 @@ import {
 } from '../types';
 import { isDirectory, isWithinRepo, relativePosixPath } from './repo-files';
 import { findGradleProjectDir } from './parsers/gradle-dependency-parser';
+import {
+  asArray,
+  isEscapedCharacter,
+  packageDependencyEntries,
+  parseJavaProperties,
+  parsePom,
+  parseYarnLockfile,
+  PomDependency,
+  pomDependencies,
+  stripGradleComments,
+  xmlText,
+  yarnLockVersion
+} from './manifest-parsers';
 
 const MAX_MANIFEST_BYTES = 1024 * 1024;
 const MAX_MANIFESTS = 64;
@@ -180,16 +191,11 @@ function collectJavaScriptEvidence(context: EvidenceContext): void {
 
   const dependencyFields = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
   const declarations: JavaScriptDeclaration[] = [];
-  for (const field of dependencyFields) {
-    const dependencies = manifest[field];
-    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
-      continue;
-    }
-    for (const [packageName, range] of Object.entries(dependencies)) {
-      const matched = JAVASCRIPT_IDENTITIES[packageName];
-      if (matched && typeof range === 'string') {
-        declarations.push({ packageName, range, field, identity: matched });
-      }
+  for (const entry of packageDependencyEntries(manifest, dependencyFields)) {
+    if ('invalid' in entry) continue;
+    const matched = JAVASCRIPT_IDENTITIES[entry.name];
+    if (matched && typeof entry.specifier === 'string') {
+      declarations.push({ packageName: entry.name, range: entry.specifier, field: entry.field, identity: matched });
     }
   }
 
@@ -262,42 +268,33 @@ function collectYarnClassicVersions(
   if (content === undefined) {
     return versions;
   }
-  if (/^__metadata:/m.test(content)) {
+  const lockfile = parseYarnLockfile(content);
+  if (lockfile.format === 'berry') {
     diagnostic(context, 'yarn_lock_unsupported', 'This is a Yarn 2+ lockfile, which the tool cannot read; only Yarn 1 lockfiles are supported.', true, 'yarn.lock');
     return versions;
   }
+  if (lockfile.format === 'malformed') {
+    diagnostic(context, 'yarn_lock_malformed', lockfile.message === undefined
+      ? 'Could not be read as a Yarn 1 lockfile.'
+      : `Could not be read as a Yarn 1 lockfile: ${lockfile.message}`, true, 'yarn.lock');
+    return versions;
+  }
 
-  try {
-    const parsed = parseYarnLock(content) as { type: string; object?: Record<string, { version?: string }> };
-    if (parsed.type !== 'success' || !parsed.object) {
-      diagnostic(context, 'yarn_lock_malformed', 'Could not be read as a Yarn 1 lockfile.', true, 'yarn.lock');
-      return versions;
+  for (const declaration of installedDeclarations) {
+    const selector = yarnSelector(declaration);
+    const version = yarnLockVersion(lockfile.entries, selector);
+    if (version !== undefined) {
+      versions.set(selector, version);
+    } else {
+      diagnostic(
+        context,
+        'version_unresolved',
+        `Has no entry for ${selector}.`,
+        true,
+        'yarn.lock',
+        { subject: selector, listHeading: 'Not found in yarn.lock' }
+      );
     }
-
-    for (const declaration of installedDeclarations) {
-      const selector = yarnSelector(declaration);
-      let resolved = false;
-      for (const [combinedSelectors, resolution] of Object.entries(parsed.object)) {
-        const selectors = combinedSelectors.split(/,\s*/).map(value => value.replace(/^"|"$/g, ''));
-        if (selectors.includes(selector) && typeof resolution.version === 'string') {
-          versions.set(selector, resolution.version);
-          resolved = true;
-          break;
-        }
-      }
-      if (!resolved) {
-        diagnostic(
-          context,
-          'version_unresolved',
-          `Has no entry for ${selector}.`,
-          true,
-          'yarn.lock',
-          { subject: selector, listHeading: 'Not found in yarn.lock' }
-        );
-      }
-    }
-  } catch (error) {
-    diagnostic(context, 'yarn_lock_malformed', `Could not be read as a Yarn 1 lockfile: ${errorMessage(error)}`, true, 'yarn.lock');
   }
 
   return versions;
@@ -345,18 +342,14 @@ async function visitMavenPom(
     return inherited;
   }
   const sourcePath = relativePosixPath(context.repoPath, realPomPath);
-  let project: any;
-  try {
-    const parsed = await parseStringPromise(content, { explicitArray: false, trim: true });
-    project = parsed?.project;
-  } catch (error) {
-    diagnostic(context, 'manifest_malformed', `Not valid XML: ${errorMessage(error)}`, true, sourcePath);
+  const parsed = await parsePom(content);
+  if (!parsed.ok) {
+    diagnostic(context, 'manifest_malformed', parsed.reason === 'invalid-xml'
+      ? `Not valid XML: ${parsed.message}`
+      : 'Has no <project> element.', true, sourcePath);
     return inherited;
   }
-  if (!project || typeof project !== 'object') {
-    diagnostic(context, 'manifest_malformed', 'Has no <project> element.', true, sourcePath);
-    return inherited;
-  }
+  const project = parsed.project;
 
   if (asArray(project.profiles?.profile).length > 0) {
     diagnostic(
@@ -382,8 +375,8 @@ async function visitMavenPom(
       if (xmlText(project.parent.groupId) === 'org.springframework.boot') effective.springBoot = 'parent';
     }
   }
-  if (!effective.springBoot && asArray(project.dependencies?.dependency)
-    .some(dependency => xmlText(dependency?.groupId) === 'org.springframework.boot')) {
+  if (!effective.springBoot && pomDependencies(project.dependencies?.dependency)
+    .some(dependency => dependency.groupId === 'org.springframework.boot')) {
     effective.springBoot = 'dependency';
   }
 
@@ -421,12 +414,12 @@ async function visitMavenPom(
     });
   }
 
-  for (const dependency of asArray(project.dependencyManagement?.dependencies?.dependency)) {
-    const coordinates = mavenCoordinates(dependency);
+  for (const dependency of pomDependencies(project.dependencyManagement?.dependencies?.dependency)) {
+    const coordinates = dependency.groupId && dependency.artifactId ? `${dependency.groupId}:${dependency.artifactId}` : undefined;
     if (!coordinates) {
       continue;
     }
-    const rawVersion = xmlText(dependency.version);
+    const rawVersion = dependency.version;
     const resolvedVersion = resolveMavenValue(rawVersion, effective.properties, sourcePath);
     const [groupId, artifactId] = coordinates.split(':');
     const managedKey = resolveMavenDependencyKey(dependency, groupId, artifactId, effective, sourcePath);
@@ -439,7 +432,7 @@ async function visitMavenPom(
         sourcePath: resolvedVersion?.sourcePath ?? sourcePath
       });
     }
-    if (xmlText(dependency.type) === 'pom' && xmlText(dependency.scope) === 'import') {
+    if (dependency.type === 'pom' && dependency.scope === 'import') {
       effective.importsBom = true;
       diagnostic(
         context,
@@ -480,13 +473,12 @@ function collectMavenDependencies(
   rawDependencies: unknown,
   effective: MavenContext
 ): void {
-  for (const dependency of asArray(rawDependencies)) {
-    const rawGroupId = xmlText(dependency?.groupId);
-    const rawArtifactId = xmlText(dependency?.artifactId);
+  for (const dependency of pomDependencies(rawDependencies)) {
+    const { groupId: rawGroupId, artifactId: rawArtifactId } = dependency;
     if (!rawGroupId || !rawArtifactId) {
       continue;
     }
-    const testScope = xmlText(dependency.scope) === 'test' ? true as const : undefined;
+    const testScope = dependency.scope === 'test' ? true as const : undefined;
     const resolvedGroupId = resolveMavenValue(rawGroupId, effective.properties, sourcePath);
     const resolvedArtifactId = resolveMavenValue(rawArtifactId, effective.properties, sourcePath);
     if (!resolvedGroupId || !resolvedArtifactId) {
@@ -526,7 +518,7 @@ function collectMavenDependencies(
       });
       continue;
     }
-    const rawVersion = xmlText(dependency.version);
+    const rawVersion = dependency.version;
     const direct = rawVersion ? resolveMavenValue(rawVersion, effective.properties, sourcePath) : undefined;
     // Maven manages each type and classifier separately: a managed test-jar version is not the jar's version.
     const managed = rawVersion || !mavenDependency
@@ -595,14 +587,14 @@ function mavenManagementKey(dependency: NonNullable<S007TechnologyObservation['m
 }
 
 function resolveMavenDependencyKey(
-  dependency: any,
+  dependency: Pick<PomDependency, 'type' | 'classifier'>,
   groupId: string,
   artifactId: string,
   effective: MavenContext,
   sourcePath: string
 ): S007TechnologyObservation['mavenDependency'] | undefined {
-  const rawType = xmlText(dependency.type) || 'jar';
-  const rawClassifier = xmlText(dependency.classifier);
+  const rawType = dependency.type || 'jar';
+  const rawClassifier = dependency.classifier;
   const type = resolveMavenValue(rawType, effective.properties, sourcePath)?.value;
   const classifier = rawClassifier
     ? resolveMavenValue(rawClassifier, effective.properties, sourcePath)?.value
@@ -1074,21 +1066,11 @@ function escapeRegExp(value: string): string {
 }
 
 function readGradleProperties(context: EvidenceContext, propertiesPath: string): Map<string, string> {
-  const properties = new Map<string, string>();
   if (!fs.existsSync(propertiesPath)) {
-    return properties;
+    return new Map<string, string>();
   }
   const content = readManifest(context, propertiesPath);
-  if (content === undefined) {
-    return properties;
-  }
-  for (const line of content.split(/\r?\n/)) {
-    const match = /^\s*([^#!\s][^=]*)=(.*)$/.exec(line);
-    if (match) {
-      properties.set(match[1].trim(), match[2].trim());
-    }
-  }
-  return properties;
+  return content === undefined ? new Map<string, string>() : parseJavaProperties(content);
 }
 
 function parseGradleIncludes(content: string): string[] {
@@ -1669,101 +1651,10 @@ function gradleCodePositions(content: string): Uint8Array {
   return positions;
 }
 
-function stripGradleComments(content: string): string {
-  let result = '';
-  let quote: "'" | '"' | "'''" | '\"\"\"' | undefined;
-  let lineComment = false;
-  let blockComment = false;
 
-  for (let index = 0; index < content.length;) {
-    const character = content[index];
-    const pair = content.slice(index, index + 2);
-    const triple = content.slice(index, index + 3);
 
-    if (lineComment) {
-      if (character === '\n') {
-        lineComment = false;
-        result += character;
-      } else {
-        result += ' ';
-      }
-      index += 1;
-      continue;
-    }
-    if (blockComment) {
-      if (pair === '*/') {
-        result += '  ';
-        blockComment = false;
-        index += 2;
-      } else {
-        result += character === '\n' ? '\n' : ' ';
-        index += 1;
-      }
-      continue;
-    }
-    if (quote) {
-      if (content.startsWith(quote, index) && !isEscapedCharacter(content, index)) {
-        result += quote;
-        index += quote.length;
-        quote = undefined;
-      } else {
-        result += character;
-        index += 1;
-      }
-      continue;
-    }
-    if (pair === '//') {
-      result += '  ';
-      lineComment = true;
-      index += 2;
-      continue;
-    }
-    if (pair === '/*') {
-      result += '  ';
-      blockComment = true;
-      index += 2;
-      continue;
-    }
-    if (triple === "'''" || triple === '\"\"\"') {
-      quote = triple;
-      result += triple;
-      index += 3;
-      continue;
-    }
-    if (character === "'" || character === '"') {
-      quote = character;
-    }
-    result += character;
-    index += 1;
-  }
-  return result;
-}
 
-function isEscapedCharacter(content: string, index: number): boolean {
-  let backslashes = 0;
-  for (let cursor = index - 1; cursor >= 0 && content[cursor] === '\\'; cursor -= 1) {
-    backslashes += 1;
-  }
-  return backslashes % 2 === 1;
-}
 
-function mavenCoordinates(dependency: any): string | undefined {
-  const groupId = xmlText(dependency?.groupId);
-  const artifactId = xmlText(dependency?.artifactId);
-  return groupId && artifactId ? `${groupId}:${artifactId}` : undefined;
-}
-
-function asArray(value: any): any[] {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
-function xmlText(value: any): string {
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number') return String(value);
-  if (value && typeof value === 'object' && typeof value._ === 'string') return value._.trim();
-  return '';
-}
 
 function isExactVersion(value: string): boolean {
   return /^v?\d+\.\d+\.\d+(?:[-+].+)?$/.test(value.trim());

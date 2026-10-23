@@ -166,14 +166,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'S012',
     description: 'Uses officially supported build tools',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Internationalization requirements',
-      languageReasons: {
-        javascript: 'Build tools (npm/yarn)'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S013',

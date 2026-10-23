@@ -65,9 +65,18 @@ To update the policy:
    applicability exceptions, deprecations, and reviewer notes explicitly.
 4. Run `yarn test --runInBand --testPathPattern=s007-policy` and `yarn build`.
 
-The policy also retains build-tool, testing, and infrastructure sections for future
-criteria. S007 consumes only applicable language and framework entries. See
-[Criterion Notes](docs/criterion-notes.md) for reviewer guidance.
+S007 consumes only applicable language and framework entries. S012 consumes the
+build-tool sections; the testing and infrastructure sections are kept for future
+criteria. See [Criterion Notes](docs/criterion-notes.md) for reviewer guidance.
+
+### S012 Officially Supported Build Tools
+
+S012 checks the tools that build the module (Maven, Gradle, Make, Yarn, npm, Node.js,
+and others) against the build-tool sections of the same policy. It reads build files
+and GitHub Actions workflows only, so it runs in safe mode without network access.
+When a repository pins no version, the versions FOLIO's shared workflows supply come
+from the maintainer-reviewed `config/folio-shared-workflows.json`. See
+[Criterion Notes](docs/criterion-notes.md#s012-officially-supported-build-tools).
 
 ### Agent Review
 
