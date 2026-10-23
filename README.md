@@ -168,6 +168,9 @@ All inputs are optional:
 | `java_version` | Java version for Maven/Gradle builds | `21` |
 | `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
+| `allow_remote_lookups` | Allow read-only lookups of platform-lsp and FAR, needed for S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
+| `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
+| `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
 
 #### Outputs
 
@@ -236,7 +239,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S014, also tick remote lookups and enter the application named in the evaluation's Jira task.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 
