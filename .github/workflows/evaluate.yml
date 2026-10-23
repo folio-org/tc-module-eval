@@ -43,6 +43,21 @@ on:
         required: false
         type: string
         default: "master"
+      allow_remote_lookups:
+        description: "Allow read-only lookups of folio-org/platform-lsp and FAR (needed for S014)"
+        required: false
+        type: boolean
+        default: false
+      application:
+        description: "Application named in the evaluation's Jira task, e.g. app-search (S014)"
+        required: false
+        type: string
+        default: ""
+      platform_ref:
+        description: "folio-org/platform-lsp branch, tag or commit S014 reads (empty uses the evaluator default, snapshot)"
+        required: false
+        type: string
+        default: ""
       # Hosted OpenCode criterion-agent review is intentionally not exposed here.
       # This reusable workflow remains deterministic-only until protected
       # environment secret handling and repository allowlists are designed.
@@ -230,15 +245,34 @@ jobs:
           OUTPUT_FORMAT: ${{ inputs.output_format }}
           CRITERIA_FILTER: ${{ inputs.criteria_filter }}
           CLI_ARGS: ${{ steps.prepare-args.outputs.cli_args }}
+          ALLOW_REMOTE_LOOKUPS: ${{ inputs.allow_remote_lookups }}
+          APPLICATION: ${{ inputs.application }}
+          PLATFORM_REF: ${{ inputs.platform_ref }}
+          # Read-only token for GitHub API lookups; the evaluator sends it only to api.github.com and never to
+          # repository build commands. Set only when remote lookups are on.
+          GITHUB_TOKEN: ${{ inputs.allow_remote_lookups && github.token || '' }}
         run: |
           echo "Starting FOLIO Module Evaluation..."
           echo "Repository: $REPO_URL"
           echo "Ref: $REF"
           echo "Output format: $OUTPUT_FORMAT"
           echo "Criteria filter: ${CRITERIA_FILTER:-(all)}"
+
+          # Remote-lookup options are added only when set, each as one quoted argument.
+          REMOTE_ARGS=()
+          if [ "$ALLOW_REMOTE_LOOKUPS" = "true" ]; then
+            REMOTE_ARGS+=("--allow-remote-lookups")
+          fi
+          if [ -n "$APPLICATION" ]; then
+            REMOTE_ARGS+=("--application=$APPLICATION")
+          fi
+          if [ -n "$PLATFORM_REF" ]; then
+            REMOTE_ARGS+=("--platform-ref=$PLATFORM_REF")
+          fi
+          echo "Remote lookups: ${ALLOW_REMOTE_LOOKUPS}"
           echo ""
 
-          node dist/cli.js evaluate $CLI_ARGS
+          node dist/cli.js evaluate $CLI_ARGS "${REMOTE_ARGS[@]}"
 
       - name: Parse evaluation results
         id: parse-results

@@ -192,11 +192,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'S014',
     description: 'Assigned to one application descriptor',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Monitoring and logging'
-    }
+    languages: ['java', 'javascript']
   },
 
   {

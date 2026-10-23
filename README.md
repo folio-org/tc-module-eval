@@ -79,6 +79,20 @@ agent review for broader cited analysis, for example
 `--criterion-agent-opencode --criterion-agent-criteria S010`. Agent advice never changes
 the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-third-party-system-resilience).
 
+### Remote Lookups
+
+Evaluation is offline by default. S014 (assigned to exactly one application on the FOLIO LSP platform)
+needs to read `folio-org/platform-lsp` and FAR, so it is `manual` unless you opt in:
+
+```bash
+folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
+```
+
+`--application` is the application named in the evaluation's Jira task. `--platform-ref` picks the
+platform-lsp branch, tag or commit (default `snapshot`). Remote reads are read-only, allowlisted and
+bounded, and each one is recorded in the report. See
+[Criterion Notes](docs/criterion-notes.md#s014-application-assignment).
+
 ### For Local Development: Use Devcontainer
 
 For local development, use the provided devcontainer configuration in `.devcontainer/`. The container provides isolation with all required tools (Node.js, Java 21, Maven, Gradle).
@@ -154,6 +168,9 @@ All inputs are optional:
 | `java_version` | Java version for Maven/Gradle builds | `21` |
 | `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
+| `allow_remote_lookups` | Allow read-only lookups of platform-lsp and FAR, needed for S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
+| `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
+| `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
 
 #### Outputs
 
@@ -222,7 +239,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S014, also tick remote lookups and enter the application named in the evaluation's Jira task.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 

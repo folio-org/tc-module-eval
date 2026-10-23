@@ -50,6 +50,7 @@ import { collectS010Evidence } from '../../utils/s010-evidence';
 import { evaluateS010 } from '../../utils/s010-evaluator';
 import { renderS010HumanDetails } from '../../utils/s010-report-details';
 import { reportText } from '../../utils/report-text';
+import { analyzeS014, renderS014HumanDetails } from '../../utils/s014-evaluator';
 import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
 
 /**
@@ -71,7 +72,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun),
       S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun),
       S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun),
-      S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun)
+      S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun),
+      S014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS014(repoPath, evaluationRun)
     });
   }
 
@@ -344,6 +346,22 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       details: renderS010HumanDetails(analysis, agentReview),
       criterionDetails: analysis,
       agentReview
+    };
+  }
+
+  private async evaluateS014(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S014']
+    });
+    const analysis = await analyzeS014(repoPath, run);
+    return {
+      criterionId: 'S014',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS014HumanDetails(analysis),
+      criterionDetails: analysis
     };
   }
 

@@ -17,6 +17,11 @@ export interface CreateEvaluationRunOptions {
   commandRunner?: CommandRunner;
   agentReview?: EvaluationRun['agentReview'];
   s008CatalogChannel?: S008CatalogChannel;
+  repositoryCommit?: string;
+  requestedBranch?: string;
+  remoteLookups?: EvaluationRun['remoteLookups'];
+  s014Application?: string;
+  s014PlatformRef?: string;
 }
 
 export function createEvaluationRun(options: CreateEvaluationRunOptions): EvaluationRun {
@@ -38,6 +43,11 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     commandRunner: options.commandRunner,
     agentReview: options.agentReview,
     s008CatalogChannel: options.s008CatalogChannel ?? 'official',
+    repositoryCommit: options.repositoryCommit,
+    requestedBranch: options.requestedBranch,
+    remoteLookups: options.remoteLookups,
+    s014Application: options.s014Application,
+    s014PlatformRef: options.s014PlatformRef,
     async getOrCreateArtifact<K extends ArtifactKey>(
       key: K,
       producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>

@@ -6,6 +6,7 @@ import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
+import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
 
 const program = new Command();
 
@@ -27,6 +28,9 @@ program
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
+  .option('--allow-remote-lookups', 'Allow read-only lookups of folio-org/platform-lsp and FAR (S014)')
+  .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
+  .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
@@ -51,6 +55,9 @@ program
 
       if (options.branch) {
         console.log(`🌿 Branch: ${options.branch}`);
+      }
+      if (options.allowRemoteLookups) {
+        console.log(`🌐 Remote lookups allowed (folio-org/platform-lsp ${options.platformRef}, FAR)`);
       }
       if (options.allowLocalCommands) {
         console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
@@ -158,6 +165,12 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
   if (!['official', 'development'].includes(options.s008Catalog)) {
     throw new Error('Invalid S008 catalog. Use official or development.');
   }
+  if (options.application !== undefined && !isValidRemoteName(options.application)) {
+    throw new Error('Invalid --application. Use an application name such as app-search.');
+  }
+  if (!isValidPlatformRef(options.platformRef)) {
+    throw new Error('Invalid --platform-ref. Use a platform-lsp branch, tag or commit such as snapshot or R1-2026.');
+  }
   return {
     tempDir: options.tempDir,
     outputDir: options.output,
@@ -167,7 +180,10 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     allowLocalCommands: options.allowLocalCommands === true,
     commandExecutionEnvironment: resolveCommandExecutionEnvironment(),
     agentReview: buildCriterionAgentReviewConfig(options),
-    s008CatalogChannel: options.s008Catalog
+    s008CatalogChannel: options.s008Catalog,
+    allowRemoteLookups: options.allowRemoteLookups === true,
+    s014Application: options.application,
+    s014PlatformRef: options.platformRef
   };
 }
 

@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'platformMembership';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -134,6 +134,7 @@ export interface EvaluationRunArtifacts {
   s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
   s009DependencyEvidence?: import('./s009-library-acceptance').S009DependencyEvidence;
   s010ThirdPartyEvidence?: import('./s010-third-party-resilience').S010Evidence;
+  platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
 }
 
 export interface EvaluationRun {
@@ -147,6 +148,16 @@ export interface EvaluationRun {
   commandRunner?: CommandRunner;
   agentReview?: CriterionAgentReviewConfig;
   s008CatalogChannel: import('./s008-interface-acceptance').S008CatalogChannel;
+  /** The evaluated commit; absent for direct evaluateCriterion calls. */
+  repositoryCommit?: string;
+  /** The --branch value, if one was given. */
+  requestedBranch?: string;
+  /** The remote-evidence transport; absent unless --allow-remote-lookups was given. */
+  remoteLookups?: import('./remote-evidence').RemoteLookups;
+  /** The application the evaluation's Jira task names (--application). */
+  s014Application?: string;
+  /** The platform-lsp branch, tag or commit S014 reads (--platform-ref). */
+  s014PlatformRef?: string;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -167,6 +178,12 @@ export interface EvaluationConfig {
   commandExecutionEnvironment?: CommandExecutionEnvironment;
   agentReview?: CriterionAgentReviewConfig;
   s008CatalogChannel?: import('./s008-interface-acceptance').S008CatalogChannel;
+  /** Allow read-only lookups of SonarCloud, platform-lsp and FAR (--allow-remote-lookups). */
+  allowRemoteLookups?: boolean;
+  /** Replaces the remote-evidence transport, like commandRunner; implies remote lookups are allowed. */
+  remoteLookups?: import('./remote-evidence').RemoteLookups;
+  s014Application?: string;
+  s014PlatformRef?: string;
 }
 
 export * from './s004-installation-documentation';
@@ -176,6 +193,8 @@ export * from './s007-officially-supported-technologies';
 export * from './s008-interface-acceptance';
 export * from './s009-library-acceptance';
 export * from './s010-third-party-resilience';
+export * from './s014-application-assignment';
+export * from './remote-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 

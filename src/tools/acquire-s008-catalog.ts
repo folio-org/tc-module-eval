@@ -6,6 +6,12 @@ import { Command } from 'commander';
 import { S008CatalogChannel } from '../types';
 import { isSupportedEurekaVersionExpression } from '../utils/eureka-interface-compatibility';
 import { importS008Catalog } from './import-s008-catalog';
+import {
+  parseApplicationModuleReference,
+  parseFarApplication,
+  parsePlatformApplicationPins,
+  parsePlatformPins
+} from '../utils/platform-applications';
 
 const DEFAULT_PLATFORM_RAW_BASE = 'https://raw.githubusercontent.com/folio-org/platform-lsp';
 const DEFAULT_FAR_URL = 'https://far.ci.folio.org';
@@ -212,18 +218,8 @@ async function acquireApplication(
     diagnostics.push(httpDiagnostic('far_request_failed', error, exactId));
     return undefined;
   }
-  const envelope = asOptionalRecord(response.parsed);
-  const records = Array.isArray(envelope?.applicationDescriptors) ? envelope!.applicationDescriptors : [];
-  const totalRecords = typeof envelope?.totalRecords === 'number' ? envelope.totalRecords : records.length;
-  if (records.length !== 1 || totalRecords !== 1) {
-    diagnostics.push({ code: 'far_cardinality', material: true, message: `Expected exactly one FAR result for ${exactId}; received ${totalRecords}.`, source: url.toString() });
-    return undefined;
-  }
-  const application = asOptionalRecord(records[0]);
-  if (!application || application.id !== exactId || application.name !== pin.name || application.version !== pin.version) {
-    diagnostics.push({ code: 'far_identity_mismatch', material: true, message: `FAR result did not exactly match ${exactId}.`, source: url.toString() });
-    return undefined;
-  }
+  const application = parseFarApplication(response.parsed, pin, url.toString(), diagnostics);
+  if (!application) return undefined;
   const snapshotPath = `snapshots/applications/${safeName(exactId)}.json`;
   await writeStable(path.join(path.dirname(snapshotsDir), snapshotPath), application);
   const references = [
@@ -268,28 +264,13 @@ function moduleReferences(
     }
   }
   const parsedReferences = references.flatMap(reference => {
-    const record = asOptionalRecord(reference);
-    if (!record || typeof record.id !== 'string') {
-      diagnostics.push({ code: 'invalid_module_reference', material: true, message: `${applicationId} contains a module reference without an exact ID.` });
-      return [];
-    }
-    const identity = moduleIdentity(record);
-    if (!identity) {
-      diagnostics.push({ code: 'unresolved_module_identity', material: true, message: `Unable to derive module identity for ${record.id}.`, source: applicationId });
-      return [];
-    }
-    const version = typeof record.version === 'string' && record.version
-      ? record.version
-      : record.id.slice(identity.length + 1);
-    if (!version || record.id !== `${identity}-${version}`) {
-      diagnostics.push({ code: 'unresolved_module_version', material: true, message: `Unable to derive exact module version for ${record.id}.`, source: applicationId });
-      return [];
-    }
-    const candidate = embeddedById.get(record.id);
+    const parsed = parseApplicationModuleReference(reference, applicationId, diagnostics);
+    if (!parsed) return [];
+    const candidate = embeddedById.get(parsed.id);
     const embeddedRecord = asOptionalRecord(candidate);
-    const usableEmbedded = embeddedRecord?.id === record.id ? candidate : undefined;
-    if (candidate && !usableEmbedded) diagnostics.push({ code: 'embedded_descriptor_mismatch', material: true, message: `${field} entry did not match ${record.id}.`, source: applicationId });
-    return [{ id: record.id, identity, version, sourceApplication: applicationId, embedded: usableEmbedded }];
+    const usableEmbedded = embeddedRecord?.id === parsed.id ? candidate : undefined;
+    if (candidate && !usableEmbedded) diagnostics.push({ code: 'embedded_descriptor_mismatch', material: true, message: `${field} entry did not match ${parsed.id}.`, source: applicationId });
+    return [{ ...parsed, sourceApplication: applicationId, embedded: usableEmbedded }];
   });
   const referenceIds = new Set(parsedReferences.map(reference => reference.id));
   for (const embeddedId of embeddedById.keys()) {
@@ -469,36 +450,14 @@ function componentSourceManifest(component: ComponentPin, descriptors: AcquiredD
     : { name: component.name, version: component.version, status: 'unresolved' };
 }
 
+// S008 catalogs accepted platform releases, so experimental applications stay out (S014 counts them).
 function collectApplicationPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ApplicationPin[] {
-  const applications = asOptionalRecord(platform.applications);
-  if (platform.applications !== undefined && !applications) {
-    diagnostics.push({ code: 'invalid_application_container', material: true, message: 'Platform applications must be an object.' });
-  }
-  const groups: Array<{ values: unknown; optional: boolean }> = [
-    { values: applications?.required, optional: false },
-    { values: applications?.optional, optional: true }
-  ];
-  return groups.flatMap(group => parsePins(group.values, group.optional, 'application', diagnostics));
+  return parsePlatformApplicationPins(platform, ['required', 'optional'], diagnostics)
+    .map(({ name, version, tier }) => ({ name, version, optional: tier !== 'required' }));
 }
 
 function collectComponentPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ComponentPin[] {
-  return parsePins(platform['eureka-components'], false, 'component', diagnostics).map(({ name, version }) => ({ name, version }));
-}
-
-function parsePins(values: unknown, optional: boolean, kind: string, diagnostics: Diagnostic[]): ApplicationPin[] {
-  if (values === undefined) return [];
-  if (!Array.isArray(values)) {
-    diagnostics.push({ code: `invalid_${kind}_pins`, material: true, message: `Platform ${kind} pins must be an array.` });
-    return [];
-  }
-  return values.flatMap((value, index) => {
-    const record = asOptionalRecord(value);
-    if (!record || typeof record.name !== 'string' || typeof record.version !== 'string' || !record.name || !record.version) {
-      diagnostics.push({ code: `invalid_${kind}_pin`, material: true, message: `Platform ${kind} pin ${index} lacks concrete name/version.` });
-      return [];
-    }
-    return [{ name: record.name, version: record.version, optional }];
-  }).sort(byJson);
+  return parsePlatformPins(platform['eureka-components'], 'component', diagnostics);
 }
 
 interface FetchOptions { fetchImpl: typeof fetch; timeoutMs: number; maxBytes: number }
@@ -543,15 +502,6 @@ function validateBaseUrl(value: string, label: string): URL {
 
 function validateCommit(value: string): void {
   if (!/^[0-9a-f]{40}$/.test(value) || /^0+$/.test(value)) throw new Error('--platform-commit must be an explicit immutable 40-character lowercase commit SHA');
-}
-
-function moduleIdentity(reference: Record<string, unknown>): string | undefined {
-  if (typeof reference.name === 'string' && reference.name) return reference.name;
-  const id = reference.id as string;
-  if (typeof reference.version === 'string' && id.endsWith(`-${reference.version}`)) {
-    return id.slice(0, -reference.version.length - 1);
-  }
-  return undefined;
 }
 
 function repositoryHint(descriptor: Record<string, unknown>): string | undefined {
