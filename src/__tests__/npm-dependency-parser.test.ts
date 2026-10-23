@@ -63,6 +63,7 @@ class FakeRunner implements CommandRunner {
       durationMs: result.durationMs ?? 1,
       stdout: result.stdout ?? '',
       stderr: result.stderr ?? '',
+      stdoutTruncated: result.stdoutTruncated,
       errorMessage: result.errorMessage,
       sanitized: true
     };
@@ -265,6 +266,26 @@ describe('npm-dependency-parser', () => {
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
+    });
+
+    it.each([
+      ['malformed JSON', { stdout: '{"express@4.18.2": {"licenses": "MIT"' }, 'npm could not list the dependencies: license-checker output could not be read as JSON: '],
+      ['a JSON array instead of an object', { stdout: '[{"licenses": "MIT"}]' }, 'npm could not list the dependencies: license-checker output is an array, not the expected object that lists each package'],
+      ['a package entry that is not an object', { stdout: '{"express@4.18.2": null}' }, 'npm could not list the dependencies: license-checker output has an entry for express@4.18.2 that is not a set of package details'],
+      ['an object whose keys are not packages', { stdout: '{"error": {"code": "E404"}}' }, 'npm could not list the dependencies: license-checker output lists "error", which is not a package name followed by @ and a version'],
+      // Parseable on its own, so only the truncation flag shows that packages are missing.
+      ['truncated output', { stdout: '{"express@4.18.2": {"licenses": "MIT"}}', stdoutTruncated: true }, 'npm could not list the dependencies: license-checker output was longer than 10 MB and was cut off, so the dependency list is incomplete'],
+      ['empty output', { stdout: '' }, 'npm could not list the dependencies: license-checker printed nothing, so there is no dependency list to read']
+    ])('should report an extraction error, not an empty dependency list, for %s', async (_case, checkerResult, message) => {
+      (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => !filePath.includes('.npmrc'));
+      (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
+      const runner = new FakeRunner([{ status: 'success' }, { status: 'success', ...checkerResult }]);
+
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
+
+      expect(result.dependencies).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toMatchObject({ source: 'npm-parser', message: expect.stringContaining(message) });
     });
 
     it('should handle packages with array licenses', async () => {
