@@ -303,6 +303,23 @@ describe('criterion agent review', () => {
     expect(result.errors.join(' ')).not.toContain('missing.md');
   });
 
+  it.each([
+    [undefined, 'no candidate evidence was available for agent review'],
+    ['F004 agent review needs runtime evidence (--ui-runtime-url)', 'F004 agent review needs runtime evidence (--ui-runtime-url)']
+  ])('gives the criterion\'s own reason when there is nothing to review: %s', async (notRunReason, expected) => {
+    const review = jest.fn();
+    const result = await reviewCriterionWithAgent({
+      criterionId: 'F004',
+      status: EvaluationStatus.MANUAL,
+      hasReviewMaterial: false,
+      notRunReason,
+      evaluationRun: createEvaluationRun({ repositoryPath: repoPath, language: 'javascript', agentReview: { enabled: true, adapter: 'fake' } }),
+      review
+    });
+    expect(result).toEqual({ unavailableReason: expected });
+    expect(review).not.toHaveBeenCalled();
+  });
+
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await reviewCriterionWithAgent({
       criterionId: 'S005',

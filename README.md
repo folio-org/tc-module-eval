@@ -96,6 +96,16 @@ against the testing sections of the same policy. It never runs tests, even with
 S013 is `manual` and lists the test runners it found. See
 [Criterion Notes](docs/criterion-notes.md#s013-unit-test-coverage).
 
+### F003 Internationalization
+
+F003 checks that a UI package renders its text through react-intl from an English translation file,
+`translations/<namespace>/en.json`. It reads the committed production source (`src/`, `lib/` and
+root-level files, without tests or stories) and fails without react-intl or a valid `en.json`. Message
+ids missing from `en.json`, hard-coded user-visible text and invalid ICU messages make it `manual`,
+with a checklist for the reviewer and, when agent review is enabled, the agent's results per item. A
+package that renders no user interface, such as stripes-connect, is not applicable. See
+[Criterion Notes](docs/criterion-notes.md#f003-internationalization).
+
 ### F005 Stripes Version
 
 F005 checks that a UI module uses the Stripes version on the officially supported technologies

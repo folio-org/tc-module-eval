@@ -2,11 +2,11 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, `S010` third-party system resilience review, and `S011` SonarQube suppression review.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, `S010` third-party system resilience review, `S011` SonarQube suppression review, and `F003` internationalization review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all six currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all seven currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
 - Criterion-supplied files are starting context and do not limit the browsable source inventory. A criterion may explicitly set `evidenceMode: 'supplied-files'` when it must restrict review to those files; repository browsing remains the default when the option is omitted.
 - If starting context names a path also present in the committed snapshot, the committed content is authoritative while the path remains listed as starting material.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
@@ -132,6 +132,19 @@ S011 review runs for a deterministic `manual` result when the repository or its 
 
 The agent reads the suppressed code and returns exactly one assessment per group, with the group ID as `technologyId`: `aligned_fact` when the suppression looks justified, `substantive_concern` when it does not, `evidence_gap` when the code does not settle it. Each must cite the group's own file; a group whose file is not in the review snapshot must stay `evidence_gap`. `likely_sufficient` needs every group `aligned_fact`, `likely_insufficient` a `substantive_concern`, and `needs_reviewer_judgment` a cited reviewer action. A review that misses a group, adds an unknown one, or breaks these rules is rejected and S011 stays `manual` without advice. Issues accepted or hotspots reviewed in SonarCloud, and SonarCloud project settings, are listed for the human only; they are not repository files.
 
+## F00x Frontend Criteria Review
+
+F criteria share one contract (`src/utils/frontend-agent-review.ts`); F003 is the first to use it, and F001, F002, F004, F006 and F007 will follow. Enabling agent review without `--criterion-agent-criteria` runs it for F003 whenever F003 is manual (Q6).
+
+- **Obligations.** Each checklist item that is not reviewer-only gives one obligation per subject (a message id, a text, a path and line), or one for the whole item. IDs are short and per run: `F003-C1#1`, `F003-C1#2`, … At most 25 are given to the agent, subject obligations first in item order, then whole-item ones; the rest are shown as "Not given to the agent (limit of 25)".
+- **Starting material** under `.criterion-agent/<ID>/`: `checklist.json` (items, their first 20 starting points and the obligations given), `evidence-summary.json` (the deterministic findings, lists cut until it fits in 48 KB) and `response-shape.json` (a complete example).
+- **Browse scope.** A request may narrow the committed snapshot with `browseInclude`. F criteria browse production source (`src/`, `lib/`, root-level files, without tests, stories, examples, fixtures and mocks), CSS under `src/` and `lib/`, and `package.json`; F003 adds its own `translations/<namespace>/en.json`, or every candidate `en.json` when the namespace is unclear. Tests, guides, other locales and CHANGELOG are left out. The scope is stated in the prompt and in the report ("Agent review scope" under what the tool found).
+- **Timeout.** F criteria use 420,000 ms per OpenCode command unless `--criterion-agent-timeout-ms` is given.
+- **Validation**, all or nothing, no retry. The response is rejected when an obligation has no assessment or more than one, or an assessment names an ID that is neither an obligation nor an allowed `discovered:<kind>:<n>` (F003: `text`, `id`); an assessment has no `coverageDisposition`; the review, an assessment or an action cites no repository path; an `investigated` obligation does not cite its own file, or an obligation about a file outside the snapshot is not `unresolved`; an `aligned_fact` is `unresolved` or an `evidence_gap` is `investigated`; a discovered assessment is anything but `substantive_concern` or `evidence_gap`; `likely_sufficient` comes with a concern, gap, policy question, unresolved disposition or withheld obligation; `likely_insufficient` has no `substantive_concern`; or `needs_reviewer_judgment` has no reviewer action. `likely_sufficient` therefore means every obligation given was checked and holds.
+- **Report.** Each checklist item shows the agent's result for its obligations ("Supported by evidence", "Potential problem", "Needs verification", …); discovered findings, the recommendation, summary and reviewer actions follow in the review's own section. A criterion with nothing to review can give its own reason (`notRunReason`) instead of "no candidate evidence was available".
+
+F003 asks the agent whether each missing id has English fallback text, whether each hard-coded candidate is shown to users, whether computed id families resolve to keys, and whether each invalid text would fail in react-intl; and to report other hard-coded text or missing ids as `discovered:text:<n>` or `discovered:id:<n>`.
+
 ## S006 Sensitive Information Review
 
 S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports show the matched value as a bounded excerpt so reviewers can judge it directly; value fingerprints are not reported.
@@ -191,7 +204,7 @@ folio-eval evaluate <repo-url> \
   --criterion-agent-timeout-ms 420000
 ```
 
-The default timeout is 120,000 ms. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
+The default timeout is 120,000 ms, or 420,000 ms for F criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
 
 Advanced options:
 

@@ -47,6 +47,10 @@ export interface CriterionAgentReviewRequest {
     review: CriterionAgentReviewResult,
     availableSourcePaths: ReadonlySet<string>
   ) => string | undefined;
+  /** Narrows the browsable committed source, on top of the shared exclusions. */
+  browseInclude?: (repoRelativePath: string) => boolean;
+  /** Timeout for each OpenCode command when the run sets none (--criterion-agent-timeout-ms). */
+  defaultTimeoutMs?: number;
   /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
   coverageGapIds?: string[];
   schemaDescription: string;
@@ -68,6 +72,8 @@ export interface OptionalCriterionAgentReviewRequest {
   criterionId: string;
   status: EvaluationStatus;
   hasReviewMaterial: boolean;
+  /** Why the review does not run without review material; by default, no candidate evidence was available. */
+  notRunReason?: string;
   evaluationRun: EvaluationRun;
   review: (
     config: CriterionAgentReviewConfig,
@@ -87,7 +93,7 @@ export async function reviewCriterionWithAgent(
     return {};
   }
   if (!request.hasReviewMaterial) {
-    return { unavailableReason: 'no candidate evidence was available for agent review' };
+    return { unavailableReason: request.notRunReason ?? 'no candidate evidence was available for agent review' };
   }
   if (!request.evaluationRun.agentReview?.enabled) {
     return { unavailableReason: 'agent review is disabled or unconfigured' };
@@ -143,6 +149,9 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [`Agent review is not enabled for ${request.criterionId}`] };
   }
 
+  if (config.timeoutMs === undefined && request.defaultTimeoutMs !== undefined) {
+    config = { ...config, timeoutMs: request.defaultTimeoutMs };
+  }
   const validationError = validateAgentReviewConfig(config, request.repositoryPath);
   if (validationError) {
     return { ...unavailable, errors: [validationError] };

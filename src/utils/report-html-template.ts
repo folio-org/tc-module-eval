@@ -5,7 +5,7 @@ import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
 import { s011AgentReviewNames } from './s011-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
-import { CHECKLIST_HEADING, frontendChecklistOf, renderFrontendChecklistLines, unattachedAssessments } from './frontend-checklist';
+import { CHECKLIST_HEADING, frontendChecklistOf, renderFrontendAgentReviewLines, renderFrontendChecklistLines } from './frontend-checklist';
 
 const CRITERION_TITLES: Record<string, string> = {
   A001: 'Product Council approval',
@@ -23,6 +23,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S012: 'Officially supported build tools',
   S013: 'Unit test coverage and technologies',
   S014: 'Application assignment',
+  F003: 'Internationalization',
   F005: 'Stripes version'
 };
 
@@ -183,8 +184,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
     return [
       ...withoutSection(details, CHECKLIST_HEADING),
       ...renderFrontendChecklistLines(checklist, review),
-      ...renderAgentReviewLines({ ...review, assessments: unattachedAssessments(checklist, review) }),
-      '  - Advisory only; the criterion status is unchanged.'
+      ...renderFrontendAgentReviewLines(checklist, review)
     ];
   }
   // The subject names each criterion's own report uses, so the rows match the rest of its details.

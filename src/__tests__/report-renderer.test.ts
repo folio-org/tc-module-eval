@@ -1173,7 +1173,7 @@ describe('EvaluationReportRenderer', () => {
       expect(agent.hideCount).toBe(true);
       // Only the assessment that answers no checklist obligation stays in the review's findings.
       expect(agent.children.find((node: any) => node.text === 'Findings:').children.map((node: any) => node.text))
-        .toEqual(['text:1 — Needs verification:', 'F003 C3#1 — Supported by evidence:']);
+        .toEqual(['Hard-coded text found by the agent (1) — Needs verification:', 'F003 C3#1 — Supported by evidence:']);
       expect(agent.children.map((node: any) => node.text)).toContain('Recommendation: Reviewer judgment needed');
       expect(downloadData(html).criteria[0].details).toBe(details.join('\n'));
     });
