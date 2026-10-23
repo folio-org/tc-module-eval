@@ -34,10 +34,6 @@ describe('S006 shared evaluator', () => {
     jest.restoreAllMocks();
   });
 
-  it('keeps S006 in canonical shared criteria order after S005', () => {
-    expect(evaluator.criteriaIds.slice(0, 7)).toEqual(['S001', 'S002', 'S003', 'S004', 'S005', 'S006', 'S007']);
-  });
-
   it('evaluates S006 instead of returning the catalog fallback for Java and JavaScript repositories', async () => {
     writeRepoFile('README.md', '# Clean module\n');
 

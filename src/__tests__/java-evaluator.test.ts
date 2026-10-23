@@ -93,8 +93,6 @@ describe('JavaEvaluator', () => {
         return Promise.resolve('');
       });
 
-//      (mockFs.readdir as jest.Mock).mockResolvedValue([]);
-
       const results = await evaluator.evaluate(mockRepoPath);
       
       // Should have results from all sections: Administrative (1) + Shared (14) + Backend (16) = 31 total
@@ -117,13 +115,21 @@ describe('JavaEvaluator', () => {
     });
 
     it('should handle evaluation errors gracefully', async () => {
-      // Mock fs to throw errors
-      (mockFs.pathExists as jest.Mock).mockRejectedValue(new Error('File system error'));
+      // Criteria that read a repository which does not exist throw; each one must still yield a result.
+      const parent = realFs.mkdtempSync(path.join(os.tmpdir(), 'java-evaluator-'));
+      const missingRepo = path.join(parent, 'missing');
+      const ids = (prefix: string, count: number) =>
+        Array.from({ length: count }, (_, i) => `${prefix}${String(i + 1).padStart(3, '0')}`);
+      try {
+        const results = await evaluator.evaluate(missingRepo);
 
-      const results = await evaluator.evaluate(mockRepoPath);
-      
-      // Should still return results, even if some evaluations fail
-      expect(Array.isArray(results)).toBe(true);
+        expect(results.map(r => r.criterionId)).toEqual(['A001', ...ids('S', 14), ...ids('B', 16)]);
+        const failed = results.filter(r => r.evidence.startsWith('Evaluation failed:'));
+        expect(failed.length).toBeGreaterThan(0);
+        failed.forEach(result => expect(result.status).toBe(EvaluationStatus.MANUAL));
+      } finally {
+        realFs.rmSync(parent, { recursive: true, force: true });
+      }
     });
 
     it('should evaluate S001 against the repository license file', async () => {

@@ -527,14 +527,14 @@ describe('Dependency Utils', () => {
       expect(result.issues).toHaveLength(0);
     });
 
-    it('should detect parser contract violation when licenses contain pipe separator', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:unsplit-licenses',
-          version: '1.0.0',
-          licenses: ['Apache-2.0|MIT'] // Parser failed to split!
-        }
-      ];
+    it.each([
+      ['pipe separator', 'org.example:unsplit-licenses', 'Apache-2.0|MIT'], // Parser failed to split!
+      ['OR separator', 'org.example:npm-style-unsplit', 'MIT OR Apache-2.0'], // npm/SPDX format - parser should split!
+      ['AND separator', 'org.example:spdx-and-unsplit', 'LGPL-2.1 AND MIT'], // SPDX format - parser should split!
+      ['parentheses', 'org.example:complex-unsplit', '(MIT OR Apache-2.0)'], // Complex SPDX expression - parser should split!
+      ['WITH keyword', 'org.example:spdx-exception-unsplit', 'Apache-2.0 WITH LLVM-exception'] // SPDX exception - parser should normalize!
+    ])('should detect parser contract violation when licenses contain %s', (_name, name, license) => {
+      const dependencies: Dependency[] = [{ name, version: '1.0.0', licenses: [license] }];
 
       const readmeContent = 'No license documentation';
       const result = checkLicenseCompliance(dependencies, readmeContent);
@@ -543,82 +543,7 @@ describe('Dependency Utils', () => {
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
-      expect(result.issues[0].reason).toContain("'Apache-2.0|MIT'");
-    });
-
-    it('should detect parser contract violation when licenses contain OR separator', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:npm-style-unsplit',
-          version: '1.0.0',
-          licenses: ['MIT OR Apache-2.0'] // npm/SPDX format - parser should split!
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Should fail due to parser contract violation
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
-      expect(result.issues[0].reason).toContain("'MIT OR Apache-2.0'");
-    });
-
-    it('should detect parser contract violation when licenses contain AND separator', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:spdx-and-unsplit',
-          version: '1.0.0',
-          licenses: ['LGPL-2.1 AND MIT'] // SPDX format - parser should split!
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Should fail due to parser contract violation
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
-    });
-
-    it('should detect parser contract violation when licenses contain parentheses', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:complex-unsplit',
-          version: '1.0.0',
-          licenses: ['(MIT OR Apache-2.0)'] // Complex SPDX expression - parser should split!
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Should fail due to parser contract violation
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
-      expect(result.issues[0].reason).toContain("'(MIT OR Apache-2.0)'");
-    });
-
-    it('should detect parser contract violation when licenses contain WITH keyword', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:spdx-exception-unsplit',
-          version: '1.0.0',
-          licenses: ['Apache-2.0 WITH LLVM-exception'] // SPDX exception - parser should normalize!
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Should fail due to parser contract violation
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');
-      expect(result.issues[0].reason).toContain("'Apache-2.0 WITH LLVM-exception'");
+      expect(result.issues[0].reason).toContain(`'${license}'`);
     });
   });
 
