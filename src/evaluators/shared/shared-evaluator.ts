@@ -38,7 +38,7 @@ import { loadS007Policy } from '../../utils/s007-policy';
 import { collectS007TechnologyEvidence } from '../../utils/s007-technology-evidence';
 import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effective-evidence';
 import { evaluateS007 } from '../../utils/s007-evaluator';
-import { buildS007CriterionDetails, renderS007HumanDetails } from '../../utils/s007-report-details';
+import { renderS007HumanDetails } from '../../utils/s007-report-details';
 import { reviewS007WithAgent } from '../../utils/s007-agent-review';
 import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
 import { loadS008Catalog } from '../../utils/s008-catalog';
@@ -278,7 +278,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: analysis.status as EvaluationStatus,
       evidence: analysis.summary,
       details: renderS007HumanDetails(analysis, agentReview),
-      criterionDetails: buildS007CriterionDetails(analysis),
+      criterionDetails: analysis,
       agentReview
     };
   }

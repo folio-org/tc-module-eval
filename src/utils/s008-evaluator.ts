@@ -47,29 +47,10 @@ export function evaluateS008(
   const status = failures.length ? EvaluationStatus.FAIL
     : reviews.length || !declarations.complete ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
   const catalogName = `${channel} catalog (${catalogLoad.value.baseline.descriptorVersion})`;
-  // With unreadable declarations, the count covers only the interfaces that could be read.
-  const declared = declarations.complete ? 'the module declares' : 'that could be read';
-  const summary = failures.length
-    ? `${failures.length === findings.length
-      ? findings.length === 1 ? `The one interface ${declared} is not` : `None of the ${findings.length} interfaces ${declared} is`
-      : `${failures.length} of the ${findings.length} interfaces ${declared} ${failures.length === 1 ? 'is' : 'are'} not`} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.${reviews.length
-        ? ` ${reviews.length} more ${reviews.length === 1 ? 'needs' : 'need'} a reviewer: ${nameList(sortProblems(reviews))}.`
-        : ''}`
-    : reviews.length
-      ? `${reviews.length === findings.length
-        ? findings.length === 1 ? `The one interface ${declared} needs` : `All ${findings.length} interfaces ${declared} need`
-        : `${reviews.length} of the ${findings.length} interfaces ${declared} ${reviews.length === 1 ? 'needs' : 'need'}`} a reviewer: ${nameList(sortProblems(reviews))}.${declarations.complete ? '' : ' Some declarations could not be read either.'}`
-    : !declarations.complete
-      ? declarations.sourcePaths.length && findings.length
-        ? `No problems were found in the ${findings.length} interface${findings.length === 1 ? '' : 's'} that could be read, but some declarations could not be read, so a reviewer must check them.`
-        : 'S008 could not find or read the module\'s interface declarations, so a reviewer must check its interfaces.'
-      : findings.length
-        ? `${findings.length === 1 ? 'The one interface the module declares is' : `All ${findings.length} interfaces the module declares are`} provided by accepted modules in the ${catalogName}.`
-        : 'The module declares no interfaces from other modules, so there is nothing to check.';
   return {
     ...base,
     status,
-    summary,
+    summary: summarize(findings, failures, reviews, declarations, catalogName),
     ledger: { sourcePath: displayPolicyPath(ledgerLoad.sourcePath), digest: ledgerLoad.digest },
     catalog: {
       sourcePath: displayPolicyPath(catalogLoad.sourcePath),
@@ -80,6 +61,42 @@ export function evaluateS008(
     },
     findings
   };
+}
+
+function summarize(
+  findings: S008Finding[],
+  failures: S008Finding[],
+  reviews: S008Finding[],
+  declarations: S008DeclarationResult,
+  catalogName: string
+): string {
+  // With unreadable declarations, the count covers only the interfaces that could be read.
+  const declared = declarations.complete ? 'the module declares' : 'that could be read';
+  if (failures.length) {
+    const subject = failures.length === findings.length
+      ? findings.length === 1 ? `The one interface ${declared} is not` : `None of the ${findings.length} interfaces ${declared} is`
+      : `${failures.length} of the ${findings.length} interfaces ${declared} ${failures.length === 1 ? 'is' : 'are'} not`;
+    const alsoReviews = reviews.length
+      ? ` ${reviews.length} more ${reviews.length === 1 ? 'needs' : 'need'} a reviewer: ${nameList(sortProblems(reviews))}.`
+      : '';
+    return `${subject} available from an accepted module in the ${catalogName}: ${nameList(sortProblems(failures))}.${alsoReviews}`;
+  }
+  if (reviews.length) {
+    const subject = reviews.length === findings.length
+      ? findings.length === 1 ? `The one interface ${declared} needs` : `All ${findings.length} interfaces ${declared} need`
+      : `${reviews.length} of the ${findings.length} interfaces ${declared} ${reviews.length === 1 ? 'needs' : 'need'}`;
+    return `${subject} a reviewer: ${nameList(sortProblems(reviews))}.${declarations.complete ? '' : ' Some declarations could not be read either.'}`;
+  }
+  if (!declarations.complete) {
+    if (declarations.sourcePaths.length && findings.length) {
+      return `No problems were found in the ${findings.length} interface${findings.length === 1 ? '' : 's'} that could be read, but some declarations could not be read, so a reviewer must check them.`;
+    }
+    return 'S008 could not find or read the module\'s interface declarations, so a reviewer must check its interfaces.';
+  }
+  if (findings.length) {
+    return `${findings.length === 1 ? 'The one interface the module declares is' : `All ${findings.length} interfaces the module declares are`} provided by accepted modules in the ${catalogName}.`;
+  }
+  return 'The module declares no interfaces from other modules, so there is nothing to check.';
 }
 
 function finding(declaration: S008DeclarationResult['declarations'][number], ledger: Readonly<AcceptanceLedger>, catalog: Readonly<S008Catalog>): S008Finding {

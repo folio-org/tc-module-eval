@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { JavaSharedEvaluator } from '../evaluators/java/java-shared-evaluator';
-import { EvaluationStatus, ModuleDescriptorArtifact } from '../types';
+import { CommandExecutionRequest, CommandRunner, EvaluationStatus, ModuleDescriptorArtifact } from '../types';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
@@ -85,13 +85,25 @@ describe('S002 module descriptor evaluator', () => {
     expect(result.evidence).toContain('Commit a ModuleDescriptor.json at the repository root, or add a build step that generates it.');
   });
 
-  it('should reuse the same lazy artifact slot for repeated direct evaluation', async () => {
+  it('should generate the descriptor once when one run evaluates S002 twice', async () => {
     const repo = tempRepo();
-    fs.writeFileSync(path.join(repo, 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-example-1.0.0' }));
-    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'] });
-    const originalGetOrCreate = run.getOrCreateArtifact.bind(run);
-    const getOrCreateSpy = jest.fn(originalGetOrCreate);
-    run.getOrCreateArtifact = getOrCreateSpy;
+    fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><artifactId>mod-example</artifactId></project>');
+    // Counts every generation and caches nothing itself, so a second run of the build means the artifact was not reused.
+    const generations: CommandExecutionRequest[] = [];
+    const commandRunner: CommandRunner = {
+      normalize: request => JSON.stringify(request),
+      async run(request) {
+        generations.push(request);
+        fs.mkdirSync(path.join(repo, 'target'), { recursive: true });
+        fs.writeFileSync(path.join(repo, 'target', 'ModuleDescriptor.json'), JSON.stringify({ id: 'mod-example-1.0.0' }));
+        return {
+          identity: JSON.stringify(request), command: request.command, args: request.args ?? [], cwd: request.cwd,
+          commandExecutionEnvironment: 'local', localCommandsAllowed: true, status: 'success', exitCode: 0,
+          durationMs: 1, stdout: '', stderr: '', sanitized: true
+        };
+      }
+    };
+    const run = createEvaluationRun({ repositoryPath: repo, language: 'java', criteriaFilter: ['S002'], commandRunner });
     const evaluator = new JavaSharedEvaluator();
 
     const first = await evaluator.evaluateCriterion('S002', repo, run);
@@ -99,8 +111,8 @@ describe('S002 module descriptor evaluator', () => {
 
     expect(first.status).toBe(EvaluationStatus.PASS);
     expect(second.status).toBe(EvaluationStatus.PASS);
-    expect(getOrCreateSpy).toHaveBeenCalledTimes(2);
-    expect(run.artifacts.moduleDescriptor?.descriptorPath).toBe('ModuleDescriptor.json');
+    expect(generations).toHaveLength(1);
+    expect(generations[0].command).toBe('mvn');
   });
 
   it('should fail with artifact context when selected descriptor cannot be read', async () => {

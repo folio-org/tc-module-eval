@@ -38,7 +38,7 @@ function validateSemantics(ledger: AcceptanceLedger): S008PolicyDiagnostic[] {
   const diagnostics: S008PolicyDiagnostic[] = [];
   duplicateDiagnostics(ledger.families.map(item => item.id), 'family ID', '/families', diagnostics);
   duplicateDiagnostics(ledger.moduleIdentities.map(item => item.identity), 'module identity', '/moduleIdentities', diagnostics);
-  duplicateDiagnostics(ledger.libraryCoordinates.map(coordinateKey), 'library coordinate', '/libraryCoordinates', diagnostics);
+  duplicateDiagnostics(ledger.libraryCoordinates.map(libraryCoordinateKey), 'library coordinate', '/libraryCoordinates', diagnostics);
   const familyIds = new Set(ledger.families.map(item => item.id));
   for (const [index, mapping] of [...ledger.moduleIdentities, ...ledger.libraryCoordinates].entries()) {
     if (!familyIds.has(mapping.familyId)) {
@@ -48,7 +48,7 @@ function validateSemantics(ledger: AcceptanceLedger): S008PolicyDiagnostic[] {
   return diagnostics;
 }
 
-function coordinateKey(value: AcceptanceLedger['libraryCoordinates'][number]): string {
+export function libraryCoordinateKey(value: AcceptanceLedger['libraryCoordinates'][number]): string {
   return value.ecosystem === 'maven'
     ? `maven:${value.groupId}:${value.artifactId}`
     : `npm:${value.packageName}`;
