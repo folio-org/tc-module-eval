@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -138,6 +138,8 @@ export interface EvaluationRunArtifacts {
   platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
   sonarCloudSnapshot?: import('./sonarcloud-snapshot').SonarCloudSnapshot;
   s011SuppressionScan?: import('./s011-sonarqube').S011SuppressionScan;
+  /** The committed source every agent review browses; read once and frozen, since the reviews share it. */
+  agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
 }
 
 export interface EvaluationRun {
@@ -278,6 +280,8 @@ export interface CriterionAgentReviewConfig {
   fakeResult?: CriterionAgentReviewResult;
   generatedProvider?: CriterionAgentGeneratedProvider;
   providerConfigError?: string;
+  /** Set per run by reviewCriterionWithAgent so a run's reviews share one committed-source read. */
+  readRepositorySnapshot?: () => Promise<import('../utils/committed-source').CommittedSourceSnapshot>;
 }
 
 export interface CriterionAgentGeneratedProvider {

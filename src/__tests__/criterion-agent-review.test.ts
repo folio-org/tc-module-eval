@@ -22,6 +22,7 @@ import * as committedSource from '../utils/committed-source';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
 import { sanitizeStructuredOutput } from '../utils/opencode-output';
 import { LocalCommandRunner } from '../utils/command-runner';
+import { createEvaluationRun } from '../utils/evaluation-run';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -169,6 +170,32 @@ describe('criterion agent review', () => {
     expect(repository).toMatchObject({ available: true, evidenceReferences: ['src.ts'] });
     expect(supplied.available).toBe(false);
     expect(supplied.errors.join(' ')).toContain('incomplete advisory JSON');
+  });
+
+  it('reads committed source once for all of a run\'s reviews', async () => {
+    fs.writeFileSync(path.join(repoPath, 'README.md'), 'committed README');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    const snapshot = jest.spyOn(committedSource, 'readCommittedSource');
+    const run = createEvaluationRun({
+      repositoryPath: repoPath, language: 'java', agentReview: { enabled: true, adapter: 'fake' }
+    });
+    const review = (criterionId: string) => reviewCriterionWithAgent({
+      criterionId, status: EvaluationStatus.MANUAL, hasReviewMaterial: true, evaluationRun: run,
+      review: config => runCriterionAgentReviewImpl({
+        criterionId, repositoryPath: repoPath, instructions: 'review', schemaDescription: 'schema',
+        files: [{ repoRelativePath: `.criterion-agent/${criterionId}/context.json`, content: '{}' }]
+      }, config)
+    });
+
+    const results = [await review('S004'), await review('S005')];
+
+    expect(results.map(result => result.agentReview)).toEqual([
+      expect.objectContaining({ available: true, criterionId: 'S004', evidenceReferences: ['README.md'] }),
+      expect.objectContaining({ available: true, criterionId: 'S005', evidenceReferences: ['README.md'] })
+    ]);
+    expect(snapshot).toHaveBeenCalledTimes(1);
   });
 
   it('does not let excluded, oversized, or untracked starting files bypass repository snapshot policy', async () => {

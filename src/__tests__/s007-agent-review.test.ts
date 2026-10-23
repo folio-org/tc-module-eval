@@ -10,6 +10,7 @@ import {
 } from '../types';
 import * as committedSource from '../utils/committed-source';
 import { prepareCriterionAgentReviewEvidence, prepareCriterionReviewWorkspace, reviewCriterionWithAgent } from '../utils/criterion-agent-review';
+import { createEvaluationRun } from '../utils/evaluation-run';
 import { buildS007AgentReviewRequest, reviewS007WithAgent } from '../utils/s007-agent-review';
 import { loadS007Policy } from '../utils/s007-policy';
 
@@ -199,7 +200,7 @@ describe('S007 agent review', () => {
 
     const result = await reviewCriterionWithAgent({
       criterionId: 'S007', status: EvaluationStatus.MANUAL, hasReviewMaterial: true,
-      evaluationRun: { agentReview: fakeConfig({}) } as any,
+      evaluationRun: createEvaluationRun({ repositoryPath: repoPath, language: 'java', agentReview: fakeConfig({}) }),
       review: config => reviewS007WithAgent(repoPath, deterministic, config)
     });
     expect(result.agentReview?.available).toBe(false);

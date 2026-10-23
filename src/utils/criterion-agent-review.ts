@@ -10,7 +10,8 @@ import {
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { prepareRepositoryBrowsing } from './agent-review-repository';
+import type { CommittedSourceSnapshot } from './committed-source';
+import { prepareRepositoryBrowsing, readRepositorySnapshot } from './agent-review-repository';
 import { isWithinRepo } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
@@ -91,9 +92,14 @@ export async function reviewCriterionWithAgent(
     return { unavailableReason: `agent review is not enabled for ${request.criterionId}` };
   }
 
+  const run = request.evaluationRun;
+  const config: CriterionAgentReviewConfig = {
+    ...request.evaluationRun.agentReview,
+    readRepositorySnapshot: () => run.getOrCreateArtifact('agentReviewSnapshot', () => readRepositorySnapshot(run.repositoryPath))
+  };
   let agentReview: CriterionAgentReviewResult;
   try {
-    agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+    agentReview = await request.review(config, run.commandRunner);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -137,7 +143,7 @@ export async function runCriterionAgentReview(
 
   let prepared: PreparedCriterionAgentReview;
   try {
-    prepared = await prepareCriterionAgentReviewEvidence(request);
+    prepared = await prepareCriterionAgentReviewEvidence(request, config.readRepositorySnapshot);
   } catch (error) {
     return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${error instanceof Error ? error.message : String(error)}`)] };
   }
@@ -190,7 +196,8 @@ export interface PreparedCriterionAgentReview {
 }
 
 export async function prepareCriterionAgentReviewEvidence(
-  request: CriterionAgentReviewRequest
+  request: CriterionAgentReviewRequest,
+  readSnapshot?: () => Promise<CommittedSourceSnapshot>
 ): Promise<PreparedCriterionAgentReview> {
   let preparedRequest: PreparedCriterionAgentReviewRequest;
   let availableSourcePaths: ReadonlySet<string>;
@@ -201,7 +208,7 @@ export async function prepareCriterionAgentReviewEvidence(
     preparedRequest = suppliedRequest;
     availableSourcePaths = new Set(request.files.map(file => file.repoRelativePath));
   } else {
-    const preparedRepository = await prepareRepositoryBrowsing(request);
+    const preparedRepository = await prepareRepositoryBrowsing(request, readSnapshot);
     preparedRequest = preparedRepository.request;
     availableSourcePaths = preparedRepository.sourcePaths;
   }
