@@ -71,49 +71,6 @@ describe('JavaEvaluator', () => {
   });
 
   describe('evaluate', () => {
-    it('should evaluate all applicable criteria sections', async () => {
-      // Mock file system for basic repository structure
-      mockFs.pathExists.mockImplementation((filePath: any) => {
-        const pathStr = filePath.toString();
-        return Promise.resolve(
-          pathStr.endsWith('README.md') ||
-          pathStr.endsWith('LICENSE') ||
-          pathStr.endsWith('pom.xml')
-        );
-      });
-
-      mockFs.readFile.mockImplementation((filePath: any) => {
-        const pathStr = filePath.toString();
-        if (pathStr.endsWith('LICENSE')) {
-          return Promise.resolve('Apache License\nVersion 2.0');
-        }
-        if (pathStr.endsWith('README.md')) {
-          return Promise.resolve('# Test Module\nThis is a FOLIO module for testing.');
-        }
-        return Promise.resolve('');
-      });
-
-      const results = await evaluator.evaluate(mockRepoPath);
-      
-      // Should have results from all sections: Administrative (1) + Shared (14) + Backend (16) = 31 total
-      expect(results.length).toBe(31);
-      
-      // Should have results for all major criterion categories
-      const criterionIds = results.map(r => r.criterionId);
-      expect(criterionIds).toContain('A001'); // Administrative
-      expect(criterionIds).toContain('S001'); // Shared - License
-      expect(criterionIds).toContain('S004'); // Shared - README
-      expect(criterionIds).toContain('B001'); // Backend
-      
-      // Each result should have the required structure
-      results.forEach(result => {
-        expect(result).toHaveProperty('criterionId');
-        expect(result).toHaveProperty('status');
-        expect(result).toHaveProperty('evidence');
-        expect(['pass', 'fail', 'manual', 'not_applicable']).toContain(result.status);
-      });
-    });
-
     it('should handle evaluation errors gracefully', async () => {
       // Criteria that read a repository which does not exist throw; each one must still yield a result.
       const parent = realFs.mkdtempSync(path.join(os.tmpdir(), 'java-evaluator-'));

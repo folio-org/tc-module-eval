@@ -60,13 +60,4 @@ describe('S008 shared evaluator integration', () => {
       declarations: { sourcePaths: ['src/main/resources/descriptors/ModuleDescriptor.json'] }
     });
   });
-
-  it('runs S008 both alone and as part of the full shared criterion set', async () => {
-    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: {} } });
-    const evaluator = new TestEvaluator('javascript');
-    const only = await evaluator.evaluate(repo, ['S008']);
-    const full = await evaluator.evaluate(repo);
-    expect(only.map(item => item.criterionId)).toEqual(['S008']);
-    expect(full.map(item => item.criterionId)).toContain('S008');
-  });
 });

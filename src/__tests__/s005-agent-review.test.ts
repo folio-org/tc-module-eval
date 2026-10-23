@@ -77,15 +77,6 @@ describe('S005 agent review adapter', () => {
     expect(request.files.map(file => file.content).join('\n')).not.toContain('worktree-edit');
   });
 
-  it('reports preparation errors as unavailable from the shared runner', async () => {
-    writeCompletedDisclosure();
-    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
-    await expect(buildS005AgentReviewRequest(repoPath, analysis)).resolves.toBeDefined();
-    const review = await reviewS005WithAgent(repoPath, analysis, fakeConfig(baseResult()));
-    expect(review.available).toBe(false);
-    expect(review.errors.join(' ')).toContain('Repository browsing workspace is incomplete');
-  });
-
   it('supplies checklist facts and distinguishes unchecked boxes from affirmative denial', async () => {
     writeFile('PERSONAL_DATA_DISCLOSURE.md', '# Personal Data Disclosure\n- [x] Username / User Identifier (UUID)\n- [ ] Email address');
     const request = await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath));

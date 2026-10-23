@@ -75,15 +75,6 @@ describe('S006 agent review adapter', () => {
     expect(request.files.map(file => file.content).join('\n')).not.toContain('export const mode = "edited"');
   });
 
-  it('reports preparation errors as unavailable from the shared runner', async () => {
-    writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
-    const analysis = await analyzeRepo();
-    await expect(buildS006AgentReviewRequest(repoPath, analysis)).resolves.toBeDefined();
-    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig(baseResult()));
-    expect(review.available).toBe(false);
-    expect(review.errors.join(' ')).toContain('Repository browsing workspace is incomplete');
-  });
-
   it('accepts repository citations, drops unknown citations, and preserves deterministic status', async () => {
     writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
     commit();

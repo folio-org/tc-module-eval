@@ -1,13 +1,9 @@
-import * as fs from 'fs-extra';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { ReportGenerator } from '../utils/report-generator';
-import { ReportRenderer } from '../utils/report-renderer';
 import { EvaluationResult } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
-
-jest.mock('fs-extra', () => ({
-  ensureDir: jest.fn(),
-  writeFile: jest.fn()
-}));
 
 describe('ReportGenerator', () => {
   const result: EvaluationResult = {
@@ -17,55 +13,49 @@ describe('ReportGenerator', () => {
     evaluatedAt: new Date('2026-06-03T12:00:00.000Z'),
     criteria: []
   };
-
-  const mockFs = fs as jest.Mocked<typeof fs>;
+  let root: string;
 
   beforeEach(() => {
     setLogger(new NoopLogger());
-    jest.clearAllMocks();
-    (mockFs.ensureDir as jest.Mock).mockResolvedValue(undefined);
-    (mockFs.writeFile as unknown as jest.Mock).mockResolvedValue(undefined);
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'report-generator-'));
   });
 
   afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
     resetLogger();
   });
 
   it('should write both report formats by default', async () => {
-    const renderer: jest.Mocked<ReportRenderer> = {
-      renderJson: jest.fn().mockReturnValue('json report'),
-      renderHtml: jest.fn().mockReturnValue('html report')
-    };
-    const generator = new ReportGenerator('/tmp/reports', renderer);
+    const outputDir = path.join(root, 'reports');
+    const paths = await new ReportGenerator(outputDir).generateReports(result);
 
-    const paths = await generator.generateReports(result);
-
-    expect(mockFs.ensureDir).toHaveBeenCalledWith('/tmp/reports');
-    expect(paths.jsonPath).toMatch(/\/tmp\/reports\/test-module-.+\.json$/);
-    expect(paths.htmlPath).toMatch(/\/tmp\/reports\/test-module-.+\.html$/);
-    expect(mockFs.writeFile).toHaveBeenCalledTimes(2);
-    expect(renderer.renderJson).toHaveBeenCalledWith(result);
-    expect(renderer.renderHtml).toHaveBeenCalledWith(result);
+    expect(paths.jsonPath).toMatch(/\/reports\/test-module-[^/]+\.json$/);
+    expect(paths.htmlPath).toBe(paths.jsonPath!.replace(/\.json$/, '.html'));
+    expect(fs.readdirSync(outputDir).sort()).toEqual([path.basename(paths.htmlPath!), path.basename(paths.jsonPath!)]);
+    expect(JSON.parse(fs.readFileSync(paths.jsonPath!, 'utf8'))).toMatchObject({
+      moduleName: 'test-module',
+      repositoryUrl: 'https://github.com/folio-org/test-module',
+      evaluatedAt: '2026-06-03T12:00:00.000Z'
+    });
+    const html = fs.readFileSync(paths.htmlPath!, 'utf8');
+    expect(html).toMatch(/^<!DOCTYPE html>/i);
+    expect(html).toContain('test-module');
   });
 
   it('should respect report format options', async () => {
-    const renderer: jest.Mocked<ReportRenderer> = {
-      renderJson: jest.fn().mockReturnValue('json report'),
-      renderHtml: jest.fn().mockReturnValue('html report')
-    };
-    const generator = new ReportGenerator('/tmp/reports', renderer);
+    const defaultDir = path.join(root, 'reports');
+    const customDir = path.join(root, 'custom', 'reports');
 
-    const paths = await generator.generateReports(result, {
+    const paths = await new ReportGenerator(defaultDir).generateReports(result, {
       outputJson: true,
       outputHtml: false,
-      outputDir: '/tmp/custom-reports'
+      outputDir: customDir
     });
 
-    expect(mockFs.ensureDir).toHaveBeenCalledWith('/tmp/custom-reports');
-    expect(paths.jsonPath).toMatch(/\/tmp\/custom-reports\/test-module-.+\.json$/);
     expect(paths.htmlPath).toBeUndefined();
-    expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
-    expect(renderer.renderJson).toHaveBeenCalledWith(result);
-    expect(renderer.renderHtml).not.toHaveBeenCalled();
+    expect(path.dirname(paths.jsonPath!)).toBe(customDir);
+    expect(fs.readdirSync(customDir)).toEqual([path.basename(paths.jsonPath!)]);
+    expect(JSON.parse(fs.readFileSync(paths.jsonPath!, 'utf8')).moduleName).toBe('test-module');
+    expect(fs.existsSync(defaultDir)).toBe(false);
   });
 });
