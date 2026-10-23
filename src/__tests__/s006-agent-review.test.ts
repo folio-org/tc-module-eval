@@ -285,6 +285,46 @@ describe('S006 agent review adapter', () => {
     if (mode !== 'unresolved-gap') expect(review.errors.join(' ')).toContain('requires repository evidence');
   });
 
+  it.each([
+    ['a repeated discovered ID', { extra: [discovered('discovered:x'), discovered('discovered:x')] }, 'S006 requires exactly one coverage disposition for every supplied review obligation.'],
+    ['an ID that is neither an obligation nor discovered:', { extra: [discovered('token')] }, 'S006 requires exactly one coverage disposition for every supplied review obligation.'],
+    ['a missing coverage disposition', { finding: { coverageDisposition: undefined } }, 'S006 requires exactly one coverage disposition for every supplied review obligation.'],
+    ['investigation of an unavailable finding path', { findingPath: 'docker/.env', finding: { type: 'aligned_fact', coverageDisposition: 'investigated', evidenceReferences: ['docker/.env', 'docs/token.md'] } }, 'S006 cannot claim direct investigation of an unavailable or uncited finding or coverage path.'],
+    ['investigation that does not cite the finding path', { finding: { type: 'aligned_fact', coverageDisposition: 'investigated', evidenceReferences: ['README.md'] } }, 'S006 cannot claim direct investigation of an unavailable or uncited finding or coverage path.'],
+    ['an immaterial disposition for an excluded finding', { findingPath: 'docker/.env', finding: { coverageDisposition: 'immaterial' } }, 'S006 findings whose source is excluded must remain unresolved; contextual documentation cannot establish their committed contents.'],
+    ['an unresolved aligned fact', { finding: { type: 'aligned_fact' } }, 'S006 unresolved obligations cannot be labeled aligned facts.'],
+    ['likely_sufficient with an unresolved limitation', { recommendation: 'likely_sufficient', scope: investigatedScope(), finding: { type: 'analyzer_limitation' } }, 'S006 likely_sufficient conflicts with unresolved coverage or finding dispositions.'],
+    ['likely_sufficient with an investigated policy question', { recommendation: 'likely_sufficient', scope: investigatedScope(), finding: { type: 'policy_question', coverageDisposition: 'investigated' } }, 'S006 likely_sufficient conflicts with unresolved coverage or finding dispositions.'],
+    ['likely_insufficient without a substantive concern', { recommendation: 'likely_insufficient' }, 'S006 likely_insufficient requires a cited substantive concern, not merely incomplete coverage.'],
+    ['needs_reviewer_judgment without reviewer actions', { reviewerActions: [] }, 'S006 needs_reviewer_judgment requires a cited action identifying the missing fact.']
+  ] as const)('rejects %s with the matching validation error', async (_name, variant: any, message) => {
+    writeFile('README.md', 'Configuration usage');
+    writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
+    writeFile('docker/.env', 'LOCAL_DEFAULT=value');
+    commit();
+    const analysis = await analyzeRepo();
+    expect(analysis.findings.length).toBeGreaterThan(0);
+    analysis.findings = [{ ...analysis.findings[0], path: variant.findingPath ?? 'docs/token.md' }];
+    const unresolved = { type: 'evidence_gap' as const, summary: 'Usage needs verification.', coverageDisposition: 'unresolved' as const, evidenceReferences: ['docs/token.md'] };
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), recommendation: variant.recommendation ?? 'needs_reviewer_judgment', evidenceReferences: ['docs/token.md'],
+      assessments: [
+        { ...unresolved, technologyId: 'scope', ...variant.scope },
+        { ...unresolved, technologyId: 'finding:0', ...variant.finding },
+        ...(variant.extra ?? [])
+      ],
+      reviewerActions: variant.reviewerActions ?? [{ action: 'Obtain evidence of how this example is deployed.', evidenceReferences: ['docs/token.md'] }]
+    }));
+    expect(review.available).toBe(false);
+    expect(review.errors).toContain(message);
+  });
+
+  function discovered(technologyId: string) {
+    return { technologyId, type: 'evidence_gap', summary: 'Additional usage.', coverageDisposition: 'unresolved', evidenceReferences: ['README.md'] };
+  }
+  function investigatedScope() {
+    return { type: 'aligned_fact', coverageDisposition: 'investigated' };
+  }
   function baseResult(): NonNullable<CriterionAgentReviewConfig['fakeResult']> {
     return { available: true, criterionId: 'S006', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
       summary: 'Review required.', rationale: 'Repository source requires context.', evidenceReferences: ['docs/token.md'], warnings: [], errors: [] };

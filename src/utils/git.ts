@@ -10,7 +10,6 @@ import { getLogger } from './logger';
 export class GitUtils {
   private tempDir: string;
   private timeoutMs: number;
-  private repoName: string = '';
 
   constructor(tempDir?: string, timeoutMs: number = 120000) {
     this.tempDir = tempDir || path.join(os.tmpdir(), 'folio-eval');
@@ -44,15 +43,13 @@ export class GitUtils {
         getLogger().info(`Repository cloned to: ${clonePath}`);
       }
 
-      this.repoName = repoName;
-
       return clonePath;
-    } catch (error: any) {
+    } catch (error: unknown) {
       await fs.remove(clonePath).catch(() => {
         // Ignore cleanup errors
       });
 
-      const errorMessage = error.message || String(error);
+      const errorMessage = (error instanceof Error && error.message) || String(error);
 
       if (branch && (errorMessage.includes('Remote branch') || errorMessage.includes('not found'))) {
         throw new Error(
@@ -95,7 +92,6 @@ export class GitUtils {
   async cleanup(repoPath: string): Promise<void> {
     if (await fs.pathExists(repoPath)) {
       await fs.remove(repoPath);
-      this.repoName = '';
       getLogger().info(`Cleaned up: ${repoPath}`);
     }
   }
@@ -119,17 +115,9 @@ export class GitUtils {
     name: string;
     commit: string;
     trackedFiles: string[];
-    hasPackageJson: boolean;
-    hasPomXml: boolean;
-    hasBuildGradle: boolean;
   }> {
-    // Fallback when this instance did not clone repoPath: cloneRepository clones to
-    // <tempDir>/<repo>/<timestamp>, so the parent directory names the repository.
-    const name = this.repoName || path.basename(path.dirname(repoPath));
-    const hasPackageJson = await fs.pathExists(path.join(repoPath, 'package.json'));
-    const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));
-    const hasBuildGradle = await fs.pathExists(path.join(repoPath, 'build.gradle')) ||
-                          await fs.pathExists(path.join(repoPath, 'build.gradle.kts'));
+    // cloneRepository clones to <tempDir>/<repo>/<timestamp>, so the parent directory names the repository.
+    const name = path.basename(path.dirname(repoPath));
     const git = simpleGit(repoPath);
     const [commit, trackedOutput] = await Promise.all([
       git.revparse(['HEAD']),
@@ -139,10 +127,7 @@ export class GitUtils {
     return {
       name,
       commit: commit.trim(),
-      trackedFiles: trackedOutput.split('\0').filter(Boolean),
-      hasPackageJson,
-      hasPomXml,
-      hasBuildGradle
+      trackedFiles: trackedOutput.split('\0').filter(Boolean)
     };
   }
 }

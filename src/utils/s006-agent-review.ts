@@ -17,29 +17,34 @@ function validateS006Review(
   availableSourcePaths: ReadonlySet<string>
 ): string | undefined {
   const assessments = review.assessments ?? [];
-  let invalid: string | undefined;
   if (obligations.some(item => assessments.filter(a => a.technologyId === item.id).length !== 1)
     || new Set(assessments.map(a => a.technologyId)).size !== assessments.length
     || assessments.some(a => (!obligations.some(item => item.id === a.technologyId)
       && !DISCOVERED_TECHNOLOGY_ID.test(a.technologyId)) || !a.coverageDisposition)) {
-    invalid = 'S006 requires exactly one coverage disposition for every supplied review obligation.';
-  } else if (obligations.some(item => item.path && assessments.some(a => a.technologyId === item.id
-    && a.coverageDisposition === 'investigated' && (!availableSourcePaths.has(item.path!) || !a.evidenceReferences.includes(item.path!))))) {
-    invalid = 'S006 cannot claim direct investigation of an unavailable or uncited finding or coverage path.';
-  } else if (obligations.some(item => item.path && item.id.startsWith('finding:') && !availableSourcePaths.has(item.path)
-    && assessments.some(a => a.technologyId === item.id && a.coverageDisposition !== 'unresolved'))) {
-    invalid = 'S006 findings whose source is excluded must remain unresolved; contextual documentation cannot establish their committed contents.';
-  } else if (assessments.some(a => a.coverageDisposition === 'unresolved' && a.type === 'aligned_fact')) {
-    invalid = 'S006 unresolved obligations cannot be labeled aligned facts.';
-  } else if (review.recommendation === 'likely_sufficient' && assessments.some(a =>
-    a.coverageDisposition === 'unresolved' || ['evidence_gap', 'policy_question', 'substantive_concern'].includes(a.type))) {
-    invalid = 'S006 likely_sufficient conflicts with unresolved coverage or finding dispositions.';
-  } else if (review.recommendation === 'likely_insufficient' && !assessments.some(a => a.type === 'substantive_concern')) {
-    invalid = 'S006 likely_insufficient requires a cited substantive concern, not merely incomplete coverage.';
-  } else if (review.recommendation === 'needs_reviewer_judgment' && !review.reviewerActions?.length) {
-    invalid = 'S006 needs_reviewer_judgment requires a cited action identifying the missing fact.';
+    return 'S006 requires exactly one coverage disposition for every supplied review obligation.';
   }
-  return invalid;
+  if (obligations.some(item => item.path && assessments.some(a => a.technologyId === item.id
+    && a.coverageDisposition === 'investigated' && (!availableSourcePaths.has(item.path!) || !a.evidenceReferences.includes(item.path!))))) {
+    return 'S006 cannot claim direct investigation of an unavailable or uncited finding or coverage path.';
+  }
+  if (obligations.some(item => item.path && item.id.startsWith('finding:') && !availableSourcePaths.has(item.path)
+    && assessments.some(a => a.technologyId === item.id && a.coverageDisposition !== 'unresolved'))) {
+    return 'S006 findings whose source is excluded must remain unresolved; contextual documentation cannot establish their committed contents.';
+  }
+  if (assessments.some(a => a.coverageDisposition === 'unresolved' && a.type === 'aligned_fact')) {
+    return 'S006 unresolved obligations cannot be labeled aligned facts.';
+  }
+  if (review.recommendation === 'likely_sufficient' && assessments.some(a =>
+    a.coverageDisposition === 'unresolved' || ['evidence_gap', 'policy_question', 'substantive_concern'].includes(a.type))) {
+    return 'S006 likely_sufficient conflicts with unresolved coverage or finding dispositions.';
+  }
+  if (review.recommendation === 'likely_insufficient' && !assessments.some(a => a.type === 'substantive_concern')) {
+    return 'S006 likely_insufficient requires a cited substantive concern, not merely incomplete coverage.';
+  }
+  if (review.recommendation === 'needs_reviewer_judgment' && !review.reviewerActions?.length) {
+    return 'S006 needs_reviewer_judgment requires a cited action identifying the missing fact.';
+  }
+  return undefined;
 }
 
 function reviewObligations(analysis: S006SensitiveInformationAnalysisResult): Array<{ id: string; description: string; path?: string }> {
