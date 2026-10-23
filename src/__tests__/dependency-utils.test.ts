@@ -27,7 +27,7 @@ jest.mock('../utils/license-policy', () => {
         'Apache-2.0': 'A',
         'MIT': 'A',
         'BSD-2-Clause': 'A',
-        'LGPL-2.1': 'B',
+        'LGPL-2.1': 'X',
         'MPL-2.0': 'B',
         'Mozilla Public License 2.0': 'B',
         'EPL-2.0': 'B',
@@ -100,9 +100,9 @@ describe('Dependency Utils', () => {
     it('should fail with undocumented Category B licenses', () => {
       const dependencies: Dependency[] = [
         {
-          name: 'some.lgpl:library',
+          name: 'some.mpl:library',
           version: '1.0.0',
-          licenses: ['LGPL-2.1']
+          licenses: ['MPL-2.0']
         }
       ];
       
@@ -117,53 +117,48 @@ describe('Dependency Utils', () => {
     it('should pass when the README names the Category B dependency', () => {
       const dependencies: Dependency[] = [
         {
-          name: 'some.lgpl:library',
+          name: 'some.mpl:library',
           version: '1.0.0',
-          licenses: ['LGPL-2.1']
+          licenses: ['MPL-2.0']
         }
       ];
 
-      const readmeContent = 'Third-party notices: some.lgpl:library is used under the LGPL-2.1.';
+      const readmeContent = 'Third-party notices: some.mpl:library is used under the MPL-2.0.';
       const result = checkLicenseCompliance(dependencies, readmeContent);
 
       expect(result.compliant).toBe(true);
       expect(result.issues).toHaveLength(0);
     });
 
-    it('should handle special exceptions for Hibernate libraries', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.hibernate:hibernate-core',
-          version: '5.6.0',
-          licenses: ['LGPL-2.1']
-        }
-      ];
-      
-      const readmeContent = 'This README does not mention any license information';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-      
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
-      expect(result.issues[0].reason).toMatch(/README (does not name this dependency|names it, and it does not)/);
+    // LGPL-2.1 is Category X; the listed special exceptions may still use it if the README names them.
+    it.each([
+      ['Hibernate libraries', 'org.hibernate:hibernate-core', 'hibernate-core'],
+      ['the CQL Java library', 'org.z3950.zing:cql-java', 'cql-java']
+    ])('should allow LGPL-2.1 for %s only when the README names the library', (_label, name, artifactId) => {
+      const dependency: Dependency = { name, version: '1.0.0', licenses: ['LGPL-2.1'] };
+
+      expect(checkLicenseCompliance([dependency], `Third-party notices: ${artifactId} is used under the LGPL-2.1.`))
+        .toEqual({ compliant: true, issues: [] });
+      expect(checkLicenseCompliance([dependency], 'This README does not mention any license information')).toEqual({
+        compliant: false,
+        issues: [{
+          dependency,
+          reason: "'LGPL-2.1' is allowed for this library only if the README names it, and it does not.",
+          issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
+        }]
+      });
     });
 
-    it('should handle special exceptions for CQL Java library', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.z3950.zing:cql-java',
-          version: '1.13',
-          licenses: ['LGPL-2.1']
-        }
-      ];
-      
-      const readmeContent = 'This README does not mention any license information';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-      
+    it('should reject LGPL-2.1 for a library that is not a special exception, even when the README names it', () => {
+      const result = checkLicenseCompliance(
+        [{ name: 'some.lgpl:library', version: '1.0.0', licenses: ['LGPL-2.1'] }],
+        'Third-party notices: some.lgpl:library is used under the LGPL-2.1.'
+      );
+
       expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].issueType).toBe(LicenseIssueType.UNDOCUMENTED_CATEGORY_B);
-      expect(result.issues[0].reason).toMatch(/README (does not name this dependency|names it, and it does not)/);
+      expect(result.issues.map(issue => [issue.reason, issue.issueType])).toEqual([
+        ["'LGPL-2.1' is prohibited (Category X).", LicenseIssueType.CATEGORY_X_VIOLATION]
+      ]);
     });
 
     // Comprehensive Category B license tests

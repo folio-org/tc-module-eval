@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { setTimeout as delay } from 'timers/promises';
 import { LocalCommandRunner, sanitizeCommandOutput } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
 
@@ -159,25 +160,51 @@ describe('CommandRunner', () => {
     const runner = new LocalCommandRunner(true);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'command-runner-'));
     const pidFile = path.join(tempDir, 'pid');
+    const termFile = path.join(tempDir, 'term');
+    const child = `const fs = require("fs");
+      process.on("SIGTERM", () => fs.writeFileSync(${JSON.stringify(termFile)}, ""));
+      fs.writeFileSync(${JSON.stringify(`${pidFile}.tmp`)}, String(process.pid));
+      fs.renameSync(${JSON.stringify(`${pidFile}.tmp`)}, ${JSON.stringify(pidFile)});
+      setInterval(() => {}, 1000);`;
+    let pid: number | undefined;
 
+    // Fake timers hold the runner's timeout until the child ignores SIGTERM and has written its pid; a
+    // real 100 ms timeout can kill a slow-starting child first. The child process itself runs for real.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     try {
-      const result = await runner.run({
-        command: 'node',
-        args: ['-e', `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)`],
-        cwd: process.cwd(),
-        timeoutMs: 100
-      });
-      const pid = Number(fs.readFileSync(pidFile, 'utf-8'));
+      let settled = false;
+      const pending = runner.run({ command: 'node', args: ['-e', child], cwd: process.cwd(), timeoutMs: 100 });
+      void pending.then(() => { settled = true; });
+      const waitForFile = async (file: string): Promise<void> => {
+        while (!fs.existsSync(file)) {
+          if (settled) throw new Error(`The command ended before writing ${path.basename(file)}: ${(await pending).errorMessage}`);
+          await delay(5);
+        }
+      };
+
+      await waitForFile(pidFile);
+      pid = Number(fs.readFileSync(pidFile, 'utf-8'));
+      jest.advanceTimersByTime(100);
+      await waitForFile(termFile);
+      // The child got SIGTERM and kept running; SIGKILL follows only after the full 250 ms grace.
+      jest.advanceTimersByTime(249);
+      expect(jest.getTimerCount()).toBe(1);
+      jest.advanceTimersByTime(1);
+      expect(jest.getTimerCount()).toBe(0);
+      const result = await pending;
 
       expect(result.status).toBe('timed_out');
       expect(result.signal).toBe('SIGKILL');
-      expect(result.errorMessage).toContain('Command timed out after 100ms plus');
-      expect(result.errorMessage).toContain('elapsed');
-      expect(() => process.kill(pid, 0)).toThrow();
+      expect(result.errorMessage).toBe('Command timed out after 100ms plus 250ms grace (350ms elapsed) (signal: SIGKILL)');
+      expect(() => process.kill(pid!, 0)).toThrow();
     } finally {
+      jest.useRealTimers();
+      if (pid !== undefined) {
+        try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+      }
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it('should truncate oversized successful output without failing the command', async () => {
     const runner = new LocalCommandRunner(true);
