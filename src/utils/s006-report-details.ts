@@ -40,6 +40,7 @@ export const S006_CONTEXT_LABELS_PLAIN: Record<S006FindingContext, string> = {
   test_fixture: 'tests',
   sample_or_example: 'examples or templates',
   local_docker_defaults: 'local Docker setup',
+  helper_script: 'helper scripts',
   generated_content: 'generated files',
   unknown: 'other files'
 };
@@ -124,6 +125,7 @@ export function projectS006ReportFinding(finding: S006SensitiveInformationFindin
     confidence: finding.confidence,
     severity: finding.severity,
     disposition,
+    detectedBy: [...finding.detectedBy],
     excerpt: {
       ...finding.excerpt,
       text: reportSafeExcerpt(finding)

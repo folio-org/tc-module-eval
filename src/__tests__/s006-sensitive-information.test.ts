@@ -377,7 +377,8 @@ describe('S006 bounded repository candidate scanning', () => {
 
   it('stops at the total byte cap and marks coverage material when high-signal candidates remain unread', async () => {
     repoPath = createTempRepo();
-    for (let index = 0; index < 30; index++) {
+    const fileCount = Math.ceil(MAX_S006_SCAN_TOTAL_BYTES / MAX_S006_SCAN_BYTES_PER_FILE) + 5;
+    for (let index = 0; index < fileCount; index++) {
       writeRepoFile(
         repoPath,
         `config/service-${String(index).padStart(3, '0')}.yml`,
@@ -388,7 +389,7 @@ describe('S006 bounded repository candidate scanning', () => {
     const result = scanS006RepositoryCandidates(repoPath);
 
     expect(result.coverage.scannedBytes).toBeLessThanOrEqual(MAX_S006_SCAN_TOTAL_BYTES);
-    expect(result.files.length).toBeLessThan(30);
+    expect(result.files.length).toBeLessThan(fileCount);
     expect(result.coverage.materiallyWeakened).toBe(true);
     expect(result.coverage.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -1807,6 +1808,7 @@ describe('S006 context labels and type exports', () => {
       'test_fixture',
       'sample_or_example',
       'local_docker_defaults',
+      'helper_script',
       'generated_content',
       'unknown'
     ]);
@@ -1903,7 +1905,7 @@ describe('S006 analysis corrections', () => {
   }
 
   it('treats a Gitleaks secret marked as made up inside a camelCase word as synthetic', async () => {
-    writeRepoFile(repoPath, 'scripts/list.sh', 'curl --header "X-Okapi-Token: dummyToken" http://localhost:8080/erm/sas\n');
+    writeRepoFile(repoPath, 'src/main/resources/list.sh', 'curl --header "X-Okapi-Token: dummyToken" http://localhost:8080/erm/sas\n');
     const result = await analyzeS006SensitiveInformation(repoPath, {
       commandRunner: new StaticGitleaksRunner({
         status: 'failed',
@@ -1911,7 +1913,7 @@ describe('S006 analysis corrections', () => {
         report: [{
           RuleID: 'curl-auth-header',
           Description: 'Discovered a potential authorization token provided in a curl command header.',
-          File: 'scripts/list.sh',
+          File: 'src/main/resources/list.sh',
           StartLine: 1,
           Match: 'curl --header "X-Okapi-Token: dummyToken"',
           Secret: 'dummyToken',
@@ -1921,7 +1923,7 @@ describe('S006 analysis corrections', () => {
     });
 
     expect(result.findings.find(finding => finding.detectorId === 'bearer-or-jwt-token')).toMatchObject({
-      path: 'scripts/list.sh',
+      path: 'src/main/resources/list.sh',
       context: 'production_source_or_configuration',
       valueClassification: 'synthetic',
       statusImpact: 'manual_review'
@@ -2022,7 +2024,7 @@ describe('S006 analysis corrections', () => {
     writeRepoFile(repoPath, 'src/main/resources/application.yml', [
       `key: ${'folio.'.repeat(1500)}LOCAL_ERROR`,
       `other: ${'db.'.repeat(3000)}x`,
-      'url: https://{environment}-okapi.ci.folio.org'
+      'url: https://{environment}-okapi.ci.library.org'
     ].join('\n'));
 
     const started = Date.now();
@@ -2030,7 +2032,7 @@ describe('S006 analysis corrections', () => {
 
     expect(Date.now() - started).toBeLessThan(1000);
     expect(result.findings.filter(finding => finding.detectorId === 'tenant-host-endpoint').map(finding => finding.excerpt.text)).toEqual([
-      'okapi.ci.folio.org'
+      'okapi.ci.library.org'
     ]);
   });
 
@@ -2072,6 +2074,126 @@ describe('S006 analysis corrections', () => {
 
     expect(result.warnings).toEqual([]);
     expect(result.findings).toEqual([expect.objectContaining({ RuleID: 'github-pat', File: 'config/app.properties' })]);
+  });
+});
+
+describe('S006 reviewer decisions', () => {
+  let repoPath: string;
+
+  beforeEach(() => {
+    repoPath = createTempRepo();
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  });
+
+  function analyzeWithGitleaksReport(report: unknown[] = []): Promise<S006SensitiveInformationAnalysisResult> {
+    return analyzeS006SensitiveInformation(repoPath, {
+      commandRunner: new StaticGitleaksRunner({ status: report.length ? 'failed' : 'success', exitCode: report.length ? 1 : 0, report })
+    });
+  }
+
+  it('reads extensionless files in folders where secrets are often kept and skips binary ones', async () => {
+    writeRepoFile(repoPath, '.github/CODEOWNERS', '* @folio-org/team\n');
+    writeRepoFile(repoPath, 'config/secrets', 'db.password=Zq8vT3kL9mN2pR7x\n');
+    writeRepoBinaryFile(repoPath, 'config/keystore', Buffer.from([0x00, 0x01, 0x02, 0x03]));
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['config/secrets:1']);
+    expect(result.coverage.skippedFiles).toEqual([{ path: 'config/keystore', reason: 'binary', materialToCoverage: false }]);
+    expect(result.coverage.warnings).toEqual([]);
+    expect(result.coverage.complete).toBe(true);
+  });
+
+  it('reads every candidate file of a large module without a coverage gap', async () => {
+    for (let index = 0; index < 1500; index++) {
+      writeRepoFile(repoPath, `src/main/java/org/folio/C${index}.java`, `class C${index} {}\n`);
+    }
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.coverage.scannedFiles).toBe(1500);
+    expect(result.coverage.complete).toBe(true);
+    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('drops Gitleaks generic-api-key findings whose value is a plain UUID', async () => {
+    writeRepoFile(repoPath, 'README.md', '"relationshipId": "f5d0068e-6272-458e-8a81-b85e7b9a14aa"\n"apiKey": "Wm4nB7xQ2rT9kL5pYc3d"\n');
+
+    const result = await analyzeWithGitleaksReport([
+      { RuleID: 'generic-api-key', File: 'README.md', StartLine: 1, Match: 'relationshipId": "f5d0068e-6272-458e-8a81-b85e7b9a14aa"', Secret: 'f5d0068e-6272-458e-8a81-b85e7b9a14aa', Entropy: 3.9 },
+      { RuleID: 'generic-api-key', File: 'README.md', StartLine: 2, Match: 'apiKey": "Wm4nB7xQ2rT9kL5pYc3d"', Secret: 'Wm4nB7xQ2rT9kL5pYc3d', Entropy: 4.1 }
+    ]);
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['README.md:2']);
+  });
+
+  it('does not report public FOLIO hosts, header-name constants, {NAME} placeholders, or empty lists', async () => {
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', [
+      'okapi: https://okapi.ci.folio.org/_/proxy',
+      'snapshot: folio-snapshot-okapi.dev.folio.org',
+      'kafka: kafka.prod.library.edu:9092'
+    ].join('\n'));
+    writeRepoFile(repoPath, 'src/constants.js', [
+      "export const OKAPI_TOKEN_HEADER = 'X-Okapi-Token';",
+      "export const AUTH_TOKEN_HEADER = 'Authorization';",
+      "export const API_TOKEN = 'Zq8vT3kL9mN2pR7x';"
+    ].join('\n'));
+    writeRepoFile(repoPath, 'src/main/resources/vault.properties', 'token={VAULT_TOKEN}\nssl.keystore.password={KEYWORD_PASSWORD}\n');
+    writeRepoFile(repoPath, 'src/main/resources/openapi.yaml', 'security:\n  - accessToken: []\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`).sort()).toEqual([
+      'src/constants.js:3',
+      'src/main/resources/application.yml:3'
+    ]);
+  });
+
+  it('keeps a real-looking secret in a helper script for review instead of failing', async () => {
+    writeRepoFile(repoPath, 'create-tenant.sh', 'curl https://admin:Zq8vT3kL9mN2pR7x@okapi.library.edu/_/proxy/tenants\n');
+    writeRepoFile(repoPath, 'scripts/load.py', 'URL = "https://admin:Wm4nB7xQ2rT9kL5p@okapi.library.edu/instances"\n');
+    writeRepoFile(repoPath, 'scripts/list.sh', 'curl http://localhost:9130/loan-storage/loans\ncat <<EOF\nAUTH_TOKEN: $AUTH_TOKEN\nEOF\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.filter(finding => finding.detectorId === 'credential-url').map(finding => [finding.path, finding.context, finding.statusImpact]).sort()).toEqual([
+      ['create-tenant.sh', 'helper_script', 'manual_review'],
+      ['scripts/load.py', 'helper_script', 'manual_review']
+    ]);
+    expect(result.findings.filter(finding => finding.path === 'scripts/list.sh')).toEqual([]);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(classifyS006SourceContext('src/main/resources/liquibase/tenant/scripts/create-table.xml')).toBe('production_source_or_configuration');
+    expect(classifyS006SourceContext('docker/docker-entrypoint.sh')).not.toBe('helper_script');
+    expect(classifyS006SourceContext('.github/scripts/release.sh')).toBe('ci_or_deployment_configuration');
+  });
+
+  it('notes a repository .gitleaksignore file without changing the status', async () => {
+    writeRepoFile(repoPath, 'README.md', '# Module\n');
+    writeRepoFile(repoPath, '.gitleaksignore', 'README.md:generic-api-key:1\n');
+
+    const result = await analyzeWithGitleaksReport();
+    const rendered = formatS006Evidence(result);
+
+    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+    expect(result.scanner.ignoreFilePresent).toBe(true);
+    expect(rendered.details).toContain('  - Note: the repository has a .gitleaksignore file, which tells Gitleaks to skip the findings it lists. Check that it does not hide a real secret.');
+  });
+
+  it('merges the built-in finding into the Gitleaks finding for the same value on the same line, and keeps other values', async () => {
+    writeRepoFile(repoPath, 'config/app.conf', 'api.token="Wm4nB7xQ2rT9kL5p" db.password="Zq8vT3kL9mN2pR7x"\n');
+
+    const result = await analyzeWithGitleaksReport([
+      { RuleID: 'generic-api-key', File: 'config/app.conf', StartLine: 1, Match: 'db.password="Zq8vT3kL9mN2pR7x"', Secret: 'Zq8vT3kL9mN2pR7x', Entropy: 3.9 }
+    ]);
+
+    expect(result.findings.map(finding => `${finding.excerpt.text.split('=')[0]} ${finding.detectedBy.join('+')}`).sort()).toEqual([
+      'api.token built-in',
+      'db.password gitleaks+built-in'
+    ]);
+    expect(formatS006Evidence(result).details).toContain('config/app.conf:1 [secret] Password or secret value assigned to db.password in production code or configuration, found by both Gitleaks and the built-in scan');
   });
 });
 

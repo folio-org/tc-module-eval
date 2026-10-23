@@ -1515,6 +1515,9 @@
             "confidence": "medium",
             "severity": "high",
             "disposition": "scanner_or_pattern_candidate",
+            "detectedBy": [
+              "built-in"
+            ],
             "excerpt": {
               "text": "DB_PASSWORD=[REDACTED]",
               "multiline": false,

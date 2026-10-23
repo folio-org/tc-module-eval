@@ -15,9 +15,10 @@ import {
   URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN
 } from './redaction';
 
-// %s, %d, and {} are printf and log format placeholders.
+// %s, %d, and {} are printf and log format placeholders; {NAME} is a template placeholder such as {VAULT_TOKEN};
+// [] is an empty list, as in an OpenAPI security requirement (accessToken: []).
 const PLACEHOLDER_VALUE_PATTERN =
-  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|%[sd]|\{\}|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
+  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|%[sd]|\{\}|\[\]|\{[A-Za-z_][A-Za-z0-9_.-]*\}|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
 const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';

@@ -52,18 +52,21 @@ S005 checks `PERSONAL_DATA_DISCLOSURE.md` mechanics and completion, plus bounded
 
 ## S006 Sensitive Information Review
 
-S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. A value that looks like a real secret in production code or CI/deployment files fails; documentation, tests, examples, local Docker defaults, host names, private addresses, and incomplete scans require manual review.
+S006 runs Gitleaks on the working tree and bounded checks for credential URLs, secret assignments, FOLIO or environment endpoints, and local paths. A value that looks like a real secret in production code or CI/deployment files fails; documentation, tests, examples, local Docker defaults, helper scripts, host names, private addresses, and incomplete scans require manual review. Helper scripts are files in `scripts/` folders and shell scripts, except those under `src/`, container entrypoints, and scripts in CI pipeline folders.
+
+The built-in scan reads up to 2,000 files and 8 MB in total (96 KB per file), which covers every candidate file in large FOLIO modules such as mod-inventory-storage and ui-users. In folders where secrets are often kept (CI, deployment, configuration, and `src/main/resources`), it also reads files without an extension, such as `CODEOWNERS`; binary ones are skipped. It reads only regular files inside the repository and never follows symbolic links.
 
 The report lists each finding by file, line, kind (`[secret]`, `[token]`, `[api-key]`, `[private-key]`, `[login-url]`, `[private-url]`, `[host]`, `[local-path]`, `[env-file]`), and where it was found. It hides matched values; for an assignment it names only the variable, such as "assigned to DB_PASSWORD". Agent review receives the matched values. "Coverage gaps" lists what was not fully scanned and keeps the result in manual review; "Skipped" lists folders and files that do not affect the result, such as `.git` and `node_modules`.
 
-Gitleaks runs with its default rules and `--ignore-gitleaks-allow`, so a `.gitleaks.toml` or `gitleaks:allow` comment in the evaluated repository cannot hide findings. A value marked as made up, including inside a camelCase or snake_case word such as `dummyToken`, counts as a test or example value and cannot fail S006. The built-in secret-assignment check skips:
+Gitleaks runs with its default rules and `--ignore-gitleaks-allow`, so a `.gitleaks.toml` or `gitleaks:allow` comment in the evaluated repository cannot hide findings. Gitleaks still reads a `.gitleaksignore` file at the repository root; the report notes such a file without changing the status. Gitleaks `generic-api-key` findings whose value is a plain UUID are record IDs and are dropped. When Gitleaks and the built-in scan report the same value on the same line, the report shows one finding found by both. A value marked as made up, including inside a camelCase or snake_case word such as `dummyToken`, counts as a test or example value and cannot fail S006. The built-in secret-assignment check skips:
 
 - comparisons (`==`, `===`) and arrow functions (`=>`);
 - unquoted values in program source (Java, Kotlin, Groovy, Gradle, JavaScript, TypeScript, Python, Ruby, and Jenkinsfiles), which are code rather than committed values, unless they sit inside a string literal (including a multiline one) such as a JDBC URL;
 - an unquoted `${VAR}` reference followed by a command in a shell script or Dockerfile, as in `PGPASSWORD=${DB_PASSWORD} psql …`;
-- `%s`, `%d`, and `{}` format placeholders.
+- `%s`, `%d`, `{}`, and `{NAME}` placeholders (such as `{VAULT_TOKEN}`), `$NAME` references, and empty lists (`accessToken: []`);
+- constants that hold an HTTP header name, such as `OKAPI_TOKEN_HEADER = 'X-Okapi-Token'`.
 
-Java `import` and `import static` lines, and identifiers such as `Constants.LOCAL_ERROR`, are never host names.
+Java `import` and `import static` lines, identifiers such as `Constants.LOCAL_ERROR`, and public FOLIO hosts (`folio.org` and its subdomains, such as `okapi.ci.folio.org`) are never reported as host names. Localhost URLs in helper scripts are not reported.
 
 The devcontainer and GitHub Actions install Gitleaks. Elsewhere, install `gitleaks` on `PATH` or set `GITLEAKS_PATH`. An unavailable or failed scanner produces a material warning and manual status.
 

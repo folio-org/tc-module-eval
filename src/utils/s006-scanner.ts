@@ -6,13 +6,15 @@ import {
   S006ScanWarning,
   S006SkippedFile
 } from '../types';
-import { GENERATED_REPORT_DIRECTORY_PATTERN, decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { GENERATED_REPORT_DIRECTORY_PATTERN, decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { MAX_S006_EXCERPT_BYTES } from './s006-detectors';
 
 export const MAX_S006_SCAN_TRAVERSAL_ENTRIES = 5000;
-export const MAX_S006_SCAN_CANDIDATE_FILES = 300;
+// Sized to read every candidate file in large FOLIO modules (mod-inventory-storage has about 1,450;
+// ui-users needs about 6 MB) while keeping memory and time bounded.
+export const MAX_S006_SCAN_CANDIDATE_FILES = 2000;
 export const MAX_S006_SCAN_BYTES_PER_FILE = 96 * 1024;
-export const MAX_S006_SCAN_TOTAL_BYTES = 2 * 1024 * 1024;
+export const MAX_S006_SCAN_TOTAL_BYTES = 8 * 1024 * 1024;
 
 const MAX_S006_RETAINED_SKIPPED_FILES = 250;
 const S006_SKIPPED_DIRECTORY_REASONS: ReadonlyMap<string, S006SkippedFile['reason']> = new Map([
@@ -401,6 +403,11 @@ function classifyS006CandidatePath(relativePath: string): { eligible: boolean; m
   if (S006_SUPPORTED_SPECIAL_FILE_PATTERN.test(normalized) || S006_SUPPORTED_TEXT_FILE_PATTERN.test(normalized)) {
     return { eligible: true, materialUnsupported: false };
   }
+  // Extensionless files such as CODEOWNERS or .gitignore in folders where secrets are often kept are
+  // read as text; binary ones are skipped when read.
+  if (isS006HighSignalPath(normalized) && !path.posix.basename(normalized).replace(/^\.+/, '').includes('.')) {
+    return { eligible: true, materialUnsupported: false };
+  }
 
   return {
     eligible: false,
@@ -453,14 +460,19 @@ function readBoundedS006CandidateText(
   { status: 'empty' } |
   { status: 'binary' } |
   { status: 'read-error'; message: string } {
+  let descriptor: number | undefined;
   try {
-    const stats = fs.statSync(filePath);
+    // The walk already skipped symbolic links; opening without following them and checking the open
+    // file keeps a path swapped after the walk from leading outside the repository or to a FIFO.
+    descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
+    const stats = fs.fstatSync(descriptor);
     if (!stats.isFile() || stats.size === 0 || remainingTotalBytes <= 0) {
       return { status: 'empty' };
     }
 
     const bytesToRead = Math.min(stats.size, MAX_S006_SCAN_BYTES_PER_FILE, remainingTotalBytes);
-    const slice = readBoundedFileBytes(filePath, bytesToRead);
+    const buffer = Buffer.alloc(bytesToRead);
+    const slice = buffer.subarray(0, fs.readSync(descriptor, buffer, 0, bytesToRead, 0));
     if (isBinaryBuffer(slice)) {
       return { status: 'binary' };
     }
@@ -477,11 +489,15 @@ function readBoundedS006CandidateText(
       totalCapReached: stats.size > remainingTotalBytes,
       materialToCoverage
     };
-  } catch (error) {
+  } catch {
     return {
       status: 'read-error',
       message: 'Could not read this file.'
     };
+  } finally {
+    if (descriptor !== undefined) {
+      fs.closeSync(descriptor);
+    }
   }
 }
 

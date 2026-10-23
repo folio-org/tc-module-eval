@@ -47,6 +47,9 @@ export function formatS006Evidence(
     ] : []),
     'Coverage:',
     `  - Gitleaks: ${formatScannerSummary(analysis)}`,
+    analysis.scanner.ignoreFilePresent
+      ? '  - Note: the repository has a .gitleaksignore file, which tells Gitleaks to skip the findings it lists. Check that it does not hide a real secret.'
+      : undefined,
     `  - Built-in scan: read ${analysis.coverage.scannedFiles} of ${analysis.coverage.candidateFiles} file${analysis.coverage.candidateFiles === 1 ? '' : 's'} (${formatKilobytes(analysis.coverage.scannedBytes)} read)`,
     `  - Complete: ${analysis.coverage.complete ? 'yes' : analysis.coverage.materiallyWeakened ? 'no, see Coverage gaps' : 'no, but nothing left out affects the result; see Skipped'}`,
     ...formatCoverageGapLines(analysis),
@@ -155,9 +158,10 @@ function formatExampleLines(findings: S006SensitiveInformationFinding[]): string
     const label = S006_CATEGORY_LABELS[finding.category].one;
     const name = s006AssignedName(finding);
     const where = `${name ? `assigned to ${reportText(name)} ` : ''}in ${S006_CONTEXT_LABELS_PLAIN[finding.context]}`;
+    const foundByBoth = finding.detectedBy.length > 1 ? ', found by both Gitleaks and the built-in scan' : '';
     const description = finding.statusImpact === 'deterministic_fail'
-      ? `Fails S006: ${label} that looks real, ${where}`
-      : `${capitalize(label)} ${where}${VALUE_NOTES[finding.valueClassification]}`;
+      ? `Fails S006: ${label} that looks real, ${where}${foundByBoth}`
+      : `${capitalize(label)} ${where}${VALUE_NOTES[finding.valueClassification]}${foundByBoth}`;
     return `  - ${location}${lineRange} [${S006_DETECTOR_TAGS[finding.detectorId]}] ${description}`;
   });
 }
