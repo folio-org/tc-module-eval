@@ -175,11 +175,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B001',
     description: 'Compliant Module Descriptor',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'API design and RESTful principles'
-    }
+    languages: ['java']
   },
   {
     id: 'B002',

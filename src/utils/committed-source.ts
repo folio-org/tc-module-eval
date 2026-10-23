@@ -9,6 +9,10 @@ export interface CommittedSourceLimits {
   maxFileBytes: number;
   maxTotalBytes: number;
   include(path: string): boolean;
+  /** Paths to list in `listedPaths` without reading them. */
+  list?(path: string): boolean;
+  /** Skip git submodules (gitlinks) with a non-material diagnostic instead of a material one. */
+  skipSubmodules?: boolean;
 }
 
 export interface CommittedSourceFile {
@@ -30,6 +34,8 @@ export interface CommittedSourceSnapshot {
   files: CommittedSourceFile[];
   diagnostics: CommittedSourceDiagnostic[];
   complete: boolean;
+  /** The tree paths the `list` option selects, read or not; absent without that option. */
+  listedPaths?: string[];
 }
 
 const DEFAULT_LIMITS: CommittedSourceLimits = {
@@ -79,8 +85,15 @@ export async function readCommittedSource(
     });
   }
 
-  const parsed = parseTree(treeResult.stdout, limits.maxEntries, diagnostics)
+  const entries = parseTree(treeResult.stdout, limits.maxEntries, diagnostics);
+  const listedPaths = limits.list ? entries.filter(entry => limits.list!(entry.path)).map(entry => entry.path).sort() : undefined;
+  const parsed = entries
     .filter(entry => limits.include(entry.path))
+    .filter(entry => {
+      if (!limits.skipSubmodules || entry.mode !== '160000') return true;
+      diagnostics.push({ code: 'unsafe-entry', message: 'Skipped a git submodule', material: false, path: safePath(entry.path) });
+      return false;
+    })
     .sort((left, right) => left.path.localeCompare(right.path));
   const candidates = parsed.slice(0, limits.maxFiles);
   if (parsed.length > limits.maxFiles) {
@@ -181,7 +194,8 @@ export async function readCommittedSource(
     revision,
     files,
     diagnostics,
-    complete: !treeResult.exceeded && !diagnostics.some(diagnostic => diagnostic.material)
+    complete: !treeResult.exceeded && !diagnostics.some(diagnostic => diagnostic.material),
+    ...(listedPaths ? { listedPaths } : {})
   };
 }
 

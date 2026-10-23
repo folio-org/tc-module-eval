@@ -354,6 +354,25 @@ F005 has no agent review: nothing in the repository can settle what it leaves to
 
 Like every F criterion, the report has up to three layers: what the tool found and the status it decided; a checklist for the reviewer, whose items have stable IDs such as `F005-C1`, are phrased as the desired state and list where to start (`criterionDetails.checklist`; empty for pass and not applicable); and, for criteria with agent review, the agent's results attached to the checklist items they address.
 
+## B001 Module Descriptor Template
+
+B001 checks that the repository includes a compliant module descriptor: the committed template, not the descriptor the build generates (that is S002). It reads the template from the committed source, replaces the build placeholders the build properties define, and validates it against the same Okapi ModuleDescriptor schema S002 uses. It runs no commands, so it works in safe mode.
+
+- **Template:** a `ModuleDescriptor*.json` in `descriptors/`, `src/main/resources/descriptors/`, `service/src/main/okapi/` or the repository root, the same places that make a repository a backend module.
+- **Placeholders:** `${name}` and `@name@` take their values from the nearest `pom.xml` (its `<properties>`, and the project's `artifactId`, `version`, `groupId` and, with `project.`, `name` and `parent.version`; the version and groupId fall back to the parent's) and from the `gradle.properties` files of the template's folder and its parents, nearest first. A property may refer to other properties. A placeholder the build properties do not define, such as Grails' `${info.app.name}`, is left as written; inside a JSON string that does not affect validity, and the report lists where it is used.
+- `pass`: exactly one template, valid JSON that matches the schema.
+- `fail`: the template is not valid JSON after placeholders are replaced, or does not match the schema; or an edge module (an `edge-` artifactId with an `edge-common` or `edge-common-spring` dependency in `pom.xml`) has no template.
+- `manual`: several candidate templates; a placeholder outside a JSON string, such as a number, whose JSON only the build decides; a template that could not be read; or a repository with no descriptor that is not a known shared library ("a module must have one; a library need not").
+- `not_applicable`: an allowlisted shared library without a descriptor, now including `edge-common` and `edge-common-spring`.
+
+With `--allow-local-commands`, when S002 generated the descriptor in the same evaluation, B001 also says whether that descriptor matches the schema; it does not change B001's status. B001 has no agent review. Its checklist for the reviewer has B001-C1 (the template is the one the build uses) and, for a repository that is neither a module nor a known library, B001-C2.
+
+B001 builds the evidence the other B criteria share, read once per evaluation from committed files: the repository kind, the parsed template, the framework and storage. It reads only `src/main/` (in any module folder), `grails-app/`, descriptor templates, `ramls/`, `templates/db_scripts/`, YAML and JSON files under `api/`, `openapi/` or `swagger/` folders, build files, `Dockerfile`, and the root `README*` and `ENV_VARS.md`, up to 2,000 files; binaries and large files elsewhere, such as test images, do not make it incomplete. Git submodules, such as `ramls/raml-util` and `ramls/acq-models`, are skipped. Reference-data folders (`ref-data/`, `reference-data/`) are listed, not read. The framework is detected from main-class and source evidence, never from a dependency alone: RMB from `org.folio.rest.RestVerticle` as the main verticle in a `pom.xml` or a `templates/db_scripts/schema.json`, Spring Boot from `@SpringBootApplication`, Vert.x from a class extending `AbstractVerticle`, Grails from `grails-app/`. Storage needs positive evidence: an RMB `schema.json`, `PostgresClient` or `PgUtil` used (not only imported), a Liquibase changelog (a `*changelog*.xml`, `.yaml` or `.json` under `src/main/resources`), a datasource in `application*.yml` or `.properties`, or Grails domain classes with a datasource. A `domain-models-runtime` dependency alone is not storage (mod-circulation uses it only for logging).
+
+`--existing-module` records that an existing module is evaluated rather than a new one (the default). B001 does not depend on it; B004, B005 and B006 will relax some new-module rules for existing modules.
+
+B criteria use the same three-layer report and checklist as the F criteria (see [F005](#f005-stripes-version)).
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

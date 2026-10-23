@@ -9,6 +9,9 @@ import { errorMessage } from './type-guards';
 const MAX_POM_BYTES = 1024 * 1024;
 
 const EXPLICIT_LIBRARY_NAMES = new Set([
+  // Shared by edge modules, whose own artifactIds also start with edge-.
+  'edge-common',
+  'edge-common-spring',
   'folio-spring-base',
   'folio-spring-support',
   'folio-kafka-wrapper',

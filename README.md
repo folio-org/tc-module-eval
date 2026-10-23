@@ -114,6 +114,16 @@ and `--criteria F005` works on its own. A Stripes library that does not depend o
 such as stripes-components, is left to the reviewer with a checklist item. See
 [Criterion Notes](docs/criterion-notes.md#f005-stripes-version).
 
+### B001 Module Descriptor Template
+
+B001 checks that a backend or edge module commits a module descriptor template that matches the Okapi
+ModuleDescriptor schema, with build placeholders such as `${artifactId}` replaced from `pom.xml` and
+`gradle.properties`. It runs no build; S002 checks the descriptor the build generates. Shared libraries
+are not applicable, and a repository that is neither a module nor a known library is left to the
+reviewer. `--existing-module` marks the evaluation of an existing module rather than a new one; later
+B criteria relax some new-module rules for it. See
+[Criterion Notes](docs/criterion-notes.md#b001-module-descriptor-template).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
