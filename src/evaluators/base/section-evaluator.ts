@@ -32,24 +32,25 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
    * @returns Promise<CriterionResult[]> Results of all criteria in this section
    */
   async evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]> {
-    const results: CriterionResult[] = [];
+    const results: Promise<CriterionResult>[] = [];
 
     // Determine which criteria to evaluate
     const criteriaToEvaluate = criteriaFilter
       ? this.criteriaIds.filter(id => criteriaFilter.includes(id))
       : this.criteriaIds;
 
+    // Criteria run one at a time and in order, except that a criterion waiting on its agent review lets
+    // the next one start: reviews overlap (the run bounds how many), while deterministic work stays sequential.
     for (const criterionId of criteriaToEvaluate) {
-      try {
-        const result = await this.evaluateCriterion(criterionId, repoPath, evaluationRun);
-        results.push(result);
-      } catch (error) {
+      const handoff = evaluationRun?.nextAgentReviewHandoff();
+      const result = this.evaluateCriterion(criterionId, repoPath, evaluationRun)
         // If evaluation fails, create a manual review result
-        results.push(this.createErrorResult(criterionId, error));
-      }
+        .catch(error => this.createErrorResult(criterionId, error));
+      results.push(result);
+      await (handoff ? Promise.race([result, handoff]) : result);
     }
 
-    return results;
+    return Promise.all(results);
   }
 
   /**

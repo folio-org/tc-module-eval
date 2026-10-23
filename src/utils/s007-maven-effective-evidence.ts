@@ -15,6 +15,8 @@ import { finalizeS007TechnologyEvidence, matchJavaIdentity, mavenDependencyKey }
 const EFFECTIVE_POM_GOAL = 'org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom';
 const MAX_EFFECTIVE_POM_BYTES = 2 * 1024 * 1024;
 const MAX_EFFECTIVE_POMS = 12;
+/** Maven runs for different POMs are independent; a few run at once. */
+const MAX_CONCURRENT_EFFECTIVE_POMS = 3;
 
 interface MavenProjectIdentity {
   groupId: string;
@@ -42,8 +44,14 @@ export async function enrichS007WithMavenEffectivePom(
   let diagnostics = evidence.diagnostics;
   let changed = false;
 
-  for (const [sourcePath, unresolved] of [...unresolvedByPom].slice(0, MAX_EFFECTIVE_POMS)) {
-    const effective = await produceEffectivePom(repoPath, sourcePath, evaluationRun, commandRunner);
+  const poms = [...unresolvedByPom].slice(0, MAX_EFFECTIVE_POMS);
+  const effectivePoms = await settleWithConcurrency(poms, MAX_CONCURRENT_EFFECTIVE_POMS, ([sourcePath]) =>
+    produceEffectivePom(repoPath, sourcePath, evaluationRun, commandRunner));
+  // Apply the results in POM order, as the sequential runs did.
+  for (const [index, [sourcePath, unresolved]] of poms.entries()) {
+    const outcome = effectivePoms[index];
+    if (outcome.status === 'rejected') throw outcome.reason;
+    const effective = outcome.value;
     if (!effective) continue;
 
     const resolvedCoordinates = new Set<string>();
@@ -126,6 +134,28 @@ export async function enrichS007WithMavenEffectivePom(
   });
 }
 
+/** Like Promise.allSettled over items.map(run), with at most `limit` runs in flight. */
+async function settleWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = { status: 'fulfilled', value: await run(items[index]) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function unresolvedMavenObservations(
   evidence: S007TechnologyEvidenceResult
 ): Map<string, S007TechnologyObservation[]> {
@@ -182,7 +212,10 @@ async function produceEffectivePom(
         pomPath,
         EFFECTIVE_POM_GOAL,
         `-Doutput=${outputPath}`,
-        '-Dstyle.color=never'
+        '-Dstyle.color=never',
+        // Runs for different POMs share the local repository; lock it across processes, not just within one JVM.
+        '-Daether.syncContext.named.factory=file-lock',
+        '-Daether.syncContext.named.nameMapper=file-gav'
       ],
       cwd: repoPath,
       timeoutMs: 180000,

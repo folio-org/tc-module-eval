@@ -1,5 +1,5 @@
 import type { CriterionAgentReviewRequest, PreparedCriterionAgentReviewRequest } from './criterion-agent-review';
-import { readCommittedSource } from './committed-source';
+import { CommittedSourceSnapshot, readCommittedSource } from './committed-source';
 
 const MAX_FILES = 50_000;
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -11,9 +11,9 @@ export interface PreparedRepositoryBrowsing {
   sourcePaths: ReadonlySet<string>;
 }
 
-/** Add immutable repository source to criterion-specific starting material. */
-export async function prepareRepositoryBrowsing(request: CriterionAgentReviewRequest): Promise<PreparedRepositoryBrowsing> {
-  const snapshot = await readCommittedSource(request.repositoryPath, {
+/** Read the committed source agent reviews browse. A run's reviews share one read, so it is frozen. */
+export async function readRepositorySnapshot(repositoryPath: string): Promise<CommittedSourceSnapshot> {
+  const snapshot = await readCommittedSource(repositoryPath, {
     include: candidate => !EXCLUDED_PATTERN.test(candidate),
     maxTreeBytes: 16 * 1024 * 1024,
     maxEntries: MAX_FILES,
@@ -21,6 +21,19 @@ export async function prepareRepositoryBrowsing(request: CriterionAgentReviewReq
     maxFileBytes: MAX_FILE_BYTES,
     maxTotalBytes: MAX_TOTAL_BYTES
   });
+  snapshot.files.forEach(file => Object.freeze(file));
+  snapshot.diagnostics.forEach(diagnostic => Object.freeze(diagnostic));
+  Object.freeze(snapshot.files);
+  Object.freeze(snapshot.diagnostics);
+  return Object.freeze(snapshot);
+}
+
+/** Add immutable repository source to criterion-specific starting material. */
+export async function prepareRepositoryBrowsing(
+  request: CriterionAgentReviewRequest,
+  readSnapshot: () => Promise<CommittedSourceSnapshot> = () => readRepositorySnapshot(request.repositoryPath)
+): Promise<PreparedRepositoryBrowsing> {
+  const snapshot = await readSnapshot();
   const blocking = snapshot.diagnostics.find(diagnostic => !['binary', 'unsafe-entry', 'file-size'].includes(diagnostic.code));
   if (blocking) throw new Error(`Repository browsing workspace is incomplete: ${blocking.message}`);
   if (!snapshot.files.length) throw new Error('No committed repository source was available for agent review.');

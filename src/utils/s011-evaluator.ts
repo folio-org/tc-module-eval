@@ -38,13 +38,18 @@ export interface S011Inputs {
 
 /** Gathers S011's local and remote evidence for one evaluation and evaluates it. */
 export async function analyzeS011(repoPath: string, run: EvaluationRun): Promise<S011Analysis> {
-  const [ci, table] = await Promise.all([
-    run.getOrCreateArtifact('buildTestEvidence', () => collectBuildTestEvidence(repoPath)),
-    loadFolioSharedWorkflows()
-  ]);
-  const workflows = table.ok ? table.table : undefined;
-  // Made once per run: S013 lists the coverage settings from the same scan.
-  const scan = await run.getOrCreateArtifact('s011SuppressionScan', async () => scanS011Suppressions(repoPath, ci, workflows));
+  const scanRepository = async () => {
+    const [ci, table] = await Promise.all([
+      run.getOrCreateArtifact('buildTestEvidence', () => collectBuildTestEvidence(repoPath)),
+      loadFolioSharedWorkflows()
+    ]);
+    const workflows = table.ok ? table.table : undefined;
+    // Made once per run: S013 lists the coverage settings from the same scan.
+    const scan = await run.getOrCreateArtifact('s011SuppressionScan', async () => scanS011Suppressions(repoPath, ci, workflows));
+    return { workflows, scan };
+  };
+  // Read SonarCloud (undefined without remote lookups) while the repository is scanned, as S013 does.
+  const [{ workflows, scan }, snapshot] = await Promise.all([scanRepository(), getSonarCloudSnapshot(run, repoPath)]);
   const sonarFlags = scan.sharedWorkflows.map(name => workflows?.workflows[name]?.sonar);
   const inputs: S011Inputs = {
     remoteLookups: Boolean(run.remoteLookups),
@@ -55,7 +60,7 @@ export async function analyzeS011(repoPath: string, run: EvaluationRun): Promise
   };
   const lookups = run.remoteLookups;
   if (!lookups) return evaluateS011(inputs);
-  inputs.snapshot = await getSonarCloudSnapshot(run, repoPath);
+  inputs.snapshot = snapshot;
   const keys = [...ruleKeysIn(inputs.snapshot), ...scan.suppressions.flatMap(item => item.rule ? [item.rule] : [])];
   const { rules, record } = await lookupSonarRules(lookups, keys);
   inputs.rules = rules;

@@ -9,6 +9,7 @@ import {
   EvaluationRun,
   S007TechnologyEvidenceResult
 } from '../types';
+import { createEvaluationRun } from '../utils/evaluation-run';
 import { evaluateS007 } from '../utils/s007-evaluator';
 import { enrichS007WithMavenEffectivePom } from '../utils/s007-maven-effective-evidence';
 import { loadS007Policy } from '../utils/s007-policy';
@@ -242,6 +243,44 @@ describe('S007 Maven effective-POM evidence', () => {
     expect(enriched.diagnostics
       .filter(diagnostic => diagnostic.code === 'effective_model_unrepresented')
       .map(diagnostic => diagnostic.path)).toEqual(['a/pom.xml', 'b/pom.xml']);
+  });
+
+  it('runs up to three POMs at once and applies their results in POM order', async () => {
+    const pom = await fs.readFile(path.join(repoPath, 'pom.xml'), 'utf8');
+    const modules = ['a', 'b', 'c', 'd', 'e'];
+    for (const module of modules) await fs.outputFile(path.join(repoPath, `${module}/pom.xml`), pom);
+    let running = 0;
+    let maxRunning = 0;
+    class SlowRunner extends EffectivePomRunner {
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        running++;
+        maxRunning = Math.max(maxRunning, running);
+        // Earlier POMs take longest, so Maven finishes them last.
+        const module = request.args![request.args!.indexOf('-f') + 1].split(path.sep).slice(-2)[0];
+        await new Promise(resolve => setTimeout(resolve, 10 * (modules.length - modules.indexOf(module))));
+        running--;
+        return super.run(request);
+      }
+    }
+    const runner = new SlowRunner(effectivePom([
+      dependency('org.projectlombok', 'lombok', '1.18.42'),
+      dependency('io.vertx', 'vertx-core', '4.5.0')
+    ]));
+    const parts = modules.map(module => unresolvedEvidence(['org.projectlombok:lombok'], `${module}/pom.xml`));
+    const evidence = {
+      ...parts[0],
+      observations: parts.flatMap(part => part.observations),
+      diagnostics: parts.flatMap(part => part.diagnostics)
+    };
+
+    const enriched = await enrichS007WithMavenEffectivePom(repoPath, evidence, run(runner), runner);
+
+    expect(maxRunning).toBe(3);
+    expect(enriched.diagnostics
+      .filter(diagnostic => diagnostic.code === 'effective_model_unrepresented')
+      .map(diagnostic => diagnostic.path)).toEqual(modules.map(module => `${module}/pom.xml`));
+    expect(enriched.observations.filter(observation => observation.resolutionSource === 'maven-effective-pom')
+      .map(observation => observation.versionSourcePath)).toEqual(modules.map(module => `${module}/pom.xml`));
   });
 
   (process.getuid?.() === 0 ? it.skip : it)('skips enrichment, keeping the evidence, when a POM cannot be read', async () => {
@@ -580,16 +619,5 @@ function dependency(groupId: string, artifactId: string, version: string, type?:
 }
 
 function run(commandRunner: CommandRunner): EvaluationRun {
-  return {
-    repositoryPath: '',
-    language: 'java',
-    selectedCriteria: ['S007'],
-    s008CatalogChannel: 'official',
-    commandRunner,
-    artifacts: {},
-    commandObservations: new Map(),
-    getOrCreateArtifact: async () => {
-      throw new Error('not used');
-    }
-  };
+  return createEvaluationRun({ repositoryPath: '', language: 'java', criteriaFilter: ['S007'], commandRunner });
 }

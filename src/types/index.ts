@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -138,6 +138,8 @@ export interface EvaluationRunArtifacts {
   platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
   sonarCloudSnapshot?: import('./sonarcloud-snapshot').SonarCloudSnapshot;
   s011SuppressionScan?: import('./s011-sonarqube').S011SuppressionScan;
+  /** The committed source every agent review browses; read once and frozen, since the reviews share it. */
+  agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
 }
 
 export interface EvaluationRun {
@@ -165,6 +167,13 @@ export interface EvaluationRun {
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
   ): Promise<NonNullable<EvaluationRunArtifacts[K]>>;
+  /**
+   * Run one criterion's agent review once a review slot is free, after handing the section loop on to the next
+   * criterion. Call it at most once per criterion: a second call would start the next criterion early.
+   */
+  runAgentReview<T>(review: () => Promise<T>): Promise<T>;
+  /** Resolves when the next runAgentReview call starts, so the section loop can start the next criterion. */
+  nextAgentReviewHandoff(): Promise<void>;
 }
 
 /**
@@ -278,6 +287,8 @@ export interface CriterionAgentReviewConfig {
   fakeResult?: CriterionAgentReviewResult;
   generatedProvider?: CriterionAgentGeneratedProvider;
   providerConfigError?: string;
+  /** Set per run by reviewCriterionWithAgent so a run's reviews share one committed-source read. */
+  readRepositorySnapshot?: () => Promise<import('../utils/committed-source').CommittedSourceSnapshot>;
 }
 
 export interface CriterionAgentGeneratedProvider {

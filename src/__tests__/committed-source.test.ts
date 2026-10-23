@@ -74,6 +74,39 @@ describe('committed source reader', () => {
     expect(snapshot.complete).toBe(false);
   });
 
+  it('reads blobs that span many output chunks intact and probes over-budget blobs for binary content', async () => {
+    const large = Array.from({ length: 20_000 }, (_, line) => `line ${line} ✓\n`).join('');
+    const root = repository({
+      'a.txt': large,
+      'b.bin': Buffer.concat([Buffer.alloc(9000, 'x'), Buffer.from([0])]),
+      'c.dat': Buffer.from([7, 0, 7]),
+      'd.txt': 'after'
+    });
+
+    const snapshot = await readCommittedSource(root, { maxFileBytes: 1024 * 1024, maxTotalBytes: Buffer.byteLength(large) + 5 });
+
+    expect(snapshot.files.map(file => [file.path, file.content])).toEqual([['a.txt', large], ['d.txt', 'after']]);
+    expect(snapshot.diagnostics).toEqual([
+      expect.objectContaining({ code: 'total-size', path: 'b.bin' }),
+      expect.objectContaining({ code: 'binary', path: 'c.dat' })
+    ]);
+  });
+
+  it('omits only the blob git cannot read and keeps reading the rest', async () => {
+    const root = repository({ 'a.txt': 'first', 'b.txt': 'corrupt\n'.repeat(500), 'c.txt': 'third' });
+    const oid = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD:b.txt']).toString().trim();
+    const objectPath = path.join(root, '.git', 'objects', oid.slice(0, 2), oid.slice(2));
+    const object = fs.readFileSync(objectPath);
+    object[object.length - 1] ^= 0xff;
+    fs.chmodSync(objectPath, 0o644);
+    fs.writeFileSync(objectPath, object);
+
+    const snapshot = await readCommittedSource(root, { include: () => true });
+
+    expect(snapshot.files.map(file => [file.path, file.content])).toEqual([['a.txt', 'first'], ['c.txt', 'third']]);
+    expect(snapshot.diagnostics).toEqual([expect.objectContaining({ code: 'git-error', path: 'b.txt' })]);
+  });
+
   it('applies deterministic file and total-byte limits', async () => {
     const root = repository({
       'a.txt': '1234',
