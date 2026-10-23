@@ -149,6 +149,8 @@ describe('S014 application assignment', () => {
       expect(result.evidence).toContain('1 other platform application could not be checked, but that cannot change this result.');
       expect(result.details).toContain('Applications checked: 3 (2 read from FAR, 1 could not be read).');
       expect(result.details).toContain('Could not check:\n  - app-c 1.0.0 (optional): FAR could not be read: HTTP 404.');
+      // The transport's error already reads "HTTP 404."; the status is not repeated in front of it.
+      expect(result.details).toMatch(/query=id%3D%3Dapp-c-1\.0\.0&full=false&limit=2 \(fetched [^;]+; HTTP 404\.\)$/m);
     });
 
     it('fails one membership in a different application even when another application could not be read', async () => {

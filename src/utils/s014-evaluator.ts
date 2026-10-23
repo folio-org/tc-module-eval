@@ -10,6 +10,7 @@ import {
   S014TemplateCheck
 } from '../types';
 import { classifyModuleKind } from './module-kind';
+import { sourceLine } from './remote-evidence';
 import { reportPath, reportText } from './report-text';
 import {
   checkApplicationTemplate,
@@ -202,15 +203,7 @@ export function renderS014HumanDetails(analysis: S014Analysis): string {
       ? `${file} could not be read. ${reportText(template.problem)}`
       : `${file} ${template.listsModule ? 'lists' : 'does not list'} ${name}`}`);
   }
-  if (analysis.remoteEvidence.length) {
-    lines.push('Sources:');
-    for (const record of analysis.remoteEvidence) {
-      const outcome = record.error
-        ? `${record.status ? `HTTP ${record.status}, ` : ''}${reportText(record.error)}`
-        : `HTTP ${record.status}, ${reportText(record.sha256 ?? '')}`;
-      lines.push(`  - ${reportText(record.url)} (fetched ${reportText(record.fetchedAt.replace(/\.\d{3}Z$/, 'Z'))}; ${outcome})`);
-    }
-  }
+  if (analysis.remoteEvidence.length) lines.push('Sources:', ...analysis.remoteEvidence.map(sourceLine));
   return lines.join('\n');
 }
 
