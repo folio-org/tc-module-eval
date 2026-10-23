@@ -22,8 +22,8 @@ export async function loadS008Catalog(
 
   const catalog = loaded.parsed as unknown as S008Catalog;
   const diagnostics: S008PolicyDiagnostic[] = [];
-  if (catalog.channel !== channel) diagnostics.push({ code: 'catalog_channel_mismatch', message: `Selected ${channel} but catalog declares ${catalog.channel}.`, path: '/channel' });
-  if (!catalog.authoritative) diagnostics.push({ code: 'catalog_not_authoritative', message: 'Catalog has not been marked reviewed.', path: '/authoritative' });
+  if (catalog.channel !== channel) diagnostics.push({ code: 'catalog_channel_mismatch', message: `The ${channel} catalog file says it is the ${catalog.channel} catalog.`, path: '/channel' });
+  if (!catalog.authoritative) diagnostics.push({ code: 'catalog_not_authoritative', message: 'The catalog has not been marked as reviewed (authoritative is false).', path: '/authoritative' });
   duplicates(catalog.providers.map(item => item.moduleId), 'provider module ID', diagnostics);
   duplicates(catalog.eurekaComponents.map(item => item.familyId), 'Eureka component family ID', diagnostics);
   const componentIdentities = catalog.eurekaComponents.flatMap(item => item.moduleIdentities);
@@ -32,7 +32,7 @@ export async function loadS008Catalog(
     const descriptorSource = component.descriptorSource;
     if (descriptorSource.status === 'unresolved') diagnostics.push({
       code: 'catalog_unresolved_component',
-      message: `Eureka component ${component.familyId}@${component.version} has unresolved descriptor provenance.`,
+      message: `The catalog does not say where the descriptor of Eureka component ${component.familyId} ${component.version} came from.`,
       path: `/eurekaComponents/${index}/descriptorSource`
     });
     if (descriptorSource.status === 'acquired' && !catalog.providers.some(provider =>
@@ -40,7 +40,7 @@ export async function loadS008Catalog(
       && provider.descriptorHash === descriptorSource.descriptorHash
     )) diagnostics.push({
       code: 'catalog_component_provider_missing',
-      message: `Eureka component ${component.familyId}@${component.version} has no provider matching its acquired descriptor provenance.`,
+      message: `The catalog has no provider entry matching the descriptor of Eureka component ${component.familyId} ${component.version}.`,
       path: `/eurekaComponents/${index}/descriptorSource`
     });
   }
@@ -49,7 +49,7 @@ export async function loadS008Catalog(
       if (!isSupportedEurekaVersionExpression(provided.version, true)) {
         diagnostics.push({
           code: 'catalog_invalid_interface_version',
-          message: `Provider ${provider.moduleId} has unsupported version syntax for ${provided.id}: ${provided.version}`,
+          message: `The catalog says ${provider.moduleId} provides ${provided.id} with the version "${provided.version}", which S008 cannot check.`,
           path: `/providers/${providerIndex}/provides/${interfaceIndex}/version`
         });
       }
@@ -62,7 +62,7 @@ export async function loadS008Catalog(
 function duplicates(values: string[], label: string, diagnostics: S008PolicyDiagnostic[]): void {
   const seen = new Set<string>();
   for (const value of values) {
-    if (seen.has(value)) diagnostics.push({ code: 'duplicate_entry', message: `Duplicate ${label}: ${value}` });
+    if (seen.has(value)) diagnostics.push({ code: 'duplicate_entry', message: `The catalog lists the ${label} ${value} more than once.` });
     seen.add(value);
   }
 }

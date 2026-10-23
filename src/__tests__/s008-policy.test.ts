@@ -38,7 +38,7 @@ describe('S008 trusted policy loaders', () => {
     if (checkedIn.ok) {
       expect(checkedIn.value.authoritative).toBe(true);
       expect(checkedIn.value.source.reference).toContain('docs/s009-library-baseline.md');
-      expect(checkedIn.value.families).toHaveLength(207);
+      expect(checkedIn.value.families).toHaveLength(208);
       expect(checkedIn.value.libraryCoordinates).toHaveLength(143);
       expect(checkedIn.value.libraryCoordinates.filter(item => item.ecosystem === 'maven')).toHaveLength(88);
       expect(checkedIn.value.libraryCoordinates.filter(item => item.ecosystem === 'npm')).toHaveLength(55);

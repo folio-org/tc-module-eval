@@ -121,7 +121,8 @@ export interface S008ProviderCandidate {
 
 export interface S008Finding {
   declaration: S008Declaration;
-  classification: 'satisfied' | 'unaccepted' | 'incompatible' | 'missing';
+  /** newer-minor: an accepted provider has the same major version but only an older minor version. */
+  classification: 'satisfied' | 'unaccepted' | 'incompatible' | 'newer-minor' | 'missing';
   candidates: S008ProviderCandidate[];
 }
 

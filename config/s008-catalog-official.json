@@ -1185,6 +1185,51 @@
       "source": "FAR:app-platform-complete-3.3.6"
     },
     {
+      "descriptorHash": "sha256:fd41742897e8614b197c6d7435026532b1898fb734f4fce0646973fd0d3fdf38",
+      "moduleId": "mod-circulation-bff-1.2.3",
+      "moduleIdentity": "mod-circulation-bff",
+      "provides": [
+        {
+          "id": "_tenant",
+          "interfaceType": "system",
+          "version": "2.0"
+        },
+        {
+          "id": "circulation-bff-ecs-request-external",
+          "version": "1.1"
+        },
+        {
+          "id": "circulation-bff-inventory",
+          "version": "1.0"
+        },
+        {
+          "id": "circulation-bff-loans",
+          "version": "1.6"
+        },
+        {
+          "id": "circulation-bff-pick-slips",
+          "version": "1.0"
+        },
+        {
+          "id": "circulation-bff-requests-batch",
+          "version": "1.1"
+        },
+        {
+          "id": "circulation-bff-requests",
+          "version": "1.4"
+        },
+        {
+          "id": "circulation-bff-search-slips",
+          "version": "1.0"
+        },
+        {
+          "id": "circulation-bff-users",
+          "version": "1.0"
+        }
+      ],
+      "source": "FAR:app-requests-ecs-2.0.6"
+    },
+    {
       "descriptorHash": "sha256:b226c67a92781cde28e085235b3ddd31d92a540208106f2eb08d39c318402f23",
       "moduleId": "mod-circulation-item-2.0.0",
       "moduleIdentity": "mod-circulation-item",
