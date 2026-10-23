@@ -46,6 +46,9 @@ const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 
 const MAVEN_COORDINATE_PATTERN = /^(.+?):(.+?):(.+?)$/;
+// Licenses and name, then the last " (groupId:artifactId:version - URL)" group on the line.
+// The coordinate parts exclude ':' so that a long run of colons cannot cause cubic backtracking.
+const MAVEN_THIRD_PARTY_LINE_PATTERN = /^(.*) \(([^\s():]+:[^\s():]+:[^\s():]+) - .*\)$/;
 
 const MAVEN_BUILD_FILES = ['pom.xml'];
 
@@ -139,71 +142,81 @@ function parseMavenCoordinates(coordinates: string): { groupId: string; artifact
   return { groupId: groupId.trim(), artifactId: artifactId.trim(), version: version.trim() };
 }
 
+/**
+ * Parses a dependency line from license-maven-plugin's default third-party-file.ftl template:
+ * `(License A) (License B) Name (groupId:artifactId:version - URL)`. Each license is one
+ * parenthesised group, written as-is, so a license name can contain balanced parentheses.
+ * The name can contain parentheses too, so the coordinates are read from the end of the line.
+ * A name that itself starts with a parenthesised group cannot be told apart from a license.
+ * @returns the dependency, or null when the line does not have this form
+ */
 function parseMavenThirdPartyLine(line: string): Dependency | null {
-  const trimmedLine = line.trim();
-
-  if (!trimmedLine || trimmedLine.startsWith('Lists of') || !trimmedLine.startsWith('(')) {
+  const match = line.trim().match(MAVEN_THIRD_PARTY_LINE_PATTERN);
+  if (!match) {
     return null;
   }
+  const [, licensesAndName, coordinates] = match;
 
-  // Parse format: (License Name) Artifact Name (groupId:artifactId:version - URL)
-  const licenseEnd = trimmedLine.indexOf(')');
-  if (licenseEnd === -1) {
-    return null;
-  }
-
-  const licenseName = trimmedLine.substring(1, licenseEnd).trim();
-  if (!isNonEmptyString(licenseName)) {
-    return null;
-  }
-
-  const remaining = trimmedLine.substring(licenseEnd + 1).trim();
-
-  const coordStart = remaining.indexOf('(');
-  const coordEnd = remaining.indexOf(')');
-
-  if (coordStart === -1 || coordEnd === -1) {
-    return null;
-  }
-
-  const coordPart = remaining.substring(coordStart + 1, coordEnd);
-
-  const parts = coordPart.split(' - ');
-  const coordinates = parts[0]?.trim();
-
-  if (!isNonEmptyString(coordinates)) {
-    return null;
+  const licenseNames: string[] = [];
+  let position = 0;
+  while (licensesAndName[position] === '(') {
+    let depth = 0;
+    let end = position;
+    for (; end < licensesAndName.length; end++) {
+      if (licensesAndName[end] === '(') depth++;
+      if (licensesAndName[end] === ')' && --depth === 0) break;
+    }
+    if (depth !== 0) {
+      return null;
+    }
+    licenseNames.push(licensesAndName.substring(position + 1, end).trim());
+    position = end + 1;
+    while (licensesAndName[position] === ' ') position++;
   }
 
   const parsed = parseMavenCoordinates(coordinates);
-  if (!parsed) {
+  if (licenseNames.length === 0 || !parsed) {
     return null;
   }
 
-  const depName = `${parsed.groupId}:${parsed.artifactId}`;
-
-  const licenses = splitDualLicenses(licenseName);
-
   return {
-    name: depName,
+    name: `${parsed.groupId}:${parsed.artifactId}`,
     version: parsed.version,
-    licenses
+    // The plugin lists every license declared for the dependency; any one of them may be chosen.
+    licenses: licenseNames.flatMap(splitDualLicenses)
   };
 }
 
+/**
+ * @throws Error with a plain-language reason when a dependency line cannot be read, so the
+ * dependency is reported instead of being left out of the license check
+ */
 function parseMavenThirdPartyFile(content: string): Dependency[] {
   if (!isNonEmptyString(content)) {
     return [];
   }
 
   const dependencies: Dependency[] = [];
-  const lines = content.split('\n');
+  const unreadable: string[] = [];
 
-  for (const line of lines) {
+  for (const line of content.split('\n')) {
+    // Dependency lines start with a license group; the header and blank lines do not.
+    if (!line.trim().startsWith('(')) {
+      continue;
+    }
     const dependency = parseMavenThirdPartyLine(line);
     if (dependency && isValidDependency(dependency)) {
       dependencies.push(dependency);
+    } else {
+      unreadable.push(line.trim());
     }
+  }
+
+  if (unreadable.length > 0) {
+    throw new Error(
+      `${MAVEN_THIRD_PARTY_PATH} has ${unreadable.length === 1 ? '1 dependency line' : `${unreadable.length} dependency lines`} ` +
+      `that could not be read, so the dependency list is incomplete. First unreadable line: ${unreadable[0]}`
+    );
   }
 
   return dependencies;
