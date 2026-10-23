@@ -16,6 +16,7 @@ import {
   parsePlatformApplicationPins,
   PlatformParseDiagnostic
 } from './platform-applications';
+import { pomArtifactId } from './module-kind';
 import { isWithinRepo, readBoundedFileBytes } from './repo-files';
 
 export const DEFAULT_PLATFORM_REF = 'snapshot';
@@ -82,24 +83,9 @@ function descriptorIdName(id: string): string | undefined {
   return match && isValidRemoteName(match[1]) ? match[1] : undefined;
 }
 
-// The project's own artifactId: the first one outside comments and the <parent> block.
+// The project's own artifactId, unless it is a ${...} placeholder. An unparsable POM names nothing.
 function projectArtifactId(pom: string | undefined): string | undefined {
-  if (!pom) return undefined;
-  let text = '';
-  for (let index = 0; index < pom.length;) {
-    const comment = pom.indexOf('<!--', index);
-    if (comment < 0) {
-      text += pom.slice(index);
-      break;
-    }
-    text += pom.slice(index, comment);
-    const end = pom.indexOf('-->', comment + 4);
-    index = end < 0 ? pom.length : end + 3;
-  }
-  const parentStart = text.indexOf('<parent>');
-  const parentEnd = parentStart < 0 ? -1 : text.indexOf('</parent>', parentStart);
-  if (parentEnd >= 0) text = text.slice(0, parentStart) + text.slice(parentEnd + '</parent>'.length);
-  const value = /<artifactId>\s*([^<\s]{1,100})\s*<\/artifactId>/.exec(text)?.[1];
+  const value = pom === undefined ? undefined : pomArtifactId(pom, []);
   return value && !value.includes('$') ? value : undefined;
 }
 

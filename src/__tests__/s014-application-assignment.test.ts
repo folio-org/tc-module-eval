@@ -289,6 +289,18 @@ describe('S014 application assignment', () => {
       expect(unnamed.requested).toEqual([]);
     });
 
+    it.each([
+      ['dependency', '<dependencies><dependency><groupId>org.folio</groupId><artifactId>mod-y</artifactId></dependency></dependencies>'],
+      ['plugin', '<build><plugins><plugin><groupId>org.folio</groupId><artifactId>mod-y</artifactId></plugin></plugins></build>']
+    ])('names the module from the project\'s own artifactId, not a %s declared before or after it', async (_label, declaration) => {
+      const result = await evaluate(await backendRepo('repo-name', {
+        'pom.xml': `<project><modelVersion>4.0.0</modelVersion>${declaration}<groupId>org.folio</groupId><artifactId>mod-x</artifactId>${declaration}</project>`
+      }), { responses: syntheticPlatform([{ name: 'app-a', modules: ['mod-x'] }, { name: 'app-b', modules: ['mod-y'] }]), application: 'app-a' });
+
+      expect(result.criterionDetails.moduleName).toEqual({ name: 'mod-x', source: 'pom', path: 'pom.xml' });
+      expect(result.status).toBe(EvaluationStatus.PASS);
+    });
+
     it('keeps FAR text inside its report row', async () => {
       const id = 'app-a-1.0.0';
       const responses = syntheticPlatform([{
