@@ -26,6 +26,7 @@ interface EffectiveMavenDependency {
   key: string;
   coordinates: string;
   version: string;
+  test: boolean;
 }
 
 export async function enrichS007WithMavenEffectivePom(
@@ -56,6 +57,9 @@ export async function enrichS007WithMavenEffectivePom(
       changed = true;
       return {
         ...observation,
+        // A version inferred from a property is replaced by the one Maven actually resolved.
+        declaredVersion: observation.versionProperty ? undefined : observation.declaredVersion,
+        versionProperty: undefined,
         resolvedVersion,
         versionSourcePath: sourcePath,
         resolutionSource: 'maven-effective-pom',
@@ -76,10 +80,20 @@ export async function enrichS007WithMavenEffectivePom(
     for (const dependency of effective.dependencies) {
       const [groupId, artifactId] = dependency.coordinates.split(':');
       if (!matchJavaIdentity(groupId, artifactId)) continue;
-      if (representedKeys.has(dependency.key)) continue;
-      const message = `Effective Maven model for ${sourcePath} includes inherited S007-relevant dependency ${dependency.coordinates} (${dependency.key}) that was not represented by static repository evidence.`;
-      if (!diagnostics.some(diagnostic => diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message)) {
-        diagnostics = [...diagnostics, { code: 'effective_model_unrepresented', message, material: true, path: sourcePath }];
+      if (representedKeys.has(dependency.key) || dependency.test) continue;
+      const subject = `${dependency.coordinates}${dependency.key === `${dependency.coordinates}:jar:` ? '' : ` (${dependency.key})`} ${dependency.version}`;
+      const message = `Maven's effective POM includes ${subject}, which is not declared in the repository's own build files, so the tool did not check it.`;
+      if (!diagnostics.some(diagnostic =>
+        diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message && diagnostic.path === sourcePath
+      )) {
+        diagnostics = [...diagnostics, {
+          code: 'effective_model_unrepresented',
+          message,
+          material: true,
+          path: sourcePath,
+          subject,
+          listHeading: 'In the Maven effective POM but not declared in the repository, so not checked'
+        }];
         changed = true;
       }
     }
@@ -92,9 +106,8 @@ export async function enrichS007WithMavenEffectivePom(
       }
       if (
         diagnostic.code === 'version_unresolved' &&
-        [...resolvedCoordinates].some(coordinates =>
-          diagnostic.message === `Version for ${coordinates} could not be resolved from local Maven metadata.`
-        )
+        diagnostic.subject !== undefined &&
+        resolvedCoordinates.has(diagnostic.subject)
       ) {
         return false;
       }
@@ -103,6 +116,8 @@ export async function enrichS007WithMavenEffectivePom(
   }
 
   if (!changed) return evidence;
+  // Finalizing also drops BOM warnings once every dependency has a version, including those of a parent POM in the
+  // repository that was not itself resolved because it declares no dependency without a version.
   return finalizeS007TechnologyEvidence({
     ...evidence,
     observations,
@@ -119,9 +134,9 @@ function unresolvedMavenObservations(
     if (
       observation.ecosystem !== 'java' ||
       observation.evidenceKind !== 'dependency-declaration' ||
-      !observation.sourcePath.endsWith('pom.xml') ||
-      observation.declaredVersion ||
+      (observation.declaredVersion && !observation.versionProperty) ||
       observation.resolvedVersion ||
+      observation.testScope ||
       observation.versionResolutionEligible === false ||
       !observation.mavenDependency
     ) continue;
@@ -138,12 +153,22 @@ async function produceEffectivePom(
 ): Promise<{ versions: Map<string, Set<string>>; dependencies: EffectiveMavenDependency[] } | undefined> {
   const pomPath = path.resolve(repoPath, sourcePath);
   if (!pomPath.startsWith(`${path.resolve(repoPath)}${path.sep}`) && pomPath !== path.resolve(repoPath)) return undefined;
-  if (
-    !fs.existsSync(pomPath) ||
-    fs.lstatSync(pomPath).isSymbolicLink() ||
-    !fs.statSync(pomPath).isFile() ||
-    !isWithinRepo(repoPath, pomPath)
-  ) return undefined;
+  // Read the project identity before Maven runs: the build can rewrite repository files, for example replace
+  // pom.xml with a link to a file outside the repository. A file that cannot be read skips enrichment only.
+  let sourceProject: Awaited<ReturnType<typeof parseMavenProject>>;
+  try {
+    if (
+      !fs.existsSync(pomPath) ||
+      fs.lstatSync(pomPath).isSymbolicLink() ||
+      !fs.statSync(pomPath).isFile() ||
+      fs.statSync(pomPath).size > MAX_EFFECTIVE_POM_BYTES ||
+      !isWithinRepo(repoPath, pomPath)
+    ) return undefined;
+    sourceProject = await parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true);
+  } catch {
+    return undefined;
+  }
+  if (!sourceProject) return undefined;
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 's007-effective-pom-'));
   const outputPath = path.join(workspace, 'effective-pom.xml');
@@ -169,11 +194,8 @@ async function produceEffectivePom(
 
     const stat = fs.lstatSync(outputPath, { throwIfNoEntry: false });
     if (!stat?.isFile() || stat.isSymbolicLink() || stat.size > MAX_EFFECTIVE_POM_BYTES) return undefined;
-    const [sourceProject, effectiveProject] = await Promise.all([
-      parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true),
-      parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false)
-    ]);
-    if (!sourceProject || !effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
+    const effectiveProject = await parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false);
+    if (!effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
       return undefined;
     }
     return { versions: effectiveProject.versions, dependencies: effectiveProject.dependencies };
@@ -219,7 +241,7 @@ async function parseMavenProject(
       classifier: xmlText(dependency?.classifier)
     });
     versions.set(key, new Set([...(versions.get(key) ?? []), version]));
-    dependencies.push({ key, coordinates, version });
+    dependencies.push({ key, coordinates, version, test: xmlText(dependency?.scope) === 'test' });
   }
   return { identity, versions, dependencies };
 }

@@ -1617,8 +1617,8 @@
     {
       "criterionId": "S007",
       "status": "manual",
-      "evidence": "S007 manual: current repository evidence or policy semantics require reviewer judgment.",
-      "details": "S007 manual: current repository evidence or policy semantics require reviewer judgment.",
+      "evidence": "S007 manual: No definite policy violation was found, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
+      "details": "S007 manual: No definite policy violation was found, but a reviewer needs to check Spring Boot (the policy rule is time-bound or disputed) and gaps in what the tool could read from the repository.",
       "criterionDetails": {
         "policyFormatVersion": "1.0",
         "findingCount": 14,
@@ -1721,27 +1721,27 @@
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }

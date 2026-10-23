@@ -83,6 +83,22 @@ S007 reads static, repository-local Maven, Gradle, and package metadata. A top-l
 
 Recommendations and deprecation notes remain visible but cannot cause failure on their own.
 
+Some artifacts show that a framework is used but have their own version line, so S007 does not compare their version with the framework rule: Grails plugins and other `org.grails` artifacts outside the Grails core project (GORM's `grails-datastore-*`, the `*-testing-support` libraries), and Spring projects in `org.springframework.*` groups other than Spring Boot (Spring Kafka, Spring Batch, Spring Data, Spring Cloud). If no other declaration gives the framework version, the version counts as missing. Grails 7 publishes under `org.apache.grails`, with one version for all its artifacts.
+
+An imported BOM only supplies versions for dependencies declared without one, and versions set in the repository take precedence. So once every production Maven dependency has a version, from the repository or (with `--allow-local-commands`) from the effective POMs, imported BOMs no longer block a pass.
+
+Without a `yarn.lock`, each declared `package.json` range is checked as a whole, with npm's version semantics (a prerelease matches only a range that names one): it passes when every version it allows meets the policy (`^18.2.0` allows only 18.x), needs review when it also allows unsupported versions (`>=18` allows any later major), and fails when it allows none.
+
+Only production dependencies decide the status. Maven `test` scope dependencies and Gradle `test*`, `testFixtures*`, and `integrationTest*` configurations are listed as notes, are not compared with each other for conflicts, and leave no coverage gap.
+
+RMB (raml-module-builder) is recognized from its `org.folio:domain-models-*` artifacts, which carry the RMB version, as well as `org.folio:raml-module-builder`. A failing version newer than the rule allows gets different advice from an older one: use an allowed version or ask the Technical Council to update the policy.
+
+Groovy is detected from the Gradle `groovy` and Grails plugins and the Maven GMavenPlus plugin. Grails modules usually declare no Java version and take versions from the Grails BOM; both remain coverage gaps.
+
+In safe mode, a dependency with no version anywhere in the repository takes the version of a `<artifactId>.version` property set in the repository (for example `lombok.version`), following the Spring Boot convention for overriding the versions it manages. This applies only when that management is probably inherited from a parent POM: the parent outside the repository is a Spring Boot parent, or the module uses Spring Boot, has a parent outside the repository, and imports no BOM. A property does not change the versions of an imported BOM. The report labels such a version as inferred from the property. With `--allow-local-commands` the effective-POM version replaces it.
+
+The report lists each problem once under "Repository evidence coverage"; problems of the same kind in one file, such as dependencies without a version, are merged into one row.
+
 S012 build tools, S013 testing, infrastructure compatibility, live policy synchronization, and new-module applicability remain outside S007.
 
 ## S010 Third-Party System Resilience

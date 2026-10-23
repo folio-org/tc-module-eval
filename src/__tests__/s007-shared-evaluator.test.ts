@@ -126,8 +126,8 @@ describe('S007 shared evaluator', () => {
         matchedPolicy: expect.objectContaining({ entryId: 'react' })
       })
     ]));
-    expect(result.details).toContain('frontend-third-party-frameworks/react');
-    expect(result.details).toContain('package.json');
+    expect(result.details).toContain('Policy rule: React ^18.2.0');
+    expect(result.details).toContain('package.json — dependencies.react');
   });
 
   it('keeps deterministic evidence before an unavailable advisory note', async () => {
@@ -181,7 +181,7 @@ describe('S007 shared evaluator', () => {
       expect.objectContaining({ code: 'version_unresolved' })
     ]));
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Resolution method: Maven effective POM');
+    expect(result.details).toContain('pom.xml — org.projectlombok:lombok, version 1.18.42 from the Maven effective POM');
   });
 
   it('attaches an available advisory end to end without changing manual status', async () => {
@@ -233,7 +233,7 @@ describe('S007 shared evaluator', () => {
     expect(result.details).toContain('Vue is explicitly declared.');
     expect(result.details).toContain('Findings:');
     expect(result.details).toContain('What to verify:');
-    expect(result.details).toContain('Deterministic result remains Manual.');
+    expect(result.details).toContain('Advisory only; the criterion status is unchanged.');
   });
 
   it.each(['quarkus', 'constructor'])('preserves deterministic findings when review discovers %s outside the analyzer inventory', async technologyId => {
@@ -335,6 +335,304 @@ describe('S007 shared evaluator', () => {
       expect.objectContaining({ technologyId: 'grails', classification: 'compliant' }),
       expect.objectContaining({ technologyId: 'java', classification: 'compliant' })
     ]));
+  });
+
+  it('recognizes Grails 7 coordinates, so a Java 17 Grails module uses the Grails exception', async () => {
+    await write('gradle.properties', 'grailsVersion=7.0.1\n');
+    await write('build.gradle', `
+      plugins { id 'org.apache.grails.gradle.grails-web' }
+      java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+      dependencies {
+        implementation platform("org.apache.grails:grails-bom:$grailsVersion")
+        implementation 'org.apache.grails:grails-core'
+      }
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'grails',
+        classification: 'compliant',
+        evidence: [expect.objectContaining({ detail: 'org.apache.grails:grails-bom', declaredVersion: '7.0.1' })]
+      }),
+      expect.objectContaining({ technologyId: 'java', classification: 'compliant' })
+    ]));
+    expect(result.status).not.toBe(EvaluationStatus.FAIL);
+  });
+
+  it.each([
+    // Without a yarn.lock, a range passes only when every version it allows meets the policy.
+    ['passes a caret range inside the policy range', { react: '^18.2.0' }, EvaluationStatus.PASS],
+    ['passes a partial caret range inside the policy range', { react: '^18.2' }, EvaluationStatus.PASS],
+    ['passes an explicit range with an exclusive upper bound', { react: '>=18.2.0 <19.0.0' }, EvaluationStatus.PASS],
+    ['passes an open-ended range above a minimum', { '@folio/stripes': '>=10.1.0', react: '~18.2.3' }, EvaluationStatus.PASS],
+    ['keeps an open-ended range that allows the next major manual', { react: '>=18.2.0' }, EvaluationStatus.MANUAL],
+    ['keeps a range that allows versions below the minimum manual', { '@folio/stripes': '>=10', react: '^18.2.0' }, EvaluationStatus.MANUAL],
+    ['fails a range that allows no supported version', { react: '^17.0.0' }, EvaluationStatus.FAIL]
+  ])('without a yarn.lock %s', async (_name, dependencies, expected) => {
+    await writeJson('package.json', { dependencies });
+
+    const result = await new JavaScriptSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('javascript'));
+
+    expect(result.status).toBe(expected);
+    if (expected === EvaluationStatus.PASS) {
+      expect(result.details).toContain('Every version the declared range');
+      expect(result.details).not.toContain('Repository evidence coverage');
+    }
+  });
+
+  it.each([
+    ['36.0.0', EvaluationStatus.FAIL],
+    ['35.4.1', EvaluationStatus.PASS]
+  ])('recognizes RMB %s from its domain-models artifacts', async (version, expected) => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version><raml-module-builder.version>${version}</raml-module-builder.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>\${raml-module-builder.version}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-api-interfaces</artifactId><version>\${raml-module-builder.version}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime-testing</artifactId><version>\${raml-module-builder.version}</version><scope>test</scope></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(expected);
+    if (expected === EvaluationStatus.FAIL) {
+      expect(result.evidence).toBe('S007 fail: raml-module-builder 36.0.0 in pom.xml (the policy allows "raml-module-builder 35 for existing modules only") '
+        + 'is not an officially supported version. It is newer than the policy allows: use a version the policy allows, '
+        + 'or ask the Technical Council to update the policy.');
+      expect(result.details).toContain('    - Why: Version 36.0.0 is not allowed by the policy rule "raml-module-builder 35 for existing modules only". '
+        + 'It is newer than the rule allows: use a version the rule allows, or ask the Technical Council to update the policy.');
+      expect(result.details).toContain('pom.xml — org.folio:domain-models-runtime, version 36.0.0');
+    }
+  });
+
+  it.each([
+    ['fails when every declared version breaks the rule', '36.0.0', '36.0.1', EvaluationStatus.FAIL],
+    ['needs review when one declared version meets the rule', '35.4.1', '36.0.0', EvaluationStatus.MANUAL]
+  ])('with different RMB versions declared, %s', async (_name, first, second, expected) => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>${first}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-api-interfaces</artifactId><version>${second}</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(expected);
+  });
+
+  it('gives neutral advice when a failing range is neither wholly older nor provably newer', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>(36.0.0,36.0.1)</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.evidence).toMatch(/is not an officially supported version\. Change it to a version the policy allows\.$/);
+    expect(result.details).not.toContain('Upgrade');
+  });
+
+  it('lists Maven test dependencies as notes that do not decide the status', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>5.0.4</version></dependency>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-junit5</artifactId><version>4.5.0</version><scope>test</scope></dependency>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-unit</artifactId><scope>test</scope></dependency>
+          <dependency><groupId>org.springframework</groupId><artifactId>spring-test</artifactId><version>6.2.0</version><scope>test</scope></dependency>
+          <dependency><groupId>\${project.groupId}</groupId><artifactId>local-test-support</artifactId><scope>test</scope></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(details.evidenceDiagnostics).toEqual([]);
+    expect(details.findings.filter(finding => finding.contribution === 'note').map(finding => finding.evidence[0].detail))
+      .toEqual(['io.vertx:vertx-junit5', 'io.vertx:vertx-unit', 'org.springframework:spring-test']);
+    expect(result.evidence).toBe('S007 pass: Every technology found is officially supported: Java and Eclipse Vert.x.');
+    expect(result.details).toContain('- Eclipse Vert.x: Mixed results: 1 meets the policy, 2 used only in tests.');
+    expect(result.details).toContain('      - pom.xml — io.vertx:vertx-junit5, version 4.5.0');
+  });
+
+  it('lists dependencies from Gradle test configurations as notes', async () => {
+    await write('build.gradle', `
+      java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+      dependencies {
+        testImplementation 'io.vertx:vertx-core:5.0.4'
+        implementation 'io.vertx:vertx-core:5.0.4'
+        testImplementation 'io.vertx:vertx-junit5'
+        integrationTestImplementation("io.vertx:vertx-core:4.5.0")
+      }
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    // The test declaration listed first must not hide the production one.
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ technologyId: 'vertx', contribution: 'pass' })
+    ]));
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(details.findings.filter(finding => finding.contribution === 'note').map(finding => finding.evidence[0]))
+      .toEqual([
+        expect.objectContaining({ detail: 'io.vertx:vertx-core', declaredVersion: '5.0.4' }),
+        expect.objectContaining({ detail: 'io.vertx:vertx-junit5', declaredVersion: undefined }),
+        expect.objectContaining({ detail: 'io.vertx:vertx-core', declaredVersion: '4.5.0' })
+      ]);
+  });
+
+  it('detects Groovy from the Grails plugin and keeps the missing Java version as a coverage gap', async () => {
+    await write('build.gradle', `
+      apply plugin:"org.grails.grails-web"
+      dependencies { implementation "org.apache.grails:grails-core:7.0.1" }
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(details.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        technologyId: 'groovy',
+        classification: 'compliant',
+        evidence: [expect.objectContaining({ path: 'build.gradle', detail: 'plugin org.grails.grails-web' })]
+      }),
+      expect.objectContaining({ technologyId: 'evidence-coverage', rationale: expect.stringContaining('No Java version was found.') })
+    ]));
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('infers a version from a Spring Boot <artifactId>.version property in safe mode and labels it', async () => {
+    await write('pom.xml', `
+      <project>
+        <parent><groupId>org.folio</groupId><artifactId>folio-spring-parent</artifactId><version>10.1.0</version><relativePath /></parent>
+        <properties><java.version>21</java.version><lombok.version>1.18.48</lombok.version></properties>
+        <dependencies>
+          <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+          <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(details.findings).toEqual(expect.arrayContaining([expect.objectContaining({
+      technologyId: 'lombok',
+      classification: 'compliant',
+      rationale: 'Version 1.18.48 (inferred from the lombok.version property) meets the policy rule.',
+      evidence: [expect.objectContaining({ declaredVersion: '1.18.48', versionProperty: 'lombok.version' })]
+    })]));
+    expect(details.evidenceDiagnostics.map(diagnostic => diagnostic.subject)).not.toContain('org.projectlombok:lombok');
+    expect(result.details).toContain(
+      'pom.xml — org.projectlombok:lombok, version 1.18.48 inferred from the lombok.version property (Spring Boot convention)'
+    );
+  });
+
+  it.each([
+    ['the parent is in the repository', '<relativePath>parent/pom.xml</relativePath>', true],
+    ['the module does not use Spring Boot', '<relativePath />', false]
+  ])('does not infer a version from a property when %s', async (_name, relativePath, springBoot) => {
+    await write('parent/pom.xml', '<project><groupId>org.example</groupId><artifactId>parent</artifactId><version>1</version></project>');
+    await write('pom.xml', `
+      <project>
+        <parent><groupId>org.example</groupId><artifactId>parent</artifactId><version>1</version>${relativePath}</parent>
+        <properties><java.version>21</java.version><lombok.version>1.18.48</lombok.version></properties>
+        <dependencies>
+          ${springBoot ? '<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId><version>4.0.1</version></dependency>' : ''}
+          <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+    const details = result.criterionDetails as S007AnalysisResult;
+
+    expect(details.findings).toEqual(expect.arrayContaining([expect.objectContaining({
+      technologyId: 'lombok',
+      classification: 'unresolved',
+      evidence: [expect.objectContaining({ declaredVersion: undefined })]
+    })]));
+  });
+
+  it.each([
+    [
+      'an imported Spring Boot BOM manages the dependency',
+      '<parent><groupId>org.apache</groupId><artifactId>apache</artifactId><version>33</version><relativePath /></parent>',
+      '<dependencyManagement><dependencies><dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>3.4.0</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>',
+      '<dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>'
+    ],
+    [
+      'the dependency has a version the tool cannot resolve',
+      '<parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.4.0</version><relativePath /></parent>',
+      '',
+      '<dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>\${project.version}</version></dependency>'
+    ],
+    [
+      'the repository manages the dependency with a version the tool cannot resolve',
+      '<parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.4.0</version><relativePath /></parent>',
+      '<dependencyManagement><dependencies><dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>\${undefined.lombok}</version></dependency></dependencies></dependencyManagement>',
+      '<dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>'
+    ]
+  ])('does not take a version from a property, which Maven would not use, when %s', async (_name, parent, management, lombok) => {
+    await write('pom.xml', `
+      <project>
+        ${parent}
+        <version>1.18.36</version>
+        <properties><java.version>21</java.version><lombok.version>1.18.20</lombok.version></properties>
+        ${management}
+        <dependencies>
+          <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+          ${lombok}
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect((result.criterionDetails as S007AnalysisResult).findings).toEqual(expect.arrayContaining([expect.objectContaining({
+      technologyId: 'lombok',
+      classification: 'unresolved',
+      evidence: [expect.objectContaining({ declaredVersion: undefined, versionProperty: undefined })]
+    })]));
+  });
+
+  it('replaces a version inferred from a property with the effective-POM version', async () => {
+    await write('pom.xml', `
+      <project>
+        <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>4.1.1</version><relativePath /></parent>
+        <groupId>org.folio</groupId><artifactId>mod-example</artifactId><version>1</version>
+        <properties><java.version>21</java.version><lombok.version>1.18.48</lombok.version></properties>
+        <dependencies>
+          <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+          <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java', new EffectivePomRunner()));
+
+    expect(result.details).toContain('pom.xml — org.projectlombok:lombok, version 1.18.42 from the Maven effective POM');
+    expect(result.details).not.toContain('inferred');
   });
 
   it('reuses shared static evidence without commands and keeps remote-derived evidence manual', async () => {
