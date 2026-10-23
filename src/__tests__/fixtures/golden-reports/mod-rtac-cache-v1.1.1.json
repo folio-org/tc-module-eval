@@ -1894,8 +1894,87 @@
     {
       "criterionId": "S013",
       "status": "manual",
-      "evidence": "Configuration management - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S013 manual: Coverage was not checked: remote lookups are off. Rerun with --allow-remote-lookups to read it from SonarCloud. The tests use JUnit, which is an officially supported technology.",
+      "details": "What to do: Rerun with --allow-remote-lookups so the tool can read the module's coverage from SonarCloud, or check by hand that SonarCloud's overall coverage for the evaluated commit is at least 80%.\nCoverage: not checked (remote lookups are off)\nTest technologies:\n  - JUnit (org.springframework.boot:spring-boot-starter-test in pom.xml, test scope): supported (\"JUnit guidance\")\n  - Testcontainers (org.testcontainers:junit-jupiter in pom.xml, test scope; org.testcontainers:postgresql in pom.xml, test scope; and 1 more): supported (\"testcontainers\")\n  - WireMock (org.wiremock:wiremock-standalone in pom.xml, test scope): testing helper, not covered by the supported-technologies page\nPolicy: Officially Supported Technologies (ACCEPTED, exported 2026-07-14), config/officially-supported-technologies.json",
+      "criterionDetails": {
+        "criterionId": "S013",
+        "status": "manual",
+        "summary": "S013 manual: Coverage was not checked: remote lookups are off. Rerun with --allow-remote-lookups to read it from SonarCloud. The tests use JUnit, which is an officially supported technology.",
+        "area": "backend",
+        "remoteLookups": false,
+        "coverage": {
+          "outcome": "manual",
+          "reason": "no-lookups",
+          "rationale": "Coverage was not checked: remote lookups are off. Rerun with --allow-remote-lookups to read it from SonarCloud.",
+          "measures": {}
+        },
+        "technologies": {
+          "outcome": "ok",
+          "rationale": "The tests use JUnit, which is an officially supported technology.",
+          "findings": [
+            {
+              "id": "junit",
+              "displayName": "JUnit",
+              "kind": "runner",
+              "listed": true,
+              "policyStatement": "JUnit guidance",
+              "declarations": [
+                {
+                  "dependency": "org.springframework.boot:spring-boot-starter-test",
+                  "path": "pom.xml",
+                  "scope": "test"
+                }
+              ]
+            },
+            {
+              "id": "testcontainers",
+              "displayName": "Testcontainers",
+              "kind": "library",
+              "listed": true,
+              "policyStatement": "testcontainers",
+              "declarations": [
+                {
+                  "dependency": "org.testcontainers:junit-jupiter",
+                  "path": "pom.xml",
+                  "scope": "test"
+                },
+                {
+                  "dependency": "org.testcontainers:postgresql",
+                  "path": "pom.xml",
+                  "scope": "test"
+                },
+                {
+                  "dependency": "org.testcontainers:kafka",
+                  "path": "pom.xml",
+                  "scope": "test"
+                }
+              ]
+            },
+            {
+              "id": "wiremock",
+              "displayName": "WireMock",
+              "kind": "helper",
+              "listed": false,
+              "declarations": [
+                {
+                  "dependency": "org.wiremock:wiremock-standalone",
+                  "path": "pom.xml",
+                  "scope": "test"
+                }
+              ]
+            }
+          ]
+        },
+        "policy": {
+          "sourcePath": "config/officially-supported-technologies.json",
+          "title": "Officially Supported Technologies",
+          "documentStatus": "ACCEPTED",
+          "exportDate": "2026-07-14"
+        },
+        "policyDiagnostics": [],
+        "evidenceDiagnostics": [],
+        "remoteEvidence": []
+      }
     },
     {
       "criterionId": "S014",

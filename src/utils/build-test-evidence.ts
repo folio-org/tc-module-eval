@@ -9,13 +9,31 @@ import {
   BuildTestEvidence,
   BuildToolId,
   SharedWorkflowUse,
+  TestTechnologyDeclaration,
+  TestTechnologyKind,
   VersionDeclaration,
   VersionDeclarationSource
 } from '../types';
 import { decodeBoundedUtf8, readBoundedFileBytes } from './repo-files';
-import { parseJavaProperties, parsePackageJson, parsePom, pomRequiredMavenVersions, xmlText, yarnLockfileFormat } from './manifest-parsers';
+import {
+  asArray,
+  packageDependencyEntries,
+  parseJavaProperties,
+  parsePackageJson,
+  parsePom,
+  parseYarnLockfile,
+  pomDependencies,
+  pomRequiredMavenVersions,
+  quotedGradleLiteral,
+  scanGradleDeclarations,
+  splitGradleArguments,
+  stripGradleComments,
+  xmlText,
+  yarnLockfileFormat,
+  yarnLockVersionsByName
+} from './manifest-parsers';
 
-// Reads the build files of the checkout without running anything (S012; S013 adds test runners). The repository is
+// Reads the build files of the checkout without running anything: build tools for S012, test technologies for S013. The repository is
 // untrusted: at most MAX_FILES files of MAX_FILE_BYTES each are read, symbolic links are never followed, and a file
 // whose real path is outside the repository is not read.
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -55,7 +73,9 @@ interface Context {
   workflowFiles: string[];
   sharedWorkflows: SharedWorkflowUse[];
   buildCommands: BuildCommand[];
+  /** Where problems go: S012's diagnostics, then S013's own while test declarations are read. */
   diagnostics: BuildEvidenceDiagnostic[];
+  testTechnologies: TestTechnologyDeclaration[];
   filesRead: Set<string>;
   limitReported: boolean;
 }
@@ -69,6 +89,7 @@ export async function collectBuildTestEvidence(repoPath: string): Promise<BuildT
     sharedWorkflows: [],
     buildCommands: [],
     diagnostics: [],
+    testTechnologies: [],
     filesRead: new Set(),
     limitReported: false
   };
@@ -95,6 +116,15 @@ export async function collectBuildTestEvidence(repoPath: string): Promise<BuildT
 
   await readDeclarations(context);
   readWorkflows(context);
+  // Test declarations are read last and report their problems separately, so S013's extra reads cannot change
+  // S012's evidence.
+  const diagnostics = context.diagnostics;
+  const filesRead = [...context.filesRead].sort();
+  // A test manifest that was skipped as a symbolic link or outside the repository was not read for S013 either.
+  context.diagnostics = diagnostics.filter(item => TEST_MANIFEST.test(item.path ?? '')).map(item => ({ ...item }));
+  context.limitReported = false;
+  await readTestTechnologies(context, gradleDirectory);
+  const testDiagnostics = context.diagnostics;
 
   return {
     files: context.files,
@@ -102,9 +132,12 @@ export async function collectBuildTestEvidence(repoPath: string): Promise<BuildT
     workflowFiles: context.workflowFiles,
     sharedWorkflows: context.sharedWorkflows,
     buildCommands: context.buildCommands,
-    diagnostics: context.diagnostics,
-    filesRead: [...context.filesRead].sort(),
-    complete: !context.diagnostics.some(item => item.material)
+    diagnostics,
+    filesRead,
+    complete: !diagnostics.some(item => item.material),
+    testTechnologies: context.testTechnologies,
+    testDiagnostics,
+    testComplete: !testDiagnostics.some(item => item.material)
   };
 }
 
@@ -171,6 +204,190 @@ async function readDeclarations(context: Context): Promise<void> {
       const version = content?.split(/\r?\n/).map(line => line.replace(/#.*$/, '').trim()).find(Boolean);
       if (content !== undefined) declare('node', kind, file.path, 'Node.js version', version ?? '');
     }
+  }
+}
+
+// ---- Test technologies (S013) ----
+
+interface TestTechnology {
+  id: string;
+  displayName: string;
+  kind: TestTechnologyKind;
+  /** The npm package whose yarn.lock version is shown (Jest and React Testing Library only; the policy advises versions for them). */
+  versionPackage?: string;
+}
+
+const technology = (id: string, displayName: string, kind: TestTechnologyKind, versionPackage?: string): TestTechnology =>
+  ({ id, displayName, kind, versionPackage });
+const JUNIT = technology('junit', 'JUnit', 'runner');
+const SPOCK = technology('spock', 'Spock', 'runner');
+const JEST = technology('jest', 'Jest', 'runner', 'jest');
+const RTL = technology('react-testing-library', 'React Testing Library', 'library', '@testing-library/react');
+
+/** Maven and Gradle coordinates (group:artifact) of test technologies. */
+const JAVA_TEST_TECHNOLOGIES: Array<[RegExp, TestTechnology]> = [
+  [/^(?:org\.junit\.(?:jupiter|platform|vintage):.+|junit:junit|org\.springframework\.boot:spring-boot-starter-test|io\.vertx:vertx-junit5)$/, JUNIT],
+  // Grails' testing support is built on Spock.
+  [/^(?:org\.spockframework:.+|com\.athaydes:spock-reports|org\.grails:grails-(?:gorm-|web-)?testing-support)$/, SPOCK],
+  [/^org\.testng:testng$/, technology('testng', 'TestNG', 'runner')],
+  [/^io\.rest-assured:.+$/, technology('rest-assured', 'REST Assured', 'library')],
+  [/^org\.testcontainers:.+$/, technology('testcontainers', 'Testcontainers', 'library')],
+  [/^org\.mockito:.+$/, technology('mockito', 'Mockito', 'helper')],
+  [/^org\.assertj:.+$/, technology('assertj', 'AssertJ', 'helper')],
+  [/^(?:com\.github\.tomakehurst:wiremock.*|org\.wiremock:.+)$/, technology('wiremock', 'WireMock', 'helper')],
+  [/^org\.awaitility:.+$/, technology('awaitility', 'Awaitility', 'helper')],
+  [/^com\.intuit\.karate:.+$/, technology('karate', 'Karate', 'integration')]
+];
+
+/** npm package names of test technologies. FOLIO's shared Jest configuration brings Jest and React Testing Library. */
+const JAVASCRIPT_TEST_TECHNOLOGIES: Array<[RegExp, TestTechnology[]]> = [
+  [/^jest$/, [JEST]],
+  [/^@folio\/jest-config-stripes$/, [JEST, RTL]],
+  [/^@testing-library\/react$/, [RTL]],
+  [/^karma$/, [technology('karma', 'Karma', 'runner')]],
+  [/^mocha$/, [technology('mocha', 'Mocha', 'runner')]],
+  [/^@bigtest\//, [technology('bigtest', 'BigTest', 'runner')]],
+  [/^(?:jasmine|jasmine-core)$/, [technology('jasmine', 'Jasmine', 'runner')]],
+  [/^vitest$/, [technology('vitest', 'Vitest', 'runner')]],
+  [/^cypress$/, [technology('cypress', 'Cypress', 'integration')]]
+];
+
+/** Files that can declare test dependencies at the places the collector looks. */
+const TEST_MANIFEST = /^(?:pom\.xml|package\.json|(?:service\/)?(?:build|settings)\.gradle(?:\.kts)?)$/;
+const GRADLE_TEST_CONFIGURATIONS = ['testImplementation', 'testCompileOnly', 'testRuntimeOnly', 'testCompile', 'testRuntime'];
+const POM_MODULE_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+
+/**
+ * Test technologies from the declarations that can bring them: dependencies of the root POM and of the modules it
+ * lists, test configurations of the Gradle build, and package.json dependencies and devDependencies. Versions come
+ * from yarn.lock entries looked up by package name, so no dependency tree is walked.
+ */
+async function readTestTechnologies(context: Context, gradleDirectory: string | undefined): Promise<void> {
+  const add = (match: TestTechnology, ecosystem: TestTechnologyDeclaration['ecosystem'], dependency: string, filePath: string, scope: string) => {
+    context.testTechnologies.push({ id: match.id, displayName: match.displayName, kind: match.kind, ecosystem, dependency, path: filePath, scope });
+  };
+  const addJava = (coordinates: string, filePath: string, scope: string) => {
+    const match = JAVA_TEST_TECHNOLOGIES.find(([pattern]) => pattern.test(coordinates));
+    if (match) add(match[1], 'java', coordinates, filePath, scope);
+  };
+
+  if (context.files.some(file => file.kind === 'maven-pom')) {
+    // The root POM and the modules it builds, one level down. Anything this does not read (deeper modules, modules
+    // in profiles, a module that cannot be found) could declare another runner, so it leaves the evidence incomplete.
+    const poms = new Set(['pom.xml']);
+    for (const pom of poms) {
+      const root = pom === 'pom.xml';
+      if (!root && !isRegularFile(context, pom)) {
+        if (!context.diagnostics.some(item => item.path === pom)) {
+          addDiagnostic(context, 'not_read', 'Is the POM of a module the root pom.xml lists, but it is not a file in the repository, so its test dependencies were not read.', pom);
+        }
+        continue;
+      }
+      const content = readText(context, pom);
+      if (content === undefined) continue;
+      const parsed = await parsePom(content);
+      if (!parsed.ok) {
+        malformed(context, pom, parsed.reason === 'invalid-xml' ? `Not valid XML (${parsed.message}).` : 'Has no <project> element.');
+        continue;
+      }
+      for (const dependency of pomDependencies(parsed.project.dependencies?.dependency)) {
+        addJava(`${dependency.groupId}:${dependency.artifactId}`, pom, dependency.scope || 'compile');
+      }
+      const modules = asArray(parsed.project.modules?.module).map(xmlText);
+      if (asArray(parsed.project.profiles?.profile).some(profile => profile?.modules)) {
+        addDiagnostic(context, 'not_read', 'Lists modules inside a profile, whose test dependencies were not read.', pom);
+      }
+      if (!root) {
+        if (modules.length) addDiagnostic(context, 'not_read', 'Lists modules of its own, whose test dependencies were not read.', pom);
+        continue;
+      }
+      for (const module of modules) {
+        const directory = module.replace(/\/+$/, '');
+        if (!directory || !directory.split('/').every(segment => POM_MODULE_SEGMENT.test(segment))) {
+          addDiagnostic(context, 'value_unreadable', `Lists the module "${module.slice(0, 100)}", which is not a plain folder name, so its test dependencies were not read.`, pom);
+        } else if (poms.size > MAX_FILES) {
+          addDiagnostic(context, 'file_limit', `Lists more than ${MAX_FILES} modules; the rest were not read.`, pom);
+          break;
+        } else {
+          poms.add(`${directory}/pom.xml`);
+        }
+      }
+    }
+  }
+
+  if (gradleDirectory !== undefined) {
+    // Subprojects have build files of their own, which are not read.
+    for (const settings of ['settings.gradle', 'settings.gradle.kts'].map(file => path.posix.join(gradleDirectory, file))) {
+      const content = isRegularFile(context, settings) ? readText(context, settings) : undefined;
+      if (content !== undefined && /^\s*include\b/m.test(stripGradleComments(content))) {
+        addDiagnostic(context, 'not_read', 'Includes Gradle subprojects, whose test dependencies were not read.', settings);
+      }
+    }
+    for (const file of context.files.filter(item => item.kind === 'gradle-build')) {
+      const content = readText(context, file.path);
+      if (content === undefined) continue;
+      for (const declaration of scanGradleDeclarations(stripGradleComments(content), GRADLE_TEST_CONFIGURATIONS)) {
+        const coordinates = gradleCoordinates(declaration.expression);
+        if (coordinates) addJava(coordinates, file.path, declaration.configuration);
+      }
+    }
+  }
+
+  const packageJson = context.files.find(file => file.kind === 'package-json');
+  const content = packageJson && readText(context, packageJson.path);
+  if (packageJson && content !== undefined) {
+    const parsed = parsePackageJson(content);
+    if (!parsed.ok) {
+      malformed(context, packageJson.path, `Not valid JSON (${parsed.message}).`);
+    } else {
+      for (const entry of packageDependencyEntries(parsed.manifest, ['dependencies', 'devDependencies'])) {
+        if (!('name' in entry)) {
+          malformed(context, packageJson.path, `Its ${entry.field} is not an object of package names, so its test dependencies were not read.`);
+          continue;
+        }
+        for (const match of JAVASCRIPT_TEST_TECHNOLOGIES.find(([pattern]) => pattern.test(entry.name))?.[1] ?? []) {
+          add(match, 'javascript', entry.name, packageJson.path, entry.field);
+        }
+      }
+    }
+  }
+  readTestVersions(context);
+}
+
+/** group:artifact of a Gradle dependency written as one 'group:artifact[:version]' literal or as group: and name: entries. */
+function gradleCoordinates(expression: string): string | undefined {
+  const literal = quotedGradleLiteral(splitGradleArguments(expression)[0] ?? '');
+  if (literal !== undefined) {
+    const [group, artifact] = literal.split(':');
+    return group && artifact ? `${group}:${artifact}` : undefined;
+  }
+  const group = /\bgroup\s*:\s*['"]([^'"]+)['"]/.exec(expression)?.[1];
+  const name = /\bname\s*:\s*['"]([^'"]+)['"]/.exec(expression)?.[1];
+  return group && name ? `${group}:${name}` : undefined;
+}
+
+/**
+ * The yarn.lock versions of Jest and React Testing Library. They are advice only, so a lockfile that cannot be read
+ * leaves the versions out without making the test evidence incomplete.
+ */
+function readTestVersions(context: Context): void {
+  const wanted = context.testTechnologies.filter(item => item.ecosystem === 'javascript'
+    && JAVASCRIPT_TEST_TECHNOLOGIES.some(([, matches]) => matches.some(match => match.id === item.id && match.versionPackage)));
+  const lockfile = context.files.find(file => file.kind === 'yarn-lock');
+  if (!wanted.length || !lockfile) return;
+  const before = context.diagnostics.length;
+  const content = readText(context, lockfile.path);
+  const parsed = content === undefined ? undefined : parseYarnLockfile(content);
+  if (parsed && parsed.format !== 'v1') {
+    malformed(context, lockfile.path, parsed.format === 'berry'
+      ? 'Is a Yarn 2+ lockfile, which the tool cannot read, so Jest and React Testing Library versions are not shown.'
+      : 'Could not be read as a Yarn 1 lockfile, so Jest and React Testing Library versions are not shown.');
+  }
+  for (const diagnostic of context.diagnostics.slice(before)) diagnostic.material = false;
+  if (parsed?.format !== 'v1') return;
+  for (const item of wanted) {
+    const versionPackage = JAVASCRIPT_TEST_TECHNOLOGIES.flatMap(([, matches]) => matches).find(match => match.id === item.id)!.versionPackage!;
+    item.versions = yarnLockVersionsByName(parsed.entries, versionPackage);
   }
 }
 
@@ -536,7 +753,8 @@ function safeReaddir(context: Context, relativePath: string): string[] {
 
 /** The file's text, or only its first prefixBytes when given. Call only after isRegularFile accepted the path. */
 function readText(context: Context, relativePath: string, prefixBytes?: number): string | undefined {
-  if (context.filesRead.size >= MAX_FILES) {
+  // A file read once may be read again (S013 re-reads pom.xml) without counting against the budget.
+  if (!context.filesRead.has(relativePath) && context.filesRead.size >= MAX_FILES) {
     if (!context.limitReported) {
       addDiagnostic(context, 'file_limit', `Stopped after reading ${MAX_FILES} build and workflow files; the rest were not read.`);
       context.limitReported = true;

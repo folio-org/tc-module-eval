@@ -1,5 +1,6 @@
 import { parseStringPromise } from 'xml2js';
 import { parse as parseYarnLock } from '@yarnpkg/lockfile';
+import semver from 'semver';
 
 // Pure parsers for build and package files: text in, declarations out. They read no files and run no commands,
 // so the S007, S009 and S012 collectors decide what to read, how much, and what a parse failure means for them.
@@ -223,6 +224,21 @@ export function yarnLockVersion(entries: Record<string, { version?: unknown }>, 
     }
   }
   return undefined;
+}
+
+/**
+ * Every version a Yarn 1 lockfile resolves for a package name, whatever range asked for it and wherever it sits in
+ * the dependency tree, without duplicates and lowest first. "jest" matches jest@^29.7.0, not jest-cli@^29.7.0.
+ */
+export function yarnLockVersionsByName(entries: Record<string, { version?: unknown }>, name: string): string[] {
+  const versions = new Set<string>();
+  for (const [combinedSelectors, resolution] of Object.entries(entries)) {
+    const selectors = combinedSelectors.split(/,\s*/).map(value => value.replace(/^"|"$/g, ''));
+    if (selectors.some(selector => selector.startsWith(`${name}@`)) && typeof resolution.version === 'string') {
+      versions.add(resolution.version);
+    }
+  }
+  return [...versions].sort((left, right) => semver.valid(left) && semver.valid(right) ? semver.compare(left, right) : left.localeCompare(right));
 }
 
 // ---- Gradle build scripts ----

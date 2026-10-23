@@ -124,11 +124,37 @@ export interface BuildCommand {
 }
 
 export interface BuildEvidenceDiagnostic {
-  code: 'file_too_large' | 'symlink_not_followed' | 'outside_repository' | 'read_error' | 'malformed' | 'file_limit' | 'command_limit' | 'value_unreadable';
+  code: 'file_too_large' | 'symlink_not_followed' | 'outside_repository' | 'read_error' | 'malformed' | 'file_limit' | 'command_limit' | 'value_unreadable' | 'not_read';
   message: string;
   path?: string;
   /** A material problem leaves the evidence incomplete. */
   material: boolean;
+}
+
+/**
+ * What a test dependency is for S013: a unit-test runner, a testing library the supported-technologies page lists
+ * (React Testing Library, REST Assured, Testcontainers), a helper the page does not govern (Mockito, AssertJ), or an
+ * integration or end-to-end tool that does not count for unit tests (Cypress, Karate).
+ */
+export type TestTechnologyKind = 'runner' | 'library' | 'helper' | 'integration';
+
+/** One dependency declaration that shows a test technology. */
+export interface TestTechnologyDeclaration {
+  /** The technology, such as junit, jest, spock or react-testing-library. */
+  id: string;
+  displayName: string;
+  kind: TestTechnologyKind;
+  ecosystem: 'java' | 'javascript';
+  /** The declared dependency, such as org.junit.jupiter:junit-jupiter or @folio/jest-config-stripes. */
+  dependency: string;
+  path: string;
+  /** Maven scope, Gradle configuration or package.json field. */
+  scope: string;
+  /**
+   * JavaScript only: the versions yarn.lock resolves for the technology's own package (jest,
+   * @testing-library/react), wherever it sits in the tree. Absent when there is no readable Yarn 1 lockfile.
+   */
+  versions?: string[];
 }
 
 export interface BuildTestEvidence {
@@ -140,7 +166,16 @@ export interface BuildTestEvidence {
   diagnostics: BuildEvidenceDiagnostic[];
   filesRead: string[];
   complete: boolean;
+  /** Test technologies from test-scope declarations (S013). */
+  testTechnologies: TestTechnologyDeclaration[];
+  /** Problems reading the test declarations. Kept apart from `diagnostics` so they cannot change S012. */
+  testDiagnostics: BuildEvidenceDiagnostic[];
+  /** Whether every manifest that can declare test dependencies was read. */
+  testComplete: boolean;
 }
+
+/** The build half of the evidence, which S012 reads and reports. */
+export type BuildEvidence = Omit<BuildTestEvidence, 'testTechnologies' | 'testDiagnostics' | 'testComplete'>;
 
 // ---- S012 analysis ----
 
@@ -212,5 +247,5 @@ export interface S012AnalysisResult {
   policy?: { sourcePath: string; title?: string; documentStatus?: string; exportDate?: string };
   sharedWorkflowTable?: { sourcePath: string; ref: string; reviewedAt: string };
   policyDiagnostics: S007PolicyDiagnostic[];
-  evidence: BuildTestEvidence;
+  evidence: BuildEvidence;
 }

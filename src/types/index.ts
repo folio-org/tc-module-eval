@@ -198,6 +198,7 @@ export * from './s010-third-party-resilience';
 export * from './s011-sonarqube';
 export * from './sonarcloud-snapshot';
 export * from './s012-build-tools';
+export * from './s013-test-coverage';
 export * from './s014-application-assignment';
 export * from './remote-evidence';
 

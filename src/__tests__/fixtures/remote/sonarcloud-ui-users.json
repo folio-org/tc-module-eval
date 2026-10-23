@@ -1,0 +1,669 @@
+{
+  "capturedAt": "2026-10-23T12:35:48.482Z",
+  "description": "SonarCloud org.folio:ui-users as S011 reads it, evaluated at ui-users commit 31d7f0f35f69c87fe1fa9fdf68c1c2f479e551b1, trimmed to the fields the evaluator reads",
+  "responses": {
+    "https://sonarcloud.io/api/ce/component?component=org.folio%3Aui-users": {
+      "status": 200,
+      "body": {
+        "queue": [],
+        "current": {
+          "id": "AaFkRGc6UGXTkGrImCjY",
+          "type": "REPORT",
+          "componentId": "AWZkCtkzYzAYGqvLqi8Z",
+          "componentKey": "org.folio:ui-users",
+          "componentName": "ui-users",
+          "componentQualifier": "TRK",
+          "analysisId": "73ea24f3-8b43-4c2c-b803-dd7671811ec0",
+          "status": "SUCCESS",
+          "submittedAt": "2026-10-22T15:39:26+0000",
+          "submitterLogin": "ankitasen-ubmainz@github",
+          "startedAt": "2026-10-22T15:39:27+0000",
+          "executedAt": "2026-10-22T15:39:32+0000",
+          "executionTimeMs": 5076,
+          "logs": false,
+          "hasScannerContext": true,
+          "organization": "folio-org",
+          "branch": "master",
+          "branchType": "LONG",
+          "warningCount": 0,
+          "warnings": []
+        }
+      }
+    },
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Aui-users": {
+      "status": 200,
+      "body": {
+        "component": {
+          "organization": "folio-org",
+          "key": "org.folio:ui-users",
+          "name": "ui-users",
+          "qualifier": "TRK",
+          "analysisDate": "2026-10-22T15:38:32+0000",
+          "tags": [
+            "users",
+            "dev-core-functional"
+          ],
+          "visibility": "public",
+          "leakPeriodDate": "2026-09-21T08:45:02+0000",
+          "version": "not provided"
+        },
+        "ancestors": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-users&status=REVIEWED&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-users&status=TO_REVIEW&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-users&issueStatuses=ACCEPTED%2CFALSE_POSITIVE&facets=issueStatuses&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "issues": [],
+        "facets": [
+          {
+            "property": "issueStatuses",
+            "values": [
+              {
+                "val": "OPEN",
+                "count": 422
+              },
+              {
+                "val": "CONFIRMED",
+                "count": 0
+              },
+              {
+                "val": "FALSE_POSITIVE",
+                "count": 0
+              },
+              {
+                "val": "ACCEPTED",
+                "count": 0
+              },
+              {
+                "val": "FIXED",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-users&issueStatuses=OPEN%2CCONFIRMED&impactSeverities=HIGH%2CBLOCKER&facets=rules&ps=500&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 11,
+        "p": 1,
+        "ps": 500,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 500,
+          "total": 11
+        },
+        "issues": [
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-users:src/components/Wrappers/withUserRoles.js",
+            "line": 169,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-users:src/components/Wrappers/withUserRoles.js",
+            "line": 83,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-users:src/components/Wrappers/withUserRoles.js",
+            "line": 73,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S3516",
+            "component": "org.folio:ui-users:src/hooks/useAllRolesData/useAllRolesData.js",
+            "line": 30,
+            "message": "Refactor this function to not always return the same value.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S7761",
+            "component": "org.folio:ui-users:src/components/PrintLibraryCardButton/PrintLibraryCardButton.js",
+            "line": 117,
+            "message": "Prefer `.dataset` over `setAttribute(…)`.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-users:src/components/Wrappers/withRenew.js",
+            "line": 129,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S3776",
+            "component": "org.folio:ui-users:src/views/UserEdit/UserEditHelpers.js",
+            "line": 3,
+            "message": "Refactor this function to reduce its Cognitive Complexity from 25 to the 15 allowed.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-users:src/components/util/refundTransferClaimReturned.js",
+            "line": 230,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S3776",
+            "component": "org.folio:ui-users:src/views/AccountDetails/AccountDetails.js",
+            "line": 422,
+            "message": "Refactor this function to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S3776",
+            "component": "org.folio:ui-users:src/views/LoanDetails/LoanDetails.js",
+            "line": 406,
+            "message": "Refactor this function to reduce its Cognitive Complexity from 21 to the 15 allowed.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S7746",
+            "component": "org.folio:ui-users:src/settings/patronBlocks/Limits/Limits.js",
+            "line": 230,
+            "message": "Prefer `throw error` over `return Promise.reject(error)`.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          }
+        ],
+        "facets": [
+          {
+            "property": "rules",
+            "values": [
+              {
+                "val": "javascript:S2004",
+                "count": 5
+              },
+              {
+                "val": "javascript:S3776",
+                "count": 3
+              },
+              {
+                "val": "javascript:S7746",
+                "count": 1
+              },
+              {
+                "val": "javascript:S7761",
+                "count": 1
+              },
+              {
+                "val": "javascript:S3516",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-users&issueStatuses=OPEN%2CCONFIRMED&impactSoftwareQualities=SECURITY&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "issues": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-users&issueStatuses=OPEN%2CCONFIRMED&types=VULNERABILITY&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 1,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 0
+        },
+        "issues": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/measures/component?component=org.folio%3Aui-users&metricKeys=coverage%2Cline_coverage%2Cbranch_coverage%2Clines_to_cover%2Cuncovered_lines%2Cconditions_to_cover%2Cuncovered_conditions%2Cduplicated_lines_density&branch=master": {
+      "status": 200,
+      "body": {
+        "component": {
+          "id": "AWZkCtkzYzAYGqvLqi8Z",
+          "key": "org.folio:ui-users",
+          "name": "ui-users",
+          "qualifier": "TRK",
+          "measures": [
+            {
+              "metric": "coverage",
+              "value": "77.5",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_conditions",
+              "value": "1544",
+              "bestValue": false
+            },
+            {
+              "metric": "duplicated_lines_density",
+              "value": "0.6",
+              "bestValue": false
+            },
+            {
+              "metric": "lines_to_cover",
+              "value": "9359"
+            },
+            {
+              "metric": "branch_coverage",
+              "value": "67.1",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_lines",
+              "value": "1620",
+              "bestValue": false
+            },
+            {
+              "metric": "line_coverage",
+              "value": "82.7",
+              "bestValue": false
+            },
+            {
+              "metric": "conditions_to_cover",
+              "value": "4688"
+            }
+          ]
+        }
+      }
+    },
+    "https://sonarcloud.io/api/navigation/component?component=org.folio%3Aui-users": {
+      "status": 200,
+      "body": {
+        "key": "org.folio:ui-users",
+        "organization": "folio-org",
+        "organizationName": "folio-org",
+        "id": "AWZkCtkzYzAYGqvLqi8Z",
+        "name": "ui-users",
+        "isFavorite": false,
+        "badgeToken": "12be8cfe60de43ee97aea57f4d37a6d142054486",
+        "createdAt": "2018-10-11T18:52:04+0000",
+        "visibility": "public",
+        "version": "not provided",
+        "analysisDate": "2026-10-22T15:38:32+0000",
+        "ciName": "Github Actions",
+        "analysisDateAllBranches": "2026-10-22T15:38:32+0000",
+        "qualityProfiles": [
+          {
+            "key": "AWtMlysOeA8Wl0oXGh3y",
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "deleted": false
+          }
+        ],
+        "qualityGate": {
+          "key": 9,
+          "name": "Sonar way",
+          "isDefault": true
+        },
+        "breadcrumbs": [
+          {
+            "key": "org.folio:ui-users",
+            "name": "ui-users",
+            "qualifier": "TRK"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_analyses/search?project=org.folio%3Aui-users&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 27
+        },
+        "analyses": [
+          {
+            "key": "73ea24f3-8b43-4c2c-b803-dd7671811ec0",
+            "date": "2026-10-22T15:38:32+0000",
+            "events": [
+              {
+                "key": "AaFkRHdJqmd_S4Gdsbup",
+                "category": "VERSION",
+                "name": "not provided"
+              },
+              {
+                "key": "AaFkRHdCqmd_S4Gdsbuo",
+                "category": "QUALITY_PROFILE",
+                "name": "Changes in 'FOLIO-JS Sonar Way' (js)"
+              }
+            ],
+            "projectVersion": "not provided",
+            "manualNewCodePeriodBaseline": false,
+            "revision": "31d7f0f35f69c87fe1fa9fdf68c1c2f479e551b1"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_branches/list?project=org.folio%3Aui-users": {
+      "status": 200,
+      "body": {
+        "branches": [
+          {
+            "name": "master",
+            "isMain": true
+          },
+          {
+            "name": "release-11.0.14",
+            "isMain": false
+          },
+          {
+            "name": "release-v11.0.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v10.0.5",
+            "isMain": false
+          },
+          {
+            "name": "release-v10.0.4",
+            "isMain": false
+          },
+          {
+            "name": "release-v10.0.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v10.0.1",
+            "isMain": false
+          },
+          {
+            "name": "release-8.2.5",
+            "isMain": false
+          },
+          {
+            "name": "release-v8.1.4",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.1.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.1.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.7",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.1.0",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.6",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.5",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.4",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.3",
+            "isMain": false
+          },
+          {
+            "name": "release-6.0.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v6.0.0",
+            "isMain": false
+          },
+          {
+            "name": "release-v5.0.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v5.0.0",
+            "isMain": false
+          },
+          {
+            "name": "release-v4.0.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v4.0.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v4.0.0",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.6",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.5",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.4",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.3",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v3.0.0",
+            "isMain": false
+          },
+          {
+            "name": "release-v2.26.3",
+            "isMain": false
+          },
+          {
+            "name": "release-2.26.2",
+            "isMain": false
+          },
+          {
+            "name": "release-v2.26.1",
+            "isMain": false
+          },
+          {
+            "name": "release-2.26.0-1",
+            "isMain": false
+          },
+          {
+            "name": "release-2.26.0",
+            "isMain": false
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/qualityprofiles/search?project=org.folio%3Aui-users&organization=folio-org": {
+      "status": 200,
+      "body": {
+        "profiles": [
+          {
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/rules/search?organization=folio-org&rule_keys=javascript%3AS2004%2Cjavascript%3AS3516%2Cjavascript%3AS3776%2Cjavascript%3AS7746%2Cjavascript%3AS7761&f=name&ps=100": {
+      "status": 200,
+      "body": {
+        "total": 5,
+        "p": 1,
+        "ps": 100,
+        "rules": [
+          {
+            "key": "javascript:S2004",
+            "name": "Functions should not be nested too deeply",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S3776",
+            "name": "Cognitive Complexity of functions should not be too high",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S3516",
+            "name": "Function returns should not be invariant",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S7761",
+            "name": "Data attributes should be accessed using \".dataset\"",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S7746",
+            "name": "Promise.resolve() and Promise.reject() should not be used in async functions or promise callbacks",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
