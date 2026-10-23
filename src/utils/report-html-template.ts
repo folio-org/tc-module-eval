@@ -1,7 +1,8 @@
-import { EvaluationResult, S007AnalysisResult } from '../types';
+import { EvaluationResult, S006ReportDetails, S007AnalysisResult, S010Analysis } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
 import { redactSensitiveText } from './redaction';
 import { reportText } from './report-text';
+import { s010AgentReviewNames } from './s010-report-details';
 import { citedTrackedFiles } from '../module-evaluator';
 
 const CRITERION_TITLES: Record<string, string> = {
@@ -155,10 +156,15 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
     ];
     return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails, ...details];
   }
+  // The subject names each criterion's own report uses, so the rows match the rest of its details.
   const names = criterion.criterionId === 'S007'
     ? Object.fromEntries(((criterion.criterionDetails as S007AnalysisResult | undefined)?.findings ?? [])
       .map(finding => [finding.technologyId, finding.displayName]))
-    : {};
+    : criterion.criterionId === 'S006'
+      ? (criterion.criterionDetails as S006ReportDetails | undefined)?.agentReviewSubjectNames ?? {}
+      : criterion.criterionId === 'S010' && criterion.criterionDetails
+        ? s010AgentReviewNames(criterion.criterionDetails as S010Analysis)
+        : {};
   return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
 }
 
@@ -409,18 +415,20 @@ export function createHtmlReport(result: EvaluationResult): string {
         tree[agentIndex].children.forEach(function (node) {
           var prose = node.text.match(/^(?:Summary|Rationale):\s+(.+)$/s);
           node.showFullText = !!prose && prose[1].trim().split(/\s+/).length <= 100;
-          if (node.text === 'Sources:') node.unit = 'sources';
+          if (node.text === 'Sources:') node.unit = node.children.length === 1 ? 'source' : 'sources';
         });
       }
       if (agentIndex >= 0) {
         tree[agentIndex].children.forEach(function (group) {
           if (!/^(Findings|What to verify):?$/.test(group.text)) return;
           group.openByDefault = true;
-          group.unit = /^Findings/.test(group.text) ? 'findings' : 'checks';
+          group.unit = /^Findings/.test(group.text)
+            ? (group.children.length === 1 ? 'finding' : 'findings')
+            : (group.children.length === 1 ? 'check' : 'checks');
           group.children.forEach(function (finding) {
             finding.hideCount = true;
             finding.children.forEach(function (detail) {
-              if (detail.text === 'Sources:') detail.unit = 'sources';
+              if (detail.text === 'Sources:') detail.unit = detail.children.length === 1 ? 'source' : 'sources';
             });
           });
         });
@@ -515,7 +523,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       ['pass','fail','manual','not_applicable'].forEach(function (key) { if (!counts[key]) return; var segment=h('div'); segment.style.width=(counts[key]/total*100)+'%'; segment.style.background=tone[key].dot; bar.appendChild(segment); }); summary.appendChild(bar);
       var bottom=h('div','summary-bottom'); [['pass','Passed'],['fail','Failed'],['manual','Manual review'],['not_applicable','Not applicable']].forEach(function (entry) {
         var legend=h('div','legend'); var square=h('span','legend-dot'); square.style.background=tone[entry[0]].dot; var number=h('span','legend-number'+(counts[entry[0]]?'':' zero'),String(counts[entry[0]]||0)); legend.append(square,number,h('span','legend-label',entry[1])); bottom.appendChild(legend);
-      }); bottom.appendChild(h('span','summary-note',items.length+' criteria · '+countTriage('review')+' with automated findings · '+countTriage('human')+' without an automated check')); summary.appendChild(bottom); header.appendChild(summary); main.appendChild(header);
+      }); bottom.appendChild(h('span','summary-note',items.length+(items.length===1?' criterion · ':' criteria · ')+countTriage('review')+' with automated findings · '+countTriage('human')+' without an automated check')); summary.appendChild(bottom); header.appendChild(summary); main.appendChild(header);
     }
 
     function segments(text) {

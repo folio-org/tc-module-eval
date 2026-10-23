@@ -222,7 +222,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: analysis.classification.status,
       evidence: rendered.evidence,
       details: rendered.details,
-      criterionDetails: buildS006CriterionDetails(analysis),
+      criterionDetails: buildS006CriterionDetails(analysis, agentReview),
       agentReview
     };
   }

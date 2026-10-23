@@ -21,6 +21,7 @@ import {
   S006_CONTEXT_LABELS_PLAIN,
   S006_DETECTOR_TAGS,
   S006_SKIPPED_REASON_LABELS,
+  s006AgentReviewSubjectNames,
   s006AssignedName
 } from './s006-report-details';
 import { MAX_S006_SCAN_BYTES_PER_FILE } from './s006-scanner';
@@ -241,9 +242,6 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    // Name each finding by its location so the advice can be matched to the rows above.
-    const findingNames = Object.fromEntries(analysis.findings.map((finding, index) =>
-      [`finding:${index}`, `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`]));
     // Agent prose may quote a value it read, so it is redacted like the rest of the S006 report.
     const redacted: CriterionAgentReviewResult = {
       ...agentReview,
@@ -252,7 +250,7 @@ function appendAgentReviewLines(
       assessments: agentReview.assessments?.map(item => ({ ...item, summary: redactSensitiveText(item.summary) })),
       reviewerActions: agentReview.reviewerActions?.map(item => ({ ...item, action: redactSensitiveText(item.action) }))
     };
-    lines.push('', ...renderAgentReviewLines(redacted, findingNames), '  - Advisory only; the S006 result stays Manual review.');
+    lines.push('', ...renderAgentReviewLines(redacted, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the S006 result stays Manual review.');
     return;
   }
 

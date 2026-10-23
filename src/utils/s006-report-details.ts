@@ -1,4 +1,5 @@
 import {
+  CriterionAgentReviewResult,
   S006DetectorId,
   S006FindingCategory,
   S006FindingConfidence,
@@ -16,6 +17,7 @@ import {
   rankS006Severity,
   strongestS006ReportFindings
 } from './s006-ranking';
+import { reportPath } from './report-text';
 
 const MAX_CRITERION_FINDINGS = 16;
 const MAX_CRITERION_SKIPPED_FILES = 40;
@@ -69,7 +71,8 @@ export const S006_SKIPPED_REASON_LABELS: Record<S006SkippedFile['reason'], strin
 };
 
 export function buildS006CriterionDetails(
-  analysis: S006SensitiveInformationAnalysisResult
+  analysis: S006SensitiveInformationAnalysisResult,
+  agentReview?: CriterionAgentReviewResult
 ): S006ReportDetails {
   const projectedFindings = strongestS006ReportFindings(analysis.findings, MAX_CRITERION_FINDINGS)
     .map(projectS006ReportFinding);
@@ -106,8 +109,20 @@ export function buildS006CriterionDetails(
       findingReferences: analysis.classification.findingReferences.slice(0, MAX_CRITERION_FINDINGS)
     },
     warnings: analysis.warnings.slice(0, MAX_CRITERION_WARNINGS),
-    agentReviewUnavailableReason: analysis.agentReviewUnavailableReason
+    agentReviewUnavailableReason: analysis.agentReviewUnavailableReason,
+    agentReviewSubjectNames: agentReview?.available ? s006AgentReviewSubjectNames(analysis, agentReview) : undefined
   };
+}
+
+/** Names each scanner finding the agent assessed (`finding:N`) by its location, so the advice can be matched to report rows. */
+export function s006AgentReviewSubjectNames(
+  analysis: S006SensitiveInformationAnalysisResult,
+  agentReview: CriterionAgentReviewResult
+): Record<string, string> {
+  return Object.fromEntries((agentReview.assessments ?? []).flatMap(({ technologyId }) => {
+    const finding = /^finding:\d+$/.test(technologyId) ? analysis.findings[Number(technologyId.slice(8))] : undefined;
+    return finding ? [[technologyId, `${reportPath(finding.path)}${finding.line === undefined ? '' : `:${finding.line}`}`]] : [];
+  }));
 }
 
 /** The sole projection from internal detector evidence into shareable report data. */

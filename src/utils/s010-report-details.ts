@@ -78,7 +78,7 @@ export function renderS010HumanDetails(
   }
   lines.push(...warningLines(analysis.diagnostics));
   if (agentReview?.available) {
-    lines.push(...renderAgentReviewLines(agentReview, agentReviewNames(analysis)));
+    lines.push(...renderAgentReviewLines(agentReview, s010AgentReviewNames(analysis)));
     lines.push('  - The automated result stays Manual review.');
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
@@ -98,8 +98,13 @@ export function s010ServiceName(finding: S010Finding): string | undefined {
   return isClientFinding(finding) ? 'other service clients' : shorten(finding.dependencyId);
 }
 
+// Dependency ids can come from repository file and setting names, such as "constructor".
+function isKnownService(dependencyId: string): boolean {
+  return Object.prototype.hasOwnProperty.call(SERVICE_NAMES, dependencyId);
+}
+
 function serviceName(dependencyId: string): string {
-  return SERVICE_NAMES[dependencyId] ?? dependencyId;
+  return isKnownService(dependencyId) ? SERVICE_NAMES[dependencyId] : dependencyId;
 }
 
 function coverageLabel(coverage: S010Coverage): string {
@@ -112,7 +117,7 @@ function coverageLabel(coverage: S010Coverage): string {
 
 // Finding ids look like `dependency:subject/scenario`; the subject (config key, file, or
 // interface) is what tells otherwise identical scenario rows apart.
-function findingSubject(finding: S010Finding): string {
+function findingSubject(finding: Pick<S010Finding, 'id'>): string {
   return finding.id.match(/^[^:/]+:(.+)\/[^/]+$/)?.[1] ?? '';
 }
 
@@ -123,7 +128,7 @@ function groupKey(finding: S010Finding): string {
 }
 
 // Java client scenarios are named after the class that uses the client, not after a known service.
-function isClientFinding(finding: S010Finding): boolean {
+function isClientFinding(finding: Pick<S010Finding, 'id' | 'dependencyId' | 'scenario'>): boolean {
   const subject = findingSubject(finding);
   return finding.scenario === 'runtime-unavailable' && subject !== '' && !/:\d+$/.test(subject)
     && !finding.dependencyId.startsWith('folio-interface:');
@@ -255,9 +260,23 @@ function sourceWarningText(diagnostic: S010Diagnostic): string | undefined {
   }
 }
 
-function agentReviewNames(analysis: S010Analysis): Record<string, string> {
+/** Names for the dependency ids the agent assesses, as the rows above name them. */
+export function s010AgentReviewNames(analysis: S010Analysis): Record<string, string> {
+  const services = new Set<string>();
+  const clientFiles = new Map<string, Set<string>>();
+  for (const scenario of analysis.evidence.scenarios) {
+    if (isClientFinding(scenario) && !isKnownService(scenario.dependencyId)) {
+      clientFiles.set(scenario.dependencyId, (clientFiles.get(scenario.dependencyId) ?? new Set<string>())
+        .add(path.basename(findingSubject(scenario))));
+    } else {
+      services.add(scenario.dependencyId);
+    }
+  }
   return Object.fromEntries([
     ['folio-interfaces', 'FOLIO interfaces'],
-    ...analysis.evidence.scenarios.map(scenario => [scenario.dependencyId, serviceName(scenario.dependencyId)])
+    ...[...services].map(id => [id, serviceName(id)]),
+    // A client class's id is made from its file name, so name it by the file, as its row does.
+    ...[...clientFiles].filter(([id]) => !services.has(id))
+      .map(([id, files]) => [id, `${files.size === 1 ? 'Service' : 'Services'} called from ${list([...files])}`])
   ]);
 }
