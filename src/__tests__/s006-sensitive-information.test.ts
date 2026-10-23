@@ -2205,6 +2205,58 @@ describe('S006 reviewer decisions', () => {
     expect(rendered.details).toContain('  - Note: the repository has a .gitleaksignore file, which tells Gitleaks to skip the findings it lists. Check that it does not hide a real secret.');
   });
 
+  it('keeps a stronger built-in finding and a different value on the same line instead of merging them', async () => {
+    writeRepoFile(repoPath, 'src/client.js', 'const apiKey = "Zq8vT3kL9mN2pR7x", endpoint = "https://admin:Zq8vT3kL9mN2pR7x@api.library.edu";\n');
+    writeRepoFile(repoPath, 'config/app.properties', 'first.password="Zq8vT3kL9mN2pR7x" second.password="Zq8vT3kL9mN2pR7x-rotated"\n');
+    writeRepoFile(repoPath, 'config/remote.conf', 'remote.url = "https://deploy:Wm4nB7xQ2rT9kL5p@repo.library.edu/releases"\n');
+
+    const result = await analyzeWithGitleaksReport([
+      { RuleID: 'generic-api-key', File: 'src/client.js', StartLine: 1, Match: 'apiKey = "Zq8vT3kL9mN2pR7x"', Secret: 'Zq8vT3kL9mN2pR7x', Entropy: 3.9 },
+      { RuleID: 'generic-api-key', File: 'config/app.properties', StartLine: 1, Match: 'first.password="Zq8vT3kL9mN2pR7x"', Secret: 'Zq8vT3kL9mN2pR7x', Entropy: 3.9 },
+      // Same value as the built-in credential URL, but Gitleaks' generic rule alone does not fail S006.
+      { RuleID: 'generic-api-key', File: 'config/remote.conf', StartLine: 1, Match: 'remote.url = "https://deploy:Wm4nB7xQ2rT9kL5p@repo.library.edu/releases"', Secret: 'https://deploy:Wm4nB7xQ2rT9kL5p@repo.library.edu/releases', Entropy: 4.4 }
+    ]);
+
+    expect(result.findings.filter(finding => finding.detectorId === 'credential-url').map(finding => [finding.path, finding.statusImpact])).toEqual([
+      ['config/remote.conf', 'deterministic_fail'],
+      ['src/client.js', 'deterministic_fail']
+    ]);
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings.filter(finding => finding.path === 'config/app.properties').map(finding => finding.excerpt.text.split('=')[0]).sort())
+      .toEqual(['first.password', 'second.password']);
+  });
+
+  it('treats files in .buildkite and CI files under scripts/ as CI, not helper scripts', async () => {
+    writeRepoFile(repoPath, '.buildkite/release.sh', 'curl https://admin:Zq8vT3kL9mN2pR7x@api.library.edu/deploy\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.find(finding => finding.detectorId === 'credential-url')).toMatchObject({
+      context: 'ci_or_deployment_configuration',
+      statusImpact: 'deterministic_fail'
+    });
+    expect(classifyS006SourceContext('scripts/Jenkinsfile')).toBe('ci_or_deployment_configuration');
+  });
+
+  it('only treats a value as a header name when the constant is named as a header or the value is a known header', async () => {
+    writeRepoFile(repoPath, 'config/app.properties', 'db.password=X-AbbaAbbaAbbaAbba\nauth.header.token=QwErTyUiOpAsDfGhJkLz\nauthHeaderName=Authorization\nokapi.token=X-Okapi-Token\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`)).toEqual(['config/app.properties:1', 'config/app.properties:2']);
+  });
+
+  it('counts the bytes read from binary files toward the total read limit, reading only a short probe of each', async () => {
+    for (let index = 0; index < 20; index++) {
+      writeRepoBinaryFile(repoPath, `config/blob${String(index).padStart(2, '0')}`, Buffer.alloc(MAX_S006_SCAN_BYTES_PER_FILE));
+    }
+
+    const result = scanS006RepositoryCandidates(repoPath);
+
+    expect(result.coverage.skippedFiles.filter(file => file.reason === 'binary')).toHaveLength(20);
+    expect(result.coverage.scannedBytes).toBe(20 * 1024);
+  });
+
   it('merges the built-in finding into the Gitleaks finding for the same value on the same line, and keeps other values', async () => {
     writeRepoFile(repoPath, 'config/app.conf', 'api.token="Wm4nB7xQ2rT9kL5p" db.password="Zq8vT3kL9mN2pR7x"\n');
 

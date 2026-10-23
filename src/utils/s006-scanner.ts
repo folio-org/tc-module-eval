@@ -128,10 +128,21 @@ export function scanS006RepositoryCandidates(
     const readResult = readBoundedS006CandidateText(
       candidatePath,
       relativePath,
-      MAX_S006_SCAN_TOTAL_BYTES - scannedBytes
+      MAX_S006_SCAN_TOTAL_BYTES - scannedBytes,
+      repoRoot
     );
 
+    if (readResult.status === 'outside-repository') {
+      pushS006SkippedFile(skippedFiles, {
+        path: relativePath,
+        reason: 'outside-repository',
+        materialToCoverage: true
+      });
+      continue;
+    }
+
     if (readResult.status === 'binary') {
+      scannedBytes += readResult.bytesRead;
       pushS006SkippedFile(skippedFiles, {
         path: relativePath,
         reason: 'binary',
@@ -452,14 +463,29 @@ function s006CandidatePriority(relativePath: string): number {
   return 5;
 }
 
+const BINARY_PROBE_BYTES = 1024;
+
+function isOpenFileInsideS006Repo(descriptor: number, repoRoot: string): boolean {
+  let openedPath: string;
+  try {
+    openedPath = fs.readlinkSync(`/proc/self/fd/${descriptor}`);
+  } catch {
+    return true; // No /proc (not Linux): the walk's lstat checks are the only guard.
+  }
+  const relative = path.relative(repoRoot, openedPath);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
 function readBoundedS006CandidateText(
   filePath: string,
   relativePath: string,
-  remainingTotalBytes: number
+  remainingTotalBytes: number,
+  repoRoot: string
 ): { status: 'text'; text: string; bytesRead: number; truncated: boolean; totalCapReached: boolean; materialToCoverage: boolean } |
   { status: 'empty' } |
-  { status: 'binary' } |
-  { status: 'read-error'; message: string } {
+  { status: 'binary'; bytesRead: number } |
+  { status: 'read-error'; message: string } |
+  { status: 'outside-repository' } {
   let descriptor: number | undefined;
   try {
     // The walk already skipped symbolic links; opening without following them and checking the open
@@ -469,13 +495,23 @@ function readBoundedS006CandidateText(
     if (!stats.isFile() || stats.size === 0 || remainingTotalBytes <= 0) {
       return { status: 'empty' };
     }
+    // O_NOFOLLOW covers only the last path component; a parent folder swapped for a link after the walk
+    // is caught by checking where the open file actually is.
+    if (!isOpenFileInsideS006Repo(descriptor, repoRoot)) {
+      return { status: 'outside-repository' };
+    }
 
+    // A short probe first, so binary files cost little of the total read budget; both reads count toward it.
     const bytesToRead = Math.min(stats.size, MAX_S006_SCAN_BYTES_PER_FILE, remainingTotalBytes);
     const buffer = Buffer.alloc(bytesToRead);
-    const slice = buffer.subarray(0, fs.readSync(descriptor, buffer, 0, bytesToRead, 0));
-    if (isBinaryBuffer(slice)) {
-      return { status: 'binary' };
+    const probeLength = fs.readSync(descriptor, buffer, 0, Math.min(BINARY_PROBE_BYTES, bytesToRead), 0);
+    if (isBinaryBuffer(buffer.subarray(0, probeLength))) {
+      return { status: 'binary', bytesRead: probeLength };
     }
+    const restLength = probeLength < bytesToRead
+      ? fs.readSync(descriptor, buffer, probeLength, bytesToRead - probeLength, probeLength)
+      : 0;
+    const slice = buffer.subarray(0, probeLength + restLength);
 
     const truncated = stats.size > bytesToRead;
     const text = decodeBoundedUtf8(slice, truncated);

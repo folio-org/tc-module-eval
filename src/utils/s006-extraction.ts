@@ -256,12 +256,12 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   // needs review but does not fail. Scripts packaged from src/ (such as Liquibase migrations), container
   // entrypoints, and scripts in CI pipeline folders still run in production or CI.
   if (
-    !/(^|\/)(src|\.github|\.gitlab|\.circleci|ci|buildkite|jenkins)\/|entrypoint[^/]*$/.test(normalized) &&
+    !/(^|\/)(src|\.github|\.gitlab|\.circleci|ci|\.?buildkite|jenkins)\/|entrypoint[^/]*$|(?:^|\/)(?:jenkinsfile|\.?gitlab-ci\.ya?ml)$/.test(normalized) &&
     (/(^|\/)scripts?\//.test(normalized) || /\.(?:sh|bash|zsh)$/.test(normalized))
   ) {
     return 'helper_script';
   }
-  if (/(^|\/)(\.github|\.gitlab|\.circleci|ci|buildkite|jenkins|deploy|deployment|helm|k8s|kubernetes|terraform)(\/|$)|(?:^|\/)(jenkinsfile|gitlab-ci\.ya?ml|docker-compose\.ci\.ya?ml)$/.test(normalized)) {
+  if (/(^|\/)(\.github|\.gitlab|\.circleci|ci|\.?buildkite|jenkins|deploy|deployment|helm|k8s|kubernetes|terraform)(\/|$)|(?:^|\/)(jenkinsfile|gitlab-ci\.ya?ml|docker-compose\.ci\.ya?ml)$/.test(normalized)) {
     return 'ci_or_deployment_configuration';
   }
   if (/(^|\/)(docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|dockerfile(?:\.[\w-]+)?|docker\/|dev\/docker\/)|(?:^|\/)\.env(?:\.local|\.docker)?$/.test(normalized)) {
@@ -345,10 +345,20 @@ function shouldSuppressS006SecretAssignment(
 
 // A constant that holds an HTTP header name, such as OKAPI_TOKEN_HEADER = 'X-Okapi-Token', names where a
 // token goes rather than holding one.
+// Standard and Okapi header names, which are never secret values whatever the constant is called.
+const S006_KNOWN_HEADER_NAMES = new Set([
+  'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key',
+  'x-okapi-token', 'x-okapi-tenant', 'x-okapi-url', 'x-okapi-user-id', 'x-okapi-request-id', 'x-okapi-permissions'
+]);
+
 function isS006HeaderNameConstant(rawMatch: string, value: string): boolean {
-  const name = rawMatch.replace(/\s*(?::=|[:=])[\s\S]*$/, '');
-  return /^X(?:-[A-Za-z][A-Za-z0-9]*)+$/i.test(value) ||
-    (/header/i.test(name) && /^[A-Za-z]+(?:-[A-Za-z][A-Za-z0-9]*)*$/.test(value));
+  const name = rawMatch.replace(/\s*(?::=|[:=])[\s\S]*$/, '').replace(/^.*\b(?:const|let|var|final|static|String)\s+/, '');
+  if (S006_KNOWN_HEADER_NAMES.has(value.toLowerCase())) {
+    return true;
+  }
+  return /header(?:[_-]?name)?$/i.test(name) &&
+    /^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*$/.test(value) &&
+    value.length <= 40;
 }
 
 const S006_SHELL_SCRIPT_PATTERN = /\.(?:sh|bash|zsh)$|(?:^|\/)Dockerfile(?:\.[\w-]+)?$/i;
@@ -720,10 +730,17 @@ function mergeIntoS006GitleaksFinding(
   if (detector.id !== 'password-secret-assignment' && detector.id !== 'credential-url') {
     return false;
   }
-  const localValue = detector.id === 'password-secret-assignment' ? s006AssignedValue(rawMatch) : rawMatch;
+  // Only exactly the same value merges, so a second, different value on the line stays its own finding.
+  // Gitleaks reports either the bare value or the whole match as its secret.
+  const localValue = detector.id === 'password-secret-assignment' ? s006AssignedValue(rawMatch) : rawMatch.trim();
   const match = (dedupeState.gitleaksByLine.get(s006LineKey(finding)) ?? []).find(({ secret }) =>
-    (secret.length >= 6 && rawMatch.includes(secret)) || (localValue.length >= 6 && secret.includes(localValue))
+    secret === localValue || secret === rawMatch.trim() || s006AssignedValue(secret) === localValue
   );
+  // A built-in finding that fails S006 when the Gitleaks one does not (a credential URL that repeats an
+  // assigned key, for example) is kept, so merging never weakens the result.
+  if (match && finding.statusImpact === 'deterministic_fail' && match.finding.statusImpact !== 'deterministic_fail') {
+    return false;
+  }
   if (!match) {
     return false;
   }
