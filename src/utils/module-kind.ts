@@ -4,6 +4,7 @@ import { Parser } from 'xml2js';
 import { ModuleKindResult } from '../types';
 import { xmlText } from './manifest-parsers';
 import { isDirectory, readBoundedFileBytes, readJsonFile } from './repo-files';
+import { errorMessage } from './type-guards';
 
 const MAX_POM_BYTES = 1024 * 1024;
 
@@ -124,27 +125,39 @@ function readPomArtifactId(pomPath: string, warnings: string[]): string | undefi
   if (!fs.existsSync(pomPath)) {
     return undefined;
   }
+  let bytes: Buffer;
   try {
-    const bytes = readBoundedFileBytes(pomPath, MAX_POM_BYTES + 1);
-    if (bytes.length > MAX_POM_BYTES) {
-      warnings.push(`pom.xml is larger than ${MAX_POM_BYTES} bytes and was not read`);
-      return undefined;
-    }
-    let project: unknown;
-    let parseError: unknown;
+    bytes = readBoundedFileBytes(pomPath, MAX_POM_BYTES + 1);
+  } catch (error) {
+    warnings.push(`Unable to read pom.xml: ${errorMessage(error)}`);
+    return undefined;
+  }
+  if (bytes.length > MAX_POM_BYTES) {
+    warnings.push(`pom.xml is larger than ${MAX_POM_BYTES} bytes and was not read`);
+    return undefined;
+  }
+
+  let done = false;
+  let project: unknown;
+  let parseError: unknown;
+  try {
     new Parser({ explicitArray: false, trim: true }).parseString(bytes.toString('utf-8'), (error, result) => {
+      done = true;
       if (error) {
-        parseError ??= error;
+        parseError = error;
       } else {
         project = result?.project;
       }
     });
-    if (parseError) {
-      throw parseError;
-    }
-    return xmlText((project as Record<string, unknown> | undefined)?.artifactId) || undefined;
   } catch (error) {
-    warnings.push(`Unable to parse pom.xml: ${error instanceof Error ? error.message : String(error)}`);
+    // xml2js can throw on content after the root element once it has already called back; keep that result.
+    if (!done) {
+      parseError = error;
+    }
+  }
+  if (parseError) {
+    warnings.push(`Unable to parse pom.xml: ${errorMessage(parseError)}`);
     return undefined;
   }
+  return xmlText((project as Record<string, unknown> | undefined)?.artifactId) || undefined;
 }

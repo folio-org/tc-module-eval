@@ -63,15 +63,20 @@ describe('module kind classifier', () => {
   ])('classifies a pom.xml with %s', (_label, pomXml, kind) => {
     writeFile('pom.xml', pomXml);
 
-    expect(classifyModuleKind(tempRoot).kind).toBe(kind);
+    const result = classifyModuleKind(tempRoot);
+    expect(result.kind).toBe(kind);
+    expect(result.warnings).toEqual([]);
   });
 
-  it('warns about an unparsable pom.xml and does not classify it', () => {
-    writeFile('pom.xml', '<project><artifactId>folio-spring-base</artifactId>');
+  it.each([
+    ['is not well-formed', '<project><artifactId>folio-spring-base</artifactId>', 'Unable to parse pom.xml'],
+    ['is over the 1 MiB read limit', pom('folio-spring-base').replace('<modelVersion>', `<!-- ${'x'.repeat(1024 * 1024)} --><modelVersion>`), 'larger than']
+  ])('warns and does not classify a pom.xml that %s', (_label, pomXml, warning) => {
+    writeFile('pom.xml', pomXml);
 
     const result = classifyModuleKind(tempRoot);
     expect(result.kind).toBe('ambiguous');
-    expect(result.warnings).toEqual([expect.stringContaining('Unable to parse pom.xml')]);
+    expect(result.warnings).toEqual([expect.stringContaining(warning)]);
   });
 
   it.each([
