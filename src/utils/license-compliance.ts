@@ -201,7 +201,10 @@ function evaluateMultipleLicenses(
     };
   }
 
-  return evaluations.find(e => e.status === EvaluationStatus.FAIL)!;
+  // Every alternative fails. Report an undocumented Category B one, which naming the dependency in
+  // the README addresses, before Category X (an AND group reports Category X if it has one).
+  return evaluations.find(e => e.issueType === LicenseIssueType.UNDOCUMENTED_CATEGORY_B) ??
+    evaluations.find(e => e.status === EvaluationStatus.FAIL)!;
 }
 
 /**
