@@ -42,10 +42,6 @@ const RULE_STRENGTHS: Record<S007RuleStrength, string> = {
   contested: ' (time-bound or disputed)'
 };
 
-export function buildS007CriterionDetails(analysis: S007AnalysisResult): S007AnalysisResult {
-  return analysis;
-}
-
 export function renderS007HumanDetails(
   analysis: S007AnalysisResult,
   agentReview?: CriterionAgentReviewResult

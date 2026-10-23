@@ -6,7 +6,7 @@ import {
   S009DependencyEvidence,
   S009Finding
 } from '../types';
-import { displayPolicyPath } from './acceptance-ledger';
+import { displayPolicyPath, libraryCoordinateKey } from './acceptance-ledger';
 import { reportPath, reportText } from './report-text';
 
 export function evaluateS009(
@@ -40,42 +40,49 @@ export function evaluateS009(
   const findings = evidence.observations.map(observation => finding(observation, ledgerLoad.value));
   const failures = findings.filter(item => item.classification === 'unaccepted');
   const indeterminate = findings.filter(item => item.classification === 'indeterminate-locality');
-  const failureNames = distinctCoordinateNames(failures.map(item => item.observation));
-  const indeterminateNames = distinctCoordinateNames(indeterminate.map(item => item.observation));
-  const coordinateCount = distinctCoordinates(evidence.observations).size;
   const status = failures.length
     ? EvaluationStatus.FAIL
     : indeterminate.length || !evidence.complete
       ? EvaluationStatus.MANUAL
       : EvaluationStatus.PASS;
-  const summary = failureNames.length
-    ? `${countLibraries(failureNames.length)} ${failureNames.length === 1 ? 'is' : 'are'} not approved: ${nameList(failureNames)}. `
-      + `Remove ${failureNames.length === 1 ? 'it' : 'them'} or ask the Technical Council to approve ${failureNames.length === 1 ? 'it' : 'them'}.`
-    : indeterminateNames.length
-      ? `${nameList(indeterminateNames)} ${indeterminateNames.length === 1 ? 'is' : 'are'} not approved but also built in this repository, `
-        + 'and the declared version does not show whether the build uses the local copy. A reviewer needs to check.'
-    : !evidence.complete
-      ? 'No unapproved FOLIO library was found, but some dependency declarations could not be read, so a reviewer needs to check them.'
-      : coordinateCount
-        ? coordinateCount === 1
-          ? 'The module declares 1 FOLIO library as a production dependency, and it is approved.'
-          : `The module declares ${coordinateCount} FOLIO libraries as production dependencies, and all are approved.`
-        : 'The module declares no FOLIO library (org.folio, org.folio.*, or @folio package) as a production dependency.';
 
   return {
     ...base,
     status,
-    summary,
+    summary: summarize(evidence, failures, indeterminate),
     ledger: { sourcePath: displayPolicyPath(ledgerLoad.sourcePath), digest: ledgerLoad.digest },
     findings
   };
+}
+
+function summarize(evidence: S009DependencyEvidence, failures: S009Finding[], indeterminate: S009Finding[]): string {
+  const failureNames = distinctCoordinateNames(failures.map(item => item.observation));
+  if (failureNames.length) {
+    return `${countLibraries(failureNames.length)} ${failureNames.length === 1 ? 'is' : 'are'} not approved: ${nameList(failureNames)}. `
+      + `Remove ${failureNames.length === 1 ? 'it' : 'them'} or ask the Technical Council to approve ${failureNames.length === 1 ? 'it' : 'them'}.`;
+  }
+  const indeterminateNames = distinctCoordinateNames(indeterminate.map(item => item.observation));
+  if (indeterminateNames.length) {
+    return `${nameList(indeterminateNames)} ${indeterminateNames.length === 1 ? 'is' : 'are'} not approved but also built in this repository, `
+      + 'and the declared version does not show whether the build uses the local copy. A reviewer needs to check.';
+  }
+  if (!evidence.complete) {
+    return 'No unapproved FOLIO library was found, but some dependency declarations could not be read, so a reviewer needs to check them.';
+  }
+  const coordinateCount = distinctCoordinates(evidence.observations).size;
+  if (coordinateCount) {
+    return coordinateCount === 1
+      ? 'The module declares 1 FOLIO library as a production dependency, and it is approved.'
+      : `The module declares ${coordinateCount} FOLIO libraries as production dependencies, and all are approved.`;
+  }
+  return 'The module declares no FOLIO library (org.folio, org.folio.*, or @folio package) as a production dependency.';
 }
 
 function finding(
   observation: S009DependencyEvidence['observations'][number],
   ledger: Readonly<AcceptanceLedger>
 ): S009Finding {
-  const mapping = ledger.libraryCoordinates.find(item => coordinate(item) === `${observation.ecosystem}:${observation.coordinate}`);
+  const mapping = ledger.libraryCoordinates.find(item => libraryCoordinateKey(item) === `${observation.ecosystem}:${observation.coordinate}`);
   const family = mapping && ledger.families.find(item => item.id === mapping.familyId);
   const accepted = Boolean(family && (
     family.acceptance.kind !== 'exception'
@@ -94,12 +101,6 @@ function finding(
     familyDisplayName: family?.displayName,
     acceptance: family?.acceptance
   };
-}
-
-function coordinate(value: AcceptanceLedger['libraryCoordinates'][number]): string {
-  return value.ecosystem === 'maven'
-    ? `maven:${value.groupId}:${value.artifactId}`
-    : `npm:${value.packageName}`;
 }
 
 function distinctCoordinates(observations: S009DependencyEvidence['observations']): Set<string> {
