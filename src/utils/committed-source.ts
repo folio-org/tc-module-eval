@@ -1,4 +1,5 @@
-import { spawn } from 'child_process';
+import { ChildProcessByStdio, spawn } from 'child_process';
+import { Readable, Writable } from 'stream';
 import { redactSensitiveText } from './redaction';
 
 export interface CommittedSourceLimits {
@@ -92,81 +93,88 @@ export async function readCommittedSource(
 
   const files: CommittedSourceFile[] = [];
   let totalBytes = 0;
-  for (const entry of candidates) {
-    if (entry.mode !== '100644' && entry.mode !== '100755') {
-      diagnostics.push({
-        code: 'unsafe-entry',
-        message: 'Skipped a non-regular committed tree entry',
-        material: true,
-        path: entry.path
-      });
-      continue;
-    }
-    if (entry.type !== 'blob' || !isSafeRelativePath(entry.path)) {
-      diagnostics.push({
-        code: 'unsafe-entry',
-        message: 'Skipped an unsafe committed tree entry',
-        material: true,
-        path: safePath(entry.path)
-      });
-      continue;
-    }
-    // A large binary is an omission, not an oversized source file. Probe only a
-    // bounded prefix and terminate cat-file instead of draining the entire blob.
-    if (entry.size > limits.maxFileBytes || totalBytes + entry.size > limits.maxTotalBytes) {
-      const prefix = await runGit(repoPath, ['cat-file', 'blob', entry.oid], 8192, true);
-      if (prefix.exitCode !== 0 && !prefix.exceeded) {
-        diagnostics.push(gitError(prefix, 'Unable to inspect committed content'));
+  const blobs = openBlobReader(repoPath);
+  try {
+    for (const entry of candidates) {
+      if (entry.mode !== '100644' && entry.mode !== '100755') {
+        diagnostics.push({
+          code: 'unsafe-entry',
+          message: 'Skipped a non-regular committed tree entry',
+          material: true,
+          path: entry.path
+        });
         continue;
       }
-      if (prefix.stdout.includes(0)) {
-        diagnostics.push({ code: 'binary', message: 'Skipped binary committed content', material: true, path: entry.path });
+      if (entry.type !== 'blob' || !isSafeRelativePath(entry.path)) {
+        diagnostics.push({
+          code: 'unsafe-entry',
+          message: 'Skipped an unsafe committed tree entry',
+          material: true,
+          path: safePath(entry.path)
+        });
         continue;
       }
-    }
-    if (entry.size > limits.maxFileBytes) {
-      diagnostics.push({
-        code: 'file-size',
-        message: `Committed file exceeds the ${limits.maxFileBytes}-byte per-file limit`,
-        material: true,
-        path: entry.path
-      });
-      continue;
-    }
-    if (totalBytes + entry.size > limits.maxTotalBytes) {
-      diagnostics.push({
-        code: 'total-size',
-        message: `Committed source exceeds the ${limits.maxTotalBytes}-byte total limit`,
-        material: true,
-        path: entry.path
-      });
-      continue;
-    }
+      // A large binary is an omission, not an oversized source file. Probe only a
+      // bounded prefix; terminate cat-file instead of draining an oversized blob.
+      if (entry.size > limits.maxFileBytes || totalBytes + entry.size > limits.maxTotalBytes) {
+        const prefix = entry.size > limits.maxFileBytes
+          ? await runGit(repoPath, ['cat-file', 'blob', entry.oid], 8192, true)
+          : await blobs.read(entry.oid, 8192);
+        if (prefix.exitCode !== 0 && !prefix.exceeded) {
+          diagnostics.push(gitError(prefix, 'Unable to inspect committed content'));
+          continue;
+        }
+        if (prefix.stdout.includes(0)) {
+          diagnostics.push({ code: 'binary', message: 'Skipped binary committed content', material: true, path: entry.path });
+          continue;
+        }
+      }
+      if (entry.size > limits.maxFileBytes) {
+        diagnostics.push({
+          code: 'file-size',
+          message: `Committed file exceeds the ${limits.maxFileBytes}-byte per-file limit`,
+          material: true,
+          path: entry.path
+        });
+        continue;
+      }
+      if (totalBytes + entry.size > limits.maxTotalBytes) {
+        diagnostics.push({
+          code: 'total-size',
+          message: `Committed source exceeds the ${limits.maxTotalBytes}-byte total limit`,
+          material: true,
+          path: entry.path
+        });
+        continue;
+      }
 
-    const blob = await runGit(repoPath, ['cat-file', 'blob', entry.oid], limits.maxFileBytes);
-    if (blob.exitCode !== 0 || blob.exceeded) {
-      diagnostics.push({
-        code: blob.exceeded ? 'file-size' : 'git-error',
-        message: redactSensitiveText(blob.exceeded
-          ? `Committed file exceeds the ${limits.maxFileBytes}-byte read limit`
-          : `Unable to read committed file: ${boundedStderr(blob.stderr)}`),
-        material: true,
-        path: entry.path
-      });
-      continue;
-    }
-    if (blob.stdout.includes(0)) {
-      diagnostics.push({
-        code: 'binary',
-        message: 'Skipped binary committed content',
-        material: true,
-        path: entry.path
-      });
-      continue;
-    }
+      const blob = await blobs.read(entry.oid, limits.maxFileBytes);
+      if (blob.exitCode !== 0 || blob.exceeded) {
+        diagnostics.push({
+          code: blob.exceeded ? 'file-size' : 'git-error',
+          message: redactSensitiveText(blob.exceeded
+            ? `Committed file exceeds the ${limits.maxFileBytes}-byte read limit`
+            : `Unable to read committed file: ${boundedStderr(blob.stderr)}`),
+          material: true,
+          path: entry.path
+        });
+        continue;
+      }
+      if (blob.stdout.includes(0)) {
+        diagnostics.push({
+          code: 'binary',
+          message: 'Skipped binary committed content',
+          material: true,
+          path: entry.path
+        });
+        continue;
+      }
 
-    files.push({ path: entry.path, oid: entry.oid, size: entry.size, content: blob.stdout.toString('utf8') });
-    totalBytes += entry.size;
+      files.push({ path: entry.path, oid: entry.oid, size: entry.size, content: blob.stdout.toString('utf8') });
+      totalBytes += entry.size;
+    }
+  } finally {
+    blobs.close();
   }
 
   return {
@@ -244,6 +252,112 @@ function runGit(repoPath: string, args: string[], maxBytes: number, stopAfterLim
       exceeded
     }));
   });
+}
+
+interface BlobReader {
+  /** Read one blob, keeping at most maxBytes; `exceeded` reports a larger blob, as runGit does. */
+  read(oid: string, maxBytes: number): Promise<ProcessOutput>;
+  close(): void;
+}
+
+interface BlobRequest {
+  maxBytes: number;
+  resolve(output: ProcessOutput): void;
+  size?: number;
+  received: number;
+  retained: Buffer[];
+}
+
+/**
+ * Serve a snapshot's blob reads from one `git cat-file --batch` process instead of one process per file.
+ * Each response is `<oid> <type> <size>\n<content>\n`, or `<oid> missing\n`. The process starts on the first
+ * read and close() ends it; a process that exits early fails its pending reads.
+ */
+function openBlobReader(repoPath: string): BlobReader {
+  let child: ChildProcessByStdio<Writable, Readable, Readable> | undefined;
+  const requests: BlobRequest[] = [];
+  let header = Buffer.alloc(0);
+
+  const settle = (output: ProcessOutput) => requests.shift()!.resolve(output);
+  const onData = (chunk: Buffer) => {
+    let data = chunk;
+    while (data.length && requests.length) {
+      const request = requests[0];
+      if (request.size === undefined) {
+        const newline = data.indexOf(10);
+        if (newline < 0) {
+          header = Buffer.concat([header, data]);
+          return;
+        }
+        const line = Buffer.concat([header, data.subarray(0, newline)]).toString('utf8');
+        header = Buffer.alloc(0);
+        data = data.subarray(newline + 1);
+        const match = /^\S+ \S+ (\d+)$/.exec(line);
+        if (!match) {
+          settle({ stdout: Buffer.alloc(0), stderr: Buffer.from(line), exitCode: 128, exceeded: false });
+          continue;
+        }
+        request.size = Number(match[1]);
+      }
+      // The body is the content plus a trailing newline; keep only the first maxBytes of content.
+      const body = data.subarray(0, request.size + 1 - request.received);
+      data = data.subarray(body.length);
+      const keep = Math.min(request.size, request.maxBytes) - request.received;
+      if (keep > 0) request.retained.push(body.subarray(0, keep));
+      request.received += body.length;
+      if (request.received === request.size + 1) {
+        settle({
+          stdout: Buffer.concat(request.retained),
+          stderr: Buffer.alloc(0),
+          exitCode: 0,
+          exceeded: request.size > request.maxBytes
+        });
+      }
+    }
+  };
+
+  const start = () => {
+    const git = spawn('git', ['-C', repoPath, 'cat-file', '--batch'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const stderr: Buffer[] = [];
+    let stderrBytes = 0;
+    git.stdout.on('data', onData);
+    git.stderr.on('data', (chunk: Buffer) => {
+      if (stderrBytes < 4096) {
+        const retained = chunk.subarray(0, 4096 - stderrBytes);
+        stderr.push(retained);
+        stderrBytes += retained.length;
+      }
+    });
+    // Writing after an early exit fails with EPIPE; the close handler reports the exit instead.
+    git.stdin.on('error', () => undefined);
+    git.on('error', error => {
+      stderr.push(Buffer.from(error.message));
+    });
+    git.on('close', exitCode => {
+      // An exit while reads are outstanding is a failure even when git reports success. git exits on a blob
+      // it cannot read, so only that read fails: the next read starts a new process, as per-file reads did.
+      const failure = { stdout: Buffer.alloc(0), stderr: Buffer.concat(stderr), exitCode: exitCode || 128, exceeded: false };
+      while (requests.length) settle(failure);
+      header = Buffer.alloc(0);
+      if (child === git) child = undefined;
+    });
+    return git;
+  };
+
+  return {
+    read(oid, maxBytes) {
+      const git = child ??= start();
+      return new Promise(resolve => {
+        requests.push({ maxBytes, resolve, received: 0, retained: [] });
+        git.stdin.write(`${oid}\n`);
+      });
+    },
+    close() {
+      child?.stdin.end();
+      child?.kill();
+      child = undefined;
+    }
+  };
 }
 
 function gitError(result: ProcessOutput, prefix: string): CommittedSourceDiagnostic {
