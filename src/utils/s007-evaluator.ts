@@ -9,17 +9,17 @@ import {
   S007TechnologyFinding,
   S007TechnologyObservation,
   S007TechnologyPolicyEntry,
+  S007VersionComparison,
   S007VersionConstraint
 } from '../types';
+import { CriterionLanguage } from '../criteria-definitions';
 import { normalizeS007PolicyVersionExpression, policySections } from './s007-policy';
 import { listText } from './report-text';
-
-export type VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
 
 export function evaluateS007(
   policyLoad: S007PolicyLoadResult,
   evidence: S007TechnologyEvidenceResult,
-  language: 'java' | 'javascript'
+  language: CriterionLanguage
 ): S007AnalysisResult {
   if (!policyLoad.ok) {
     return {
@@ -211,7 +211,7 @@ function evaluateObservation(
 export function compareObservationToConstraint(
   observation: Pick<S007TechnologyObservation, 'resolvedVersion' | 'declaredVersion' | 'ecosystem'>,
   constraint?: S007VersionConstraint
-): VersionComparison {
+): S007VersionComparison {
   if (!constraint) {
     return 'compliant';
   }
@@ -237,7 +237,7 @@ export function compareObservationToConstraint(
   // same set, so compare release bounds.
   const npm = observation.ecosystem === 'javascript';
   const releaseBounds = (range: string): string => npm ? range.replace(/<(\d+\.\d+\.\d+)-0(?![\w.-])/g, '<$1') : range;
-  let declaredComparison: VersionComparison = 'unresolved';
+  let declaredComparison: S007VersionComparison = 'unresolved';
   if (declared) {
     // In npm, "18" or "18.2" is a range, so only a full version is exact there.
     const exact = npm ? semver.valid(declared) ?? undefined : normalizeExactVersion(declared);
@@ -529,7 +529,7 @@ export function isRangeText(version: string): boolean {
 
 function unresolvedRationale(
   observation: S007TechnologyObservation,
-  comparison: VersionComparison,
+  comparison: S007VersionComparison,
   constraint?: S007VersionConstraint
 ): string {
   if (comparison === 'overlap') {

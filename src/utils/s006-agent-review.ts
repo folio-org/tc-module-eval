@@ -1,5 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S006SensitiveInformationAnalysisResult } from '../types';
-import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview, S006_FINDING_SUMMARY_PATH } from './criterion-agent-review';
 
 export async function reviewS006WithAgent(
   repoPath: string,
@@ -82,7 +82,7 @@ export async function buildS006AgentReviewRequest(
       'Return assessments as an array with exactly one object for each reviewObligations ID, using the ID as technologyId. Each assessment object has technologyId, type (aligned_fact, substantive_concern, analyzer_limitation, evidence_gap, policy_question), summary, evidenceReferences (an array of repository paths), and coverageDisposition (investigated, immaterial, unresolved). Use exactly these field names; see response-shape.json. For investigated path obligations, cite the original path as well as relevant usage. For immaterial, explain from cited context why the omission does not affect this scoped decision; do not imply direct inspection. Excluded source is not inspected source.',
       'For additional findings discovered outside the scanner inventory, add assessments using discovered:<normalized-id> with the same fields. Do not omit new concerns merely because there is no supplied obligation ID.',
       'sourceAvailable=false means the source cannot be inspected in this snapshot, NOT that it is uncommitted or absent from the repository. A scanner finding with unavailable source must remain unresolved (evidence_gap); documentation can supply context, but cannot establish the actual excluded contents. Cite related available usage and request inspection of the excluded file, without reproducing credential values or assignments.',
-      'Narrow citation exception: an unresolved evidence_gap assessment for a supplied gap: ID may cite .criterion-agent/S006/finding-summary.json, because scanner diagnostics establish scanner limitations. This does not support claims about repository contents, resolved gaps, finding: IDs, or reviewer actions; those still need source citations.',
+      `Narrow citation exception: an unresolved evidence_gap assessment for a supplied gap: ID may cite ${S006_FINDING_SUMMARY_PATH}, because scanner diagnostics establish scanner limitations. This does not support claims about repository contents, resolved gaps, finding: IDs, or reviewer actions; those still need source citations.`,
       'Distinguish the built-in candidate scan from Gitleaks, source available to browse, and source actually investigated. Availability alone does not resolve a scan cap. Explain additional investigation and any remaining gap. Confidence applies to this scoped assessment, not assurance that no secrets exist anywhere.',
       'Use likely_sufficient only when every material obligation is resolved and no finding needs further evidence or policy judgment. Unresolved obligations require needs_reviewer_judgment and cited reviewerActions naming the missing fact. Coverage gaps alone never justify likely_insufficient. Keep summary and rationale consistent with these dispositions.',
       'Do not claim that any credential, token, key, password, private URL, credential URL, endpoint, or secret is live, valid, exploitable, revoked, or safe. Never test credentials or contact endpoints. Do not reproduce secret values in your response; cite paths and describe their role instead.',
@@ -91,7 +91,7 @@ export async function buildS006AgentReviewRequest(
       'recommendation must be likely_sufficient, likely_insufficient, or needs_reviewer_judgment; confidence must be low, medium, or high. Cite actual inspected repository files.'
     ].join('\n'),
     files: [{
-      repoRelativePath: '.criterion-agent/S006/finding-summary.json',
+      repoRelativePath: S006_FINDING_SUMMARY_PATH,
       content: JSON.stringify({
         criterionId: analysis.criterionId,
         classification: analysis.classification,

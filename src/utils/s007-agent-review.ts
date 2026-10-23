@@ -9,20 +9,7 @@ export async function reviewS007WithAgent(
   policy?: S007OfficiallySupportedTechnologiesPolicy
 ): Promise<CriterionAgentReviewResult> {
   const request = await buildS007AgentReviewRequest(repoPath, analysis, policy);
-  const review = await runCriterionAgentReview(request, config, commandRunner);
-  if (!review.available) return review;
-  const known = new Set(analysis.findings.map(finding => finding.technologyId));
-  const canonical = new Set(policy?.sections.filter(section => section.consumer === 's007')
-    .flatMap(section => section.entries.map(entry => entry.id)));
-  for (const assessment of review.assessments ?? []) {
-    const id = assessment.technologyId;
-    if (!known.has(id) && canonical.has(id) && /^[a-z0-9][a-z0-9._-]*$/.test(id)) {
-      assessment.technologyId = `discovered:${id}`;
-      review.warnings.push(`Normalized trusted policy identifier ${id} to discovered:${id}.`);
-    }
-  }
-  const invalid = validateS007Review(analysis, review);
-  return invalid ? { ...review, available: false, errors: [...review.errors, invalid] } : review;
+  return runCriterionAgentReview(request, config, commandRunner);
 }
 
 export async function buildS007AgentReviewRequest(
@@ -56,14 +43,29 @@ export async function buildS007AgentReviewRequest(
       repoRelativePath: '.criterion-agent/S007/policy-context.json',
       content: JSON.stringify(policy ?? { unavailable: true, diagnostics: analysis.policyDiagnostics }, null, 2)
     }],
+    validateReview: review => validateS007Review(analysis, review, policy),
     schemaDescription: 'JSON object with recommendation enum, confidence enum, summary string, rationale string, repository evidenceReferences string[], nonempty cited assessments[], and cited reviewerActions[]'
   };
 }
 
-function validateS007Review(analysis: S007AnalysisResult, review: CriterionAgentReviewResult): string | undefined {
+function validateS007Review(
+  analysis: S007AnalysisResult,
+  review: CriterionAgentReviewResult,
+  policy?: S007OfficiallySupportedTechnologiesPolicy
+): string | undefined {
+  // A trusted policy ID the analyzer did not report is a discovery; rename it before the checks below.
+  const known = new Set(analysis.findings.map(finding => finding.technologyId));
+  const canonical = new Set(policy?.sections.filter(section => section.consumer === 's007')
+    .flatMap(section => section.entries.map(entry => entry.id)));
+  for (const assessment of review.assessments ?? []) {
+    const id = assessment.technologyId;
+    if (!known.has(id) && canonical.has(id) && /^[a-z0-9][a-z0-9._-]*$/.test(id)) {
+      assessment.technologyId = `discovered:${id}`;
+      review.warnings.push(`Normalized trusted policy identifier ${id} to discovered:${id}.`);
+    }
+  }
   if (!review.assessments?.length) return 'S007 agent review returned no cited practical assessments.';
-  const technologyIds = new Set(analysis.findings.map(finding => finding.technologyId));
-  if (review.assessments.some(assessment => !technologyIds.has(assessment.technologyId)
+  if (review.assessments.some(assessment => !known.has(assessment.technologyId)
     && !DISCOVERED_TECHNOLOGY_ID.test(assessment.technologyId))) {
     return 'S007 agent review returned an assessment for an unknown technology.';
   }

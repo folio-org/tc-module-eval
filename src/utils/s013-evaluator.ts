@@ -13,6 +13,7 @@ import {
   S013Technologies,
   SonarCloudSnapshot
 } from '../types';
+import { CriterionLanguage } from '../criteria-definitions';
 import { collectBuildTestEvidence } from './build-test-evidence';
 import { loadFolioSharedWorkflows } from './folio-shared-workflows';
 import { displayPolicyPath } from './acceptance-ledger';
@@ -29,7 +30,7 @@ const MAX_DECLARATIONS_SHOWN = 2;
 const KIND_ORDER: Record<S013TechnologyFinding['kind'], number> = { runner: 0, library: 1, helper: 2, integration: 3 };
 
 export interface S013Inputs {
-  language: 'java' | 'javascript';
+  language: CriterionLanguage;
   policyLoad: S007PolicyLoadResult;
   tableLoad: FolioSharedWorkflowTableLoadResult;
   evidence: BuildTestEvidence;
@@ -45,7 +46,7 @@ export interface S013Inputs {
  * Gathers S013's evidence and evaluates it. Coverage comes from SonarCloud only: tests are never run, even with
  * --allow-local-commands, and CI coverage artifacts are not downloaded.
  */
-export async function analyzeS013(repoPath: string, run: EvaluationRun, language: 'java' | 'javascript'): Promise<S013Analysis> {
+export async function analyzeS013(repoPath: string, run: EvaluationRun, language: CriterionLanguage): Promise<S013Analysis> {
   const [policyLoad, tableLoad, evidence, snapshot] = await Promise.all([
     loadS007Policy(),
     loadFolioSharedWorkflows(),

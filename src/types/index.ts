@@ -146,7 +146,7 @@ export interface EvaluationRun {
   repositoryPath: string;
   repositoryUrl?: string;
   repositoryName?: string;
-  language: string;
+  language: import('../criteria-definitions').CriterionLanguage;
   selectedCriteria: string[];
   artifacts: EvaluationRunArtifacts;
   commandObservations: Map<string, CommandExecutionResult>;

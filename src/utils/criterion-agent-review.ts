@@ -22,6 +22,9 @@ const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
 /** A technologyId the agent adds for something the analyzer missed: discovered:<normalized-id>. */
 export const DISCOVERED_TECHNOLOGY_ID = /^discovered:[a-z0-9][a-z0-9._-]*$/;
 
+/** S006's generated scanner summary; the only generated file an unresolved coverage-gap assessment may cite. */
+export const S006_FINDING_SUMMARY_PATH = '.criterion-agent/S006/finding-summary.json';
+
 export interface CriterionAgentReviewFile {
   repoRelativePath: string;
   content: string;
@@ -36,7 +39,10 @@ export interface CriterionAgentReviewRequest {
   evidenceMode?: 'repository' | 'supplied-files';
   /** Add criterion context that depends on the source actually available to the review. */
   prepareAdditionalFiles?: (availableSourcePaths: ReadonlySet<string>) => CriterionAgentReviewFile[];
-  /** Apply criterion-specific semantic checks after shared normalization and citation validation. */
+  /**
+   * Apply criterion-specific semantic checks after shared normalization and citation validation.
+   * A hook may first normalize the review in place, as S007 does for discovered technology IDs.
+   */
   validateReview?: (
     review: CriterionAgentReviewResult,
     availableSourcePaths: ReadonlySet<string>
@@ -244,10 +250,9 @@ function validateRepositoryCitations(
   availableSourcePaths: ReadonlySet<string>
 ): CriterionAgentReviewResult {
   if (!request.repositoryBrowsing || !review.available) return review;
-  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.criterionId === 'S006'
-      && request.coverageGapIds?.includes(item.technologyId)
+  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.coverageGapIds?.includes(item.technologyId)
       && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
-      && item.evidenceReferences.includes('.criterion-agent/S006/finding-summary.json'))).map(item => item.evidenceReferences),
+      && item.evidenceReferences.includes(S006_FINDING_SUMMARY_PATH))).map(item => item.evidenceReferences),
     ...(review.assessments ?? []).flatMap(item => (item.failureBounds ?? []).map(bound => bound.evidenceReferences)),
     ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
   if (references.some(citations => !citations.some(citation => availableSourcePaths.has(citation)))) {
@@ -381,7 +386,7 @@ function endpointMatchesAllowedUrl(endpoint: URL, allowed: string): boolean {
   return endpoint.pathname === parsedAllowed.pathname || endpoint.pathname.startsWith(allowedPath);
 }
 
-function unavailableResult(criterionId: string): CriterionAgentReviewResult {
+export function unavailableResult(criterionId: string): CriterionAgentReviewResult {
   return {
     available: false,
     criterionId,

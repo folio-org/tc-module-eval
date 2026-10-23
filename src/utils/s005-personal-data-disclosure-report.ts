@@ -505,7 +505,7 @@ function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistIte
     lineNumber: item.lineNumber,
     checked: item.checked,
     normalizedCategory: item.normalizedCategory,
-    normalizedCategories: item.normalizedCategories ?? [item.normalizedCategory]
+    normalizedCategories: item.normalizedCategories
   };
 }
 

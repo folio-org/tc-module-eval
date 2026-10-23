@@ -320,10 +320,10 @@ export function parseS005PersonalDataDisclosureMarkdown(content: string): S005Pe
     };
   }
 
-  const checkedCategories = uniqueCategories(checklistItems.filter(item => item.checked).flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]));
-  const uncheckedCategories = uniqueCategories(checklistItems.filter(item => !item.checked).flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]));
+  const checkedCategories = uniqueCategories(checklistItems.filter(item => item.checked).flatMap(item => item.normalizedCategories));
+  const uncheckedCategories = uniqueCategories(checklistItems.filter(item => !item.checked).flatMap(item => item.normalizedCategories));
   // Completion is deliberately row-based: one combined row is one answered question.
-  const checkedMeaningfulAnswers = checklistItems.filter(item => item.checked && (item.normalizedCategories ?? [item.normalizedCategory]).some(category => category !== 'other')).length;
+  const checkedMeaningfulAnswers = checklistItems.filter(item => item.checked && item.normalizedCategories.some(category => category !== 'other')).length;
   const completed = checkedMeaningfulAnswers > 0;
   const contradictions = detectContradictions(checklistItems);
 
@@ -777,7 +777,7 @@ function groupSignalsByCategory(
 // unchecked on a completed form is how a module discloses storing or processing personal data.
 function impliedS005DisclosureCategories(items: S005PersonalDataDisclosureChecklistItem[]): S005PersonalDataCategory[] {
   return items
-    .filter(item => !item.checked && (item.normalizedCategories ?? [item.normalizedCategory]).includes('no_personal_data'))
+    .filter(item => !item.checked && item.normalizedCategories.includes('no_personal_data'))
     .flatMap((item): S005PersonalDataCategory[] => {
       if (/\bdoes\s+not\s+store\b/i.test(item.rawLabel)) return ['storage'];
       if (/\bdoes\s+not\s+process\b/i.test(item.rawLabel)) return ['processing'];
@@ -1356,7 +1356,7 @@ function detectContradictions(
     return [];
   }
 
-  const conflictingItems = checklistItems.filter(item => item.checked && (item.normalizedCategories ?? [item.normalizedCategory]).some(category => PERSONAL_FIELD_CATEGORIES.has(category)));
+  const conflictingItems = checklistItems.filter(item => item.checked && item.normalizedCategories.some(category => PERSONAL_FIELD_CATEGORIES.has(category)));
   if (!conflictingItems.length) {
     return [];
   }
@@ -1366,7 +1366,7 @@ function detectContradictions(
       kind: 'no-personal-data-with-personal-fields',
       message: 'No-personal-data answer is checked alongside checked personal-data field answers.',
       lineNumbers: uniqueNumbers([...checkedNoPersonalData, ...conflictingItems].map(item => item.lineNumber)),
-      conflictingCategories: uniqueCategories(conflictingItems.flatMap(item => item.normalizedCategories ?? [item.normalizedCategory]).filter(category => PERSONAL_FIELD_CATEGORIES.has(category)))
+      conflictingCategories: uniqueCategories(conflictingItems.flatMap(item => item.normalizedCategories).filter(category => PERSONAL_FIELD_CATEGORIES.has(category)))
     }
   ];
 }

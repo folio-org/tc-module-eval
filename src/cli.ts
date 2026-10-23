@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
-import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';
+import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
 import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
 import { errorMessage } from './utils/type-guards';
@@ -229,10 +229,10 @@ function printEvaluationSummary(result: EvaluationResult): void {
   console.log(`   Total Criteria: ${result.criteria.length}`);
 
   const stats = {
-    pass: result.criteria.filter(c => c.status === 'pass').length,
-    fail: result.criteria.filter(c => c.status === 'fail').length,
-    manual: result.criteria.filter(c => c.status === 'manual').length,
-    notApplicable: result.criteria.filter(c => c.status === 'not_applicable').length
+    pass: result.criteria.filter(c => c.status === EvaluationStatus.PASS).length,
+    fail: result.criteria.filter(c => c.status === EvaluationStatus.FAIL).length,
+    manual: result.criteria.filter(c => c.status === EvaluationStatus.MANUAL).length,
+    notApplicable: result.criteria.filter(c => c.status === EvaluationStatus.NOT_APPLICABLE).length
   };
 
   console.log(`   ✅ Passed: ${stats.pass}`);

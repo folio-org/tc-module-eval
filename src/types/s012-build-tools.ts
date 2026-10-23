@@ -1,4 +1,5 @@
-import type { S007PolicyDiagnostic, S007PolicySectionId, S007RuleStrength, S007VersionConstraint } from './s007-officially-supported-technologies';
+import type { EvaluationStatus } from './index';
+import type { S007MatchedPolicyEntry, S007PolicyDiagnostic, S007VersionComparison } from './s007-officially-supported-technologies';
 
 // ---- FOLIO shared-workflow table (config/folio-shared-workflows.json) ----
 
@@ -195,8 +196,6 @@ export type S012FindingClassification =
   | 'coverage-incomplete'
   | 'note';
 
-export type S012VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
-
 export interface S012VersionCheck {
   /** Plain-English label, such as "Maven wrapper" or "maven-enforcer-plugin requireMavenVersion". */
   label: string;
@@ -208,18 +207,9 @@ export interface S012VersionCheck {
   kind: 'pin' | 'requirement';
   /** The version comes from FOLIO's shared workflow, not the repository. */
   inherited?: { workflow: string; ref: string; source?: string; recordedAt?: string };
-  comparison: S012VersionComparison;
+  comparison: S007VersionComparison;
   /** See VersionDeclaration.activation. */
   activation?: { state: 'inactive' | 'uncertain'; reason: string };
-}
-
-export interface S012MatchedPolicy {
-  sectionId: S007PolicySectionId;
-  entryId: string;
-  displayName: string;
-  strength: S007RuleStrength;
-  sourceStatement: string;
-  constraint?: S007VersionConstraint;
 }
 
 export interface S012Finding {
@@ -234,13 +224,13 @@ export interface S012Finding {
   /** How the build reaches the tool, such as "FOLIO's maven.yml@v1 workflow (.github/workflows/maven.yml)". */
   via?: string;
   versions: S012VersionCheck[];
-  matchedPolicy?: S012MatchedPolicy;
+  matchedPolicy?: S007MatchedPolicyEntry;
   statusDetermining: boolean;
 }
 
 export interface S012AnalysisResult {
   criterionId: 'S012';
-  status: 'pass' | 'fail' | 'manual';
+  status: EvaluationStatus.PASS | EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
   summary: string;
   area: 'frontend' | 'backend';
   findings: S012Finding[];
