@@ -266,26 +266,33 @@ describe('EvaluationReportRenderer', () => {
     try {
       fs.mkdirSync(path.join(repo, 'docs'));
       fs.writeFileSync(path.join(repo, 'README.md'), '# Module\n');
-      fs.writeFileSync(path.join(repo, 'docs/setup notes.md'), '# Setup\n\nExample: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
+      // More findings than criterionDetails keeps (16), so a name cannot come from the projected findings.
+      fs.writeFileSync(path.join(repo, 'docs/setup notes.md'), Array.from({ length: 17 }, (_, index) =>
+        `Example: Bearer abcdefghijklmnopqrstuvwxyz${String(index).padStart(6, '0')}`).join('\n') + '\n');
       fs.writeFileSync(path.join(repo, 'application.yml'), 'server:\n  password: Sup3rS3cretValue9\n');
       const analysis = await analyzeS006SensitiveInformation(repo, { commandRunner: new FakeS006GitleaksRunner() });
-      const docs = analysis.findings.findIndex(finding => finding.path === 'docs/setup notes.md');
+      const lastDocs = analysis.findings.findIndex(finding => finding.path === 'docs/setup notes.md' && finding.line === 17);
       const config = analysis.findings.findIndex(finding => finding.path === 'application.yml');
-      expect([docs, config].sort()).toEqual([0, 1]);
+      expect(analysis.findings).toHaveLength(18);
       const review: CriterionAgentReviewResult = { available: true, criterionId: 'S006', recommendation: 'needs_reviewer_judgment',
-        confidence: 'medium', summary: 'Check both.', rationale: 'Two findings.', evidenceReferences: ['README.md'],
-        // Assessed in reverse order, so each name must follow its finding index rather than its position.
-        assessments: ['scope', 'finding:1', 'finding:0', 'finding:7'].map(assessment),
+        confidence: 'medium', summary: 'Check both.', rationale: 'Many findings.', evidenceReferences: ['README.md'],
+        assessments: ['scope', `finding:${lastDocs}`, `finding:${config}`, 'finding:99'].map(assessment),
         warnings: [], errors: [] };
       const rendered = formatS006Evidence(analysis, review);
+      const criterionDetails = buildS006CriterionDetails(analysis, review);
+      expect(criterionDetails.findings.some(finding => finding.path === 'docs/setup notes.md' && finding.line === 17)).toBe(false);
+      expect(criterionDetails.findings.findIndex(finding => finding.path === 'application.yml')).not.toBe(config);
       const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S006',
         status: analysis.classification.status, evidence: rendered.evidence, details: rendered.details,
-        criterionDetails: buildS006CriterionDetails(analysis, review), agentReview: review }] });
+        criterionDetails, agentReview: review }] });
 
       // The path is percent-encoded like the rows above, so its space cannot split "path:line" from the label.
-      const names = { [docs]: 'docs/setup%20notes.md:3', [config]: 'application.yml:2' };
-      expect(assessedSubjects(preparedItems(html)[0])).toEqual(['Review scope', names[1], names[0], 'Scanner finding 8']);
-      expect(rendered.details).toContain('    - docs/setup%20notes.md:3 — Needs verification:');
+      expect(assessedSubjects(preparedItems(html)[0]))
+        .toEqual(['Review scope', 'docs/setup%20notes.md:17', 'application.yml:2', 'Scanner finding 100']);
+      for (const details of [rendered.details, downloadData(html).criteria[0].details]) {
+        expect(details).toContain('    - docs/setup%20notes.md:17 — Needs verification:');
+        expect(details).toContain('    - application.yml:2 — Needs verification:');
+      }
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }
@@ -300,11 +307,15 @@ describe('EvaluationReportRenderer', () => {
       scenario('set-service-impl:src/main/java/org/folio/SetServiceImpl.java/runtime-unavailable'),
       scenario('users:src/main/java/org/folio/a/UsersClient.java/runtime-unavailable'),
       scenario('users:src/main/java/org/folio/b/Users.java/runtime-unavailable'),
-      scenario('constructor:src/main/java/org/folio/Constructor.java/runtime-unavailable')
+      // Ids made from repository names are never Object.prototype members.
+      scenario('__proto__:src/main/java/org/folio/__proto__.java/runtime-unavailable'),
+      // An id that also names a setting keeps its plain name.
+      scenario('constructor:src/main/java/org/folio/Constructor.java/runtime-unavailable'),
+      scenario('constructor:CONSTRUCTOR_URL/configuration-absent')
     ] } };
     const review: CriterionAgentReviewResult = { available: true, criterionId: 'S010', recommendation: 'needs_reviewer_judgment',
       confidence: 'medium', summary: 'Check services.', rationale: 'Clients.', evidenceReferences: ['pom.xml'],
-      assessments: ['search', 'set-service-impl', 'users', 'constructor', 'folio-interfaces', 'discovered:object-storage', 'discovered:mod-x']
+      assessments: ['search', 'set-service-impl', 'users', '__proto__', 'constructor', 'folio-interfaces', 'discovered:object-storage', 'discovered:mod-x']
         .map(assessment), warnings: [], errors: [] };
     const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S010',
       status: EvaluationStatus.MANUAL, evidence: 'Manual', details: 'Needs review (not confirmed problems):\n  - x',
@@ -314,7 +325,8 @@ describe('EvaluationReportRenderer', () => {
       'OpenSearch or Elasticsearch',
       'Service called from SetServiceImpl.java',
       'Services called from UsersClient.java, Users.java',
-      'Service called from Constructor.java',
+      'Service called from __proto__.java',
+      'constructor',
       'FOLIO interfaces',
       'Object storage',
       'mod x'
