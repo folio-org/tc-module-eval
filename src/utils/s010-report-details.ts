@@ -10,6 +10,7 @@ import {
   S010SourceReference
 } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
+import { reportPath, reportText } from './report-text';
 import { S010_SOURCE_LIMITS } from './s010-evidence';
 
 const MAX_SUBJECTS = 8;
@@ -72,7 +73,7 @@ export function renderS010HumanDetails(
       .sort((left, right) => Number(META_IDS.has(left.group[0].dependencyId)) - Number(META_IDS.has(right.group[0].dependencyId))
         || left.title.localeCompare(right.title, 'en', { sensitivity: 'base' }));
     for (const { group, title } of groups) {
-      lines.push(`  - ${title}`, `    - ${group[0].rationale}`, ...referenceLines(group));
+      lines.push(`  - ${title}`, `    - ${reportText(group[0].rationale)}`, ...referenceLines(group));
     }
   }
   lines.push(...warningLines(analysis.diagnostics));
@@ -80,7 +81,7 @@ export function renderS010HumanDetails(
     lines.push(...renderAgentReviewLines(agentReview, agentReviewNames(analysis)));
     lines.push('  - The automated result stays Manual review.');
   } else if (analysis.agentReviewUnavailableReason) {
-    lines.push('Agent review:', `  - Not applied: ${analysis.agentReviewUnavailableReason}`);
+    lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }
   return lines.join('\n');
 }
@@ -154,22 +155,23 @@ export function s010FindingTitle(group: S010Finding[]): string {
     return `FOLIO interfaces (${list(subjects)}), if the modules behind them go down`;
   }
   if (subjects.length && subjects.every(subject => /:\d+$/.test(subject))) {
-    return `Requests to ${finding.dependencyId}, if the host goes down`;
+    return `Requests to ${shorten(finding.dependencyId)}, if the host goes down`;
   }
   if (isClientFinding(finding)) {
     return subjects.length === 1
-      ? `Service called from ${path.basename(subjects[0])}, if it goes down while the module runs`
+      ? `Service called from ${shorten(path.basename(subjects[0]))}, if it goes down while the module runs`
       : `Services called from ${subjects.length} files, if they go down while the module runs`;
   }
-  const name = serviceName(finding.dependencyId);
+  const name = shorten(serviceName(finding.dependencyId));
   return finding.scenario === 'startup-unavailable'
     ? `${name}, if it is down when the module starts`
     : `${name}, if it goes down while the module runs`;
 }
 
-// Names come from the repository (environment variables, hosts); keep a crafted one from filling the report.
+// Names come from the repository (environment variables, hosts, file names): keep a crafted one from
+// filling the report or breaking out of its row.
 function shorten(value: string): string {
-  return value.length > MAX_NAME_CHARS ? `${value.slice(0, MAX_NAME_CHARS)}…` : value;
+  return reportText(value.length > MAX_NAME_CHARS ? `${value.slice(0, MAX_NAME_CHARS)}…` : value);
 }
 
 function list(values: string[]): string {
@@ -190,7 +192,7 @@ function referenceLines(group: S010Finding[]): string[] {
   }
   return [
     ...references.slice(0, MAX_REFERENCES).map(([finding, reference]) =>
-      `    - ${reference.path}${reference.line ? `:${reference.line}` : ''} [${referenceTag(finding, reference)}] ${reference.detail}`),
+      `    - ${reportPath(reference.path)}${reference.line ? `:${reference.line}` : ''} [${referenceTag(finding, reference)}] ${reportText(reference.detail)}`),
     ...(references.length > MAX_REFERENCES ? [`    - ... ${references.length - MAX_REFERENCES} more`] : [])
   ];
 }
@@ -210,7 +212,7 @@ function warningLines(diagnostics: S010Diagnostic[]): string[] {
   for (const diagnostic of diagnostics) {
     const sourceWarning = sourceWarningText(diagnostic);
     if (!sourceWarning) {
-      lines.push(`  - ${diagnostic.path ? `${diagnostic.path} [${diagnosticTag(diagnostic)}] ` : ''}${diagnostic.message}`);
+      lines.push(`  - ${diagnostic.path ? `${reportPath(diagnostic.path)} [${diagnosticTag(diagnostic)}] ` : ''}${reportText(diagnostic.message)}`);
       continue;
     }
     const paths = merged.get(sourceWarning) ?? [];
@@ -225,7 +227,7 @@ function warningLines(diagnostics: S010Diagnostic[]): string[] {
     }
     lines.push(
       `  - ${text} (${unique.length} ${unique.length === 1 ? 'file' : 'files'}):`,
-      ...unique.slice(0, MAX_WARNING_PATHS).map(item => `    - ${item}`),
+      ...unique.slice(0, MAX_WARNING_PATHS).map(item => `    - ${reportPath(item)}`),
       ...(unique.length > MAX_WARNING_PATHS ? [`    - ... ${unique.length - MAX_WARNING_PATHS} more`] : [])
     );
   }
@@ -248,7 +250,7 @@ function sourceWarningText(diagnostic: S010Diagnostic): string | undefined {
     case 'unsafe-entry': return 'Symbolic links, submodules and unsafe paths were not read';
     case 'entry-limit': return 'The repository has too many files to list in full, so some were not read';
     case 'tree-limit': return 'The repository file list was too long to read in full, so some files were not read';
-    case 'git-error': return `Git could not read part of the repository (${diagnostic.message})`;
+    case 'git-error': return `Git could not read part of the repository (${reportText(diagnostic.message)})`;
     default: return undefined;
   }
 }

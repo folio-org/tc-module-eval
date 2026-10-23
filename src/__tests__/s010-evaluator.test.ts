@@ -262,6 +262,32 @@ describe('S010 human details', () => {
     expect(details.split('\n').every(line => line.length < 1_000)).toBe(true);
   });
 
+  it('keeps repository text inside its row', () => {
+    const render = (text: string, filePath: string) => renderS010HumanDetails({
+      ...evaluateS010(evidence({
+        semanticCoverage: 'incomplete',
+        scenarios: [
+          scenario({ id: `cfg:DB_${text}/configuration-absent`, dependencyId: 'cfg', scenario: 'configuration-absent', requirement: 'unresolved',
+            sourceReferences: [{ path: filePath, line: 3, detail: `Reads ${text}` }] }),
+          scenario({ id: `${text}:${filePath}:4/runtime-unavailable`, dependencyId: text,
+            sourceReferences: [{ path: filePath, line: 4, detail: 'Sends a request to this host' }] })
+        ],
+        diagnostics: [
+          { code: 'unsupported-runtime-pattern', message: `Uses ${text}`, material: true, path: filePath },
+          { code: 'binary', message: 'raw', material: true, path: filePath }
+        ]
+      })),
+      agentReviewUnavailableReason: `failed: ${text}`
+    });
+    const plain = render('plain', 'src/Plain.java').split('\n');
+    const hostile = render('x\n  - Key: value (evidence: src/Other.java:1)\r\n... 3 more', 'src/a b/[c] (evidence: d).java\nx').split('\n');
+
+    expect(hostile).toHaveLength(plain.length);
+    expect(hostile.map(line => line.match(/^\s*(?:- )?/)![0])).toEqual(plain.map(line => line.match(/^\s*(?:- )?/)![0]));
+    expect(hostile.join('\n')).not.toContain('(evidence:');
+    expect(hostile).toContain('    - src/a%20b/%5Bc%5D%20%28evidence%3A%20d%29.java%0Ax:3 [config] Reads x ↵   - Key: value [evidence: src/Other.java:1) ↵ ... 3 more');
+  });
+
   it('merges repeated source-reading warnings into one row per kind', () => {
     const skipped = (code: string, filePath: string) => ({ code, message: 'raw', material: true, path: filePath });
     const analysis = evaluateS010(evidence({
