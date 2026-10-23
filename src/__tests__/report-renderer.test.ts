@@ -1,5 +1,5 @@
 import { EvaluationReportRenderer } from '../utils/report-renderer';
-import { Dependency, EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types';
+import { CriterionAgentReviewResult, Dependency, EvaluationResult, EvaluationStatus, S007AnalysisResult, S010Analysis } from '../types';
 import { renderS007HumanDetails } from '../utils/s007-report-details';
 import { agentReviewReport } from './helpers/agent-review-report';
 import { runInNewContext } from 'vm';
@@ -13,6 +13,8 @@ import { analyzeS005PersonalDataDisclosure, buildS005CriterionDetails, formatS00
 import { s002ArtifactFailureResult } from '../utils/s002-module-descriptor-report';
 import { evaluateS009, renderS009HumanDetails } from '../utils/s009-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
+import { analyzeS006SensitiveInformation, buildS006CriterionDetails, formatS006Evidence } from '../utils/s006-sensitive-information';
+import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -52,6 +54,30 @@ describe('EvaluationReportRenderer', () => {
 
   function walk(nodes: any[]): any[] {
     return nodes.flatMap(node => [node, ...walk(node.children)]);
+  }
+
+  // Runs the report script against a minimal DOM and returns the page's visible text, in document order.
+  function renderedText(html: string): string {
+    const scripts: Record<string, string> = {
+      'report-data': html.match(/<script id="report-data" type="application\/json">([\s\S]+?)<\/script>/)![1],
+      'download-data': '{}'
+    };
+    const element = (): any => {
+      const node: any = { children: [], textContent: '', dataset: {}, style: { setProperty() {} },
+        setAttribute() {}, addEventListener() {}, appendChild: (child: any) => { node.children.push(child); return child; },
+        append: (...children: any[]) => { node.children.push(...children); },
+        replaceChildren: (...children: any[]) => { node.children = children; } };
+      return node;
+    };
+    const root = element();
+    runInNewContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)![1], {
+      window: { addEventListener() {} },
+      document: { activeElement: null, createElement: element, createElementNS: element,
+        createTextNode: (text: string) => ({ ...element(), textContent: text }),
+        getElementById: (id: string) => id === 'report' ? root : { textContent: scripts[id] } }
+    });
+    const text = (node: any): string => [node.textContent, ...node.children.map(text)].filter(Boolean).join(' ');
+    return text(root).replace(/\s+/g, ' ');
   }
 
   const result: EvaluationResult = {
@@ -223,10 +249,109 @@ describe('EvaluationReportRenderer', () => {
         ...(item.id === 'S006' ? ['Scope: Advice covers the findings and source investigated below; it is not a repository-wide certification that secrets are absent.'] : []),
         'Sources:', 'Advisory only; the criterion status is unchanged.'
       ]);
-      expect(item.tree[0].children.find((node: any) => node.text === 'Sources:')).toMatchObject({ unit: 'sources', children: [{ text: 'pom.xml', children: [] }] });
+      expect(item.tree[0].children.find((node: any) => node.text === 'Sources:')).toMatchObject({ unit: 'source', children: [{ text: 'pom.xml', children: [] }] });
       expect(item.tree.map((node: any) => node.text)).toEqual(['Agent review (advisory):', 'Evidence:', 'Diagnostics:']);
     }
     expect(JSON.stringify(report)).toBe(original);
+  });
+
+  // Each finding the agent assessed, with the label renderAgentReviewLines gives it.
+  const assessedSubjects = (item: any) => item.tree[0].children.find((node: any) => node.text === 'Findings:')
+    .children.map((node: any) => node.text.replace(/ — .*$/, ''));
+  const assessment = (technologyId: string) => ({ technologyId, type: 'evidence_gap' as const,
+    summary: 'Check it.', evidenceReferences: ['pom.xml'] });
+
+  it('names S006 agent-review findings by the file and line they flag', async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'renderer-s006-'));
+    try {
+      fs.mkdirSync(path.join(repo, 'docs'));
+      fs.writeFileSync(path.join(repo, 'README.md'), '# Module\n');
+      // More findings than criterionDetails keeps (16), so a name cannot come from the projected findings.
+      fs.writeFileSync(path.join(repo, 'docs/setup notes.md'), Array.from({ length: 17 }, (_, index) =>
+        `Example: Bearer abcdefghijklmnopqrstuvwxyz${String(index).padStart(6, '0')}`).join('\n') + '\n');
+      fs.writeFileSync(path.join(repo, 'application.yml'), 'server:\n  password: Sup3rS3cretValue9\n');
+      const analysis = await analyzeS006SensitiveInformation(repo, { commandRunner: new FakeS006GitleaksRunner() });
+      const lastDocs = analysis.findings.findIndex(finding => finding.path === 'docs/setup notes.md' && finding.line === 17);
+      const config = analysis.findings.findIndex(finding => finding.path === 'application.yml');
+      expect(analysis.findings).toHaveLength(18);
+      const review: CriterionAgentReviewResult = { available: true, criterionId: 'S006', recommendation: 'needs_reviewer_judgment',
+        confidence: 'medium', summary: 'Check both.', rationale: 'Many findings.', evidenceReferences: ['README.md'],
+        assessments: ['scope', `finding:${lastDocs}`, `finding:${config}`, 'finding:99'].map(assessment),
+        warnings: [], errors: [] };
+      const rendered = formatS006Evidence(analysis, review);
+      const criterionDetails = buildS006CriterionDetails(analysis, review);
+      expect(criterionDetails.findings.some(finding => finding.path === 'docs/setup notes.md' && finding.line === 17)).toBe(false);
+      expect(criterionDetails.findings.findIndex(finding => finding.path === 'application.yml')).not.toBe(config);
+      const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S006',
+        status: analysis.classification.status, evidence: rendered.evidence, details: rendered.details,
+        criterionDetails, agentReview: review }] });
+
+      // The path is percent-encoded like the rows above, so its space cannot split "path:line" from the label.
+      expect(assessedSubjects(preparedItems(html)[0]))
+        .toEqual(['Review scope', 'docs/setup%20notes.md:17', 'application.yml:2', 'Scanner finding 100']);
+      for (const details of [rendered.details, downloadData(html).criteria[0].details]) {
+        expect(details).toContain('    - docs/setup%20notes.md:17 — Needs verification:');
+        expect(details).toContain('    - application.yml:2 — Needs verification:');
+      }
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('names S010 agent-review dependencies as the S010 report rows do', () => {
+    const scenario = (id: string) => ({ id, dependencyId: id.slice(0, id.indexOf(':')), scenario: id.slice(id.lastIndexOf('/') + 1) });
+    const analysis = { evidence: { scenarios: [
+      scenario('search:ELASTICSEARCH_URL/configuration-absent'),
+      // A client class named after a known service keeps the service name.
+      scenario('search:src/main/java/org/folio/SearchClient.java/runtime-unavailable'),
+      scenario('set-service-impl:src/main/java/org/folio/SetServiceImpl.java/runtime-unavailable'),
+      scenario('users:src/main/java/org/folio/a/UsersClient.java/runtime-unavailable'),
+      scenario('users:src/main/java/org/folio/b/Users.java/runtime-unavailable'),
+      // Ids made from repository names are never Object.prototype members.
+      scenario('__proto__:src/main/java/org/folio/__proto__.java/runtime-unavailable'),
+      // An id that also names a setting keeps its plain name.
+      scenario('constructor:src/main/java/org/folio/Constructor.java/runtime-unavailable'),
+      scenario('constructor:CONSTRUCTOR_URL/configuration-absent')
+    ] } };
+    const review: CriterionAgentReviewResult = { available: true, criterionId: 'S010', recommendation: 'needs_reviewer_judgment',
+      confidence: 'medium', summary: 'Check services.', rationale: 'Clients.', evidenceReferences: ['pom.xml'],
+      assessments: ['search', 'set-service-impl', 'users', '__proto__', 'constructor', 'folio-interfaces', 'discovered:object-storage', 'discovered:mod-x']
+        .map(assessment), warnings: [], errors: [] };
+    const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S010',
+      status: EvaluationStatus.MANUAL, evidence: 'Manual', details: 'Needs review (not confirmed problems):\n  - x',
+      criterionDetails: analysis as unknown as S010Analysis, agentReview: review }] });
+
+    expect(assessedSubjects(preparedItems(html)[0])).toEqual([
+      'OpenSearch or Elasticsearch',
+      'Service called from SetServiceImpl.java',
+      'Services called from UsersClient.java, Users.java',
+      'Service called from __proto__.java',
+      'constructor',
+      'FOLIO interfaces',
+      'Object storage',
+      'mod x'
+    ]);
+  });
+
+  it('uses the singular for a count of one in agent-review and summary labels', () => {
+    const review = (actions: number): CriterionAgentReviewResult => ({ available: true, criterionId: 'S010',
+      recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'Check.', rationale: 'Because.',
+      evidenceReferences: ['pom.xml', 'README.md'].slice(0, actions),
+      assessments: [{ ...assessment('kafka'), evidenceReferences: ['pom.xml', 'README.md'].slice(0, actions) }],
+      reviewerActions: Array.from({ length: actions }, (_, index) => ({ action: `Verify ${index}.`, evidenceReferences: ['pom.xml'] })),
+      warnings: [], errors: [] });
+    const text = (agentReview: CriterionAgentReviewResult) => renderedText(new EvaluationReportRenderer().renderHtml({
+      ...result, criteria: [{ criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual', agentReview }] }));
+
+    const one = text(review(1));
+    expect(one).toMatch(/1 criterion · /);
+    expect(one).toMatch(/Findings 1 finding /);
+    expect(one).toMatch(/What to verify 1 check /);
+    expect(one).toMatch(/Sources 1 source /);
+    expect(one).not.toMatch(/\b1 (?:criteria|findings|checks|sources)\b/);
+    const two = text(review(2));
+    expect(two).toMatch(/What to verify 2 checks /);
+    expect(two).toMatch(/Sources 2 sources /);
   });
 
   it('shows the actual unavailable-review reason without inferring a timeout from command context', () => {

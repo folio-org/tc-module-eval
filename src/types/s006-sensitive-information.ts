@@ -227,4 +227,6 @@ export interface S006ReportDetails {
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
   agentReviewUnavailableReason?: string;
+  /** Location (`path:line`) of each scanner finding the agent review assessed, keyed by its `finding:N` id. */
+  agentReviewSubjectNames?: Record<string, string>;
 }

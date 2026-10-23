@@ -192,6 +192,11 @@ describe('S006 shared evaluator', () => {
     expect(result.details).toContain('Agent review (advisory):');
     expect(result.details).toContain('  - Recommendation: Reviewer judgment needed');
     expect(result.details).toMatch(/ {4}- \S+:\d+ — Needs verification:/);
+    // The HTML report names the finding from criterionDetails, the same way as these details.
+    const names = (result.criterionDetails as S006ReportDetails).agentReviewSubjectNames ?? {};
+    expect(Object.keys(names)).toEqual(['finding:0']);
+    expect(names['finding:0']).toMatch(/^\S+:\d+$/);
+    expect(result.details).toContain(`    - ${names['finding:0']} — Needs verification:`);
     expect(result.details).toContain('  - Advisory only; the S006 result stays Manual review.');
     expect(result.details).not.toContain('Evidence references:');
     expect(result.details).not.toContain('.criterion-agent/S006/excerpts/');
