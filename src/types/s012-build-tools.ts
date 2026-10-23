@@ -95,9 +95,12 @@ export interface VersionDeclaration {
   detail: string;
   /** The value as written, or for yarn.lock "v1" or "berry". */
   text: string;
+  /** For a workflow declaration, the job that sets it. */
+  job?: string;
   /**
-   * A Maven Enforcer rule that does not run ("inactive", reported only) or whose activation this POM does not show
-   * ("uncertain": it cannot help a pass, and a violation needs review instead of failing).
+   * A declaration the build does not apply ("inactive", reported only), such as a Maven Enforcer rule that does not
+   * run or a Node version set in a CI job that does not build the module; or one whose activation the repository
+   * does not show ("uncertain": it cannot help a pass, and a violation needs review instead of failing).
    */
   activation?: { state: 'inactive' | 'uncertain'; reason: string };
 }

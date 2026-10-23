@@ -395,6 +395,68 @@ jobs:
       expect(matrix.criterionDetails.findings.find(finding => finding.toolId === 'node')?.classification).toBe('conflicting');
     });
 
+    it('counts a Node version only from a CI job that builds the module', async () => {
+      await write({
+        'package.json': '{}',
+        'yarn.lock': YARN_V1_LOCK,
+        '.github/workflows/ui.yml': UI_WORKFLOW,
+        '.github/workflows/validate.yml': `
+jobs:
+  generate-module-descriptor:
+    uses: folio-org/.github/.github/workflows/ui-module-descriptor-generate.yml@v1
+    with:
+      node-version: '18'
+  lint-docs:
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npx markdownlint docs
+`
+      });
+
+      // Neither job builds the module, so ui.yml's Node 22.x applies and their Node 18 is shown only.
+      const result = await evaluate('javascript');
+      expect(result.status).toBe(EvaluationStatus.PASS);
+      expect(result.details).toContain("FOLIO's ui.yml@v1 workflow installs Node.js 22.x. Meets \"Node 22\".");
+      expect(result.details).toContain('Workflow input in .github/workflows/validate.yml: 18 - not applied (set in job generate-module-descriptor, which does not build the module), so it does not count');
+      expect(result.details).toContain('Workflow actions/setup-node in .github/workflows/validate.yml: 18 - not applied (set in job lint-docs, which does not build the module), so it does not count');
+
+      // The same pin in a job that installs the module's dependencies is the build's Node version.
+      await write({ '.github/workflows/validate.yml': (await fs.readFile(path.join(repo, '.github/workflows/validate.yml'), 'utf8'))
+        .replace('npx markdownlint docs', 'yarn install --frozen-lockfile') });
+      const building = await evaluate('javascript');
+      expect(building.status).toBe(EvaluationStatus.FAIL);
+      expect(building.evidence).toContain('The module uses Node.js 18 in .github/workflows/validate.yml');
+      // Per job, not per file: the module-descriptor job in the same file still does not count.
+      expect(building.details).toContain('Workflow input in .github/workflows/validate.yml: 18 - not applied (set in job generate-module-descriptor, which does not build the module)');
+    });
+
+    it.each([
+      ['calls ui.yml at a ref the table does not cover', 'ui:\n    uses: folio-org/.github/.github/workflows/ui.yml@v2\n    with:\n      node-version: "18"'],
+      ['runs corepack yarn', 'build:\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: "18"\n      - run: corepack yarn install --frozen-lockfile'],
+      ['builds from the workspace folder', 'build:\n    defaults:\n      run:\n        working-directory: ${{ github.workspace }}\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: "18"\n      - run: yarn install']
+    ])('keeps the Node pin of a job that %s', async (_label, job) => {
+      await write({ 'package.json': '{}', 'yarn.lock': YARN_V1_LOCK, '.github/workflows/ui.yml': UI_WORKFLOW, '.github/workflows/build.yml': `jobs:\n  ${job}\n` });
+
+      const result = await evaluate('javascript');
+
+      expect(result.status).not.toBe(EvaluationStatus.PASS);
+      expect(result.details).not.toContain('which does not build the module');
+    });
+
+    it('does not count the Node pin of a job that runs only a non-JavaScript build tool', async () => {
+      await write({
+        'package.json': '{}',
+        'yarn.lock': YARN_V1_LOCK,
+        Makefile: 'docs:\n\techo docs\n',
+        '.github/workflows/ui.yml': UI_WORKFLOW,
+        '.github/workflows/docs.yml': 'jobs:\n  docs:\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: "18"\n      - run: make docs\n'
+      });
+
+      expect((await evaluate('javascript')).status).toBe(EvaluationStatus.PASS);
+    });
+
     it('uses a step env over the workflow env, and leaves a matrix with include unsettled', async () => {
       await write({
         'package.json': '{}',

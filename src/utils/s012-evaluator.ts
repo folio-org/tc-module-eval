@@ -82,6 +82,8 @@ interface ToolSignal {
   /** How the build reaches the tool, already made safe for the report. */
   via: string;
   path: string;
+  /** The workflow job, for a CI build. */
+  job?: string;
   /** A CI build, as opposed to a lockfile or packageManager field. */
   ci?: true;
   shared?: SharedWorkflowUse;
@@ -156,11 +158,11 @@ export function evaluateS012(
 function ciSignals(evidence: BuildTestEvidence, table: FolioSharedWorkflowTable): ToolSignal[] {
   const signals: ToolSignal[] = [];
   for (const use of knownSharedWorkflows(evidence, table)) {
-    signals.push({ tool: table.workflows[use.name].buildTool, via: `FOLIO's ${use.name}@${use.ref} workflow (${reportPath(use.path)})`, path: use.path, ci: true, shared: use });
+    signals.push({ tool: table.workflows[use.name].buildTool, via: `FOLIO's ${use.name}@${use.ref} workflow (${reportPath(use.path)})`, path: use.path, job: use.job, ci: true, shared: use });
   }
   for (const command of evidence.buildCommands) {
     if (TOOL_FILES[command.tool].some(kind => hasFile(evidence, kind))) {
-      signals.push({ tool: command.tool, via: `"${reportText(command.command)}" in ${reportPath(command.path)}`, path: command.path, ci: true });
+      signals.push({ tool: command.tool, via: `"${reportText(command.command)}" in ${reportPath(command.path)}`, path: command.path, job: command.job, ci: true });
     }
   }
   return signals;
@@ -314,9 +316,18 @@ function versionChecks(
   const compare = (range: string | undefined): S012VersionCheck['comparison'] => range === undefined
     ? 'unresolved'
     : compareObservationToConstraint({ declaredVersion: range, ecosystem: tool === 'node' || tool === 'yarn' ? 'javascript' : 'java' }, entry.constraint);
+  // A Node version set in a CI job counts only when that job builds the module: it calls one of the shared build
+  // workflows in the table (at any ref), or runs a package-manager build command with package.json present.
+  const buildJobs = new Set([
+    ...evidence.sharedWorkflows.filter(use => Object.prototype.hasOwnProperty.call(table.workflows, use.name)),
+    ...ciSignals(evidence, table).filter(signal => PACKAGE_MANAGERS.includes(signal.tool))
+  ].map(item => `${item.path}\0${item.job}`));
   const checks: S012VersionCheck[] = evidence.declarations.filter(item => item.tool === tool).map(item => {
     const { range, kind } = declarationRange(item);
-    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range), activation: item.activation };
+    const notBuildJob = tool === 'node' && item.job !== undefined && !buildJobs.has(`${item.path}\0${item.job}`);
+    const activation = item.activation
+      ?? (notBuildJob ? { state: 'inactive' as const, reason: `set in job ${item.job}, which does not build the module` } : undefined);
+    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range), activation };
   });
   if (!checks.some(check => check.kind === 'pin' && !check.activation)) {
     for (const use of unique(signals.flatMap(signal => signal.shared ? [signal.shared] : []))) {

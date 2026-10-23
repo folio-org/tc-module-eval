@@ -23,7 +23,8 @@ const MAX_FILES = 64;
 const LOCKFILE_HEADER_BYTES = 4096;
 const MAX_COMMANDS = 200;
 const SHARED_WORKFLOW = /^folio-org\/\.github\/\.github\/workflows\/([A-Za-z0-9._-]+\.ya?ml)@([A-Za-z0-9._/-]+)$/;
-const ROOT_DIRECTORIES = new Set(['', '.', './', 'service', './service']);
+// The repository root or service/, written relative or from the workspace (${{ github.workspace }}, $GITHUB_WORKSPACE).
+const ROOT_DIRECTORY = /^(?:(?:\$\{\{\s*github\.workspace\s*\}\}|\$\{?GITHUB_WORKSPACE\}?)\/?|\.\/|\.)?(?:service\/?)?$/;
 
 const PRESENCE_FILES: Array<[string, BuildFileKind]> = [
   ['pom.xml', 'maven-pom'],
@@ -216,7 +217,7 @@ function readJob(
   const matrix = isObject(definition.strategy) && isObject(definition.strategy.matrix) ? definition.strategy.matrix : {};
   const declare = (tool: BuildToolId, source: VersionDeclarationSource, detail: string, value: unknown, env = jobEnv) => {
     for (const text of expandValue(value, env, matrix)) {
-      context.declarations.push({ tool, source, path: workflowPath, detail: `job ${job}, ${detail}`, text });
+      context.declarations.push({ tool, source, path: workflowPath, detail: `job ${job}, ${detail}`, text, job });
     }
   };
 
@@ -245,7 +246,7 @@ function readJob(
       declare('maven', 'setup-maven', `${action} maven-version`, inputs['maven-version'], stepEnv);
     }
     const stepDirectory = typeof step['working-directory'] === 'string' ? step['working-directory'] : jobDirectory;
-    if (typeof step.run === 'string' && ROOT_DIRECTORIES.has((stepDirectory ?? '').trim())) {
+    if (typeof step.run === 'string' && ROOT_DIRECTORY.test((stepDirectory ?? '').trim())) {
       for (const { tool, command } of buildCommandsIn(step.run)) {
         if (context.buildCommands.length >= MAX_COMMANDS) {
           addDiagnostic(context, 'command_limit', `Stopped after ${MAX_COMMANDS} build commands in workflows; the rest were not read.`, workflowPath);
@@ -267,7 +268,7 @@ export function buildCommandsIn(script: string): Array<{ tool: BuildToolId; comm
   for (const command of shellCommands(script)) {
     const first = command.findIndex(word => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
     const words = first === -1 ? [] : command.slice(first);
-    if (words[0] === 'sudo') words.shift();
+    while (words[0] === 'sudo' || words[0] === 'corepack') words.shift();
     const [program, ...args] = words;
     if (!program) continue;
     if (program === 'cd') {
