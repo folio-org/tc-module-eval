@@ -21,3 +21,8 @@ export function isNonEmptyString(value: unknown): value is string {
 export function isValidDependency(dep: Partial<Dependency>): dep is Dependency {
   return isNonEmptyString(dep.name) && isNonEmptyString(dep.version);
 }
+
+/** The message of a caught value: an Error's message, or the value as a string. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

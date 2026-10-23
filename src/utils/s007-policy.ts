@@ -10,6 +10,7 @@ import {
   S007PolicyLoadResult,
   S007PolicySection
 } from '../types';
+import { errorMessage } from './type-guards';
 
 export const DEFAULT_S007_POLICY_PATH = path.resolve(
   __dirname,
@@ -105,8 +106,4 @@ function toSchemaDiagnostic(error: ErrorObject): S007PolicyDiagnostic {
 
 function isMissingFileError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

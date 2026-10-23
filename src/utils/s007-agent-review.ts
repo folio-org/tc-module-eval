@@ -1,5 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S007AnalysisResult, S007OfficiallySupportedTechnologiesPolicy } from '../types';
-import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview } from './criterion-agent-review';
 
 export async function reviewS007WithAgent(
   repoPath: string,
@@ -64,7 +64,7 @@ function validateS007Review(analysis: S007AnalysisResult, review: CriterionAgent
   if (!review.assessments?.length) return 'S007 agent review returned no cited practical assessments.';
   const technologyIds = new Set(analysis.findings.map(finding => finding.technologyId));
   if (review.assessments.some(assessment => !technologyIds.has(assessment.technologyId)
-    && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(assessment.technologyId))) {
+    && !DISCOVERED_TECHNOLOGY_ID.test(assessment.technologyId))) {
     return 'S007 agent review returned an assessment for an unknown technology.';
   }
   if (review.recommendation === 'likely_insufficient'

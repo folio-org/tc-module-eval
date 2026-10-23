@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import semver from 'semver';
 import { S009DependencyEvidence, S009DependencyObservation, S009EvidenceDiagnostic } from '../types';
 import { findCandidateFiles, relativePosixPath } from './repo-files';
+import { escapeRegExp } from './regexp';
+import { errorMessage } from './type-guards';
 import {
   asArray,
   balancedGradleCall,
@@ -887,16 +889,4 @@ function resolveMavenText(value: string, properties: Map<string, string>, depth 
     resolved = resolved.replace(new RegExp(`\\$\\{${escapeRegExp(name)}\\}`, 'g'), nested);
   }
   return resolved.includes('${') ? undefined : resolved;
-}
-
-
-
-
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

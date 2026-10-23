@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import Ajv, { ErrorObject } from 'ajv';
 import schema from '../schemas/acceptance-ledger.schema.json';
 import { AcceptanceLedger, S008PolicyDiagnostic, S008PolicyLoadResult } from '../types';
+import { errorMessage } from './type-guards';
 
 export const DEFAULT_ACCEPTANCE_LEDGER_PATH = path.resolve(__dirname, '../../config/acceptance-ledger.json');
 const EVALUATOR_ROOT = path.resolve(__dirname, '../..');
@@ -101,8 +102,4 @@ function deepFreeze(value: unknown): void {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return;
   Object.freeze(value);
   for (const child of Object.values(value)) deepFreeze(child);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

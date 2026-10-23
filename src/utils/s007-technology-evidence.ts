@@ -7,6 +7,8 @@ import {
   S007TechnologyObservation
 } from '../types';
 import { isDirectory, isWithinRepo, relativePosixPath } from './repo-files';
+import { escapeRegExp } from './regexp';
+import { errorMessage } from './type-guards';
 import { findGradleProjectDir } from './parsers/gradle-dependency-parser';
 import {
   asArray,
@@ -1061,10 +1063,6 @@ function resolveGradleInterpolatedText(
   return value.includes('$') ? undefined : value;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function readGradleProperties(context: EvidenceContext, propertiesPath: string): Map<string, string> {
   if (!fs.existsSync(propertiesPath)) {
     return new Map<string, string>();
@@ -1663,8 +1661,4 @@ function isExactVersion(value: string): boolean {
 function isPathLexicallyInside(repoPath: string, candidatePath: string): boolean {
   const relative = path.relative(repoPath, candidatePath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -17,6 +17,9 @@ import { redactSensitiveText, truncateToByteBudget } from './redaction';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
 
+/** A technologyId the agent adds for something the analyzer missed: discovered:<normalized-id>. */
+export const DISCOVERED_TECHNOLOGY_ID = /^discovered:[a-z0-9][a-z0-9._-]*$/;
+
 export interface CriterionAgentReviewFile {
   repoRelativePath: string;
   content: string;

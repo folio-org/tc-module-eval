@@ -6,7 +6,7 @@ import {
   S010Analysis,
   S010ScenarioEvidence
 } from '../types';
-import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
@@ -112,7 +112,7 @@ function validateS010Review(
   if (!review.assessments?.length) return 'S010 agent review returned no cited practical assessments.';
   const dependencyIds = candidateIds(analysis);
   for (const assessment of review.assessments) {
-    if (!dependencyIds.has(assessment.technologyId) && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(assessment.technologyId)) {
+    if (!dependencyIds.has(assessment.technologyId) && !DISCOVERED_TECHNOLOGY_ID.test(assessment.technologyId)) {
       return 'S010 agent review returned an assessment for an unknown dependency.';
     }
   }
