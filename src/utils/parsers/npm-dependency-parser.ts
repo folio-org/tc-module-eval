@@ -151,74 +151,69 @@ function splitSpdxLicenses(license: string): Array<string | string[]> {
 }
 
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 /**
  * Parse license-checker-rseidelsohn JSON output
  * @param jsonOutput - JSON string from license-checker-rseidelsohn
  * @returns Array of parsed dependencies
+ * @throws Error with a plain-language reason when the output is empty, not JSON, or not an object of packages
  */
 function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
   if (!isNonEmptyString(jsonOutput)) {
-    return [];
+    throw new Error('license-checker printed nothing, so there is no dependency list to read');
   }
 
+  let licenseData: unknown;
   try {
-    const licenseData = JSON.parse(jsonOutput);
-    const dependencies: Dependency[] = [];
+    licenseData = JSON.parse(jsonOutput);
+  } catch (error) {
+    throw new Error(`license-checker output could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!isPlainObject(licenseData)) {
+    const found = licenseData === null ? 'null' : Array.isArray(licenseData) ? 'an array' : `a ${typeof licenseData}`;
+    throw new Error(`license-checker output is ${found}, not the expected object that lists each package`);
+  }
 
-    for (const [packageKey, packageInfo] of Object.entries(licenseData)) {
-      // packageKey format: "package-name@version" or "@scope/package-name@version"
-      let name: string;
-      let version: string;
+  const dependencies: Dependency[] = [];
 
-      if (packageKey.startsWith('@')) {
-        const secondAtIndex = packageKey.indexOf('@', 1);
-        if (secondAtIndex === -1) {
-          continue;
-        }
-        name = packageKey.substring(0, secondAtIndex);
-        version = packageKey.substring(secondAtIndex + 1);
-      } else {
-        const atIndex = packageKey.indexOf('@');
-        if (atIndex === -1) {
-          continue;
-        }
-        name = packageKey.substring(0, atIndex);
-        version = packageKey.substring(atIndex + 1);
-      }
+  for (const [packageKey, packageInfo] of Object.entries(licenseData)) {
+    // packageKey format: "package-name@version" or "@scope/package-name@version"
+    const versionAt = packageKey.indexOf('@', packageKey.startsWith('@') ? 1 : 0);
+    const name = versionAt === -1 ? '' : packageKey.substring(0, versionAt);
+    const version = versionAt === -1 ? '' : packageKey.substring(versionAt + 1);
+    if (!isNonEmptyString(name) || !isNonEmptyString(version)) {
+      throw new Error(`license-checker output lists "${packageKey}", which is not a package name followed by @ and a version`);
+    }
+    if (!isPlainObject(packageInfo)) {
+      throw new Error(`license-checker output has an entry for ${packageKey} that is not a set of package details`);
+    }
 
-      if (!isNonEmptyString(name) || !isNonEmptyString(version)) {
-        continue;
-      }
+    let licenses: Array<string | string[]> = [];
 
-      const info = packageInfo as any;
-      let licenses: Array<string | string[]> = [];
+    if (packageInfo.licenses) {
+      const licenseField = packageInfo.licenses;
 
-      if (info.licenses) {
-        const licenseField = info.licenses;
-
-        if (typeof licenseField === 'string') {
-          licenses = splitSpdxLicenses(licenseField);
-        } else if (Array.isArray(licenseField)) {
-          licenses = licenseField.flatMap(l => splitSpdxLicenses(String(l)));
-        }
-      }
-
-      const dependency: Dependency = {
-        name: name.trim(),
-        version: version.trim(),
-        licenses: licenses.length > 0 ? licenses : undefined
-      };
-
-      if (isValidDependency(dependency)) {
-        dependencies.push(dependency);
+      if (typeof licenseField === 'string') {
+        licenses = splitSpdxLicenses(licenseField);
+      } else if (Array.isArray(licenseField)) {
+        licenses = licenseField.flatMap(l => splitSpdxLicenses(String(l)));
       }
     }
 
-    return dependencies;
-  } catch (error) {
-    getLogger().error('Failed to parse license-checker output:', error);
-    return [];
+    const dependency: Dependency = {
+      name: name.trim(),
+      version: version.trim(),
+      licenses: licenses.length > 0 ? licenses : undefined
+    };
+
+    if (isValidDependency(dependency)) {
+      dependencies.push(dependency);
+    }
   }
+
+  return dependencies;
 }
 
 /**
@@ -307,6 +302,10 @@ export async function getNpmDependencies(
       return { dependencies: [], errors: [commandError('npm-parser', 'npm', checkerResult)], warnings };
     }
 
+    if (checkerResult.stdoutTruncated) {
+      throw new Error(`license-checker output was longer than ${LICENSE_CHECK_MAX_OUTPUT / (1024 * 1024)} MB and was cut off, so the dependency list is incomplete`);
+    }
+    // Throws with a plain-language reason when the output cannot be read; reported by the catch below.
     const dependencies = parseLicenseCheckerOutput(checkerResult.stdout);
 
     return { dependencies, errors, warnings };

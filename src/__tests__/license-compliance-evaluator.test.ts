@@ -440,6 +440,51 @@ describe('ThirdPartyLicenseEvaluator', () => {
     });
   });
 
+  it('should return MANUAL, not PASS on the Maven dependencies alone, when license-checker output cannot be read', async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-npm-output-'));
+    try {
+      fs.writeFileSync(path.join(repo, 'pom.xml'), '<project><packaging>jar</packaging></project>');
+      fs.writeFileSync(path.join(repo, 'package.json'), '{"name":"ui-x"}');
+      fs.writeFileSync(path.join(repo, '.npmrc'), '');
+      fs.mkdirSync(path.join(repo, 'target', 'licenses'), { recursive: true });
+      fs.writeFileSync(
+        path.join(repo, 'target', 'licenses', 'THIRD-PARTY.txt'),
+        '     (The Apache Software License, Version 2.0) Guava (com.google.guava:guava:32.1.3-jre - https://github.com/google/guava)\n'
+      );
+      const runner = new LocalCommandRunner(true);
+      const evaluationRun = createEvaluationRun({
+        repositoryPath: repo,
+        language: 'java',
+        commandRunner: {
+          normalize: request => runner.normalize(request),
+          run: async request => ({
+            identity: runner.normalize(request),
+            command: request.command,
+            args: request.args ?? [],
+            cwd: request.cwd,
+            commandExecutionEnvironment: 'local',
+            localCommandsAllowed: true,
+            status: 'success',
+            exitCode: 0,
+            durationMs: 1,
+            stdout: request.command === 'npx' ? '{"express@4.18.2": {"licenses": "MIT"' : '',
+            stderr: '',
+            sanitized: true
+          })
+        }
+      });
+
+      const result = await new ThirdPartyLicenseEvaluator().evaluate(repo, 'S003', evaluationRun);
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toBe('Dependency licenses were not checked because the dependencies could not be listed.');
+      expect(result.details).toContain('Why the dependencies could not be listed:\n  - [npm] npm could not list the dependencies: license-checker output could not be read as JSON: ');
+      expect(result.details).not.toContain('Cause:');
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   it('should limit the Gradle license report to the runtime classpath', async () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), 's003-gradle-'));
     try {
