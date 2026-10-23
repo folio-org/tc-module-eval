@@ -119,8 +119,6 @@ function hasExplicitLibraryMarker(
   return false;
 }
 
-// The project's own <artifactId>, not the <parent>'s or a dependency's. Synchronous: xml2js calls back before
-// parseString returns unless its async option is set.
 function readPomArtifactId(pomPath: string, warnings: string[]): string | undefined {
   if (!fs.existsSync(pomPath)) {
     return undefined;
@@ -136,12 +134,20 @@ function readPomArtifactId(pomPath: string, warnings: string[]): string | undefi
     warnings.push(`pom.xml is larger than ${MAX_POM_BYTES} bytes and was not read`);
     return undefined;
   }
+  return pomArtifactId(bytes.toString('utf-8'), warnings);
+}
 
+/**
+ * The project's own <artifactId> in pom.xml text, not the <parent>'s or a dependency's or plugin's, as written:
+ * properties are not resolved. Synchronous: xml2js calls back before parseString returns unless its async option
+ * is set.
+ */
+export function pomArtifactId(content: string, warnings: string[]): string | undefined {
   let done = false;
   let project: unknown;
   let parseError: unknown;
   try {
-    new Parser({ explicitArray: false, trim: true }).parseString(bytes.toString('utf-8'), (error, result) => {
+    new Parser({ explicitArray: false, trim: true }).parseString(content, (error, result) => {
       done = true;
       if (error) {
         parseError = error;
