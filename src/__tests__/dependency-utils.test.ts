@@ -219,22 +219,6 @@ describe('Dependency Utils', () => {
       });
     });
 
-    it('should handle dependencies with multiple licenses', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'dual.licensed:library',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'MIT']
-        }
-      ];
-      
-      const readmeContent = 'This is a test README';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-      
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
     it('should report issues for dependencies without license information', () => {
       const dependencies: Dependency[] = [
         {
@@ -309,35 +293,20 @@ describe('Dependency Utils', () => {
   });
 
   describe('Dual License Handling', () => {
-    it('should pass when dual-licensed with Category A (Apache-2.0|MIT)', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:dual-lib',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'MIT']
-        }
-      ];
+    // A dependency passes without README documentation when any of its licenses is Category A,
+    // whatever the other licenses are (Category X, B, unknown) and wherever the Category A license appears.
+    it.each([
+      ['Category A + Category A', 'org.example:dual-lib', ['Apache-2.0', 'MIT']],
+      ['Category A + Category X', 'org.example:mixed-lib', ['Apache-2.0', 'GPL-3.0']],
+      ['Category A + unknown', 'org.example:unknown-mix', ['Apache-2.0', 'SomeUnknownLicense']],
+      ['triple Category A', 'org.example:triple-lib', ['Apache-2.0', 'MIT', 'BSD-3-Clause']],
+      ['Category A + Category B', 'org.example:a-b-mix', ['Apache-2.0', 'MPL-2.0']],
+      ['Category B + Category A', 'org.example:previously-configured-dual', ['MPL-2.0', 'Apache-2.0']]
+    ])('should pass an undocumented dependency licensed %s', (_case, name, licenses) => {
+      const dependencies: Dependency[] = [{ name, version: '1.0.0', licenses }];
 
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
+      const result = checkLicenseCompliance(dependencies, 'No license documentation');
 
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
-    it('should pass when dual-licensed Category A + Category X (Apache-2.0|GPL-3.0)', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:mixed-lib',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'GPL-3.0']
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Category A wins over Category X
       expect(result.compliant).toBe(true);
       expect(result.issues).toHaveLength(0);
     });
@@ -376,23 +345,6 @@ describe('Dependency Utils', () => {
       expect(result.issues).toHaveLength(1);
     });
 
-    it('should pass when dual-licensed with unknown but has Category A (Apache-2.0|SomeUnknownLicense)', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:unknown-mix',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'SomeUnknownLicense']
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Known Category A license wins over unknown
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
     it('should handle multiple dual-licensed dependencies correctly', () => {
       const dependencies: Dependency[] = [
         {
@@ -419,73 +371,6 @@ describe('Dependency Utils', () => {
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].dependency.name).toBe('org.example:dual-x');
-    });
-
-    it('should handle triple-licensed dependencies (Apache-2.0|MIT|BSD-3-Clause)', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:triple-lib',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'MIT', 'BSD-3-Clause']
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // All are Category A
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
-    it('should split dual licenses from Maven THIRD-PARTY.txt format', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:maven-dual',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'MIT'] // Already split by parseMavenThirdPartyLine
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
-    it('should handle Category A + Category B dual license without requiring documentation', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:a-b-mix',
-          version: '1.0.0',
-          licenses: ['Apache-2.0', 'MPL-2.0']
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Category A wins, no documentation required
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
-    });
-
-    it('should evaluate (MPL-2.0|Apache-2.0) with OR logic - previously managed by config entry', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:previously-configured-dual',
-          version: '1.0.0',
-          licenses: ['MPL-2.0', 'Apache-2.0']
-        }
-      ];
-
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
-
-      // Apache-2.0 is Category A, so it should pass without documentation
-      expect(result.compliant).toBe(true);
-      expect(result.issues).toHaveLength(0);
     });
 
     it.each([
