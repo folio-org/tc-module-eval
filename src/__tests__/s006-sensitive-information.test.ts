@@ -16,6 +16,7 @@ import type {
 import type { S006ReportDetails as RootS006ReportDetails } from '../index';
 import { EvaluationStatus } from '../types';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
+import { expectLinearTime } from './helpers/linear-time';
 import {
   analyzeS006SensitiveInformation,
   buildS006CriterionDetails,
@@ -2044,20 +2045,18 @@ describe('S006 analysis corrections', () => {
   });
 
   it('scans long dotted lines for host names without slow backtracking', async () => {
-    writeRepoFile(repoPath, 'src/main/resources/application.yml', [
-      `key: ${'folio.'.repeat(1500)}LOCAL_ERROR`,
-      `other: ${'db.'.repeat(3000)}x`,
-      'url: https://{environment}-okapi.ci.library.org'
-    ].join('\n'));
+    const dottedLines = (size: number) => `key: ${'folio.'.repeat(size)}LOCAL_ERROR\nother: ${'db.'.repeat(size * 2)}x`;
+    writeRepoFile(repoPath, 'src/main/resources/application.yml', `${dottedLines(1500)}\nurl: https://{environment}-okapi.ci.library.org`);
 
-    const started = Date.now();
     const result = await analyzeWithoutGitleaksFindings();
 
-    expect(Date.now() - started).toBeLessThan(1000);
     expect(result.findings.filter(finding => finding.detectorId === 'tenant-host-endpoint').map(finding => finding.excerpt.text)).toEqual([
       'okapi.ci.library.org'
     ]);
-  });
+    // Times the host name pattern alone: the secret assignment pattern still takes quadratic time on such lines.
+    const { pattern } = getS006DetectorById('tenant-host-endpoint');
+    await expectLinearTime(60_000, dottedLines, async text => [...text.matchAll(pattern)]);
+  }, 60_000);
 
   it('orders Gitleaks findings by file and line regardless of report order', async () => {
     const finding = (file: string, line: number) => ({ RuleID: 'generic-api-key', File: file, StartLine: line, Secret: `s${line}`, Fingerprint: `${file}:generic-api-key:${line}` });

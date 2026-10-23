@@ -764,6 +764,7 @@ describe('criterion agent review', () => {
     expect(result.errors.join('\n')).toContain('capture truncated');
   });
 
+  // Up to 17 MiB passes through real processes, which takes seconds when other suites load the machine.
   it.each([
     ['above the former 1 MiB limit', 2, false],
     ['above the capture limit', 17, true]
@@ -799,7 +800,7 @@ else {
     } finally {
       fs.rmSync(bin, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it.each([1, 2, 3])('retains content-free debug records after timeout at stage %i', async stage => {
     const output = sanitizeStructuredOutput(JSON.stringify({ type: 'tool_use', timestamp: 1500, part: {

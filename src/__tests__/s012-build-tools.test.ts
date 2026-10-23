@@ -5,6 +5,7 @@ import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { CommandRunner, CriterionResult, EvaluationStatus, S012AnalysisResult } from '../types';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { DEFAULT_FOLIO_SHARED_WORKFLOWS_PATH, loadFolioSharedWorkflows } from '../utils/folio-shared-workflows';
+import { expectLinearTime } from './helpers/linear-time';
 
 class TestEvaluator extends SharedEvaluator {}
 
@@ -151,14 +152,19 @@ describe('S012 officially supported build tools', () => {
     });
 
     it('reads many Enforcer rules and executions in linear time', async () => {
-      const rules = '<requireMavenVersion><version>[3.9]</version></requireMavenVersion>'.repeat(3000);
-      const executions = '<execution><id>x</id><goals><goal>display-info</goal></goals></execution>'.repeat(3000);
-      await write({ 'pom.xml': POM(`<build><plugins><plugin><artifactId>maven-enforcer-plugin</artifactId><configuration><rules>${rules}</rules></configuration><executions>${executions}</executions></plugin></plugins></build>`) });
+      const result = await expectLinearTime(750, size => {
+        const rules = '<requireMavenVersion><version>[3.9]</version></requireMavenVersion>'.repeat(size);
+        const executions = '<execution><id>x</id><goals><goal>display-info</goal></goals></execution>'.repeat(size);
+        return POM(`<build><plugins><plugin><artifactId>maven-enforcer-plugin</artifactId><configuration><rules>${rules}</rules></configuration><executions>${executions}</executions></plugin></plugins></build>`);
+      }, async pom => {
+        await write({ 'pom.xml': pom });
+        return evaluate('java');
+      });
 
-      const started = Date.now();
-      await evaluate('java');
-      expect(Date.now() - started).toBeLessThan(1000);
-    });
+      // The larger POM was read in full: its rule was found and judged not to run.
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.details).toContain('so it does not count');
+    }, 60_000);
 
     it('leaves Gradle in service/ to a reviewer because the policy has no settled Gradle guidance', async () => {
       await write({

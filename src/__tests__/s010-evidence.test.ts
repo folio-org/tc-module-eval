@@ -5,6 +5,7 @@ import { execFileSync } from 'child_process';
 import { collectS010Evidence } from '../utils/s010-evidence';
 import { evaluateS010 } from '../utils/s010-evaluator';
 import { EvaluationStatus } from '../types';
+import { expectLinearTime } from './helpers/linear-time';
 
 const roots: string[] = [];
 
@@ -901,34 +902,32 @@ describe('S010 evidence collection', () => {
     ...files
   });
   const databaseYaml = (line: string) => ({ 'src/main/resources/application.yml': `spring:\n  datasource:\n${line}` });
-  // Each input took seconds before its fix and takes milliseconds after it.
-  it.each<[string, Record<string, string>, 'java' | 'javascript', number?]>([
-    ['a Spring @Value default that never closes', javaModule({
+  // Before its fix, each input took seconds at four times the size, because the work grew faster than linearly.
+  it.each<[string, (size: number) => Record<string, string>, 'java' | 'javascript', number]>([
+    ['a Spring @Value default that never closes', size => javaModule({
       'descriptors/ModuleDescriptor-template.json': JSON.stringify({ launchDescriptor: { env: Array(3).fill({ name: 'DB_URL', required: true }) } }),
-      'src/main/java/Config.java': '@Value("${DB_URL:'.repeat(11_000)
-    }), 'java'],
-    ['a startup method signature that never closes', javaModule({
-      'src/main/java/Migrations.java': `class Migrations implements InitializingBean { Flyway flyway; ${'run('.repeat(45_000)} }`
-    }), 'java'],
-    ['a long run of YAML indentation', javaModule(databaseYaml(`${' '.repeat(60_000)}x`)), 'java'],
-    ['a long run of spaces inside a YAML value', javaModule(databaseYaml(`    url: jdbc${' '.repeat(60_000)}x`)), 'java'],
-    ['a long run of spaces before a carriage return in a YAML value', javaModule(databaseYaml(`    url: ${' '.repeat(35_000)}x\ry`)), 'java'],
-    ['an unclosed process.env lookup', javaModule({ 'src/main/js/env.js': 'process.env['.repeat(16_000) }), 'java'],
-    ['many browser requests in one file', uiModule({
-      'src/requests.js': 'fetch("https://a.b/");\n'.repeat(8_000)
-    }), 'javascript'],
-    // Reading 300 files takes about a second of git calls; merging the declarations took far longer.
-    ['one environment variable declared many times', javaModule(Object.fromEntries(Array.from({ length: 300 }, (_, index) => [
-      `descriptors/ModuleDescriptor-${index}.json`, JSON.stringify({ launchDescriptor: { env: Array(400).fill({ name: 'DB_URL' }) } })
-    ]))), 'java', 5_000]
-  ])('stays fast on %s', async (_name, files, language, limit = 1_000) => {
-    const root = repository(files);
+      'src/main/java/Config.java': '@Value("${DB_URL:'.repeat(size)
+    }), 'java', 2_750],
+    ['a startup method signature that never closes', size => javaModule({
+      'src/main/java/Migrations.java': `class Migrations implements InitializingBean { Flyway flyway; ${'run('.repeat(size)} }`
+    }), 'java', 11_250],
+    ['a long run of YAML indentation', size => javaModule(databaseYaml(`${' '.repeat(size)}x`)), 'java', 15_000],
+    ['a long run of spaces inside a YAML value', size => javaModule(databaseYaml(`    url: jdbc${' '.repeat(size)}x`)), 'java', 15_000],
+    ['a long run of spaces before a carriage return in a YAML value', size => javaModule(databaseYaml(`    url: ${' '.repeat(size)}x\ry`)), 'java', 8_750],
+    ['an unclosed process.env lookup', size => javaModule({ 'src/main/js/env.js': 'process.env['.repeat(size) }), 'java', 4_000],
+    ['many browser requests in one file', size => uiModule({
+      'src/requests.js': 'fetch("https://a.b/");\n'.repeat(size)
+    }), 'javascript', 2_000],
+    // Merging the declarations grew with the square of the number of files that declare the variable.
+    ['one environment variable declared many times', size => javaModule(Object.fromEntries(Array.from({ length: size }, (_, index) => [
+      `descriptors/ModuleDescriptor-${index}.json`, JSON.stringify({ launchDescriptor: { env: Array(1_600).fill({ name: 'DB_URL' }) } })
+    ]))), 'java', 40]
+  ])('stays linear in time on %s', async (_name, files, language, size) => {
+    const result = await expectLinearTime(size, inputSize => repository(files(inputSize)), root => collectS010Evidence(root, language));
 
-    const started = Date.now();
-    await collectS010Evidence(root, language);
-
-    expect(Date.now() - started).toBeLessThan(limit);
-  }, 120_000);
+    // Every file of the larger input was read, so no source limit made that run cheaper.
+    expect(result.discoveryCoverage).toBe('complete');
+  }, 300_000);
 
   it('lists at most 1,000 dependency checks and says the list was cut', async () => {
     const root = repository({
