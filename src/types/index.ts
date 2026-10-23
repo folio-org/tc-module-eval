@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -137,6 +137,7 @@ export interface EvaluationRunArtifacts {
   buildTestEvidence?: import('./s012-build-tools').BuildTestEvidence;
   platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
   sonarCloudSnapshot?: import('./sonarcloud-snapshot').SonarCloudSnapshot;
+  s011SuppressionScan?: import('./s011-sonarqube').S011SuppressionScan;
 }
 
 export interface EvaluationRun {

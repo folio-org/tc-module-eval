@@ -54,6 +54,11 @@ export async function analyzeS013(repoPath: string, run: EvaluationRun, language
     run.getOrCreateArtifact('buildTestEvidence', () => collectBuildTestEvidence(repoPath)),
     getSonarCloudSnapshot(run, repoPath)
   ]);
+  // The exclusions qualify a coverage figure, so they are read only when SonarCloud has an analysis to show.
+  // S011's scan, shared through the run so it is made once when both criteria run.
+  const scopeScan = snapshot?.analysis && !snapshot.problem
+    ? await run.getOrCreateArtifact('s011SuppressionScan', async () => scanS011Suppressions(repoPath, evidence, tableLoad.ok ? tableLoad.table : undefined))
+    : undefined;
   return evaluateS013({
     language,
     policyLoad,
@@ -62,8 +67,7 @@ export async function analyzeS013(repoPath: string, run: EvaluationRun, language
     remoteLookups: Boolean(run.remoteLookups),
     snapshot,
     repositoryCommit: run.repositoryCommit,
-    // The exclusions qualify a coverage figure, so they are read only when SonarCloud has an analysis to show.
-    scopeScan: snapshot?.analysis && !snapshot.problem ? scanS011Suppressions(repoPath, evidence, tableLoad.ok ? tableLoad.table : undefined) : undefined
+    scopeScan
   });
 }
 

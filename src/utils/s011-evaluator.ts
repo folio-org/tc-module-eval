@@ -42,7 +42,8 @@ export async function analyzeS011(repoPath: string, run: EvaluationRun): Promise
     loadFolioSharedWorkflows()
   ]);
   const workflows = table.ok ? table.table : undefined;
-  const scan = scanS011Suppressions(repoPath, ci, workflows);
+  // Made once per run: S013 lists the coverage settings from the same scan.
+  const scan = await run.getOrCreateArtifact('s011SuppressionScan', async () => scanS011Suppressions(repoPath, ci, workflows));
   const sonarFlags = scan.sharedWorkflows.map(name => workflows?.workflows[name]?.sonar);
   const inputs: S011Inputs = {
     remoteLookups: Boolean(run.remoteLookups),
