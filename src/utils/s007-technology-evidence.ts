@@ -426,7 +426,7 @@ async function visitMavenPom(
     // Keep a managed version whose property is not defined here too: a child POM may define it, and Maven then
     // uses the managed version rather than any other.
     if (rawVersion && managedKey) {
-      effective.dependencyManagement.set(mavenManagementKey(managedKey), {
+      effective.dependencyManagement.set(mavenDependencyKey(managedKey), {
         rawValue: rawVersion,
         value: resolvedVersion?.value ?? '',
         sourcePath: resolvedVersion?.sourcePath ?? sourcePath
@@ -523,7 +523,7 @@ function collectMavenDependencies(
     // Maven manages each type and classifier separately: a managed test-jar version is not the jar's version.
     const managed = rawVersion || !mavenDependency
       ? undefined
-      : effective.dependencyManagement.get(mavenManagementKey(mavenDependency));
+      : effective.dependencyManagement.get(mavenDependencyKey(mavenDependency));
     const managedResolved = managed
       ? resolveMavenValue(managed.rawValue, effective.properties, managed.sourcePath)
       : undefined;
@@ -582,7 +582,7 @@ function springBootVersionProperty(
   return value ? { name, ...value } : undefined;
 }
 
-function mavenManagementKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
+export function mavenDependencyKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
   return [dependency.groupId, dependency.artifactId, dependency.type, dependency.classifier].join(':');
 }
 

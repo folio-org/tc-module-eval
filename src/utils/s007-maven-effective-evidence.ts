@@ -10,7 +10,7 @@ import {
 } from '../types';
 import { MAVEN_NETWORK_POLICY } from './build-tool-policies';
 import { isWithinRepo } from './repo-files';
-import { finalizeS007TechnologyEvidence, matchJavaIdentity } from './s007-technology-evidence';
+import { finalizeS007TechnologyEvidence, matchJavaIdentity, mavenDependencyKey } from './s007-technology-evidence';
 
 const EFFECTIVE_POM_GOAL = 'org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom';
 const MAX_EFFECTIVE_POM_BYTES = 2 * 1024 * 1024;
@@ -250,10 +250,6 @@ function sameProject(source: MavenProjectIdentity, effective: MavenProjectIdenti
   return source.groupId === effective.groupId &&
     source.artifactId === effective.artifactId &&
     source.version === effective.version;
-}
-
-function mavenDependencyKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
-  return [dependency.groupId, dependency.artifactId, dependency.type, dependency.classifier].join(':');
 }
 
 function mavenCoordinatesFromDependency(dependency: any): string | undefined {

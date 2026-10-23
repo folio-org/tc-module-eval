@@ -22,17 +22,9 @@ import { isNonEmptyString, isValidDependency } from './type-guards';
  * @returns Array of unique dependencies
  */
 function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
-  if (!Array.isArray(dependencies)) {
-    return [];
-  }
-
   const uniqueMap = new Map<string, Dependency>();
 
   for (const dep of dependencies) {
-    if (!isValidDependency(dep)) {
-      continue;
-    }
-
     const key = `${dep.name}:${dep.version}`;
 
     // If we haven't seen this dependency before, or if the current one has license info and the stored one doesn't

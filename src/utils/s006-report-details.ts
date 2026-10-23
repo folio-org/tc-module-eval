@@ -126,7 +126,7 @@ export function s006AgentReviewSubjectNames(
 }
 
 /** The sole projection from internal detector evidence into shareable report data. */
-export function projectS006ReportFinding(finding: S006SensitiveInformationFinding): S006ReportFinding {
+function projectS006ReportFinding(finding: S006SensitiveInformationFinding): S006ReportFinding {
   const disposition = finding.statusImpact === 'deterministic_fail'
     ? 'deterministic_failure'
     : 'scanner_or_pattern_candidate';
@@ -164,7 +164,7 @@ export function s006AssignedName(finding: S006SensitiveInformationFinding): stri
   return undefined;
 }
 
-export function buildFindingSummary(
+function buildFindingSummary(
   findings: Array<Pick<S006ReportFinding, 'confidence' | 'severity'>>
 ): S006ReportDetails['findingSummary'] {
   if (!findings.length) {
