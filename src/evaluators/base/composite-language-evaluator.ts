@@ -1,18 +1,11 @@
 import { LanguageEvaluator, CriterionResult, SectionEvaluator, EvaluationRun } from '../../types';
 import { getLogger } from '../../utils/logger';
 
-/**
- * Abstract base class for language evaluators that delegate to
- * an ordered list of section evaluators.
- */
 export abstract class CompositeLanguageEvaluator implements LanguageEvaluator {
 
   abstract canEvaluate(repoPath: string): Promise<boolean>;
   abstract getLanguage(): string;
 
-  /**
-   * Return the ordered list of section evaluators to run.
-   */
   protected abstract getSectionEvaluators(): SectionEvaluator[];
 
   /**

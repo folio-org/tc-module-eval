@@ -44,11 +44,6 @@ export function readRepoTextFile(repoPath: string, relativePath: string, maxByte
   }
 }
 
-/**
- * Safely read file contents
- * @param filePath - Path to file
- * @returns File contents or null if file doesn't exist or can't be read
- */
 export function safeReadFile(filePath: string): string | null {
   try {
     if (!fs.existsSync(filePath)) {

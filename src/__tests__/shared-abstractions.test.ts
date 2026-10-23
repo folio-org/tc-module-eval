@@ -13,10 +13,8 @@ jest.mock('fs-extra', () => ({
   readFile: jest.fn().mockResolvedValue('')
 }));
 
-// Concrete subclass for testing SharedEvaluator
 class TestSharedEvaluator extends SharedEvaluator {}
 
-// Concrete subclass that overrides a handler
 class OverriddenSharedEvaluator extends SharedEvaluator {
   constructor() {
     super();
@@ -28,7 +26,6 @@ class OverriddenSharedEvaluator extends SharedEvaluator {
   }
 }
 
-// Stub section evaluator for CompositeLanguageEvaluator tests
 class StubSectionEvaluator extends BaseSectionEvaluator {
   readonly sectionName: string;
 
@@ -41,7 +38,6 @@ class StubSectionEvaluator extends BaseSectionEvaluator {
   }
 }
 
-// Concrete CompositeLanguageEvaluator for testing
 class TestCompositeEvaluator extends CompositeLanguageEvaluator {
   private sections: SectionEvaluator[];
 
@@ -210,13 +206,11 @@ describe('BaseSectionEvaluator', () => {
 
     expect(results).toHaveLength(3);
     expect(results[0].status).toBe(EvaluationStatus.PASS);
-    // The throwing handler should produce a MANUAL error result
     expect(results[1].criterionId).toBe('X002');
     expect(results[1].status).toBe(EvaluationStatus.MANUAL);
     expect(results[1].evidence).toContain('Handler exploded');
     expect(results[1].evidence).toContain('[REDACTED_PRIVATE_URL]');
     expect(results[1].evidence).not.toContain('localhost:8080');
-    // Evaluation continues after the error
     expect(results[2].status).toBe(EvaluationStatus.PASS);
   });
 
@@ -321,7 +315,6 @@ describe('CompositeLanguageEvaluator', () => {
       'X001': async () => ({ criterionId: 'X001', status: EvaluationStatus.PASS, evidence: 'ok' }),
     });
 
-    // Create a section that throws during evaluate()
     const throwingSection: SectionEvaluator = {
       sectionName: 'Broken',
       criteriaIds: ['Z001'],

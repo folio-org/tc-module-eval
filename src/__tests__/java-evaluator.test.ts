@@ -2,7 +2,6 @@ import { JavaEvaluator } from '../evaluators/java-evaluator';
 import { EvaluationStatus } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
-// Mock fs-extra module with factory function
 jest.mock('fs-extra', () => ({
   pathExists: jest.fn(),
   readFile: jest.fn()

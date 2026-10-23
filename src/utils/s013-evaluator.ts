@@ -99,8 +99,6 @@ export function evaluateS013(inputs: S013Inputs): S013Analysis {
   };
 }
 
-// ---- Coverage: SonarCloud's overall figure on the evaluated commit ----
-
 function coverageHalf(inputs: S013Inputs): S013Coverage {
   const snapshot = inputs.snapshot;
   if (!inputs.remoteLookups || !snapshot) {
@@ -225,8 +223,6 @@ function coverageScope(inputs: S013Inputs, scan: S011SuppressionScan): S013Cover
   };
 }
 
-// ---- Test technologies against the s013 sections of the supported-technologies policy ----
-
 function technologyHalf(inputs: S013Inputs, area: 'frontend' | 'backend'): S013Technologies {
   const ecosystem = area === 'frontend' ? 'javascript' : 'java';
   const sections = inputs.policyLoad.ok ? policySections(inputs.policyLoad.policy, 's013', area) : [];
@@ -280,8 +276,6 @@ function technologyHalf(inputs: S013Inputs, area: 'frontend' | 'backend'): S013T
     findings
   };
 }
-
-// ---- Report ----
 
 export function renderS013HumanDetails(analysis: S013Analysis): string {
   const lines: string[] = [];

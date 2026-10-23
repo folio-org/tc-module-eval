@@ -1,7 +1,3 @@
-/**
- * Tests for dependency analysis utilities
- */
-
 import { getDependencies } from '../utils/dependency-orchestrator';
 import { checkLicenseCompliance } from '../utils/license-compliance';
 import { LicenseCategory } from '../utils/license-policy';
@@ -10,18 +6,15 @@ import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Mock fs and child_process for testing
 jest.mock('fs');
 jest.mock('child_process');
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
-// Mock the license configuration loading
 jest.mock('../utils/license-policy', () => {
   const actual = jest.requireActual('../utils/license-policy');
   return {
     ...actual,
-    // Provide test configuration data
     getLicenseCategoryNormalized: jest.fn((licenseName: string) => {
       const testCategories: Record<string, string> = {
         'Apache-2.0': 'A',
@@ -161,7 +154,6 @@ describe('Dependency Utils', () => {
       ]);
     });
 
-    // Comprehensive Category B license tests
     describe('Category B License Documentation Tests', () => {
       const categoryBDependencies: Dependency[] = [
         { name: 'org.mozilla:rhino', version: '1.7.14', licenses: ['MPL-2.0'] },
@@ -170,7 +162,7 @@ describe('Dependency Utils', () => {
       ];
 
       it('should not accept a license family keyword as a README mention of the dependency', () => {
-        // Each line used to count: "eclipse"/"epl" (also inside "deployment"), "mozilla"/"mpl" (inside "example"),
+        // Each line has a license family keyword: "eclipse"/"epl" (also inside "deployment"), "mozilla"/"mpl" (inside "example"),
         // and "common development". None of them names a dependency.
         const readmeContent = [
           'This project uses Mozilla Public License, Eclipse Public License and',
@@ -323,7 +315,6 @@ describe('Dependency Utils', () => {
       const readmeContent = 'This project bundles dual-b-lib under the MPL-2.0.';
       const result = checkLicenseCompliance(dependencies, readmeContent);
 
-      // ANY Category B documented = pass
       expect(result.compliant).toBe(true);
       expect(result.issues).toHaveLength(0);
     });
@@ -374,18 +365,17 @@ describe('Dependency Utils', () => {
     });
 
     it.each([
-      ['pipe separator', 'org.example:unsplit-licenses', 'Apache-2.0|MIT'], // Parser failed to split!
-      ['OR separator', 'org.example:npm-style-unsplit', 'MIT OR Apache-2.0'], // npm/SPDX format - parser should split!
-      ['AND separator', 'org.example:spdx-and-unsplit', 'LGPL-2.1 AND MIT'], // SPDX format - parser should split!
-      ['parentheses', 'org.example:complex-unsplit', '(MIT OR Apache-2.0)'], // Complex SPDX expression - parser should split!
-      ['WITH keyword', 'org.example:spdx-exception-unsplit', 'Apache-2.0 WITH LLVM-exception'] // SPDX exception - parser should normalize!
+      ['pipe separator', 'org.example:unsplit-licenses', 'Apache-2.0|MIT'],
+      ['OR separator', 'org.example:npm-style-unsplit', 'MIT OR Apache-2.0'],
+      ['AND separator', 'org.example:spdx-and-unsplit', 'LGPL-2.1 AND MIT'],
+      ['parentheses', 'org.example:complex-unsplit', '(MIT OR Apache-2.0)'],
+      ['WITH keyword', 'org.example:spdx-exception-unsplit', 'Apache-2.0 WITH LLVM-exception']
     ])('should detect parser contract violation when licenses contain %s', (_name, name, license) => {
       const dependencies: Dependency[] = [{ name, version: '1.0.0', licenses: [license] }];
 
       const readmeContent = 'No license documentation';
       const result = checkLicenseCompliance(dependencies, readmeContent);
 
-      // Should fail due to parser contract violation
       expect(result.compliant).toBe(false);
       expect(result.issues).toHaveLength(1);
       expect(result.issues[0].reason).toContain('combines several licenses and could not be checked');

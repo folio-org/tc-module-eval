@@ -208,8 +208,6 @@ async function readDeclarations(context: Context): Promise<void> {
   }
 }
 
-// ---- Test technologies (S013) ----
-
 interface TestTechnology {
   id: string;
   displayName: string;
@@ -696,8 +694,6 @@ function resolvePomProperties(value: string, project: Record<string, any>): stri
     return property && !property.includes('${') ? property : reference;
   });
 }
-
-// ---- Bounded, symlink-safe reads ----
 
 function isRegularFile(context: Context, relativePath: string): boolean {
   const stats = lstat(context, relativePath);

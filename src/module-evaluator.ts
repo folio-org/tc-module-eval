@@ -59,11 +59,6 @@ export class ModuleEvaluator {
     ];
   }
 
-  /**
-   * Evaluate a FOLIO module repository
-   * @param repositoryUrl GitHub URL of the repository
-   * @returns Promise<EvaluationResult> Complete evaluation result
-   */
   async evaluateModule(repositoryUrl: string): Promise<EvaluationResult> {
     let repoPath = '';
 
@@ -143,11 +138,6 @@ export class ModuleEvaluator {
     }
   }
 
-  /**
-   * Select the appropriate evaluator for the repository
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<LanguageEvaluator | null> Selected evaluator or null
-   */
   private async selectEvaluator(repoPath: string): Promise<LanguageEvaluator | null> {
     for (const evaluator of this.evaluators) {
       if (await evaluator.canEvaluate(repoPath)) {
@@ -157,11 +147,6 @@ export class ModuleEvaluator {
     return null;
   }
 
-  /**
-   * Summarize evaluation results
-   * @param results Array of criterion results
-   * @returns string Summary of results
-   */
   private summarizeResults(results: CriterionResult[]): string {
     const pass = results.filter(r => r.status === EvaluationStatus.PASS).length;
     const fail = results.filter(r => r.status === EvaluationStatus.FAIL).length;
@@ -171,27 +156,14 @@ export class ModuleEvaluator {
     return `${pass} passed, ${fail} failed, ${manual} require manual review, ${notApplicable} not applicable`;
   }
 
-  /**
-   * Add a new language evaluator
-   * @param evaluator Language evaluator to add
-   */
   addEvaluator(evaluator: LanguageEvaluator): void {
     this.evaluators.push(evaluator);
   }
 
-  /**
-   * Get list of supported languages
-   * @returns string[] Array of supported language names
-   */
   getSupportedLanguages(): string[] {
     return this.evaluators.map(evaluator => evaluator.getLanguage());
   }
 
-  /**
-   * Validate criteria filter against available criteria
-   * @param criteriaFilter Array of criterion IDs to validate
-   * @param evaluator The language evaluator being used
-   */
   private validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): void {
     const availableCriteria = Array.from(getCriteriaForLanguage(evaluator.getLanguage()));
     const invalidCriteria = criteriaFilter.filter(id => !availableCriteria.includes(id));

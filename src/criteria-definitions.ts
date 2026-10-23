@@ -7,9 +7,6 @@
 
 import { CriterionResult, EvaluationStatus } from './types';
 
-/**
- * Individual criterion definition
- */
 export interface CriterionDefinition {
   id: string;
   description: string;
@@ -443,31 +440,14 @@ function criteriaIdsForSection<S extends CriterionSection>(
     .map(criterion => criterion.id) as CriteriaIdsForSection<typeof ACCEPTANCE_CRITERION_CATALOG, S>;
 }
 
-/**
- * Administrative criteria
- */
 export const ADMINISTRATIVE_CRITERIA = criteriaIdsForSection('Administrative');
 
-/**
- * Shared/Common criteria - apply to all FOLIO modules
- */
 export const SHARED_CRITERIA = criteriaIdsForSection('Shared/Common');
 
-/**
- * Backend criteria - specific to backend/server-side modules
- */
 export const BACKEND_CRITERIA = criteriaIdsForSection('Backend');
 
-/**
- * Frontend criteria - specific to frontend/UI modules
- */
 export const FRONTEND_CRITERIA = criteriaIdsForSection('Frontend');
 
-/**
- * Get all criteria IDs for a specific language/module type
- * @param language The programming language or module type
- * @returns Array of criterion IDs applicable to that language
- */
 export function getCriteriaForLanguage(language: string): readonly string[] {
   switch (language.toLowerCase()) {
     case 'java':
@@ -484,18 +464,12 @@ export function getCriteriaForLanguage(language: string): readonly string[] {
   }
 }
 
-/**
- * Get all criteria IDs in canonical order for a catalog language.
- */
 export function getCriteriaForCatalogLanguage(language: CriterionLanguage): readonly string[] {
   return (ACCEPTANCE_CRITERION_CATALOG as readonly AcceptanceCriterionDefinition[])
     .filter(criterion => criterion.languages.includes(language))
     .map(criterion => criterion.id);
 }
 
-/**
- * Get all criteria IDs for a section and language in canonical order.
- */
 export function getCriteriaForSection(
   section: CriterionSection,
   language: CriterionLanguage
@@ -505,9 +479,6 @@ export function getCriteriaForSection(
     .map(criterion => criterion.id);
 }
 
-/**
- * Get the catalog entry for a criterion ID.
- */
 export function getAcceptanceCriterionDefinition(criterionId: string): AcceptanceCriterion | undefined {
   return ACCEPTANCE_CRITERION_CATALOG.find(criterion => criterion.id === criterionId);
 }

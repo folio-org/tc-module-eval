@@ -48,7 +48,7 @@ export async function enrichS007WithMavenEffectivePom(
   const poms = [...unresolvedByPom].slice(0, MAX_EFFECTIVE_POMS);
   const effectivePoms = await settleWithConcurrency(poms, MAX_CONCURRENT_EFFECTIVE_POMS, ([sourcePath]) =>
     produceEffectivePom(repoPath, sourcePath, evaluationRun, commandRunner));
-  // Apply the results in POM order, as the sequential runs did.
+  // Apply the results in POM order, not in the order the runs finished.
   for (const [index, [sourcePath, unresolved]] of poms.entries()) {
     const outcome = effectivePoms[index];
     if (outcome.status === 'rejected') throw outcome.reason;

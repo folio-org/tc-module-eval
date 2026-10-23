@@ -6,8 +6,6 @@ import { errorMessage } from './type-guards';
 // Pure parsers for build and package files: text in, declarations out. They read no files and run no commands,
 // so the S007, S009 and S012 collectors decide what to read, how much, and what a parse failure means for them.
 
-// ---- Maven POM ----
-
 export type PomParseResult =
   | { ok: true; project: Record<string, any> }
   | { ok: false; reason: 'invalid-xml'; message: string }
@@ -133,8 +131,6 @@ export function pomRequiredMavenVersions(project: Record<string, any>): Required
   return result;
 }
 
-// ---- Java .properties (gradle.properties, wrapper properties) ----
-
 /** key=value lines; comments (# or !) and lines without "=" are skipped. Escapes are not interpreted. */
 export function parseJavaProperties(content: string): Map<string, string> {
   const properties = new Map<string, string>();
@@ -146,8 +142,6 @@ export function parseJavaProperties(content: string): Map<string, string> {
   }
   return properties;
 }
-
-// ---- package.json ----
 
 export type PackageJsonParseResult =
   | { ok: true; manifest: Record<string, unknown> }
@@ -187,8 +181,6 @@ export function packageDependencyEntries(manifest: Record<string, unknown>, fiel
   }
   return entries;
 }
-
-// ---- yarn.lock ----
 
 export type YarnLockfile =
   | { format: 'v1'; entries: Record<string, { version?: unknown }> }
@@ -241,8 +233,6 @@ export function yarnLockVersionsByName(entries: Record<string, { version?: unkno
   }
   return [...versions].sort((left, right) => semver.valid(left) && semver.valid(right) ? semver.compare(left, right) : left.localeCompare(right));
 }
-
-// ---- Gradle build scripts ----
 
 /** The script with comments replaced by spaces, keeping line breaks and string literals, so offsets still match. */
 export function stripGradleComments(content: string): string {

@@ -4,9 +4,6 @@ import * as path from 'path';
 import * as os from 'os';
 import { getLogger } from './logger';
 
-/**
- * Git utilities for cloning and managing repositories
- */
 export class GitUtils {
   private tempDir: string;
   private timeoutMs: number;
@@ -16,12 +13,6 @@ export class GitUtils {
     this.timeoutMs = timeoutMs;
   }
 
-  /**
-   * Clone a repository to a temporary directory
-   * @param repositoryUrl GitHub URL of the repository
-   * @param branch Optional branch name to clone (defaults to repository's default branch)
-   * @returns Promise<string> Path to the cloned repository
-   */
   async cloneRepository(repositoryUrl: string, branch?: string): Promise<string> {
     const repoName = this.extractRepoName(repositoryUrl);
     const clonePath = path.join(this.tempDir, repoName, Date.now().toString());
@@ -85,10 +76,6 @@ export class GitUtils {
     }
   }
 
-  /**
-   * Clean up cloned repository
-   * @param repoPath Path to the cloned repository
-   */
   async cleanup(repoPath: string): Promise<void> {
     if (await fs.pathExists(repoPath)) {
       await fs.remove(repoPath);
@@ -96,21 +83,11 @@ export class GitUtils {
     }
   }
 
-  /**
-   * Extract repository name from GitHub URL
-   * @param repositoryUrl GitHub URL
-   * @returns Repository name
-   */
   private extractRepoName(repositoryUrl: string): string {
     const match = repositoryUrl.match(/\/([^\/]+?)(?:\.git)?$/);
     return match ? match[1] : 'unknown-repo';
   }
 
-  /**
-   * Get basic repository information
-   * @param repoPath Path to the cloned repository
-   * @returns Basic repository info
-   */
   async getRepoInfo(repoPath: string): Promise<{
     name: string;
     commit: string;

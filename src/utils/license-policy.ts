@@ -6,11 +6,6 @@
  *
  * Configuration is loaded from external JSON files to allow non-developers
  * to update license policies without code changes.
- *
- * Categories:
- * - Category A: Licenses that are compatible with the Apache License 2.0
- * - Category B: Licenses that may be included but require appropriate labeling
- * - Category X: Licenses that are prohibited and cannot be included
  */
 
 import * as fs from 'fs';
@@ -18,9 +13,6 @@ import * as path from 'path';
 import { LicenseCategoriesConfig, SpecialExceptionsConfig, LicenseVariationsConfig } from '../types';
 import { getLogger } from './logger';
 
-/**
- * License categories according to ASF policy
- */
 export enum LicenseCategory {
   A = 'A', // Compatible licenses
   B = 'B', // Conditional licenses (require labeling)
@@ -28,18 +20,11 @@ export enum LicenseCategory {
   X = 'X'  // Prohibited licenses
 }
 
-/**
- * Cached configuration data
- */
 let licensePolicy: Map<string, LicenseCategory> | null = null;
 let licenseVariations: Map<string, string> | null = null;
 let specialExceptionsConfig: SpecialExceptionsConfig | null = null;
 
-/**
- * Get the path to the config directory
- */
 function getConfigPath(): string {
-  // Look for config directory relative to the current module
   const currentDir = __dirname;
 
   // Try multiple possible paths to handle different execution contexts
@@ -50,7 +35,6 @@ function getConfigPath(): string {
     path.join(currentDir, '..', '..', 'config'),
     // From test context
     path.join(process.cwd(), 'config'),
-    // Alternative paths
     path.join(__dirname, '..', '..', '..', 'config'),
     path.join(__dirname, '..', 'config')
   ];
@@ -61,13 +45,9 @@ function getConfigPath(): string {
     }
   }
 
-  // Fallback to process.cwd()/config
   return path.join(process.cwd(), 'config');
 }
 
-/**
- * Load license categories configuration from JSON file
- */
 function loadLicenseCategories(): Map<string, LicenseCategory> {
   if (licensePolicy !== null) {
     return licensePolicy;
@@ -91,15 +71,11 @@ function loadLicenseCategories(): Map<string, LicenseCategory> {
     return policy;
   } catch (error) {
     getLogger().error('Failed to load license categories configuration:', error);
-    // Return empty map as fallback
     return new Map<string, LicenseCategory>();
   }
 }
 
 
-/**
- * Load special exceptions configuration from JSON file
- */
 function loadSpecialExceptionsConfig(): SpecialExceptionsConfig {
   if (specialExceptionsConfig !== null) {
     return specialExceptionsConfig;
@@ -114,7 +90,6 @@ function loadSpecialExceptionsConfig(): SpecialExceptionsConfig {
     return config;
   } catch (error) {
     getLogger().error('Failed to load special exceptions configuration:', error);
-    // Return minimal fallback configuration
     return {
       exceptions: [
         { name: 'org.hibernate', description: 'Hibernate ORM libraries', matchType: 'prefix' }
@@ -155,9 +130,6 @@ export function isListedLicenseName(licenseName: string): boolean {
   return loadLicenseCategories().has(licenseName) || loadLicenseVariations().has(licenseName);
 }
 
-/**
- * Load license variations configuration from JSON file
- */
 function loadLicenseVariations(): Map<string, string> {
   if (licenseVariations !== null) {
     return licenseVariations;
@@ -177,22 +149,15 @@ function loadLicenseVariations(): Map<string, string> {
     return variations;
   } catch (error) {
     getLogger().error('Failed to load license variations configuration:', error);
-    // Return empty map as fallback
     return new Map<string, string>();
   }
 }
 
-/**
- * Normalize license name by extracting clean license and applying comprehensive mapping
- * @param licenseName The raw license name to normalize
- * @returns The normalized license name that should match ASF_LICENSE_POLICY keys
- */
 export function normalizeLicenseName(licenseName: string): string {
   if (!licenseName) {
     return licenseName;
   }
 
-  // Step 1: Extract license from parenthetical format (License Name) artifact-info
   let cleanName = licenseName.trim();
 
   // Extract from (license-name) format if present (common in Maven output)
@@ -208,8 +173,7 @@ export function normalizeLicenseName(licenseName: string): string {
     return variations.get(cleanName)!;
   }
 
-  // Step 2: Remove any trailing artifact information after the license name
-  // Common patterns: "license name (artifact-info", "license name - url", etc.
+  // Trailing artifact text, such as "license name (artifact-info" or "license name - url".
   const trailingPatterns = [
     /\s+\([^)]*$/,  // Remove trailing (...
     /\s+-\s+.*$/,   // Remove trailing - ...
@@ -220,34 +184,23 @@ export function normalizeLicenseName(licenseName: string): string {
     cleanName = cleanName.replace(pattern, '');
   }
 
-  // Step 3: Clean up whitespace
   cleanName = cleanName.trim();
 
-  // Step 4: Try direct mapping from comprehensive license variation map
   if (variations.has(cleanName)) {
     return variations.get(cleanName)!;
   }
 
-  // Step 5: Return the cleaned name if no mapping was found
-  // This preserves unknown licenses while still cleaning formatting
   return cleanName;
 }
 
-/**
- * Get the license category for a given license name with normalization
- * @param licenseName The license name to categorize
- * @returns LicenseCategory or undefined if not found
- */
 export function getLicenseCategoryNormalized(licenseName: string): LicenseCategory | undefined {
   const policy = loadLicenseCategories();
 
-  // Try exact match first
   const exactMatch = policy.get(licenseName);
   if (exactMatch) {
     return exactMatch;
   }
 
-  // Try normalized match
   const normalizedName = normalizeLicenseName(licenseName);
   return policy.get(normalizedName);
 }

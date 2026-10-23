@@ -4,9 +4,6 @@ import { EvaluationResult, ReportOptions } from '../types';
 import { getLogger } from './logger';
 import { EvaluationReportRenderer, ReportRenderer } from './report-renderer';
 
-/**
- * Generates HTML and JSON reports from evaluation results
- */
 export class ReportGenerator {
   private outputDir: string;
   private renderer: ReportRenderer;
@@ -16,12 +13,6 @@ export class ReportGenerator {
     this.renderer = renderer;
   }
 
-  /**
-   * Generate reports based on evaluation results
-   * @param result Evaluation result
-   * @param options Report generation options
-   * @returns Promise<{ htmlPath?: string; jsonPath?: string }> Paths to generated reports
-   */
   async generateReports(
     result: EvaluationResult, 
     options: ReportOptions = {}
@@ -49,22 +40,12 @@ export class ReportGenerator {
     return paths;
   }
 
-  /**
-   * Generate JSON report
-   * @param result Evaluation result
-   * @param outputPath Path to save JSON report
-   */
   private async generateJsonReport(result: EvaluationResult, outputPath: string): Promise<void> {
     const jsonContent = this.renderer.renderJson(result);
     await fs.writeFile(outputPath, jsonContent);
     getLogger().info(`JSON report generated: ${outputPath}`);
   }
 
-  /**
-   * Generate HTML report
-   * @param result Evaluation result
-   * @param outputPath Path to save HTML report
-   */
   private async generateHtmlReport(result: EvaluationResult, outputPath: string): Promise<void> {
     const htmlContent = this.renderer.renderHtml(result);
     await fs.writeFile(outputPath, htmlContent);

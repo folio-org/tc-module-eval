@@ -38,9 +38,6 @@ function formatProblem(problem: DependencyExtractionError): string {
   return `  - ${tag ? `[${tag}] ` : ''}${reportText(problem.message)}`;
 }
 
-/**
- * Format extraction errors into a detailed string for inclusion in criterion results.
- */
 export function formatExtractionErrors(errors: DependencyExtractionError[]): string {
   return errors
     .map(e => {
@@ -92,9 +89,6 @@ const ISSUE_GROUPS: Array<{ type: LicenseIssueType; title: string; action: strin
   }
 ];
 
-/**
- * Find and read README content from a repository, checking common filename variants.
- */
 export function findReadmeContent(repoPath: string): string {
   const readmeFiles = ['README.md', 'README.txt', 'README', 'readme.md', 'readme.txt'];
 
@@ -107,9 +101,6 @@ export function findReadmeContent(repoPath: string): string {
   return '';
 }
 
-/**
- * Build an evidence summary string from a list of dependencies.
- */
 export function buildEvidenceSummary(dependencies: Dependency[]): string {
   // Every dependency is listed, so the HTML report's license groups add up to the count.
   // The report parses this exact "Found N dependencies. Licenses: name:version (license); ..." form.
@@ -120,9 +111,6 @@ export function buildEvidenceSummary(dependencies: Dependency[]): string {
   return `Found ${count}. Licenses: ${licenseInfo}`;
 }
 
-/**
- * Determine the final CriterionResult based on compliance result, evidence, and warnings.
- */
 export function determineComplianceStatus(
   criterionId: string,
   complianceResult: ComplianceResult,
@@ -171,9 +159,6 @@ export function determineComplianceStatus(
   };
 }
 
-/**
- * Deep module for evaluating third-party license compliance (S003).
- */
 export class ThirdPartyLicenseEvaluator {
   constructor(
     private readonly adapters: ThirdPartyLicenseEvaluatorAdapters = {
@@ -183,9 +168,6 @@ export class ThirdPartyLicenseEvaluator {
     }
   ) {}
 
-  /**
-   * Evaluates third-party license compliance for any project type.
-   */
   async evaluate(repoPath: string, criterionId: string = 'S003', evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     try {
       const previousCommandIdentities = new Set(evaluationRun?.commandObservations.keys() ?? []);
@@ -285,14 +267,6 @@ export class ThirdPartyLicenseEvaluator {
 
 const defaultThirdPartyLicenseEvaluator = new ThirdPartyLicenseEvaluator();
 
-/**
- * Evaluates third-party license compliance (S003) for any project type.
- * This is a language-agnostic evaluation that works with Maven, Gradle, and npm projects
- * through the dependency-orchestrator auto-detection.
- *
- * @param repoPath Path to the repository to evaluate
- * @returns CriterionResult for S003 evaluation
- */
 export async function evaluateS003ThirdPartyLicenses(
   repoPath: string,
   evaluationRun?: EvaluationRun

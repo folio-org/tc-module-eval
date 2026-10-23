@@ -51,7 +51,6 @@ export const S005_CATEGORY_TITLES: Record<S005PersonalDataCategory, string> = {
   other: 'Other personal data'
 };
 
-// Short tags shown next to evidence references; they must stay single words for the report's tag chips.
 export const S005_SOURCE_CLASS_TAGS: Record<S005PersonalDataEvidenceSourceClass, string> = {
   direct_contract: 'schema',
   implementation: 'code',

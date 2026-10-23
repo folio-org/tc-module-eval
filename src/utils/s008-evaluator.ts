@@ -273,8 +273,6 @@ export function renderS008HumanDetails(analysis: S008AnalysisResult): string {
   section('Problems with the evaluator\'s catalog or ledger:', analysis.policyDiagnostics.map(diagnosticLine));
 
   const catalog = analysis.catalog;
-  // "Declarations read from" sits here, not at the top, so the details have at most eight top-level rows and sections:
-  // the HTML report shows only six of nine or more.
   section('Sources:', [
     ...(analysis.declarations.sourcePaths.length ? [`  - Declarations read from: ${analysis.declarations.sourcePaths.map(reportPath).join(', ')}`] : []),
     `  - Catalog channel: ${analysis.channel}`,
