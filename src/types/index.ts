@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -136,6 +136,7 @@ export interface EvaluationRunArtifacts {
   s010ThirdPartyEvidence?: import('./s010-third-party-resilience').S010Evidence;
   buildTestEvidence?: import('./s012-build-tools').BuildTestEvidence;
   platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
+  sonarCloudSnapshot?: import('./sonarcloud-snapshot').SonarCloudSnapshot;
 }
 
 export interface EvaluationRun {
@@ -194,6 +195,8 @@ export * from './s007-officially-supported-technologies';
 export * from './s008-interface-acceptance';
 export * from './s009-library-acceptance';
 export * from './s010-third-party-resilience';
+export * from './s011-sonarqube';
+export * from './sonarcloud-snapshot';
 export * from './s012-build-tools';
 export * from './s014-application-assignment';
 export * from './remote-evidence';

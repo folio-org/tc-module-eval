@@ -54,6 +54,8 @@ import { loadFolioSharedWorkflows } from '../../utils/folio-shared-workflows';
 import { evaluateS012 } from '../../utils/s012-evaluator';
 import { renderS012HumanDetails } from '../../utils/s012-report-details';
 import { reportText } from '../../utils/report-text';
+import { analyzeS011, renderS011HumanDetails } from '../../utils/s011-evaluator';
+import { hasS011AgentReviewMaterial, reviewS011WithAgent } from '../../utils/s011-agent-review';
 import { analyzeS014, renderS014HumanDetails } from '../../utils/s014-evaluator';
 import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
 
@@ -77,6 +79,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun),
       S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun),
       S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun),
+      S011: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS011(repoPath, evaluationRun),
       S012: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS012(repoPath, evaluationRun),
       S014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS014(repoPath, evaluationRun)
     });
@@ -373,6 +376,31 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       evidence: analysis.summary,
       details: renderS012HumanDetails(analysis),
       criterionDetails: analysis
+    };
+  }
+
+  private async evaluateS011(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S011']
+    });
+    const analysis = await analyzeS011(repoPath, run);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S011',
+      status: analysis.status,
+      hasReviewMaterial: hasS011AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS011WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    return {
+      criterionId: 'S011',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS011HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 

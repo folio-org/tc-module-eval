@@ -2,11 +2,11 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, and `S010` third-party system resilience review.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, `S010` third-party system resilience review, and `S011` SonarQube suppression review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all five currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all six currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
 - Criterion-supplied files are starting context and do not limit the browsable source inventory. A criterion may explicitly set `evidenceMode: 'supplied-files'` when it must restrict review to those files; repository browsing remains the default when the option is omitted.
 - If starting context names a path also present in the committed snapshot, the committed content is authoritative while the path remains listed as starting material.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
@@ -125,6 +125,12 @@ still belongs in the actual service assessment. Investigation starts with startu
 I/O, then tenant/provisioning helpers, runtime callers, and effective client bounds.
 The agent summary labels exception propagation with unknown duration neutrally;
 this projection does not change deterministic analysis.
+
+## S011 SonarQube Suppression Review
+
+S011 review runs for a deterministic `manual` result when the repository or its CI suppresses a Sonar rule or narrows the analysis scope. The evaluator groups suppressions by rule and file, with stable IDs such as `suppression:java:S2077:src/main/java/org/folio/search/service/reindex/jdbc/SubjectRepository.java`, `nosonar:<path>` and `all:<path>`, and scope settings by file (`scope:pom.xml`). Each group comes with its lines, rule name, the FOLIO guidance it departs from, and adjacent comments, in `.criterion-agent/S011/review-groups.json`.
+
+The agent reads the suppressed code and returns exactly one assessment per group, with the group ID as `technologyId`: `aligned_fact` when the suppression looks justified, `substantive_concern` when it does not, `evidence_gap` when the code does not settle it. Each must cite the group's own file; a group whose file is not in the review snapshot must stay `evidence_gap`. `likely_sufficient` needs every group `aligned_fact`, `likely_insufficient` a `substantive_concern`, and `needs_reviewer_judgment` a cited reviewer action. A review that misses a group, adds an unknown one, or breaks these rules is rejected and S011 stays `manual` without advice. Issues accepted or hotspots reviewed in SonarCloud, and SonarCloud project settings, are listed for the human only; they are not repository files.
 
 ## S006 Sensitive Information Review
 

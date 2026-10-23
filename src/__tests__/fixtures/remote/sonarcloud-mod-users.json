@@ -1,0 +1,415 @@
+{
+  "capturedAt": "2026-10-23T12:21:00.769Z",
+  "description": "SonarCloud org.folio:mod-users as S011 reads it, evaluated at mod-users commit 81dc3f46cec3b8950585f9c71a7f7bbee5eceddf, trimmed to the fields the evaluator reads",
+  "responses": {
+    "https://sonarcloud.io/api/ce/component?component=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "queue": [],
+        "current": {
+          "id": "AaE1imwztz0h1zLEHDIZ",
+          "type": "REPORT",
+          "componentId": "AV53mbmILrM5sI_eZlFr",
+          "componentKey": "org.folio:mod-users",
+          "componentName": "mod-users",
+          "componentQualifier": "TRK",
+          "analysisId": "337786c9-0ffc-40fb-9238-af78c52e873c",
+          "status": "SUCCESS",
+          "submittedAt": "2026-10-13T13:53:46+0000",
+          "submitterLogin": "ankitasen-ubmainz@github",
+          "startedAt": "2026-10-13T13:53:46+0000",
+          "executedAt": "2026-10-13T13:53:51+0000",
+          "executionTimeMs": 4886,
+          "logs": false,
+          "hasScannerContext": true,
+          "organization": "folio-org",
+          "branch": "master",
+          "branchType": "LONG",
+          "warningCount": 0,
+          "warnings": []
+        }
+      }
+    },
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "component": {
+          "organization": "folio-org",
+          "key": "org.folio:mod-users",
+          "name": "mod-users",
+          "qualifier": "TRK",
+          "analysisDate": "2026-10-13T13:53:19+0000",
+          "tags": [
+            "users",
+            "dev-core-functional"
+          ],
+          "visibility": "public",
+          "leakPeriodDate": "2026-09-24T17:12:58+0000",
+          "version": "19.7.0-SNAPSHOT"
+        },
+        "ancestors": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-users&status=REVIEWED&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-users&status=TO_REVIEW&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=ACCEPTED%2CFALSE_POSITIVE&facets=issueStatuses&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "issues": [],
+        "facets": [
+          {
+            "property": "issueStatuses",
+            "values": [
+              {
+                "val": "OPEN",
+                "count": 26
+              },
+              {
+                "val": "CONFIRMED",
+                "count": 0
+              },
+              {
+                "val": "FALSE_POSITIVE",
+                "count": 0
+              },
+              {
+                "val": "ACCEPTED",
+                "count": 0
+              },
+              {
+                "val": "FIXED",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&impactSeverities=HIGH%2CBLOCKER&facets=rules&ps=500&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 500,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 500,
+          "total": 0
+        },
+        "issues": [],
+        "facets": [
+          {
+            "property": "rules",
+            "values": []
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&impactSoftwareQualities=SECURITY&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "issues": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&types=VULNERABILITY&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 1,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 0
+        },
+        "issues": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/measures/component?component=org.folio%3Amod-users&metricKeys=coverage%2Cline_coverage%2Cbranch_coverage%2Clines_to_cover%2Cuncovered_lines%2Cconditions_to_cover%2Cuncovered_conditions%2Cduplicated_lines_density&branch=master": {
+      "status": 200,
+      "body": {
+        "component": {
+          "id": "AV53mbmILrM5sI_eZlFr",
+          "key": "org.folio:mod-users",
+          "name": "mod-users",
+          "qualifier": "TRK",
+          "measures": [
+            {
+              "metric": "coverage",
+              "value": "91.2",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_conditions",
+              "value": "119",
+              "bestValue": false
+            },
+            {
+              "metric": "duplicated_lines_density",
+              "value": "0.0",
+              "bestValue": true
+            },
+            {
+              "metric": "lines_to_cover",
+              "value": "2850"
+            },
+            {
+              "metric": "branch_coverage",
+              "value": "82.4",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_lines",
+              "value": "192",
+              "bestValue": false
+            },
+            {
+              "metric": "line_coverage",
+              "value": "93.3",
+              "bestValue": false
+            },
+            {
+              "metric": "conditions_to_cover",
+              "value": "677"
+            }
+          ]
+        }
+      }
+    },
+    "https://sonarcloud.io/api/navigation/component?component=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "key": "org.folio:mod-users",
+        "organization": "folio-org",
+        "organizationName": "folio-org",
+        "id": "AV53mbmILrM5sI_eZlFr",
+        "name": "mod-users",
+        "isFavorite": true,
+        "badgeToken": "18c20d96ebb9bddcb6426bac621f42d156b52127",
+        "createdAt": "2017-09-12T21:38:36+0000",
+        "visibility": "public",
+        "version": "19.7.0-SNAPSHOT",
+        "analysisDate": "2026-10-13T13:53:19+0000",
+        "ciName": "Github Actions",
+        "analysisDateAllBranches": "2026-10-13T13:53:19+0000",
+        "qualityProfiles": [
+          {
+            "key": "AV7D9NaMAFLlVksVgrkI",
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "deleted": false
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYH",
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "deleted": false
+          }
+        ],
+        "qualityGate": {
+          "key": 9,
+          "name": "Sonar way",
+          "isDefault": true
+        },
+        "breadcrumbs": [
+          {
+            "key": "org.folio:mod-users",
+            "name": "mod-users",
+            "qualifier": "TRK"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_analyses/search?project=org.folio%3Amod-users&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 34
+        },
+        "analyses": [
+          {
+            "key": "337786c9-0ffc-40fb-9238-af78c52e873c",
+            "date": "2026-10-13T13:53:19+0000",
+            "events": [
+              {
+                "key": "AaE1in0ynmZ6Sl3VWw96",
+                "category": "VERSION",
+                "name": "19.7.0-SNAPSHOT"
+              },
+              {
+                "key": "AaE1in0tnmZ6Sl3VWw95",
+                "category": "QUALITY_PROFILE",
+                "name": "Changes in 'FOLIO Java Way' (java)"
+              }
+            ],
+            "projectVersion": "19.7.0-SNAPSHOT",
+            "manualNewCodePeriodBaseline": false,
+            "revision": "81dc3f46cec3b8950585f9c71a7f7bbee5eceddf"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_branches/list?project=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "branches": [
+          {
+            "name": "master",
+            "isMain": true
+          },
+          {
+            "name": "v19.6.2",
+            "isMain": false
+          },
+          {
+            "name": "release-17.1.1",
+            "isMain": false
+          },
+          {
+            "name": "release-17.2.1",
+            "isMain": false
+          },
+          {
+            "name": "release-17-2-1",
+            "isMain": false
+          },
+          {
+            "name": "release-16.1.0",
+            "isMain": false
+          },
+          {
+            "name": "release-16.0.0",
+            "isMain": false
+          },
+          {
+            "name": "release-15.6.1",
+            "isMain": false
+          },
+          {
+            "name": "release-15-6-0",
+            "isMain": false
+          },
+          {
+            "name": "release-15-5-0",
+            "isMain": false
+          },
+          {
+            "name": "release-15-4-0",
+            "isMain": false
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/qualityprofiles/search?project=org.folio%3Amod-users&organization=folio-org": {
+      "status": 200,
+      "body": {
+        "profiles": [
+          {
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "isDefault": true
+          },
+          {
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/rules/search?organization=folio-org&rule_keys=java%3AS3011%2Cjava%3AS3776%2Cjava%3AS5542%2Cjava%3AS2699&f=name&ps=100": {
+      "status": 200,
+      "body": {
+        "total": 4,
+        "p": 1,
+        "ps": 100,
+        "rules": [
+          {
+            "key": "java:S5542",
+            "name": "Encryption algorithms should be used with secure mode and padding scheme",
+            "type": "VULNERABILITY",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "java:S2699",
+            "name": "Tests should include assertions",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ]
+          },
+          {
+            "key": "java:S3011",
+            "name": "Reflection should not be used to increase accessibility of classes, methods, or fields",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
+              }
+            ]
+          },
+          {
+            "key": "java:S3776",
+            "name": "Cognitive Complexity of methods should not be too high",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1815,8 +1815,33 @@
     {
       "criterionId": "S011",
       "status": "manual",
-      "evidence": "Accessibility requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S011 manual: Not checked: remote lookups are off. Rerun with --allow-remote-lookups to read the module's SonarCloud analysis.",
+      "details": "Ignored rules: none found in the repository or CI\nWhat to do: Rerun with --allow-remote-lookups so the tool can read the module's SonarCloud analysis, or check it in SonarCloud by hand.\nAgent review:\n  - Not applied: no candidate evidence was available for agent review",
+      "criterionDetails": {
+        "criterionId": "S011",
+        "status": "manual",
+        "summary": "S011 manual: Not checked: remote lookups are off. Rerun with --allow-remote-lookups to read the module's SonarCloud analysis.",
+        "remoteLookups": false,
+        "repositoryCommit": "ba6402ee5f470f405aeec2ee871bb79ceda2836e",
+        "violations": [],
+        "manualReasons": [],
+        "scan": {
+          "complete": true,
+          "suppressions": [],
+          "scope": [],
+          "eslintDisableCount": 0,
+          "filesScanned": 155,
+          "sharedWorkflows": [
+            "maven.yml"
+          ],
+          "diagnostics": []
+        },
+        "reviewGroups": [],
+        "rules": {},
+        "remoteEvidence": [],
+        "gate": "remote-lookups-off",
+        "agentReviewUnavailableReason": "no candidate evidence was available for agent review"
+      }
     },
     {
       "criterionId": "S012",
