@@ -379,11 +379,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F005',
     description: 'Use specified Stripes version',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Use of specified Stripes framework version'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F006',

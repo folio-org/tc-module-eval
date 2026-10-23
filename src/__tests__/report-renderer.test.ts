@@ -15,6 +15,9 @@ import { evaluateS009, renderS009HumanDetails } from '../utils/s009-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
 import { analyzeS006SensitiveInformation, buildS006CriterionDetails, formatS006Evidence } from '../utils/s006-sensitive-information';
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
+import { renderFrontendChecklistLines } from '../utils/frontend-checklist';
+import { FrontendEvaluator } from '../evaluators/javascript/frontend-evaluator';
+import { FrontendChecklist } from '../types';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -1112,5 +1115,110 @@ describe('EvaluationReportRenderer', () => {
       '  - dependencies.vue — needs review'
     ]));
     expect(html).not.toContain('<script>alert("x")</script>');
+  });
+
+  describe('F criteria', () => {
+    // An F003-like result: what the tool found, then the checklist, then the agent review note.
+    const checklist: FrontendChecklist = { items: [
+      { id: 'F003-C1', title: 'Each listed id exists in en.json.', reviewerOnly: false,
+        startingPoints: [{ path: 'src/Scan.js', line: 60, note: 'ui-checkin.statusModal.cancel' }],
+        obligations: [
+          { id: 'F003-C1#1', subject: 'ui-checkin.statusModal.cancel', path: 'src/Scan.js', line: 60 },
+          { id: 'F003-C1#2', subject: 'ui-checkin.other', withheld: true },
+          { id: 'F003-C1#3', subject: 'ui-checkin.third' }
+        ] },
+      { id: 'F003-C2', title: 'No user-visible text is hard-coded.', reviewerOnly: false, startingPoints: [], obligations: [{ id: 'F003-C2#1' }] },
+      { id: 'F003-C3', title: 'Computed ids resolve to keys in en.json.', reviewerOnly: true, startingPoints: [], obligations: [{ id: 'F003-C3#1' }] }
+    ] };
+    const frontendResult = (reason: string, agentReview?: CriterionAgentReviewResult): EvaluationResult => ({ ...result, criteria: [{
+      criterionId: 'F003', status: EvaluationStatus.MANUAL, evidence: 'F003 manual: 1 message id is missing from en.json.',
+      details: ['What the tool found:', '  - react-intl ^7.1.5', ...renderFrontendChecklistLines(checklist),
+        'Agent review:', `  - Not applied: ${reason}`].join('\n'),
+      criterionDetails: { checklist }, agentReview
+    }] });
+    const sources = ['      - Sources:', '        - src/Scan.js'];
+    const investigated = '      - Coverage judgment: Investigated directly';
+
+    it('attaches agent results to checklist items and puts the review last', () => {
+      const review: CriterionAgentReviewResult = { available: true, criterionId: 'F003', recommendation: 'needs_reviewer_judgment',
+        confidence: 'medium', summary: 'One id lacks a fallback.', rationale: 'Checked the listed ids.', evidenceReferences: ['src/Scan.js'],
+        assessments: [
+          { technologyId: 'F003-C1#1', type: 'substantive_concern', summary: 'No defaultMessage.', evidenceReferences: ['src/Scan.js'], coverageDisposition: 'investigated' },
+          { technologyId: 'F003-C2#1', type: 'aligned_fact', summary: 'All text comes from en.json.', evidenceReferences: ['src/Scan.js'], coverageDisposition: 'investigated' },
+          { technologyId: 'discovered:text:1', type: 'evidence_gap', summary: 'Possible hard-coded label.', evidenceReferences: ['src/Other.js'], coverageDisposition: 'unresolved' },
+          // A reviewer-only item is not reviewed, so an answer for it stays in the review's own findings.
+          { technologyId: 'F003-C3#1', type: 'aligned_fact', summary: 'Ids resolve.', evidenceReferences: ['src/Scan.js'], coverageDisposition: 'investigated' }
+        ],
+        warnings: [], errors: [] };
+      const html = new EvaluationReportRenderer().renderHtml(frontendResult('stale note', review));
+      const details: string[] = reportData(html).items[0].details;
+      const item = preparedItems(html)[0];
+
+      expect(details.slice(0, details.indexOf('Agent review (advisory):'))).toEqual([
+        'What the tool found:', '  - react-intl ^7.1.5',
+        'Checklist for the reviewer:',
+        '  - F003-C1 Each listed id exists in en.json.',
+        '    - Start with:', '      - src/Scan.js:60 — ui-checkin.statusModal.cancel',
+        '    - Agent: Potential problem — ui-checkin.statusModal.cancel: No defaultMessage.', ...sources, investigated,
+        '    - Not given to the agent (limit of 25): ui-checkin.other',
+        '    - No agent result: ui-checkin.third',
+        '  - F003-C2 No user-visible text is hard-coded.',
+        '    - Agent: Supported by evidence — All text comes from en.json.', ...sources, investigated,
+        '  - F003-C3 Computed ids resolve to keys in en.json.',
+        '    - Checked by the reviewer only'
+      ]);
+      expect(details).not.toContain('  - Not applied: stale note');
+      expect(item.tree.map((node: any) => node.text)).toEqual(['What the tool found:', 'Checklist for the reviewer:', 'Agent review (advisory):']);
+      const agent = item.tree[2];
+      expect(agent.hideCount).toBe(true);
+      // Only the assessment that answers no checklist obligation stays in the review's findings.
+      expect(agent.children.find((node: any) => node.text === 'Findings:').children.map((node: any) => node.text))
+        .toEqual(['text:1 — Needs verification:', 'F003 C3#1 — Supported by evidence:']);
+      expect(agent.children.map((node: any) => node.text)).toContain('Recommendation: Reviewer judgment needed');
+      expect(downloadData(html).criteria[0].details).toBe(details.join('\n'));
+    });
+
+    it.each([
+      ['agent review is not enabled for F003', 'Skipped', 'Skipped because agent review is not enabled for this criterion.'],
+      ['OpenCode timed out after 420000ms', 'Unavailable', 'No usable advisory review was returned.']
+    ])('keeps the checklist and shows "%s" after it', (reason, status, summary) => {
+      const html = new EvaluationReportRenderer().renderHtml(frontendResult(reason));
+      const details: string[] = reportData(html).items[0].details;
+
+      expect(preparedItems(html)[0].tree.map((node: any) => node.text))
+        .toEqual(['What the tool found:', 'Checklist for the reviewer:', 'Agent review (advisory):']);
+      expect(details).toEqual(expect.arrayContaining(['  - F003-C1 Each listed id exists in en.json.', `  - Status: ${status}`, `  - Summary: ${summary}`]));
+      expect(details).not.toContain('    - Checked by the reviewer only');
+    });
+
+    it('renders F005 as a Frontend criterion whose checklist starting points link to the cited file', async () => {
+      const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'renderer-f005-'));
+      try {
+        fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: '@folio/checkin', stripes: { actsAs: ['app'] },
+          devDependencies: { '@folio/stripes': '^10.0.0' } }));
+        const f005 = await new FrontendEvaluator().evaluateCriterion('F005', repo);
+        const commit = '0123456789abcdef0123456789abcdef01234567';
+        const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [f005], provenance: {
+          repositoryCommit: commit, evaluator: { name: 'folio-module-evaluator', version: '1.0.0' },
+          citedSourcePaths: citedTrackedFiles([f005], ['package.json', 'yarn.lock']) } });
+        const item = preparedItems(html)[0];
+
+        expect(item).toMatchObject({ id: 'F005', title: 'Stripes version', category: 'Frontend', triage: 'review' });
+        expect(item.summary).toMatch(/^Stripes is declared as devDependencies\.@folio\/stripes \^10\.0\.0 in package\.json\./);
+        const checklistNode = item.tree.find((node: any) => node.text === 'Checklist for the reviewer:');
+        // The checklist item and where to start on it are open, so the reviewer sees them without clicking.
+        expect(checklistNode.children[0]).toMatchObject({ openByDefault: true, children: [{ text: 'Start with:', openByDefault: true }] });
+        expect(item.tree.find((node: any) => node.text === "S007's Stripes finding:").children[0].unit).toBe('observation');
+        expect(walk(checklistNode.children).map((node: any) => node.text)).toEqual([
+          'F005-C1 The module works with Stripes 10.1 or greater (lower bound ^10.1.0).',
+          'Start with:',
+          'package.json — devDependencies.@folio/stripes ^10.0.0'
+        ]);
+        expect(rowLinks(html, 'F005')('package.json — devDependencies.@folio/stripes ^10.0.0').href)
+          .toBe(`https://github.com/folio-org/test-module/blob/${commit}/package.json`);
+      } finally {
+        fs.rmSync(repo, { recursive: true, force: true });
+      }
+    });
   });
 });

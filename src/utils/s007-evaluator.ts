@@ -1,7 +1,9 @@
 import semver from 'semver';
 import {
+  EvaluationRun,
   EvaluationStatus,
   S007AnalysisResult,
+  S007RunAnalysis,
   S007MatchedPolicyEntry,
   S007PolicyLoadResult,
   S007PolicySection,
@@ -13,8 +15,30 @@ import {
   S007VersionConstraint
 } from '../types';
 import { CriterionLanguage } from '../criteria-definitions';
-import { normalizeS007PolicyVersionExpression, policySections } from './s007-policy';
+import { loadS007Policy, normalizeS007PolicyVersionExpression, policySections } from './s007-policy';
+import { collectS007TechnologyEvidence } from './s007-technology-evidence';
+import { enrichS007WithMavenEffectivePom } from './s007-maven-effective-evidence';
 import { listText } from './report-text';
+
+/**
+ * S007's analysis of the run's repository, produced once and shared: S007 reports it, and F005 takes its Stripes
+ * finding from it, so `--criteria F005` works alone and both always state the same finding. Callers must not
+ * change the cached result.
+ */
+export function getS007Analysis(run: EvaluationRun, repoPath: string): Promise<S007RunAnalysis> {
+  return run.getOrCreateArtifact('s007Analysis', async () => {
+    const [policyLoad, evidence] = await Promise.all([
+      loadS007Policy(),
+      run.getOrCreateArtifact('s007TechnologyEvidence', async () => {
+        const staticEvidence = await collectS007TechnologyEvidence(repoPath, run.language);
+        return run.language === 'java' && run.commandRunner
+          ? enrichS007WithMavenEffectivePom(repoPath, staticEvidence, run, run.commandRunner)
+          : staticEvidence;
+      })
+    ]);
+    return { policyLoad, analysis: evaluateS007(policyLoad, evidence, run.language) };
+  });
+}
 
 export function evaluateS007(
   policyLoad: S007PolicyLoadResult,

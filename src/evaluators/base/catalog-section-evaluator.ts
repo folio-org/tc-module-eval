@@ -1,4 +1,5 @@
-import { CriterionResult } from '../../types';
+import { CriterionResult, EvaluationRun } from '../../types';
+import { createEvaluationRun } from '../../utils/evaluation-run';
 import {
   createDefaultCriterionResult,
   CriterionLanguage,
@@ -44,5 +45,14 @@ export abstract class CatalogSectionEvaluator extends BaseSectionEvaluator {
 
   private createDefaultCatalogResult(criterionId: string): CriterionResult {
     return createDefaultCriterionResult(criterionId, this.language);
+  }
+
+  /** The caller's run, or a fresh one for a direct single-criterion call. */
+  protected runFor(repoPath: string, criterionId: string, evaluationRun?: EvaluationRun): EvaluationRun {
+    return evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: [criterionId]
+    });
   }
 }
