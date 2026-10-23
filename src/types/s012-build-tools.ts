@@ -95,8 +95,11 @@ export interface VersionDeclaration {
   detail: string;
   /** The value as written, or for yarn.lock "v1" or "berry". */
   text: string;
-  /** Why the build does not apply it (a Maven Enforcer rule that does not run); such a rule is reported, not judged. */
-  inactive?: string;
+  /**
+   * A Maven Enforcer rule that does not run ("inactive", reported only) or whose activation this POM does not show
+   * ("uncertain": it cannot help a pass, and a violation needs review instead of failing).
+   */
+  activation?: { state: 'inactive' | 'uncertain'; reason: string };
 }
 
 /** A job that calls one of FOLIO's reusable workflows, folio-org/.github/.github/workflows/<name>@<ref>. */
@@ -168,8 +171,8 @@ export interface S012VersionCheck {
   /** The version comes from FOLIO's shared workflow, not the repository. */
   inherited?: { workflow: string; ref: string; source?: string; recordedAt?: string };
   comparison: S012VersionComparison;
-  /** Why the build does not apply it; it is shown but does not count. */
-  inactive?: string;
+  /** See VersionDeclaration.activation. */
+  activation?: { state: 'inactive' | 'uncertain'; reason: string };
 }
 
 export interface S012MatchedPolicy {

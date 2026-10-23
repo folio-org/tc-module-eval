@@ -135,7 +135,7 @@ async function readDeclarations(context: Context): Promise<void> {
         path: file.path,
         detail: 'maven-enforcer-plugin requireMavenVersion',
         text: resolvePomProperties(rule.version, parsed.project),
-        inactive: rule.inactiveReason
+        activation: rule.state === 'active' ? undefined : { state: rule.state, reason: rule.reason ?? '' }
       });
     }
   }
@@ -282,9 +282,10 @@ export function buildCommandsIn(script: string): Array<{ tool: BuildToolId; comm
 }
 
 /**
- * The simple commands of a shell script as word lists. Quotes, backslash escapes, comments, line continuations and
- * here-documents are honoured, so "echo 'a; sbt test'", "# sbt test" and here-document text are not commands.
- * Command separators (; & | ( ) and backquotes) and line ends start a new command. Linear in the script length.
+ * The simple commands of a shell script as word lists. Quotes, backslash escapes, comments, line continuations,
+ * here-documents and command substitutions (also inside double quotes) are honoured, so "echo 'a; sbt test'",
+ * "# sbt test" and here-document text are not commands, while echo "$(sbt test)" is. Command separators
+ * (; & | ( ) and backquotes) and line ends start a new command. Linear in the script length.
  */
 function shellCommands(script: string): string[][] {
   const commands: string[][] = [];
@@ -292,7 +293,9 @@ function shellCommands(script: string): string[][] {
   let word = '';
   let inWord = false;
   let quote: '"' | "'" | undefined;
-  const heredocs: string[] = [];
+  // Each open $( or ` inside double quotes, with its parenthesis depth; closing it returns to the quoted text.
+  const substitutions: Array<{ kind: '(' | '`'; depth: number }> = [];
+  const heredocs: Array<{ delimiter: string; stripTabs: boolean }> = [];
   const endWord = () => {
     if (inWord) words.push(word);
     word = '';
@@ -303,11 +306,17 @@ function shellCommands(script: string): string[][] {
     if (words.length) commands.push(words);
     words = [];
   };
+  const openSubstitution = (kind: '(' | '`') => {
+    substitutions.push({ kind, depth: 0 });
+    quote = undefined;
+    endCommand();
+  };
   const lines = script.split(/\r?\n/);
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
+  for (const line of lines) {
     if (!quote && heredocs.length) {
-      if (line.replace(/^\t+/, '').trim() === heredocs[0]) heredocs.shift();
+      // The body ends at a line that is exactly the delimiter (after leading tabs, for <<-).
+      const heredoc = heredocs[0];
+      if ((heredoc.stripTabs ? line.replace(/^\t+/, '') : line) === heredoc.delimiter) heredocs.shift();
       continue;
     }
     for (let index = 0; index < line.length; index += 1) {
@@ -320,9 +329,22 @@ function shellCommands(script: string): string[][] {
       if (quote === '"') {
         if (character === '\\' && index + 1 < line.length) word += line[++index];
         else if (character === '"') quote = undefined;
+        else if (character === '$' && line[index + 1] === '(' && line[index + 2] !== '(') {
+          index += 1;
+          openSubstitution('(');
+        } else if (character === '`') openSubstitution('`');
         else word += character;
         continue;
       }
+      const substitution = substitutions[substitutions.length - 1];
+      if (substitution && ((substitution.kind === '`' && character === '`') || (substitution.kind === '(' && character === ')' && substitution.depth === 0))) {
+        substitutions.pop();
+        endCommand();
+        quote = '"';
+        inWord = true;
+        continue;
+      }
+      if (substitution?.kind === '(' && (character === '(' || character === ')')) substitution.depth += character === '(' ? 1 : -1;
       if (character === '\\') {
         if (index + 1 < line.length) {
           word += line[++index];
@@ -337,17 +359,43 @@ function shellCommands(script: string): string[][] {
         continue;
       }
       if (character === '#' && !inWord) break;
+      if (line.startsWith('<<<', index)) {
+        // A here-string: the next word is input text, not a here-document.
+        endWord();
+        index += 2;
+        continue;
+      }
       if (line.startsWith('<<', index)) {
-        const heredoc = /^<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1/.exec(line.slice(index, index + 260));
-        if (heredoc) {
-          heredocs.push(heredoc[2]);
-          index += heredoc[0].length - 1;
-          endWord();
-          continue;
+        endWord();
+        const stripTabs = line[index + 2] === '-';
+        let cursor = index + (stripTabs ? 3 : 2);
+        while (line[cursor] === ' ' || line[cursor] === '\t') cursor += 1;
+        // The delimiter is one shell word; quotes around (parts of) it are removed.
+        let delimiter = '';
+        let delimiterQuote: string | undefined;
+        for (; cursor < line.length; cursor += 1) {
+          const next = line[cursor];
+          if (delimiterQuote) {
+            if (next === delimiterQuote) delimiterQuote = undefined;
+            else delimiter += next;
+          } else if (next === "'" || next === '"') {
+            delimiterQuote = next;
+          } else if (next === '\\' && cursor + 1 < line.length) {
+            delimiter += line[++cursor];
+          } else if (/[\s;&|()<>]/.test(next)) {
+            break;
+          } else {
+            delimiter += next;
+          }
         }
+        if (delimiter) heredocs.push({ delimiter, stripTabs });
+        index = cursor - 1;
+        continue;
       }
       if (/\s/.test(character)) {
         endWord();
+      } else if (character === '`' && !substitution) {
+        endCommand();
       } else if (';&|()`'.includes(character)) {
         endCommand();
       } else {
@@ -395,9 +443,9 @@ function commandTool(program: string, args: string[]): BuildToolId | undefined {
 const UNREADABLE_VALUE = '(not a plain version)';
 
 /**
- * A workflow version input as the texts it can take. ${{ env.X }} and ${{ matrix.X }} are resolved within the
- * workflow; a matrix include adds values. Anything else (an expression, a nested or cyclic YAML value, a matrix
- * with exclude, which may remove values) stays unresolved text, which cannot be compared and so cannot decide.
+ * A workflow version input as the texts it can take. ${{ env.X }} and a plain ${{ matrix.X }} list are resolved within
+ * the workflow. Anything else (another expression, a nested or cyclic YAML value, a matrix with include or exclude)
+ * stays unresolved text, which cannot be compared and so cannot decide.
  */
 function expandValue(value: unknown, env: Record<string, string>, matrix: Record<string, unknown>): string[] {
   if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? item.trim() : UNREADABLE_VALUE);
@@ -407,13 +455,9 @@ function expandValue(value: unknown, env: Record<string, string>, matrix: Record
   if (!reference) return [text];
   const [, scope, name] = reference;
   if (scope === 'env') return [env[name] ?? text];
-  if (matrix.exclude !== undefined) return [text];
-  const included = Array.isArray(matrix.include)
-    ? matrix.include.flatMap(entry => isObject(entry) && entry[name] !== undefined ? [entry[name]] : [])
-    : [];
-  const base = matrix[name];
-  const values = [...(Array.isArray(base) ? base : base === undefined ? [] : [base]), ...included];
-  return values.length ? values.map(item => typeof item === 'string' ? item.trim() : UNREADABLE_VALUE) : [text];
+  // include and exclude add, change and remove combinations in ways this does not model.
+  if (matrix.include !== undefined || matrix.exclude !== undefined || !Array.isArray(matrix[name])) return [text];
+  return (matrix[name] as unknown[]).map(item => typeof item === 'string' ? item.trim() : UNREADABLE_VALUE);
 }
 
 function workingDirectory(defaults: unknown): string | undefined {

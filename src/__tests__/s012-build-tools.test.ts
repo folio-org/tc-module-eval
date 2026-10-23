@@ -119,13 +119,9 @@ describe('S012 officially supported build tools', () => {
     });
 
     it.each([
-      ['only in pluginManagement', (rule: string) => POM(`<build><pluginManagement><plugins><plugin>
-        <artifactId>maven-enforcer-plugin</artifactId>
-        <executions><execution><goals><goal>enforce</goal></goals>
-          <configuration><rules><requireMavenVersion><version>${rule}</version></requireMavenVersion></rules></configuration>
-        </execution></executions></plugin></plugins></pluginManagement></build>`)],
       ['in an execution without the enforce goal', (rule: string) => ENFORCER(rule).replace('<goal>enforce</goal>', '<goal>display-info</goal>')],
-      ['skipped', (rule: string) => ENFORCER(rule).replace('<rules>', '<skip>true</skip><rules>')]
+      ['skipped', (rule: string) => ENFORCER(rule).replace('<rules>', '<skip>true</skip><rules>')],
+      ['bound to phase none', (rule: string) => ENFORCER(rule).replace('<goals>', '<phase>none</phase><goals>')]
     ])('does not count a requireMavenVersion rule that does not run (%s)', async (_label, pom) => {
       // Active, [3.9] would pass without CI and [3.6,3.8) would fail even with CI.
       await write({ 'pom.xml': pom('[3.9]') });
@@ -135,6 +131,33 @@ describe('S012 officially supported build tools', () => {
 
       await write({ 'pom.xml': pom('[3.6,3.8)'), '.github/workflows/maven.yml': MAVEN_WORKFLOW });
       expect((await evaluate('java')).status).toBe(EvaluationStatus.PASS);
+    });
+
+    it('applies Maven merges: managed executions join a declared plugin, and execution configuration wins', async () => {
+      const managedOnly = ENFORCER('[3.6,3.8)').replace('<build><plugins>', '<build><pluginManagement><plugins>').replace('</plugins></build>', '</plugins></pluginManagement></build>');
+      await write({ 'pom.xml': managedOnly, '.github/workflows/maven.yml': MAVEN_WORKFLOW });
+      // A parent or module POM may declare the plugin, so the rule may run: neither pass nor fail on it.
+      const uncertain = await evaluate('java');
+      expect(uncertain.status).toBe(EvaluationStatus.MANUAL);
+      expect(uncertain.evidence).toContain('a reviewer must check whether the build applies it');
+
+      await write({ 'pom.xml': managedOnly.replace('</pluginManagement>', '</pluginManagement><plugins><plugin><artifactId>maven-enforcer-plugin</artifactId></plugin></plugins>') });
+      expect((await evaluate('java')).status).toBe(EvaluationStatus.FAIL);
+
+      await write({ 'pom.xml': ENFORCER('[3.6,3.8)')
+        .replace('<executions>', '<configuration><skip>true</skip></configuration><executions>')
+        .replace('<rules>', '<skip>false</skip><rules>') });
+      expect((await evaluate('java')).status).toBe(EvaluationStatus.FAIL);
+    });
+
+    it('reads many Enforcer rules and executions in linear time', async () => {
+      const rules = '<requireMavenVersion><version>[3.9]</version></requireMavenVersion>'.repeat(3000);
+      const executions = '<execution><id>x</id><goals><goal>display-info</goal></goals></execution>'.repeat(3000);
+      await write({ 'pom.xml': POM(`<build><plugins><plugin><artifactId>maven-enforcer-plugin</artifactId><configuration><rules>${rules}</rules></configuration><executions>${executions}</executions></plugin></plugins></build>`) });
+
+      const started = Date.now();
+      await evaluate('java');
+      expect(Date.now() - started).toBeLessThan(1000);
     });
 
     it('leaves Gradle in service/ to a reviewer because the policy has no settled Gradle guidance', async () => {
@@ -199,11 +222,25 @@ describe('S012 officially supported build tools', () => {
       const unread = await evaluate('java');
       expect(unread.status).toBe(EvaluationStatus.MANUAL);
       expect(unread.criterionDetails.findings.find(finding => finding.toolId === 'sbt')?.rationale)
-        .toContain('Some workflow files could not be read, so it is not certain that this is what CI builds with');
+        .toContain('However, some workflow files could not be read, so a reviewer must check that CI really builds with it.');
 
       // Read in full, the same CI shows Maven builds the module, and the stray build.sbt is only reported.
       await write({ '.github/workflows/maven.yml': MAVEN_WORKFLOW });
       expect((await evaluate('java')).status).toBe(EvaluationStatus.PASS);
+    });
+
+    it('downgrades a long failing rationale in linear time when unread CI makes the selection uncertain', async () => {
+      await write({
+        'pom.xml': ENFORCER(`[3.6,${' '.repeat(200_000)}3.8)`),
+        'build.sbt': '',
+        '.github/workflows/maven.yml': `# ${'x'.repeat(1024 * 1024)}\n`
+      });
+
+      const started = Date.now();
+      const result = await evaluate('java');
+
+      expect(Date.now() - started).toBeLessThan(1000);
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
     });
 
     it('does not count build tools named in quoted text, comments or here-documents', async () => {
@@ -227,6 +264,19 @@ describe('S012 officially supported build tools', () => {
 
       expect(result.criterionDetails.evidence.buildCommands.map(command => command.command)).toEqual(['mvn -B verify']);
       expect(result.status).not.toBe(EvaluationStatus.FAIL);
+    });
+
+    it('reads here-strings, here-document delimiters and command substitutions as the shell does', async () => {
+      const commandsOf = async (script: string) => {
+        const body = script.split('\n').map(line => `          ${line}`).join('\n');
+        await write({ 'pom.xml': POM(), '.github/workflows/build.yml': `jobs:\n  build:\n    steps:\n      - run: |\n${body}\n` });
+        return (await evaluate('java')).criterionDetails.evidence.buildCommands.map(command => command.command);
+      };
+
+      expect(await commandsOf('mvn verify\ncat <<<EOF\nsbt test')).toEqual(['mvn verify', 'sbt test']);
+      expect(await commandsOf('cat <<EOF.txt\nnotes\nEOF.txt\nsbt test')).toEqual(['sbt test']);
+      expect(await commandsOf('cat <<EOF\n EOF\nsbt test\nEOF\nmvn verify')).toEqual(['mvn verify']);
+      expect(await commandsOf('echo "$(true; sbt test)"\necho "v=`gradle -v`"')).toEqual(['sbt test', 'gradle -v']);
     });
 
     it('does not follow a pom.xml symbolic link out of the repository, and does not pass', async () => {
@@ -345,7 +395,7 @@ jobs:
       expect(matrix.criterionDetails.findings.find(finding => finding.toolId === 'node')?.classification).toBe('conflicting');
     });
 
-    it('uses a step env over the workflow env, and the values a matrix include adds', async () => {
+    it('uses a step env over the workflow env, and leaves a matrix with include unsettled', async () => {
       await write({
         'package.json': '{}',
         'yarn.lock': YARN_V1_LOCK,
@@ -383,9 +433,14 @@ jobs:
       - run: yarn install
 `
       });
+      // include can add, extend or overwrite combinations, so the Node versions are not settled.
       const include = await evaluate('javascript');
       expect(include.status).toBe(EvaluationStatus.MANUAL);
-      expect(include.criterionDetails.findings.find(finding => finding.toolId === 'node')?.classification).toBe('conflicting');
+      expect(include.criterionDetails.findings.find(finding => finding.toolId === 'node')?.classification).toBe('version-unsettled');
+
+      await write({ '.github/workflows/build.yml': (await fs.readFile(path.join(repo, '.github/workflows/build.yml'), 'utf8'))
+        .replace("node: ['22']\n        include:\n          - node: '18'", "os: [ubuntu-latest, windows-latest]\n        include:\n          - os: ubuntu-latest\n            node: '22'") });
+      expect((await evaluate('javascript')).status).toBe(EvaluationStatus.MANUAL);
     });
 
     it('survives a cyclic YAML alias in a version input and keeps an unsupported build it saw', async () => {

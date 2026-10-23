@@ -62,49 +62,71 @@ export interface RequiredMavenVersion {
   /** The <version> as written (properties are not resolved). */
   version: string;
   /**
-   * Whether this POM shows the rule runs: the plugin is in <build><plugins>, the execution (or, for a plugin-level
-   * rule, some execution) has the enforce goal, and no <skip> is set. A rule in <pluginManagement> only configures
-   * a plugin that something else must declare, and a skip that is a property may be set at build time, so neither
-   * is active as far as this POM shows.
+   * Whether the rule runs in a normal build, as far as this POM shows. "active": an execution of the declared plugin
+   * runs the enforce goal in a lifecycle phase and is not skipped. "inactive": this POM shows it does not run (no
+   * enforce goal, phase none, skip true). "uncertain": something outside this POM decides, such as a rule only in
+   * <pluginManagement> (a parent or module POM may declare the plugin) or a skip set by a property.
    */
-  active: boolean;
-  /** Why the rule is not active, for the report. */
-  inactiveReason?: string;
+  state: 'active' | 'inactive' | 'uncertain';
+  reason?: string;
 }
 
-/** Every maven-enforcer-plugin requireMavenVersion rule in the POM's <build>, with whether it runs. */
+const MAX_ENFORCER_RULES = 64;
+
+/**
+ * The maven-enforcer-plugin requireMavenVersion rules of the POM's <build>, one per effective execution, after the
+ * merges Maven does: a managed plugin's executions join the declared plugin's by id, and execution configuration
+ * wins over plugin configuration (declared over managed at each level).
+ */
 export function pomRequiredMavenVersions(project: Record<string, any>): RequiredMavenVersion[] {
   const isEnforcer = (plugin: any) => xmlText(plugin?.artifactId) === 'maven-enforcer-plugin'
     && ['', 'org.apache.maven.plugins'].includes(xmlText(plugin?.groupId));
-  const rules = (configuration: any) => asArray(configuration?.rules?.requireMavenVersion)
-    .map(rule => xmlText(rule?.version)).filter(Boolean);
-  const skipped = (configuration: any) => {
-    const skip = xmlText(configuration?.skip);
-    return skip === '' || skip === 'false' ? undefined : skip === 'true' ? 'skip is true' : `skip is set by ${skip}`;
+  const declared = asArray(project.build?.plugins?.plugin).filter(isEnforcer)[0];
+  const managed = asArray(project.build?.pluginManagement?.plugins?.plugin).filter(isEnforcer)[0];
+  if (!declared && !managed) return [];
+  const rules = (configuration: any): string[] | undefined => {
+    const versions = asArray(configuration?.rules?.requireMavenVersion).map(rule => xmlText(rule?.version)).filter(Boolean);
+    return versions.length ? versions : undefined;
   };
+  const skipText = (configuration: any): string | undefined => configuration?.skip === undefined ? undefined : xmlText(configuration.skip);
+  const executionsById = (plugin: any) => new Map(asArray(plugin?.executions?.execution)
+    .map(execution => [xmlText(execution?.id) || 'default', execution] as [string, any]));
+  const declaredExecutions = executionsById(declared);
+  const managedExecutions = executionsById(managed);
+  const pluginRules = rules(declared?.configuration) ?? rules(managed?.configuration);
+  const pluginSkip = skipText(declared?.configuration) ?? skipText(managed?.configuration)
+    ?? (xmlText(project.properties?.['enforcer.skip']) || undefined);
+
   const result: RequiredMavenVersion[] = [];
-  for (const plugin of asArray(project.build?.pluginManagement?.plugins?.plugin).filter(isEnforcer)) {
-    for (const configuration of [plugin?.configuration, ...asArray(plugin?.executions?.execution).map(execution => execution?.configuration)]) {
-      for (const version of rules(configuration)) {
-        result.push({ version, active: false, inactiveReason: 'set in <pluginManagement>, which does not run the plugin' });
-      }
+  const add = (versions: string[], state: RequiredMavenVersion['state'], reason?: string) => {
+    for (const version of versions) {
+      if (result.length >= MAX_ENFORCER_RULES) return;
+      result.push({ version, state, reason });
     }
+  };
+  const ids = [...new Set([...declaredExecutions.keys(), ...(declared || !managed ? managedExecutions.keys() : [])])];
+  for (const id of ids) {
+    const own = declaredExecutions.get(id);
+    const inherited = managedExecutions.get(id);
+    const versions = rules(own?.configuration) ?? rules(inherited?.configuration) ?? pluginRules;
+    if (!versions) continue;
+    const goals = [...asArray(own?.goals?.goal), ...asArray(inherited?.goals?.goal)].map(xmlText);
+    const phase = xmlText(own?.phase) || xmlText(inherited?.phase);
+    const skip = skipText(own?.configuration) ?? skipText(inherited?.configuration) ?? pluginSkip;
+    if (!goals.includes('enforce')) add(versions, 'inactive', 'its execution does not run the enforce goal');
+    else if (phase === 'none') add(versions, 'inactive', 'its execution is bound to phase none');
+    else if (skip === 'true') add(versions, 'inactive', 'skip is true');
+    else if (skip !== undefined && skip !== 'false') add(versions, 'uncertain', `skip is set by ${skip}`);
+    else add(versions, 'active');
   }
-  for (const plugin of asArray(project.build?.plugins?.plugin).filter(isEnforcer)) {
-    const executions = asArray(plugin?.executions?.execution);
-    const enforcing = (execution: any) => asArray(execution?.goals?.goal).map(xmlText).includes('enforce');
-    const pluginSkip = skipped(plugin?.configuration);
-    for (const version of rules(plugin?.configuration)) {
-      const runs = executions.some(execution => enforcing(execution) && !skipped(execution?.configuration));
-      const reason = pluginSkip ?? (runs ? undefined : 'no execution runs the enforce goal');
-      result.push({ version, active: !reason, inactiveReason: reason });
+  if (!declared) {
+    // Only managed: it runs if a parent or module POM declares the plugin, which this POM does not show.
+    for (const execution of managedExecutions.values()) {
+      add(rules(execution?.configuration) ?? pluginRules ?? [], 'uncertain', 'set in <pluginManagement>; this POM does not declare the plugin');
     }
-    for (const execution of executions) {
-      for (const version of rules(execution?.configuration)) {
-        const reason = pluginSkip ?? skipped(execution?.configuration) ?? (enforcing(execution) ? undefined : 'its execution does not run the enforce goal');
-        result.push({ version, active: !reason, inactiveReason: reason });
-      }
-    }
+    if (!managedExecutions.size && pluginRules) add(pluginRules, 'uncertain', 'set in <pluginManagement>; this POM does not declare the plugin');
+  } else if (!ids.length && pluginRules) {
+    add(pluginRules, 'inactive', 'no execution runs the enforce goal');
   }
   return result;
 }

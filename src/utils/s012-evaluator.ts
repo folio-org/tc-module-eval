@@ -186,8 +186,7 @@ function unlessSelectionUncertain(finding: S012Finding, uncertain: boolean): S01
     ...finding,
     classification: 'version-unsettled',
     contribution: 'manual',
-    rationale: `${finding.rationale.replace(/\s*Change it to a version the policy allows\.|\s*Build it with [^.]+ instead\./, '')} `
-      + 'Some workflow files could not be read, so it is not certain that this is what CI builds with; a reviewer must check.'
+    rationale: `${finding.rationale} However, some workflow files could not be read, so a reviewer must check that CI really builds with it.`
   };
 }
 
@@ -273,7 +272,7 @@ function toolFinding(
   const matchedPolicy = toMatchedPolicy(match.entry, match.section);
   const versions = versionChecks(tool, evidence, table, toolSignals, match.entry);
   const withPolicy = { ...base, matchedPolicy, versions };
-  const pinned = versions.find(check => check.kind === 'pin' && !check.inherited && !check.inactive && check.range);
+  const pinned = versions.find(check => check.kind === 'pin' && !check.inherited && !check.activation && check.range);
   if (match.entry.strength === 'provisional' || match.entry.provisional) {
     return { ...withPolicy, classification: 'provisional', contribution: 'manual',
       rationale: `The module builds with ${name}${pinned ? ` ${pinned.range}` : ''}${pinned?.path ? ` (${reportPath(pinned.path)})` : ''}, and the supported-technologies page lists ${name} without settled version guidance ("${match.entry.sourceStatement}"), so a reviewer must confirm it.` };
@@ -317,9 +316,9 @@ function versionChecks(
     : compareObservationToConstraint({ declaredVersion: range, ecosystem: tool === 'node' || tool === 'yarn' ? 'javascript' : 'java' }, entry.constraint);
   const checks: S012VersionCheck[] = evidence.declarations.filter(item => item.tool === tool).map(item => {
     const { range, kind } = declarationRange(item);
-    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range), inactive: item.inactive };
+    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range), activation: item.activation };
   });
-  if (!checks.some(check => check.kind === 'pin' && !check.inactive)) {
+  if (!checks.some(check => check.kind === 'pin' && !check.activation)) {
     for (const use of unique(signals.flatMap(signal => signal.shared ? [signal.shared] : []))) {
       const workflow = table.workflows[use.name];
       const supplied = tool === 'maven' ? workflow.maven : tool === 'yarn' ? workflow.yarn : undefined;
@@ -417,9 +416,11 @@ function versionVerdict(
   versions: S012VersionCheck[],
   statement: string
 ): Pick<S012Finding, 'classification' | 'contribution' | 'rationale'> {
-  // A rule the build does not apply (an Enforcer rule that does not run) is shown but does not count.
-  const pins = versions.filter(check => check.kind === 'pin' && !check.inactive);
-  const requirements = versions.filter(check => check.kind === 'requirement' && !check.inactive);
+  // An Enforcer rule that does not run is shown but does not count. One whose activation is uncertain cannot help a
+  // pass, and if it would reject every supported version, a reviewer must check whether it runs.
+  const pins = versions.filter(check => check.kind === 'pin' && !check.activation);
+  const requirements = versions.filter(check => check.kind === 'requirement' && !check.activation);
+  const uncertainViolation = versions.find(check => check.activation?.state === 'uncertain' && check.comparison === 'noncompliant');
   const where = (check: S012VersionCheck) => check.inherited
     ? `from FOLIO's ${check.inherited.workflow}@${check.inherited.ref} workflow`
     : `in ${reportPath(check.path ?? '')}`;
@@ -433,6 +434,10 @@ function versionVerdict(
       : `The module uses ${pinPhrase(name, shown)}, but the policy allows only "${statement}".`;
     return { classification: 'version-violation', contribution: 'fail',
       rationale: `${problem} Change it to a version the policy allows.${failing.length > 1 ? ` ${failing.length - 1} more ${failing.length === 2 ? 'declaration does' : 'declarations do'} not meet it either.` : ''}` };
+  }
+  if (uncertainViolation) {
+    return { classification: 'version-unsettled', contribution: 'manual',
+      rationale: `${uncertainViolation.label} in ${reportPath(uncertainViolation.path ?? '')} accepts only ${name} ${reportText(uncertainViolation.text)}, which the policy does not allow ("${statement}"), but ${reportText(uncertainViolation.activation!.reason)}, so a reviewer must check whether the build applies it.` };
   }
   if (pins.some(check => check.comparison === 'noncompliant')) {
     return { classification: 'conflicting', contribution: 'manual',
