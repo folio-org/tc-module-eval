@@ -189,8 +189,10 @@ describe('S006 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.evidenceReferences).toEqual([expectedReference]);
-    expect(result.details).toContain('Agent review:');
-    expect(result.details).toContain('Advisory recommendation: needs_reviewer_judgment');
+    expect(result.details).toContain('Agent review (advisory):');
+    expect(result.details).toContain('  - Recommendation: Reviewer judgment needed');
+    expect(result.details).toMatch(/ {4}- \S+:\d+ — Needs verification:/);
+    expect(result.details).toContain('  - Advisory only; the S006 result stays Manual review.');
     expect(result.details).not.toContain('Evidence references:');
     expect(result.details).not.toContain('.criterion-agent/S006/excerpts/');
   });
@@ -313,7 +315,6 @@ describe('S006 shared evaluator', () => {
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.evidenceReferences).toEqual(['docs/secrets.md']);
     expect(result.agentReview?.warnings.join('\n')).toContain('Dropped');
-    expect(result.details).toContain('Dropped');
   });
 
   it('preserves manual S006 status when OpenCode review command fails', async () => {

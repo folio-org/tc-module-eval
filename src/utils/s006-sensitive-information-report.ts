@@ -13,6 +13,7 @@ import {
   rankS006Severity,
   strongestS006ReportFindings
 } from './s006-ranking';
+import { renderAgentReviewLines } from './agent-review-report';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
 import { reportPath, reportText } from './report-text';
 import {
@@ -56,11 +57,15 @@ export function formatS006Evidence(
     ...formatOtherLimitLines(analysis)
   ];
 
-  appendAgentReviewLines(lines, analysis, agentReview);
+  const reviewLines: Array<string | undefined> = [];
+  appendAgentReviewLines(reviewLines, analysis, agentReview);
+  const join = (items: Array<string | undefined>) => items.filter((line): line is string => line !== undefined).join('\n');
 
+  // The agent review has its own budget after the scan results: one assessment per finding can be long,
+  // and cutting it short would leave a truncation note inside the review section.
   return {
     evidence: truncateToByteBudget(`S006 ${analysis.classification.status}: ${analysis.classification.reason}`, 700),
-    details: truncateToByteBudget(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
+    details: truncateToByteBudget(join(lines), 12_000) + (reviewLines.length ? `\n${truncateToByteBudget(join(reviewLines), 24_000)}` : '')
   };
 }
 
@@ -234,18 +239,18 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    lines.push(
-      '',
-      'Agent review:',
-      agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
-      agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${reportText(redactSensitiveText(agentReview.summary))}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${reportText(redactSensitiveText(agentReview.rationale))}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${reportText(redactSensitiveText(agentReview.warnings.join('; ')))}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${reportText(redactSensitiveText(agentReview.errors.join('; ')))}` : undefined,
-      agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
-      agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
-    );
+    // Name each finding by its location so the advice can be matched to the rows above.
+    const findingNames = Object.fromEntries(analysis.findings.map((finding, index) =>
+      [`finding:${index}`, `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`]));
+    // Agent prose may quote a value it read, so it is redacted like the rest of the S006 report.
+    const redacted: CriterionAgentReviewResult = {
+      ...agentReview,
+      summary: agentReview.summary && redactSensitiveText(agentReview.summary),
+      rationale: agentReview.rationale && redactSensitiveText(agentReview.rationale),
+      assessments: agentReview.assessments?.map(item => ({ ...item, summary: redactSensitiveText(item.summary) })),
+      reviewerActions: agentReview.reviewerActions?.map(item => ({ ...item, action: redactSensitiveText(item.action) }))
+    };
+    lines.push('', ...renderAgentReviewLines(redacted, findingNames), '  - Advisory only; the S006 result stays Manual review.');
     return;
   }
 

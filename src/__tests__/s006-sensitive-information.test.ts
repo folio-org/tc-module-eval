@@ -1765,6 +1765,28 @@ describe('S006 report formatting and criterion details', () => {
     expect(strongest[0].context).toBe('production_source_or_configuration');
   });
 
+  it('keeps a long agent review whole after the scan results', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'README.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
+    const analysis = await analyzeRepo(repoPath);
+    const assessments = Array.from({ length: 40 }, (_, index) => ({
+      technologyId: `discovered:item-${index}`, type: 'aligned_fact' as const, coverageDisposition: 'investigated' as const,
+      summary: `Assessment ${index}: ${'The flagged value is a documentation example. '.repeat(4)}`, evidenceReferences: ['README.md']
+    }));
+    const agentReview: CriterionAgentReviewResult = {
+      available: true, criterionId: 'S006', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+      summary: 'Review needed.', rationale: 'Documentation only.', evidenceReferences: ['README.md'], assessments,
+      reviewerActions: [{ action: 'Confirm the example is not used.', evidenceReferences: ['README.md'] }], warnings: [], errors: []
+    };
+
+    const details = formatS006Evidence(analysis, agentReview).details;
+
+    expect(Buffer.byteLength(details)).toBeGreaterThan(12_000);
+    expect(details).not.toContain('[output truncated');
+    expect(details).toContain('Assessment 39:');
+    expect(details).toMatch(/Complete: yes\n\nAgent review \(advisory\):/);
+  });
+
   it('includes available agent-review state in human details', async () => {
     repoPath = createTempRepo();
     writeRepoFile(repoPath, 'README.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456\n');
@@ -1790,8 +1812,9 @@ describe('S006 report formatting and criterion details', () => {
 
     const rendered = formatS006Evidence(analysis, agentReview);
 
-    expect(rendered.details).toContain('Agent review:');
-    expect(rendered.details).toContain('Advisory recommendation: needs_reviewer_judgment');
+    expect(rendered.details).toContain('Agent review (advisory):');
+    expect(rendered.details).toContain('  - Recommendation: Reviewer judgment needed');
+    expect(rendered.details).not.toMatch(/needs_reviewer_judgment|Adapter:|Model label:/);
     expect(rendered.details).toContain('[REDACTED_PRIVATE_URL]');
     expect(rendered.details).toContain('token=[REDACTED]');
     expect(rendered.details).not.toContain('http://192.168.1.10/admin');
