@@ -91,6 +91,8 @@ Without a `yarn.lock`, each declared `package.json` range is checked as a whole,
 
 Only production dependencies decide the status. Maven `test` scope dependencies and Gradle `test*`, `testFixtures*`, and `integrationTest*` configurations are listed as notes, are not compared with each other for conflicts, and leave no coverage gap.
 
+RMB (raml-module-builder) is recognized from its `org.folio:domain-models-*` artifacts, which carry the RMB version, as well as `org.folio:raml-module-builder`. A failing version newer than the rule allows gets different advice from an older one: use an allowed version or ask the Technical Council to update the policy.
+
 Groovy is detected from the Gradle `groovy` and Grails plugins and the Maven GMavenPlus plugin. Grails modules usually declare no Java version and take versions from the Grails BOM; both remain coverage gaps.
 
 In safe mode, a dependency with no version anywhere in the repository takes the version of a `<artifactId>.version` property set in the repository (for example `lombok.version`), following the Spring Boot convention for overriding the versions it manages. This applies only when that management is probably inherited from a parent POM: the parent outside the repository is a Spring Boot parent, or the module uses Spring Boot, has a parent outside the repository, and imports no BOM. A property does not change the versions of an imported BOM. The report labels such a version as inferred from the property. With `--allow-local-commands` the effective-POM version replaces it.

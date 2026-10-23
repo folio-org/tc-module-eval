@@ -383,6 +383,70 @@ describe('S007 shared evaluator', () => {
     }
   });
 
+  it.each([
+    ['36.0.0', EvaluationStatus.FAIL],
+    ['35.4.1', EvaluationStatus.PASS]
+  ])('recognizes RMB %s from its domain-models artifacts', async (version, expected) => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version><raml-module-builder.version>${version}</raml-module-builder.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>\${raml-module-builder.version}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-api-interfaces</artifactId><version>\${raml-module-builder.version}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime-testing</artifactId><version>\${raml-module-builder.version}</version><scope>test</scope></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(expected);
+    if (expected === EvaluationStatus.FAIL) {
+      expect(result.evidence).toBe('S007 fail: raml-module-builder 36.0.0 in pom.xml (the policy allows "raml-module-builder 35 for existing modules only") '
+        + 'is not an officially supported version. It is newer than the policy allows: use a version the policy allows, '
+        + 'or ask the Technical Council to update the policy.');
+      expect(result.details).toContain('    - Why: Version 36.0.0 is not allowed by the policy rule "raml-module-builder 35 for existing modules only". '
+        + 'It is newer than the rule allows: use a version the rule allows, or ask the Technical Council to update the policy.');
+      expect(result.details).toContain('pom.xml — org.folio:domain-models-runtime, version 36.0.0');
+    }
+  });
+
+  it.each([
+    ['fails when every declared version breaks the rule', '36.0.0', '36.0.1', EvaluationStatus.FAIL],
+    ['needs review when one declared version meets the rule', '35.4.1', '36.0.0', EvaluationStatus.MANUAL]
+  ])('with different RMB versions declared, %s', async (_name, first, second, expected) => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>${first}</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-api-interfaces</artifactId><version>${second}</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(expected);
+  });
+
+  it('gives neutral advice when a failing range is neither wholly older nor provably newer', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>(36.0.0,36.0.1)</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
+
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.evidence).toMatch(/is not an officially supported version\. Change it to a version the policy allows\.$/);
+    expect(result.details).not.toContain('Upgrade');
+  });
+
   it('lists Maven test dependencies as notes that do not decide the status', async () => {
     await write('pom.xml', `
       <project>

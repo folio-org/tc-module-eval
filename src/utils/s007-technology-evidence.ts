@@ -1108,6 +1108,10 @@ export function matchJavaIdentity(groupId: string, artifactId: string): S007Java
   if (JAVA_EXACT_IDENTITIES[coordinate]) {
     return JAVA_EXACT_IDENTITIES[coordinate];
   }
+  // Modules use RMB through its domain-models-* artifacts, which all carry the RMB version.
+  if (groupId === 'org.folio' && artifactId.startsWith('domain-models-')) {
+    return JAVA_EXACT_IDENTITIES['org.folio:raml-module-builder'];
+  }
   if (groupId === 'org.springframework.boot') return identity('spring-boot', 'Spring Boot', 'java', 'framework');
   if (groupId === 'org.springframework' || groupId.startsWith('org.springframework.')) return identity('spring-framework', 'Spring Framework', 'java', 'framework');
   if (isGrailsGroup(groupId)) return identity('grails', 'Grails', 'java', 'framework');

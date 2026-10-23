@@ -135,7 +135,11 @@ function evaluateObservation(
     ...(entry.notes ?? [])
   ];
 
-  if (observation.conflictPaths?.length) {
+  // Different declared versions leave unclear which one is used, unless every one of them breaks the rule.
+  const declaredVersions = evidence.observations.filter(candidate =>
+    !candidate.testScope && candidate.identityCandidates[0] === observation.identityCandidates[0]);
+  if (observation.conflictPaths?.length && !declaredVersions.every(candidate =>
+    compareObservationToConstraint(candidate, applicableRule.constraint) === 'noncompliant')) {
     return finding(base, matchedPolicy, advisories, 'conflicting', 'manual',
       `Different versions are declared in ${observation.conflictPaths.join(', ')}, so it is not clear which one is used.`);
   }
@@ -190,7 +194,12 @@ function evaluateObservation(
   }
   if (comparison === 'noncompliant') {
     return finding(base, matchedPolicy, advisories, 'normative-violation', 'fail',
-      `${versionSubject(observation)} is not allowed by the policy rule "${applicableRule.sourceStatement}". Upgrade to a version the rule allows.`);
+      `${versionSubject(observation)} is not allowed by the policy rule "${applicableRule.sourceStatement}". `
+      + {
+        older: 'Upgrade to a version the rule allows.',
+        newer: 'It is newer than the rule allows: use a version the rule allows, or ask the Technical Council to update the policy.',
+        unknown: 'Change it to a version the rule allows.'
+      }[versionDirection(base.evidence[0], applicableRule.constraint)]);
   }
   return finding(base, matchedPolicy, advisories, 'unresolved', 'manual', unresolvedRationale(observation, comparison, applicableRule.constraint));
 }
@@ -435,15 +444,24 @@ const REVIEW_REASONS: Partial<Record<S007TechnologyFinding['classification'], st
 function summaryFor(status: EvaluationStatus, findings: S007TechnologyFinding[]): string {
   if (status === EvaluationStatus.FAIL) {
     const failing = findings.filter(finding => finding.contribution === 'fail');
-    const items = failing.map(finding => {
+    // Several declarations of one version, such as RMB's domain-models-* artifacts, make one item.
+    const items = [...new Set(failing.map(finding => {
       const evidence = finding.evidence[0];
       const version = evidence?.resolvedVersion ?? evidence?.declaredVersion;
       return `${finding.displayName}${version ? ` ${version}` : ''}${evidence ? ` in ${evidence.path}` : ''}`
         + ` (the policy allows "${finding.matchedPolicy?.sourceStatement}")`;
-    });
-    return failing.length === 1
-      ? `S007 fail: ${items[0]} is not an officially supported version. Upgrade it to a version the policy allows.`
-      : `S007 fail: ${listText(items)} are not officially supported versions. Upgrade them to versions the policy allows.`;
+    }))];
+    const directions = new Set(failing.map(finding => versionDirection(finding.evidence[0], finding.matchedPolicy?.constraint)));
+    const one = items.length === 1;
+    const direction = directions.size === 1 ? [...directions][0] : 'unknown';
+    const fix = {
+      older: `Upgrade ${one ? 'it to a version' : 'them to versions'} the policy allows.`,
+      newer: `${one ? 'It is' : 'They are'} newer than the policy allows: use ${one ? 'a version' : 'versions'} the policy allows, or ask the Technical Council to update the policy.`,
+      unknown: `Change ${one ? 'it to a version' : 'them to versions'} the policy allows.`
+    }[direction];
+    return one
+      ? `S007 fail: ${items[0]} is not an officially supported version. ${fix}`
+      : `S007 fail: ${listText(items)} are not officially supported versions. ${fix}`;
   }
   if (status === EvaluationStatus.PASS) {
     return `S007 pass: Every technology found is officially supported: ${listText([...new Set(findings
@@ -459,6 +477,33 @@ function summaryFor(status: EvaluationStatus, findings: S007TechnologyFinding[])
     }
   }
   return `S007 manual: No definite policy violation was found, but a reviewer needs to check ${listText([...reviewItems.values()])}.`;
+}
+
+/**
+ * Whether a failing version is below or above every version the rule allows, so the advice can say to upgrade or
+ * to use an allowed version. A range counts only when its lowest and highest versions are on the same side; when
+ * that cannot be established the advice stays neutral.
+ */
+function versionDirection(
+  evidence: Pick<S007TechnologyFinding['evidence'][number], 'declaredVersion' | 'resolvedVersion'> | undefined,
+  constraint?: S007VersionConstraint
+): 'older' | 'newer' | 'unknown' {
+  const allowed = constraint ? constraintToRange(constraint) : undefined;
+  const version = evidence?.resolvedVersion ?? evidence?.declaredVersion;
+  if (!allowed || !version) return 'unknown';
+  const exact = normalizeExactVersion(version);
+  if (exact) {
+    if (semver.ltr(exact, allowed, { includePrerelease: true })) return 'older';
+    return semver.gtr(exact, allowed, { includePrerelease: true }) ? 'newer' : 'unknown';
+  }
+  // A range is entirely older when it is below the lowest allowed version, and newer when its lowest version is
+  // above the highest allowed version.
+  const range = translateMavenRange(version) ?? semver.validRange(version);
+  const lowest = range ? semver.minVersion(range)?.version : undefined;
+  if (!lowest) return 'unknown';
+  if (semver.gtr(lowest, allowed, { includePrerelease: true })) return 'newer';
+  const allowedLowest = semver.minVersion(allowed)?.version;
+  return allowedLowest && semver.subset(range!, `<${allowedLowest}`, { includePrerelease: true }) ? 'older' : 'unknown';
 }
 
 function listText(items: string[]): string {
