@@ -255,6 +255,8 @@ describe('S011 SonarQube findings', () => {
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
       expect(result.evidence).toBe('S011 manual: SonarCloud has no project for this module (org.folio:mod-agreements). Its CI uses FOLIO\'s gradle.yml workflow, which does not run SonarCloud, so the security, severity, and duplication checks could not be made.');
+      // The transport's error already reads "HTTP 404."; the status is not repeated in front of it.
+      expect(result.details).toMatch(/components\/show\?component=org\.folio%3Amod-agreements \(fetched [^;]+; HTTP 404\.\)$/m);
     });
   });
 

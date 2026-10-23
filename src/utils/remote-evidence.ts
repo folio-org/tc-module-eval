@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { RemoteEvidenceAttempt, RemoteEvidenceRecord, RemoteFailureReason, RemoteJsonResult, RemoteLookups } from '../types/remote-evidence';
+import { reportText } from './report-text';
 
 // The only way evaluation code reads the network, and only with --allow-remote-lookups. Every request is
 // an HTTPS GET to an allowlisted host and path (checked again on every redirect), bounded per request and
@@ -61,6 +62,15 @@ export function isAllowedRemoteUrl(url: URL): boolean {
     // A percent-encoded "/", "\" or "." could step out of the allowed path on the server.
     && Boolean(pathPattern) && !url.pathname.includes('%') && !url.pathname.includes('\\')
     && pathPattern.test(url.pathname);
+}
+
+/** One row of a criterion's "Sources:" list: the URL, when it was fetched, and its status with the digest or error. */
+export function sourceLine(record: RemoteEvidenceRecord): string {
+  const outcome = record.error
+    // The transport's error text already names a plain HTTP status ("HTTP 404.").
+    ? `${record.status && !record.error.startsWith('HTTP ') ? `HTTP ${record.status}, ` : ''}${reportText(record.error)}`
+    : `HTTP ${record.status}, ${reportText(record.sha256 ?? '')}`;
+  return `  - ${reportText(record.url)} (fetched ${reportText(record.fetchedAt.replace(/\.\d{3}Z$/, 'Z'))}; ${outcome})`;
 }
 
 class RemoteFailure extends Error {

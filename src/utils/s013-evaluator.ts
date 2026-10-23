@@ -3,7 +3,6 @@ import {
   EvaluationRun,
   EvaluationStatus,
   FolioSharedWorkflowTableLoadResult,
-  RemoteEvidenceRecord,
   S011SuppressionScan,
   S007PolicyLoadResult,
   S007PolicySection,
@@ -21,6 +20,7 @@ import { loadFolioSharedWorkflows } from './folio-shared-workflows';
 import { displayPolicyPath } from './acceptance-ledger';
 import { compareObservationToConstraint } from './s007-evaluator';
 import { loadS007Policy, policySections } from './s007-policy';
+import { sourceLine } from './remote-evidence';
 import { reportPath, reportText } from './report-text';
 import { warningLines } from './s012-report-details';
 import { getSonarCloudSnapshot, sonarSnapshotFreshness } from './sonarcloud-snapshot';
@@ -424,14 +424,6 @@ function whatToDo(analysis: S013Analysis): string | undefined {
         : 'Fix the supported-technologies list (problems below) and run the evaluation again.');
   }
   return actions.join(' ') || undefined;
-}
-
-function sourceLine(record: RemoteEvidenceRecord): string {
-  const outcome = record.error
-    // The transport's error text already names a plain HTTP status ("HTTP 404.").
-    ? `${record.status && !record.error.startsWith('HTTP ') ? `HTTP ${record.status}, ` : ''}${reportText(record.error)}`
-    : `HTTP ${record.status}, ${reportText(record.sha256 ?? '')}`;
-  return `  - ${reportText(record.url)} (fetched ${reportText(record.fetchedAt.replace(/\.\d{3}Z$/, 'Z'))}; ${outcome})`;
 }
 
 /** A SonarCloud percentage as reported: 77.5 reads 77.5%, 80 reads 80.0%, and 79.95 stays 79.95%, never rounded up to 80. */

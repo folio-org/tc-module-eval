@@ -14,6 +14,7 @@ import {
 import { renderAgentReviewLines } from './agent-review-report';
 import { collectBuildTestEvidence } from './build-test-evidence';
 import { loadFolioSharedWorkflows } from './folio-shared-workflows';
+import { sourceLine } from './remote-evidence';
 import { reportPath, reportText } from './report-text';
 import { groupS011ReviewItems, scanS011Suppressions, suppressionFlags } from './s011-suppressions';
 import { getSonarCloudSnapshot, lookupSonarRules, sonarSnapshotFreshness } from './sonarcloud-snapshot';
@@ -201,15 +202,7 @@ export function renderS011HumanDetails(analysis: S011Analysis, agentReview?: Cri
   }
   const action = whatToDo(analysis);
   if (action) lines.push(`What to do: ${action}`);
-  if (analysis.remoteEvidence.length) {
-    lines.push('Sources:');
-    for (const record of analysis.remoteEvidence) {
-      const outcome = record.error
-        ? `${record.status ? `HTTP ${record.status}, ` : ''}${reportText(record.error)}`
-        : `HTTP ${record.status}, ${reportText(record.sha256 ?? '')}`;
-      lines.push(`  - ${reportText(record.url)} (fetched ${reportText(record.fetchedAt.replace(/\.\d{3}Z$/, 'Z'))}; ${outcome})`);
-    }
-  }
+  if (analysis.remoteEvidence.length) lines.push('Sources:', ...analysis.remoteEvidence.map(sourceLine));
   if (agentReview?.available) {
     lines.push(...renderAgentReviewLines(agentReview, s011AgentReviewNames(analysis)), '  - The automated result is unchanged.');
   } else if (analysis.agentReviewUnavailableReason) {
