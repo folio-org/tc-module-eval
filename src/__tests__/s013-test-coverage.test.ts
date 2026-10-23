@@ -4,8 +4,9 @@ import path from 'path';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { collectBuildTestEvidence } from '../utils/build-test-evidence';
 import { loadFolioSharedWorkflows } from '../utils/folio-shared-workflows';
+import * as s011Suppressions from '../utils/s011-suppressions';
 import { evaluateS013 } from '../utils/s013-evaluator';
-import { CriterionResult, EvaluationStatus, S013Analysis } from '../types';
+import { CriterionResult, EvaluationStatus, S011Analysis, S013Analysis } from '../types';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { loadRemoteFixture, RecordedResponses, replayTransport } from './helpers/remote-replay';
 
@@ -123,6 +124,24 @@ describe('S013 unit test coverage and test technologies', () => {
       // Every request of the shared snapshot, plus the re-read of the latest analysis and the analysis queue.
       expect(result.criterionDetails.remoteEvidence).toHaveLength(14);
       expect(result.criterionDetails.remoteEvidence.every(record => record.status === 200 && record.sha256)).toBe(true);
+    });
+
+    it('reuses S011\'s suppression and scope scan when both criteria run, so the repository is scanned once', async () => {
+      const repo = await uiRepo();
+      await fs.outputFile(path.join(repo, 'sonar-project.properties'), 'sonar.coverage.exclusions=src/index.js\n');
+      const replay = replayTransport(UI_USERS);
+      const run = createEvaluationRun({ repositoryPath: repo, repositoryName: 'ui-users', language: 'javascript', criteriaFilter: ['S011', 'S013'], remoteLookups: replay.transport, repositoryCommit: UI_USERS_COMMIT });
+      const scan = jest.spyOn(s011Suppressions, 'scanS011Suppressions');
+      try {
+        const [s011, s013] = await new TestEvaluator('javascript').evaluate(repo, ['S011', 'S013'], run);
+        unrecorded.push(...replay.unrecorded);
+
+        expect(scan).toHaveBeenCalledTimes(1);
+        expect((s011.criterionDetails as S011Analysis).scan.scope.map(item => item.key)).toEqual(['sonar.coverage.exclusions']);
+        expect(s013.details).toContain('  - Files excluded from coverage (sonar.coverage.exclusions, sonar-project.properties:1): src/index.js');
+      } finally {
+        scan.mockRestore();
+      }
     });
 
     it('is manual, not failed, when the analysis is of another commit or the evaluated commit is unknown', async () => {
