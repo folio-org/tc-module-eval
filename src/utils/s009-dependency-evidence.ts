@@ -1,10 +1,23 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { parseStringPromise } from 'xml2js';
 import semver from 'semver';
 import { S009DependencyEvidence, S009DependencyObservation, S009EvidenceDiagnostic } from '../types';
 import { findCandidateFiles, relativePosixPath } from './repo-files';
+import {
+  asArray,
+  balancedGradleCall,
+  GradleDependencyDeclaration,
+  packageDependencyEntries,
+  parsePackageJson,
+  parsePom,
+  pomDependencies,
+  quotedGradleLiteral,
+  scanGradleDeclarations,
+  splitGradleArguments,
+  stripGradleComments,
+  xmlText
+} from './manifest-parsers';
 
 const MAX_MANIFESTS = 128;
 const MAX_MANIFEST_BYTES = 1024 * 1024;
@@ -56,13 +69,6 @@ interface EffectiveMavenProject {
   parentPomPath?: string;
   properties: Map<string, string>;
   management: MavenManagementEntry[];
-}
-
-interface GradleDeclaration {
-  scope: typeof GRADLE_CONFIGURATIONS[number];
-  expression: string;
-  offset: number;
-  index: string;
 }
 
 export async function collectS009DependencyEvidence(repoPath: string): Promise<S009DependencyEvidence> {
@@ -258,18 +264,14 @@ async function parseMavenProject(context: Context, pomPath: string): Promise<Par
   context.projectFiles.add(sourcePath);
   const content = readManifest(context, pomPath);
   if (content === undefined) return undefined;
-  let project: any;
-  try {
-    project = (await parseStringPromise(content, { explicitArray: false, trim: true }))?.project;
-  } catch (error) {
-    diagnostic(context, 'maven_manifest_invalid', `Not valid XML (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
+  const parsed = await parsePom(content);
+  if (!parsed.ok) {
+    diagnostic(context, 'maven_manifest_invalid', parsed.reason === 'invalid-xml'
+      ? `Not valid XML (${parsed.message}), so its dependencies were not checked.`
+      : 'Has no <project> element, so its dependencies were not checked.', sourcePath);
     return undefined;
   }
-  if (!project || typeof project !== 'object') {
-    diagnostic(context, 'maven_manifest_invalid', 'Has no <project> element, so its dependencies were not checked.', sourcePath);
-    return undefined;
-  }
-  return { pomPath, sourcePath, project };
+  return { pomPath, sourcePath, project: parsed.project };
 }
 
 /** Where a parent's relativePath (default ../pom.xml) points inside the repository, if it names a POM there. */
@@ -393,15 +395,8 @@ function resolveMavenProject(
     properties,
     management: [...(parent?.management ?? [])]
   };
-  for (const dependency of asArray(parsed.project.dependencyManagement?.dependencies?.dependency)) {
-    effective.management.push({
-      groupId: xmlText(dependency?.groupId),
-      artifactId: xmlText(dependency?.artifactId),
-      type: xmlText(dependency?.type) || 'jar',
-      classifier: xmlText(dependency?.classifier),
-      version: xmlText(dependency?.version),
-      scope: xmlText(dependency?.scope)
-    });
+  for (const dependency of pomDependencies(parsed.project.dependencyManagement?.dependencies?.dependency)) {
+    effective.management.push({ ...dependency, type: dependency.type || 'jar' });
   }
   cache.set(parsed.pomPath, effective);
   return effective;
@@ -446,15 +441,13 @@ function collectMavenDependencies(
   { localProjects, profileProjects }: { localProjects: Map<string, Set<string>>; profileProjects: Set<string> },
   sourceField: string
 ): void {
-  for (const [index, dependency] of asArray(value).entries()) {
-    const rawScope = xmlText(dependency?.scope);
-    const rawGroupId = xmlText(dependency?.groupId);
-    const rawArtifactId = xmlText(dependency?.artifactId);
+  for (const [index, dependency] of pomDependencies(value).entries()) {
+    const { scope: rawScope, groupId: rawGroupId, artifactId: rawArtifactId } = dependency;
     const field = `${sourceField}.dependency[${index}]`;
     const groupId = resolveMavenText(rawGroupId, effective.properties);
     const artifactId = resolveMavenText(rawArtifactId, effective.properties);
-    const type = resolveMavenText(xmlText(dependency?.type) || 'jar', effective.properties);
-    const classifier = resolveMavenText(xmlText(dependency?.classifier), effective.properties) ?? '';
+    const type = resolveMavenText(dependency.type || 'jar', effective.properties);
+    const classifier = resolveMavenText(dependency.classifier, effective.properties) ?? '';
     const managed = groupId && artifactId && type !== undefined
       ? findMavenManagement(effective, groupId, artifactId, type, classifier)
       : undefined;
@@ -480,7 +473,7 @@ function collectMavenDependencies(
       continue;
     }
     if (!isFolioGroup(groupId)) continue;
-    const rawVersion = xmlText(dependency?.version) || managed?.version || '';
+    const rawVersion = dependency.version || managed?.version || '';
     const declaredVersion = resolveMavenText(rawVersion, effective.properties);
     const localVersions = localProjects.get(`${groupId}:${artifactId}`);
     if (localVersions?.size && declaredVersion && localVersions.has(declaredVersion)) continue;
@@ -540,7 +533,7 @@ function collectGradle(context: Context): void {
       );
     }
 
-    for (const declaration of scanGradleDeclarations(staticContent)) {
+    for (const declaration of scanGradleDeclarations(staticContent, GRADLE_CONFIGURATIONS)) {
       collectGradleDeclaration(context, sourcePath, staticContent, declaration);
     }
   }
@@ -550,7 +543,7 @@ function collectGradleDeclaration(
   context: Context,
   sourcePath: string,
   content: string,
-  declaration: GradleDeclaration
+  declaration: GradleDependencyDeclaration
 ): void {
   const expression = declaration.expression.trim();
   if (expression.startsWith('{')) return;
@@ -573,8 +566,8 @@ function collectGradleDeclaration(
         coordinate: `${map.group}:${map.name}`,
         declaredVersion: map.version,
         sourcePath,
-        sourceField: `dependencies.${declaration.scope}[${declaration.index}]`,
-        scope: declaration.scope
+        sourceField: `dependencies.${declaration.configuration}[${declaration.index}]`,
+        scope: declaration.configuration
       });
       return;
     }
@@ -592,9 +585,9 @@ function collectGradleDeclaration(
     return;
   }
   if (isIgnoredGradleExpression(expression)) return;
-  const literal = quotedLiteral(expression);
+  const literal = quotedGradleLiteral(expression);
   if (literal !== undefined) {
-    collectGradleCoordinate(context, sourcePath, declaration.scope, literal, declaration.index);
+    collectGradleCoordinate(context, sourcePath, declaration.configuration, literal, declaration.index);
     return;
   }
   const line = content.slice(0, declaration.offset).split(/\r?\n/).length;
@@ -633,138 +626,13 @@ function collectGradleCoordinate(
   });
 }
 
-function scanGradleDeclarations(content: string): GradleDeclaration[] {
-  const declarations: GradleDeclaration[] = [];
-  const counts = new Map<string, number>();
-  for (let index = 0; index < content.length;) {
-    if (content[index] === '"' || content[index] === "'") {
-      index = skipGradleQuoted(content, index);
-      continue;
-    }
-    if (!/[A-Za-z_]/.test(content[index])) {
-      index += 1;
-      continue;
-    }
-    const start = index;
-    index += 1;
-    while (index < content.length && /[A-Za-z0-9_]/.test(content[index])) index += 1;
-    const identifier = content.slice(start, index);
-    if (identifier === 'add') {
-      const open = skipWhitespace(content, index);
-      if (content[open] !== '(') continue;
-      const call = balancedGradleCall(content, open);
-      if (!call) continue;
-      const args = splitGradleArguments(call.content);
-      const scope = args[0] && quotedLiteral(args[0]);
-      if (scope && isGradleConfiguration(scope) && args[1]) {
-        const count = counts.get(scope) ?? 0;
-        declarations.push({ scope, expression: args.slice(1).join(','), offset: start, index: String(count) });
-        counts.set(scope, count + 1);
-      }
-      index = call.end;
-      continue;
-    }
-    if (!isGradleConfiguration(identifier) || previousNonWhitespace(content, start) === '.') continue;
-    const expressionStart = skipWhitespace(content, index);
-    let expression: string | undefined;
-    let end = expressionStart;
-    if (content[expressionStart] === '(') {
-      const call = balancedGradleCall(content, expressionStart);
-      if (call) {
-        expression = call.content;
-        end = call.end;
-      }
-    } else if (expressionStart > index && !['=', '.', '{'].includes(content[expressionStart] ?? '')) {
-      // A call without parentheses ends at the line end, a semicolon, or a brace that closes an enclosing block.
-      end = expressionStart;
-      let depth = 0;
-      while (end < content.length && content[end] !== '\n' && content[end] !== ';') {
-        if (content[end] === '"' || content[end] === "'") {
-          end = skipGradleQuoted(content, end);
-          continue;
-        }
-        if ('([{'.includes(content[end])) depth += 1;
-        else if (')]}'.includes(content[end]) && --depth < 0) break;
-        end += 1;
-      }
-      expression = content.slice(expressionStart, end);
-    }
-    if (!expression?.trim()) continue;
-    const count = counts.get(identifier) ?? 0;
-    declarations.push({ scope: identifier, expression, offset: start, index: String(count) });
-    counts.set(identifier, count + 1);
-    index = end;
-  }
-  return declarations;
-}
 
-function isGradleConfiguration(value: string): value is typeof GRADLE_CONFIGURATIONS[number] {
-  return (GRADLE_CONFIGURATIONS as readonly string[]).includes(value);
-}
 
-function skipWhitespace(content: string, index: number): number {
-  while (index < content.length && /\s/.test(content[index])) index += 1;
-  return index;
-}
 
-function previousNonWhitespace(content: string, index: number): string | undefined {
-  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    if (!/\s/.test(content[cursor])) return content[cursor];
-  }
-  return undefined;
-}
 
-function skipGradleQuoted(content: string, start: number): number {
-  const quote = content.startsWith(content[start].repeat(3), start) ? content[start].repeat(3) : content[start];
-  for (let index = start + quote.length; index < content.length; index += 1) {
-    if (content.startsWith(quote, index) && !isEscapedCharacter(content, index)) return index + quote.length;
-  }
-  return content.length;
-}
 
-function balancedGradleCall(content: string, open: number): { content: string; end: number } | undefined {
-  let depth = 0;
-  for (let index = open; index < content.length; index += 1) {
-    if (content[index] === '"' || content[index] === "'") {
-      index = skipGradleQuoted(content, index) - 1;
-      continue;
-    }
-    if (content[index] === '(') depth += 1;
-    if (content[index] === ')' && --depth === 0) return { content: content.slice(open + 1, index), end: index + 1 };
-  }
-  return undefined;
-}
 
-function splitGradleArguments(value: string): string[] {
-  const parts: string[] = [];
-  let start = 0;
-  let depth = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    if (value[index] === '"' || value[index] === "'") {
-      index = skipGradleQuoted(value, index) - 1;
-      continue;
-    }
-    if (value[index] === '(' || value[index] === '[' || value[index] === '{') depth += 1;
-    else if (value[index] === ')' || value[index] === ']' || value[index] === '}') depth -= 1;
-    else if (value[index] === ',' && depth === 0) {
-      parts.push(value.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  parts.push(value.slice(start).trim());
-  return parts;
-}
 
-// The whole value must be one string literal: 'a' + 'b' or an unterminated quote is not a literal.
-function quotedLiteral(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (!['"', "'"].includes(trimmed[0])) return undefined;
-  const quote = trimmed.startsWith(trimmed[0].repeat(3)) ? trimmed[0].repeat(3) : trimmed[0];
-  if (trimmed.length < quote.length * 2 || !trimmed.endsWith(quote)
-    || isEscapedCharacter(trimmed, trimmed.length - quote.length)
-    || skipGradleQuoted(trimmed, 0) !== trimmed.length) return undefined;
-  return trimmed.slice(quote.length, -quote.length);
-}
 
 function isIgnoredGradleExpression(value: string): boolean {
   const match = /^(project|files|fileTree|platform|enforcedPlatform|kotlin)\s*\(/.exec(value);
@@ -840,33 +708,31 @@ function collectNpm(context: Context): void {
     const { packagePath, sourcePath, manifest } = parsed;
     context.projectFiles.add(sourcePath);
     const seenPackages = new Set<string>();
-    for (const field of NPM_FIELDS) {
-      const dependencies = manifest[field];
-      if (dependencies === undefined) continue;
-      if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
+    for (const entry of packageDependencyEntries(manifest, NPM_FIELDS)) {
+      const { field } = entry;
+      if ('invalid' in entry) {
         diagnostic(context, 'npm_dependencies_invalid', `"${field}" is not an object of package names and versions, so it was not checked.`, sourcePath);
         continue;
       }
-      for (const [declaredName, specifier] of Object.entries(dependencies)) {
-        if (typeof specifier !== 'string') {
-          diagnostic(context, 'npm_dependency_invalid', `The version of ${declaredName} in "${field}" is not a string, so it was not checked.`, sourcePath);
-          continue;
-        }
-        const packageName = npmTargetPackage(declaredName, specifier);
-        if (!packageName.startsWith('@folio/')) continue;
-        seenPackages.add(packageName);
-        const locality = npmLocality(packageName, specifier, packagePath, localWorkspaces);
-        if (locality === 'local') continue;
-        addObservation(context, {
-          ecosystem: 'npm',
-          coordinate: packageName,
-          locality: locality === 'ambiguous' ? 'ambiguous' : undefined,
-          declaredVersion: specifier,
-          sourcePath,
-          sourceField: `${field}.${declaredName}`,
-          scope: field
-        });
+      const { name: declaredName, specifier } = entry;
+      if (typeof specifier !== 'string') {
+        diagnostic(context, 'npm_dependency_invalid', `The version of ${declaredName} in "${field}" is not a string, so it was not checked.`, sourcePath);
+        continue;
       }
+      const packageName = npmTargetPackage(declaredName, specifier);
+      if (!packageName.startsWith('@folio/')) continue;
+      seenPackages.add(packageName);
+      const locality = npmLocality(packageName, specifier, packagePath, localWorkspaces);
+      if (locality === 'local') continue;
+      addObservation(context, {
+        ecosystem: 'npm',
+        coordinate: packageName,
+        locality: locality === 'ambiguous' ? 'ambiguous' : undefined,
+        declaredVersion: specifier,
+        sourcePath,
+        sourceField: `${field}.${declaredName}`,
+        scope: field
+      });
     }
     collectBundledDependencies(context, manifest, sourcePath, seenPackages);
   }
@@ -928,14 +794,12 @@ function readNpmManifest(
   context.projectFiles.add(sourcePath);
   const content = readManifest(context, packagePath);
   if (content === undefined) return undefined;
-  try {
-    const manifest = JSON.parse(content);
-    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('root value must be an object');
-    return { sourcePath, manifest };
-  } catch (error) {
-    diagnostic(context, 'npm_manifest_invalid', `Not valid JSON (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
+  const parsed = parsePackageJson(content);
+  if (!parsed.ok) {
+    diagnostic(context, 'npm_manifest_invalid', `Not valid JSON (${parsed.message}), so its dependencies were not checked.`, sourcePath);
     return undefined;
   }
+  return { sourcePath, manifest: parsed.manifest };
 }
 
 function workspacePatterns(value: unknown, context: Context): string[] {
@@ -1025,85 +889,9 @@ function resolveMavenText(value: string, properties: Map<string, string>, depth 
   return resolved.includes('${') ? undefined : resolved;
 }
 
-function stripGradleComments(content: string): string {
-  let result = '';
-  let quote: "'" | '"' | "'''" | '\"\"\"' | undefined;
-  let lineComment = false;
-  let blockComment = false;
-  for (let index = 0; index < content.length;) {
-    const character = content[index];
-    const pair = content.slice(index, index + 2);
-    const triple = content.slice(index, index + 3);
-    if (lineComment) {
-      result += character === '\n' ? '\n' : ' ';
-      if (character === '\n') lineComment = false;
-      index += 1;
-      continue;
-    }
-    if (blockComment) {
-      if (pair === '*/') {
-        result += '  ';
-        blockComment = false;
-        index += 2;
-      } else {
-        result += character === '\n' ? '\n' : ' ';
-        index += 1;
-      }
-      continue;
-    }
-    if (quote) {
-      if (content.startsWith(quote, index) && !isEscapedCharacter(content, index)) {
-        result += quote;
-        index += quote.length;
-        quote = undefined;
-      } else {
-        result += character;
-        index += 1;
-      }
-      continue;
-    }
-    if (pair === '//') {
-      result += '  ';
-      lineComment = true;
-      index += 2;
-      continue;
-    }
-    if (pair === '/*') {
-      result += '  ';
-      blockComment = true;
-      index += 2;
-      continue;
-    }
-    if (triple === "'''" || triple === '\"\"\"') {
-      quote = triple;
-      result += triple;
-      index += 3;
-      continue;
-    }
-    if (character === "'" || character === '"') quote = character;
-    result += character;
-    index += 1;
-  }
-  return result;
-}
 
-function isEscapedCharacter(content: string, index: number): boolean {
-  let backslashes = 0;
-  for (let cursor = index - 1; cursor >= 0 && content[cursor] === '\\'; cursor -= 1) backslashes += 1;
-  return backslashes % 2 === 1;
-}
 
-function xmlText(value: any): string {
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number') return String(value);
-  if (value && typeof value === 'object' && typeof value._ === 'string') return value._.trim();
-  return '';
-}
 
-function asArray(value: any): any[] {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
-}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
