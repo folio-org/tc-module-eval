@@ -18,7 +18,8 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 const MAVEN_SCOPES = new Set(['compile', 'runtime', 'provided']);
 const NPM_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const;
-const GRADLE_CONFIGURATIONS = ['api', 'implementation', 'compileOnly', 'runtimeOnly'] as const;
+// compile and runtime are the production configurations of Gradle 6 and older.
+const GRADLE_CONFIGURATIONS = ['api', 'implementation', 'compileOnly', 'runtimeOnly', 'compile', 'runtime'] as const;
 
 interface Context {
   repoPath: string;
@@ -51,6 +52,8 @@ interface EffectiveMavenProject {
   parentGroupId?: string;
   parentArtifactId?: string;
   parentVersion?: string;
+  /** The local parent POM this project inherits from, when the declared parent is in the repository. */
+  parentPomPath?: string;
   properties: Map<string, string>;
   management: MavenManagementEntry[];
 }
@@ -87,45 +90,131 @@ export async function collectS009DependencyEvidence(repoPath: string): Promise<S
   };
 }
 
+// The Maven build is the root pom.xml, the modules it lists (recursively, including profile modules), and the
+// local parents they inherit from. Other pom.xml files, such as test fixtures, are never read.
 async function collectMaven(context: Context): Promise<void> {
-  const pomFiles = candidateFiles(context, file => path.basename(file) === 'pom.xml');
-  const projects = new Map<string, ParsedMavenProject>();
-  for (const pomPath of pomFiles) {
-    const sourcePath = relativePosixPath(context.repoPath, pomPath);
-    context.projectFiles.add(sourcePath);
-    const content = readManifest(context, pomPath);
-    if (content === undefined) continue;
+  const rootPom = path.join(context.repoPath, 'pom.xml');
+  let rootStats: fs.Stats;
+  try {
+    rootStats = fs.lstatSync(rootPom);
+  } catch {
+    return;
+  }
+  if (!rootStats.isFile()) {
+    context.projectFiles.add('pom.xml');
+    diagnostic(context, 'maven_manifest_unreadable', 'Is a symbolic link or not a regular file, so the Maven build was not checked.', 'pom.xml');
+    return;
+  }
+  const projects = new Map<string, ParsedMavenProject | undefined>();
+  const load = async (pomPath: string): Promise<ParsedMavenProject | undefined> => {
+    if (projects.has(pomPath)) return projects.get(pomPath);
+    if (projects.size >= MAX_MANIFESTS) {
+      manifestLimit(context);
+      return undefined;
+    }
+    const parsed = await parseMavenProject(context, pomPath);
+    projects.set(pomPath, parsed);
+    return parsed;
+  };
 
-    let project: any;
-    try {
-      project = (await parseStringPromise(content, { explicitArray: false, trim: true }))?.project;
-    } catch (error) {
-      diagnostic(context, 'maven_manifest_invalid', `Unable to parse ${sourcePath}: ${errorMessage(error)}`, sourcePath);
-      continue;
+  // Walk the modules; edges listed only in a profile are conditional, because the default build may not include them.
+  const edges = new Map<string, Array<{ target: string; conditional: boolean }>>();
+  const scheduled = new Set([rootPom]);
+  const seenReferences = new Set<string>();
+  const queue = [rootPom];
+  while (queue.length) {
+    const pomPath = queue.shift()!;
+    const parsed = await load(pomPath);
+    if (!parsed) continue;
+    const references = [
+      ...asArray(parsed.project.modules?.module).map(module => ({ name: xmlText(module), conditional: false })),
+      ...asArray(parsed.project.profiles?.profile).flatMap(profile => asArray(profile?.modules?.module))
+        .map(module => ({ name: xmlText(module), conditional: true }))
+    ].filter(reference => reference.name);
+    const pomEdges: Array<{ target: string; conditional: boolean }> = [];
+    edges.set(pomPath, pomEdges);
+    for (const { name, conditional } of references) {
+      const referenceKey = `${conditional}\0${name}`;
+      if (seenReferences.has(`${pomPath}\0${referenceKey}`)) continue;
+      seenReferences.add(`${pomPath}\0${referenceKey}`);
+      const resolved = resolveRepoPom(context, path.dirname(pomPath), name);
+      if (resolved.kind !== 'file') {
+        diagnostic(
+          context,
+          'maven_module_missing',
+          `Module ${name} has no pom.xml inside this repository (or its path goes through a symbolic link), so its dependencies were not checked.`,
+          parsed.sourcePath
+        );
+        continue;
+      }
+      pomEdges.push({ target: resolved.path, conditional });
+      if (scheduled.has(resolved.path)) continue;
+      if (scheduled.size >= MAX_MANIFESTS) {
+        manifestLimit(context);
+        continue;
+      }
+      scheduled.add(resolved.path);
+      queue.push(resolved.path);
     }
-    if (!project || typeof project !== 'object') {
-      diagnostic(context, 'maven_manifest_invalid', `${sourcePath} has no Maven project element.`, sourcePath);
-      continue;
-    }
-    projects.set(fs.realpathSync(pomPath), { pomPath: fs.realpathSync(pomPath), sourcePath, project });
+  }
+  const modules = new Set([...scheduled].filter(pomPath => projects.has(pomPath)));
+  const unconditional = new Set<string>();
+  for (const pending = [rootPom]; pending.length;) {
+    const pomPath = pending.shift()!;
+    if (unconditional.has(pomPath) || !modules.has(pomPath)) continue;
+    unconditional.add(pomPath);
+    for (const edge of edges.get(pomPath) ?? []) if (!edge.conditional) pending.push(edge.target);
   }
 
+  // Load local parents named by relativePath; they count only when they are the declared parent.
+  for (const pending = [...projects.values()]; pending.length;) {
+    const parsed = pending.shift();
+    const parent = parsed && localParent(context, parsed);
+    if (parsed && parent?.kind === 'symlink') {
+      diagnostic(
+        context,
+        'maven_parent_unreadable',
+        'Its parent path goes through a symbolic link, so the parent POM and the dependencies it passes on were not checked.',
+        parsed.sourcePath
+      );
+    }
+    if (parent?.kind !== 'file' || projects.has(parent.path)) continue;
+    pending.push(await load(parent.path));
+  }
+
+  const loaded = new Map([...projects].filter((entry): entry is [string, ParsedMavenProject] => Boolean(entry[1])));
   const cache = new Map<string, EffectiveMavenProject>();
-  for (const parsed of projects.values()) resolveMavenProject(context, parsed, projects, cache, new Set());
-  const participating = participatingMavenProjects(context, projects);
+  for (const parsed of loaded.values()) resolveMavenProject(context, parsed, loaded, cache, new Set());
   const localProjects = new Map<string, Set<string>>();
-  for (const pomPath of participating) {
+  const profileProjects = new Set<string>();
+  for (const pomPath of modules) {
     const effective = cache.get(pomPath);
     if (!effective?.groupId || !effective.artifactId) continue;
-    const versions = localProjects.get(`${effective.groupId}:${effective.artifactId}`) ?? new Set<string>();
+    const key = `${effective.groupId}:${effective.artifactId}`;
+    if (!unconditional.has(pomPath)) {
+      profileProjects.add(key);
+      continue;
+    }
+    const versions = localProjects.get(key) ?? new Set<string>();
     if (effective.version) versions.add(effective.version);
-    localProjects.set(`${effective.groupId}:${effective.artifactId}`, versions);
+    localProjects.set(key, versions);
   }
 
-  for (const parsed of projects.values()) {
+  // Dependencies come from build modules and from the local parents they inherit.
+  const inBuild = new Set<string>();
+  for (let pomPath of modules) {
+    while (pomPath && !inBuild.has(pomPath) && loaded.has(pomPath)) {
+      inBuild.add(pomPath);
+      pomPath = cache.get(pomPath)?.parentPomPath ?? '';
+    }
+  }
+  const buildProjects = [...loaded.values()].filter(parsed => inBuild.has(parsed.pomPath));
+  const locality = { localProjects, profileProjects };
+
+  for (const parsed of buildProjects) {
     const effective = cache.get(parsed.pomPath);
     if (!effective) continue;
-    collectMavenDependencies(context, parsed.sourcePath, parsed.project.dependencies?.dependency, effective, localProjects, 'dependencies');
+    collectMavenDependencies(context, parsed.sourcePath, parsed.project.dependencies?.dependency, effective, locality, 'dependencies');
     for (const [profileIndex, profile] of asArray(parsed.project.profiles?.profile).entries()) {
       const profileProperties = new Map(effective.properties);
       for (const [name, value] of Object.entries(profile?.properties ?? {})) {
@@ -137,8 +226,8 @@ async function collectMaven(context: Context): Promise<void> {
         diagnostic(
           context,
           'maven_profile_management_unresolved',
-          'Profile dependency management may change production scope and is outside the bounded static Maven model.',
-          `${parsed.sourcePath}#profiles.profile[${profileIndex}].dependencyManagement`
+          `Profile ${profileIndex + 1} has its own <dependencyManagement>, which can change whether a dependency ships. The evaluator does not apply it.`,
+          parsed.sourcePath
         );
       }
       for (const name of Object.keys(profile?.properties ?? {})) {
@@ -147,8 +236,8 @@ async function collectMaven(context: Context): Promise<void> {
           diagnostic(
             context,
             'maven_profile_scope_unresolved',
-            `Profile property ${name} may change a managed dependency scope.`,
-            `${parsed.sourcePath}#profiles.profile[${profileIndex}].properties.${name}`
+            `Profile ${profileIndex + 1} sets property ${name}, which can change whether a managed dependency ships. The evaluator does not apply it.`,
+            parsed.sourcePath
           );
         }
       }
@@ -157,10 +246,81 @@ async function collectMaven(context: Context): Promise<void> {
         parsed.sourcePath,
         profile?.dependencies?.dependency,
         profileEffective,
-        localProjects,
+        locality,
         `profiles.profile[${profileIndex}].dependencies`
       );
     }
+  }
+}
+
+async function parseMavenProject(context: Context, pomPath: string): Promise<ParsedMavenProject | undefined> {
+  const sourcePath = relativePosixPath(context.repoPath, pomPath);
+  context.projectFiles.add(sourcePath);
+  const content = readManifest(context, pomPath);
+  if (content === undefined) return undefined;
+  let project: any;
+  try {
+    project = (await parseStringPromise(content, { explicitArray: false, trim: true }))?.project;
+  } catch (error) {
+    diagnostic(context, 'maven_manifest_invalid', `Not valid XML (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
+    return undefined;
+  }
+  if (!project || typeof project !== 'object') {
+    diagnostic(context, 'maven_manifest_invalid', 'Has no <project> element, so its dependencies were not checked.', sourcePath);
+    return undefined;
+  }
+  return { pomPath, sourcePath, project };
+}
+
+/** Where a parent's relativePath (default ../pom.xml) points inside the repository, if it names a POM there. */
+function localParent(context: Context, parsed: ParsedMavenProject): ReturnType<typeof resolveRepoPom> | undefined {
+  const parent = parsed.project.parent;
+  if (!parent) return undefined;
+  const relativeValue = xmlText(parent.relativePath);
+  if (parent.relativePath !== undefined && !relativeValue) return undefined;
+  return resolveRepoPom(context, path.dirname(parsed.pomPath), relativeValue || '../pom.xml');
+}
+
+/**
+ * Resolves a Maven module or parent path relative to a POM's folder, one component at a time, so that no symbolic
+ * link is followed, even one a later ".." would cancel. Maven accepts "\" as a separator; a folder means its pom.xml.
+ */
+function resolveRepoPom(
+  context: Context,
+  baseDirectory: string,
+  relative: string
+): { kind: 'file'; path: string } | { kind: 'missing' | 'outside' | 'symlink' } {
+  if (path.isAbsolute(relative) || /^[A-Za-z]:/.test(relative) || /^[\\/]/.test(relative)) return { kind: 'outside' };
+  const inside = (candidate: string) => {
+    const fromRepo = path.relative(context.repoPath, candidate);
+    return fromRepo !== '..' && !fromRepo.startsWith(`..${path.sep}`) && !path.isAbsolute(fromRepo);
+  };
+  let current = baseDirectory;
+  let stats = fs.lstatSync(current);
+  const parts = relative.split(/[\\/]+/).filter(part => part && part !== '.');
+  for (const [index, part] of [...parts, ''].entries()) {
+    if (index === parts.length) {
+      if (!stats.isDirectory()) break;
+      current = path.join(current, 'pom.xml');
+    } else if (part === '..') {
+      current = path.dirname(current);
+      if (!inside(current)) return { kind: 'outside' };
+    } else {
+      current = path.join(current, part);
+    }
+    try {
+      stats = fs.lstatSync(current);
+    } catch {
+      return { kind: 'missing' };
+    }
+    if (stats.isSymbolicLink()) return { kind: 'symlink' };
+  }
+  return stats.isFile() && inside(current) ? { kind: 'file', path: current } : { kind: 'missing' };
+}
+
+function manifestLimit(context: Context): void {
+  if (!context.diagnostics.some(item => item.code === 'manifest_limit')) {
+    diagnostic(context, 'manifest_limit', `The Maven build has more than ${MAX_MANIFESTS} pom.xml files; only the first ${MAX_MANIFESTS} were checked.`);
   }
 }
 
@@ -174,23 +334,38 @@ function resolveMavenProject(
   const cached = cache.get(parsed.pomPath);
   if (cached) return cached;
   if (visiting.has(parsed.pomPath)) {
-    diagnostic(context, 'maven_parent_cycle', `Local Maven parent cycle includes ${parsed.sourcePath}.`, parsed.sourcePath);
+    diagnostic(context, 'maven_parent_cycle', 'Its parent POMs in this repository form a cycle, so the properties and dependency management it inherits could not be read.', parsed.sourcePath);
     return undefined;
   }
   const nextVisiting = new Set(visiting).add(parsed.pomPath);
   let parent: EffectiveMavenProject | undefined;
+  let matchedParentPath: string | undefined;
   if (parsed.project.parent) {
-    const relativeValue = xmlText(parsed.project.parent.relativePath);
-    const relativePathDisabled = parsed.project.parent.relativePath !== undefined && !relativeValue;
-    const parentPath = relativePathDisabled
-      ? undefined
-      : path.resolve(path.dirname(parsed.pomPath), relativeValue || '../pom.xml');
-    const parentProject = parentPath && (projects.get(parentPath) ?? projects.get(path.join(parentPath, 'pom.xml')));
+    const location = localParent(context, parsed);
+    const parentProject = location?.kind === 'file' ? projects.get(location.path) : undefined;
     if (parentProject) {
       const candidate = resolveMavenProject(context, parentProject, projects, cache, nextVisiting);
-      if (candidate && mavenParentMatches(parsed.project.parent, candidate)) parent = candidate;
+      if (candidate && mavenParentMatches(parsed.project.parent, candidate)) {
+        parent = candidate;
+        matchedParentPath = parentProject.pomPath;
+      } else if (candidate && mavenParentMatches(parsed.project.parent, candidate, true)) {
+        // Maven uses the local POM when its version is in the range; the evaluator does not compare ranges.
+        diagnostic(
+          context,
+          'maven_parent_unresolved',
+          'Its parent version is a range, so the evaluator cannot tell whether Maven uses the parent POM in this repository and the dependencies it passes on.',
+          parsed.sourcePath
+        );
+      }
       else if (candidate) {
-        diagnostic(context, 'maven_parent_mismatch', `Local Maven parent for ${parsed.sourcePath} does not match its declared GAV.`, parsed.sourcePath);
+        // Maven then uses the published parent, so this is the same as a parent outside the repository.
+        diagnostic(
+          context,
+          'maven_parent_mismatch',
+          'The POM at its parent path is not the parent it declares, so Maven uses the published parent. As with any parent outside this repository, its properties and dependency management are not read.',
+          parsed.sourcePath,
+          false
+        );
       }
     }
   }
@@ -214,6 +389,7 @@ function resolveMavenProject(
     parentGroupId,
     parentArtifactId,
     parentVersion,
+    parentPomPath: matchedParentPath,
     properties,
     management: [...(parent?.management ?? [])]
   };
@@ -231,7 +407,8 @@ function resolveMavenProject(
   return effective;
 }
 
-function mavenParentMatches(declared: any, candidate: EffectiveMavenProject): boolean {
+/** Whether the declared parent is this POM; with versionRange, whether it names this POM with a version range instead. */
+function mavenParentMatches(declared: any, candidate: EffectiveMavenProject, versionRange = false): boolean {
   const properties = new Map(candidate.properties);
   const groupId = resolveMavenText(xmlText(declared?.groupId), properties);
   const artifactId = resolveMavenText(xmlText(declared?.artifactId), properties);
@@ -239,7 +416,7 @@ function mavenParentMatches(declared: any, candidate: EffectiveMavenProject): bo
   return Boolean(groupId && artifactId && version
     && groupId === candidate.groupId
     && artifactId === candidate.artifactId
-    && version === candidate.version);
+    && (versionRange ? /^[[(].*[\])]$/.test(version) : version === candidate.version));
 }
 
 function setMavenAliases(
@@ -261,29 +438,12 @@ function setMavenAliases(
   }
 }
 
-function participatingMavenProjects(context: Context, projects: Map<string, ParsedMavenProject>): Set<string> {
-  const root = projects.get(path.join(context.repoPath, 'pom.xml'));
-  if (!root) return new Set();
-  const participating = new Set<string>();
-  const visit = (parsed: ParsedMavenProject): void => {
-    if (participating.has(parsed.pomPath)) return;
-    participating.add(parsed.pomPath);
-    for (const moduleName of asArray(parsed.project.modules?.module).map(xmlText).filter(Boolean)) {
-      const modulePom = path.resolve(path.dirname(parsed.pomPath), moduleName, 'pom.xml');
-      const module = projects.get(modulePom);
-      if (module) visit(module);
-    }
-  };
-  visit(root);
-  return participating;
-}
-
 function collectMavenDependencies(
   context: Context,
   sourcePath: string,
   value: unknown,
   effective: EffectiveMavenProject,
-  localProjects: Map<string, Set<string>>,
+  { localProjects, profileProjects }: { localProjects: Map<string, Set<string>>; profileProjects: Set<string> },
   sourceField: string
 ): void {
   for (const [index, dependency] of asArray(value).entries()) {
@@ -300,30 +460,32 @@ function collectMavenDependencies(
       : undefined;
     const managedScope = managed?.scope ? resolveMavenText(managed.scope, effective.properties) : undefined;
     const scope = rawScope ? resolveMavenText(rawScope, effective.properties) : managed?.scope ? managedScope : 'compile';
+    const maybeFolio = groupId ? isFolioGroup(groupId) : rawGroupId.includes('${');
     if (!scope) {
-      if (rawGroupId === 'org.folio' || rawGroupId.includes('${')) {
-        diagnostic(context, 'maven_scope_unresolved', 'Maven dependency scope could not be resolved from local parent properties or dependency management.', `${sourcePath}#${field}`);
+      if (maybeFolio) {
+        diagnostic(context, 'maven_scope_unresolved', `The scope of dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} uses a property that is not set in this repository's POMs, so the evaluator cannot tell whether it ships.`, sourcePath);
       }
       continue;
     }
     if (!MAVEN_SCOPES.has(scope)) continue;
     if (!groupId || !artifactId) {
-      if (rawGroupId === 'org.folio' || rawGroupId.includes('${')) {
+      if (maybeFolio) {
         diagnostic(
           context,
           'maven_coordinate_unresolved',
-          `Maven dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} could not be resolved from local properties.`,
-          `${sourcePath}#${field}`
+          `Dependency ${rawGroupId || '?'}:${rawArtifactId || '?'} uses a property that is not set in this repository's POMs, so the evaluator cannot tell whether it is a FOLIO library.`,
+          sourcePath
         );
       }
       continue;
     }
-    if (groupId !== 'org.folio') continue;
+    if (!isFolioGroup(groupId)) continue;
     const rawVersion = xmlText(dependency?.version) || managed?.version || '';
     const declaredVersion = resolveMavenText(rawVersion, effective.properties);
     const localVersions = localProjects.get(`${groupId}:${artifactId}`);
     if (localVersions?.size && declaredVersion && localVersions.has(declaredVersion)) continue;
-    const ambiguousLocality = Boolean(localVersions !== undefined && (
+    // A module listed only in a profile may not be in the build, so it cannot prove the dependency is local.
+    const ambiguousLocality = profileProjects.has(`${groupId}:${artifactId}`) || Boolean(localVersions !== undefined && (
       !localVersions.size || !declaredVersion || /^[[(].*[\])]$/.test(declaredVersion)
     ));
     addObservation(context, {
@@ -353,8 +515,13 @@ function findMavenManagement(
   ));
 }
 
+/** The FOLIO Maven namespace: org.folio and its sub-groups such as org.folio.okapi. */
+function isFolioGroup(groupId: string | undefined): boolean {
+  return groupId === 'org.folio' || Boolean(groupId?.startsWith('org.folio.'));
+}
+
 function collectGradle(context: Context): void {
-  const buildFiles = candidateFiles(context, file => ['build.gradle', 'build.gradle.kts'].includes(path.basename(file))
+  const buildFiles = candidateFiles(context, 'Gradle build', file => ['build.gradle', 'build.gradle.kts'].includes(path.basename(file))
     && !relativePosixPath(context.repoPath, file).startsWith('buildSrc/')
     && !relativePosixPath(context.repoPath, file).startsWith('build-logic/'));
 
@@ -368,7 +535,7 @@ function collectGradle(context: Context): void {
       diagnostic(
         context,
         'gradle_external_script',
-        'An applied Gradle script may contain production dependency declarations that cannot be classified statically.',
+        'Applies another Gradle script (apply from), which may declare more dependencies. The evaluator does not read applied scripts.',
         sourcePath
       );
     }
@@ -388,10 +555,19 @@ function collectGradleDeclaration(
   const expression = declaration.expression.trim();
   if (expression.startsWith('{')) return;
   const namedGroup = gradleNamedLiteral(expression, 'group');
-  if (namedGroup && namedGroup !== 'org.folio') return;
+  if (namedGroup && !namedGroup.includes('$') && !isFolioGroup(namedGroup)) return;
   const map = parseGradleMap(expression);
   if (map) {
-    if (map.group === 'org.folio' && map.name && !map.name.includes('$')) {
+    if (map.group?.includes('$') || (isFolioGroup(map.group) && map.name?.includes('$'))) {
+      diagnostic(
+        context,
+        'gradle_coordinate_unresolved',
+        `Dependency ${map.group}:${map.name} has a variable ${map.group?.includes('$') ? 'group' : 'name'}, so the evaluator cannot tell which FOLIO library it is.`,
+        sourcePath
+      );
+      return;
+    }
+    if (isFolioGroup(map.group) && map.name) {
       addObservation(context, {
         ecosystem: 'maven',
         coordinate: `${map.group}:${map.name}`,
@@ -425,7 +601,7 @@ function collectGradleDeclaration(
   diagnostic(
     context,
     'gradle_dependency_unresolved',
-    `Gradle ${declaration.scope} dependency declaration could not be resolved to a literal package coordinate.`,
+    'A dependency is not a plain "group:name:version" string (for example, a version catalog entry or a variable), so the evaluator cannot tell whether it is a FOLIO library.',
     `${sourcePath}:${line}`
   );
 }
@@ -439,12 +615,12 @@ function collectGradleCoordinate(
 ): void {
   const [groupId, artifactId, ...versionParts] = rawCoordinate.split(':');
   if (groupId.includes('$')) {
-    diagnostic(context, 'gradle_coordinate_unresolved', `Gradle coordinate ${rawCoordinate} has no concrete group.`, sourcePath);
+    diagnostic(context, 'gradle_coordinate_unresolved', `Dependency ${rawCoordinate} has a variable group, so the evaluator cannot tell whether it is a FOLIO library.`, sourcePath);
     return;
   }
-  if (groupId !== 'org.folio') return;
+  if (!isFolioGroup(groupId)) return;
   if (!artifactId || artifactId.includes('$')) {
-    diagnostic(context, 'gradle_coordinate_unresolved', `Gradle coordinate ${rawCoordinate} has no concrete artifact name.`, sourcePath);
+    diagnostic(context, 'gradle_coordinate_unresolved', `Dependency ${rawCoordinate} has a variable name, so the evaluator cannot tell which FOLIO library it is.`, sourcePath);
     return;
   }
   addObservation(context, {
@@ -499,8 +675,18 @@ function scanGradleDeclarations(content: string): GradleDeclaration[] {
         end = call.end;
       }
     } else if (expressionStart > index && !['=', '.', '{'].includes(content[expressionStart] ?? '')) {
+      // A call without parentheses ends at the line end, a semicolon, or a brace that closes an enclosing block.
       end = expressionStart;
-      while (end < content.length && content[end] !== '\n' && content[end] !== ';') end += 1;
+      let depth = 0;
+      while (end < content.length && content[end] !== '\n' && content[end] !== ';') {
+        if (content[end] === '"' || content[end] === "'") {
+          end = skipGradleQuoted(content, end);
+          continue;
+        }
+        if ('([{'.includes(content[end])) depth += 1;
+        else if (')]}'.includes(content[end]) && --depth < 0) break;
+        end += 1;
+      }
       expression = content.slice(expressionStart, end);
     }
     if (!expression?.trim()) continue;
@@ -569,10 +755,15 @@ function splitGradleArguments(value: string): string[] {
   return parts;
 }
 
+// The whole value must be one string literal: 'a' + 'b' or an unterminated quote is not a literal.
 function quotedLiteral(value: string): string | undefined {
   const trimmed = value.trim();
-  if (trimmed.length < 2 || !['"', "'"].includes(trimmed[0]) || trimmed[trimmed.length - 1] !== trimmed[0]) return undefined;
-  return trimmed.slice(1, -1);
+  if (!['"', "'"].includes(trimmed[0])) return undefined;
+  const quote = trimmed.startsWith(trimmed[0].repeat(3)) ? trimmed[0].repeat(3) : trimmed[0];
+  if (trimmed.length < quote.length * 2 || !trimmed.endsWith(quote)
+    || isEscapedCharacter(trimmed, trimmed.length - quote.length)
+    || skipGradleQuoted(trimmed, 0) !== trimmed.length) return undefined;
+  return trimmed.slice(quote.length, -quote.length);
 }
 
 function isIgnoredGradleExpression(value: string): boolean {
@@ -606,22 +797,22 @@ function collectNpm(context: Context): void {
   } catch {
     return;
   }
-  const packageFiles = candidateFiles(context, file => path.basename(file) === 'package.json');
   const root = readNpmManifest(context, rootPath);
   if (!root) return;
 
   const selected = new Set([rootPath]);
-  const patterns = workspacePatterns(root.manifest.workspaces, context);
+  const patterns = workspacePatterns(root.manifest.workspaces, context).map(pattern => ({ pattern, regex: workspacePattern(pattern) }));
   if (patterns.length) {
-    for (const packagePath of packageFiles) {
-      if (packagePath === rootPath) continue;
-      const directory = relativePosixPath(context.repoPath, path.dirname(packagePath));
-      if (patterns.some(pattern => workspacePattern(pattern).test(directory))) selected.add(packagePath);
-    }
-    for (const pattern of patterns) {
-      if (![...selected].some(packagePath => packagePath !== rootPath
-        && workspacePattern(pattern).test(relativePosixPath(context.repoPath, path.dirname(packagePath))))) {
-        diagnostic(context, 'npm_workspace_missing', `Workspace pattern ${pattern} matched no package directories.`, 'package.json#/workspaces');
+    // Only workspace manifests count toward the limit; other package.json files (fixtures, examples) are never read.
+    const workspaceFiles = candidateFiles(context, 'workspace package.json', file => {
+      if (path.basename(file) !== 'package.json' || file === rootPath) return false;
+      const directory = relativePosixPath(context.repoPath, path.dirname(file));
+      return patterns.some(({ regex }) => regex.test(directory));
+    });
+    for (const packagePath of workspaceFiles) selected.add(packagePath);
+    for (const { pattern, regex } of patterns) {
+      if (!workspaceFiles.some(packagePath => regex.test(relativePosixPath(context.repoPath, path.dirname(packagePath))))) {
+        diagnostic(context, 'npm_workspace_missing', `Workspace pattern ${pattern} matches no package folder, so the evaluator cannot tell which workspaces exist.`, 'package.json');
       }
     }
   }
@@ -636,7 +827,7 @@ function collectNpm(context: Context): void {
     const name = parsed.manifest.name;
     if (typeof name !== 'string') continue;
     if (localWorkspaces.has(name)) {
-      diagnostic(context, 'npm_workspace_duplicate_name', `Multiple declared workspaces use package name ${name}.`, 'package.json#/workspaces');
+      diagnostic(context, 'npm_workspace_duplicate_name', `More than one workspace is named ${name}, so the evaluator cannot tell which one a dependency refers to.`, 'package.json');
       continue;
     }
     localWorkspaces.set(name, {
@@ -653,12 +844,12 @@ function collectNpm(context: Context): void {
       const dependencies = manifest[field];
       if (dependencies === undefined) continue;
       if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
-        diagnostic(context, 'npm_dependencies_invalid', `${field} must be an object<string,string>.`, `${sourcePath}#/${field}`);
+        diagnostic(context, 'npm_dependencies_invalid', `"${field}" is not an object of package names and versions, so it was not checked.`, sourcePath);
         continue;
       }
       for (const [declaredName, specifier] of Object.entries(dependencies)) {
         if (typeof specifier !== 'string') {
-          diagnostic(context, 'npm_dependency_invalid', `${field}.${declaredName} must be a string.`, `${sourcePath}#/${field}/${declaredName}`);
+          diagnostic(context, 'npm_dependency_invalid', `The version of ${declaredName} in "${field}" is not a string, so it was not checked.`, sourcePath);
           continue;
         }
         const packageName = npmTargetPackage(declaredName, specifier);
@@ -713,7 +904,7 @@ function collectBundledDependencies(
     if (bundled === undefined) continue;
     if (typeof bundled === 'boolean') continue;
     if (!Array.isArray(bundled) || bundled.some(value => typeof value !== 'string')) {
-      diagnostic(context, 'npm_bundled_dependencies_invalid', `${field} must be an array of package names.`, `${sourcePath}#/${field}`);
+      diagnostic(context, 'npm_bundled_dependencies_invalid', `"${field}" is not a list of package names, so it was not checked.`, sourcePath);
       continue;
     }
     for (const packageName of bundled as string[]) {
@@ -742,7 +933,7 @@ function readNpmManifest(
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('root value must be an object');
     return { sourcePath, manifest };
   } catch (error) {
-    diagnostic(context, 'npm_manifest_invalid', `Unable to parse ${sourcePath}: ${errorMessage(error)}`, sourcePath);
+    diagnostic(context, 'npm_manifest_invalid', `Not valid JSON (${errorMessage(error)}), so its dependencies were not checked.`, sourcePath);
     return undefined;
   }
 }
@@ -755,7 +946,7 @@ function workspacePatterns(value: unknown, context: Context): string[] {
       ? (value as any).packages
       : undefined;
   if (!patterns || patterns.some((item: unknown) => typeof item !== 'string' || item.startsWith('!'))) {
-    diagnostic(context, 'npm_workspaces_invalid', 'workspaces must contain supported non-negated path patterns.', 'package.json#/workspaces');
+    diagnostic(context, 'npm_workspaces_invalid', '"workspaces" is not a list of folder patterns, or uses ! exclusions, which the evaluator does not support. Workspaces were not checked.', 'package.json');
     return [];
   }
   return patterns as string[];
@@ -778,10 +969,10 @@ function npmTargetPackage(declaredName: string, specifier: string): string {
   return separator === -1 ? target : target.slice(0, separator);
 }
 
-function candidateFiles(context: Context, include: (file: string) => boolean): string[] {
+function candidateFiles(context: Context, label: string, include: (file: string) => boolean): string[] {
   const candidates = findCandidateFiles(context.repoPath, context.repoPath, include, SKIPPED_DIRECTORIES).sort();
   if (candidates.length > MAX_MANIFESTS) {
-    diagnostic(context, 'manifest_limit', `Found ${candidates.length} candidate manifests; only the first ${MAX_MANIFESTS} were analyzed.`);
+    diagnostic(context, 'manifest_limit', `The repository has ${candidates.length} ${label} files; only the first ${MAX_MANIFESTS} were checked.`);
   }
   return candidates.slice(0, MAX_MANIFESTS);
 }
@@ -791,14 +982,14 @@ function readManifest(context: Context, filePath: string): string | undefined {
   try {
     const stats = fs.statSync(filePath);
     if (stats.size > MAX_MANIFEST_BYTES) {
-      diagnostic(context, 'manifest_too_large', `${sourcePath} exceeds ${MAX_MANIFEST_BYTES} bytes.`, sourcePath);
+      diagnostic(context, 'manifest_too_large', 'Larger than 1 MiB, so it was not read.', sourcePath);
       return undefined;
     }
     const content = fs.readFileSync(filePath, 'utf8');
     context.fileHashes[sourcePath] = `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`;
     return content;
   } catch (error) {
-    diagnostic(context, 'manifest_read_error', `Unable to read ${sourcePath}: ${errorMessage(error)}`, sourcePath);
+    diagnostic(context, 'manifest_read_error', `Could not be read (${errorMessage(error)}).`, sourcePath);
     return undefined;
   }
 }
@@ -810,8 +1001,8 @@ function addObservation(context: Context, observation: S009DependencyObservation
   context.observations.push(observation);
 }
 
-function diagnostic(context: Context, code: string, message: string, pathValue?: string): void {
-  context.diagnostics.push({ code, message, path: pathValue, material: true });
+function diagnostic(context: Context, code: string, message: string, pathValue?: string, material = true): void {
+  context.diagnostics.push({ code, message, path: pathValue, material });
 }
 
 function compareObservations(left: S009DependencyObservation, right: S009DependencyObservation): number {

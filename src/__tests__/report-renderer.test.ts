@@ -767,11 +767,11 @@ describe('EvaluationReportRenderer', () => {
         ...report,
         provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: citedTrackedFiles(report.criteria, ['pom.xml']) }
       });
-      const rows = walk(preparedItems(html)[1].tree).filter((node: any) => /^pom\.xml:?$/.test(node.text));
+      // S009 lists each project file once, with its hash: "pom.xml (sha256:...)".
+      const rows = walk(preparedItems(html)[1].tree).filter((node: any) => /^pom\.xml \(sha256:[0-9a-f]{64}\)$/.test(node.text));
 
-      expect(rows).toHaveLength(2);
-      // A row with children drops its trailing colon before its lead is read, as renderNodes does.
-      rows.forEach((row: any) => expect(rowLinks(html, 'S009')(row.children.length ? row.text.replace(/:$/, '') : row.text).href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/pom.xml`));
+      expect(rows).toHaveLength(1);
+      expect(rowLinks(html, 'S009')(rows[0].text)).toMatchObject({ lead: 'pom.xml', href: `https://github.com/folio-org/test-module/blob/${commit}/pom.xml` });
     });
 
     it('links an agent-review source that is a cited file name without an extension or directory', () => {

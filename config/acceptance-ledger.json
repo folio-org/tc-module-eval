@@ -1912,6 +1912,17 @@
       }
     },
     {
+      "id": "okapi",
+      "displayName": "Okapi",
+      "canonicalRepositories": [
+        "folio-org/okapi"
+      ],
+      "acceptance": {
+        "kind": "legacy-baseline",
+        "reference": "Approved by the user on 2026-10-22 because it was already in production use"
+      }
+    },
+    {
       "id": "raml-module-builder",
       "displayName": "RAML Module Builder",
       "canonicalRepositories": [
@@ -3200,6 +3211,17 @@
       "familyId": "workflow-components"
     },
     {
+      "ecosystem": "maven",
+      "groupId": "org.folio.okapi",
+      "artifactId": "okapi-common",
+      "familyId": "okapi"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/handler-stripes-registry",
+      "familyId": "folio_handler-stripes-registry"
+    },
+    {
       "ecosystem": "npm",
       "packageName": "@folio/plugin-bursar-export",
       "familyId": "folio_plugin-bursar-export"
@@ -3328,6 +3350,11 @@
       "ecosystem": "npm",
       "packageName": "@folio/react-intl-safe-html",
       "familyId": "react-intl-safe-html"
+    },
+    {
+      "ecosystem": "npm",
+      "packageName": "@folio/service-interaction",
+      "familyId": "folio_service-interaction"
     },
     {
       "ecosystem": "npm",

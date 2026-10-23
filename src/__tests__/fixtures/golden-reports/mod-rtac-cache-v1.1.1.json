@@ -1762,7 +1762,7 @@
       "criterionDetails": {
         "channel": "official",
         "policyDiagnosticCodes": [],
-        "ledgerDigest": "sha256:45a210bc2ab687d3efddd05a6573bca92594911974dc2654f0192dba9c6a8846",
+        "ledgerDigest": "sha256:16b91744cd75f5b18fd09e928851bcf1adad44779d6c69e40b72769257dcf220",
         "catalogDigest": "sha256:cd5fef692e85fcdea438e0ccab844b4d2acd18a52c5dde3afda61207b6ef7727",
         "baseline": {
           "descriptorHash": "sha256:ac95191236d92167cc64d9924d8ee5aef84b0c9462a9d4c2f7eb906969173317",
@@ -1779,8 +1779,8 @@
     {
       "criterionId": "S009",
       "status": "pass",
-      "evidence": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
-      "details": "All 3 declared FOLIO library coordinates are mapped to families accepted for S009.",
+      "evidence": "The module declares 3 FOLIO libraries as production dependencies, and all are approved.",
+      "details": "The module declares 3 FOLIO libraries as production dependencies, and all are approved.",
       "criterionDetails": {
         "projectFileCount": 1,
         "observationCount": 3,
