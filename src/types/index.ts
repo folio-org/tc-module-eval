@@ -364,8 +364,9 @@ export interface ReportOptions {
 export interface Dependency {
   name: string;
   version: string;
-  // A dependency can have multiple licenses, or none declared
-  licenses?: string[];
+  // Alternative licenses (any one may be chosen), or none declared. An array entry is a set of
+  // licenses that all apply together, such as SPDX "MIT AND Zlib".
+  licenses?: Array<string | string[]>;
 }
 
 /**

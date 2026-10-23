@@ -10,7 +10,8 @@ jest.mock('fs');
 
 // Now import the module under test
 import { getNpmDependencies, hasNpmProject } from '../utils/parsers/npm-dependency-parser';
-import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun } from '../types';
+import { checkLicenseCompliance } from '../utils/license-compliance';
+import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun, LicenseIssueType } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
@@ -173,6 +174,46 @@ describe('npm-dependency-parser', () => {
       expect(lodash?.licenses).toEqual(['MIT', 'Apache-2.0']);
 
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('should pass an SPDX AND expression only when every license in it passes', async () => {
+      // Expected outcomes follow SPDX: AND binds tighter than OR, and parentheses group.
+      const expected: Record<string, LicenseIssueType | 'pass'> = {
+        'MIT AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        'MIT AND Apache-2.0': 'pass',
+        'MIT AND Zlib': LicenseIssueType.UNKNOWN_LICENSE,
+        'MPL-2.0 AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(MIT OR Apache-2.0) AND BSD-3-Clause': 'pass',
+        '(MIT OR Apache-2.0) AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(GPL-3.0 OR MIT) AND (Apache-2.0 OR GPL-3.0)': 'pass',
+        'MIT OR GPL-3.0 AND BSD-3-Clause': 'pass',
+        'MIT OR Apache-2.0 AND GPL-3.0': 'pass',
+        'GPL-3.0 AND MIT OR GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(MIT OR Apache-2.0': LicenseIssueType.PARSER_ERROR,
+        // 2^8 alternatives when multiplied out, too many to expand
+        [Array(8).fill('(MIT OR ISC)').join(' AND ')]: LicenseIssueType.PARSER_ERROR
+      };
+      const expressions = Object.keys(expected);
+      const licenseCheckerOutput = JSON.stringify(Object.fromEntries(expressions.map((licenses, index) =>
+        [`pkg-${index}@1.0.0`, { licenses, path: `/test/node_modules/pkg-${index}` }]
+      )));
+      (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => !filePath.includes('.npmrc'));
+      (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
+      // The compliance check reads the license policy from config/.
+      (mockFs.readFileSync as jest.Mock).mockImplementation(jest.requireActual('fs').readFileSync);
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
+
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
+      const compliance = checkLicenseCompliance(result.dependencies, '');
+
+      const outcomes = Object.fromEntries(expressions.map((expression, index) => [
+        expression,
+        compliance.issues.find(issue => issue.dependency.name === `pkg-${index}`)?.issueType ?? 'pass'
+      ]));
+      expect(outcomes).toEqual(expected);
     });
 
     it('should handle invalid repository path', async () => {
