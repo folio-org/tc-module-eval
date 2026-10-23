@@ -8,9 +8,11 @@ import {
   S007PolicyConsumer,
   S007PolicyDiagnostic,
   S007PolicyLoadResult,
-  S007PolicySection
+  S007PolicySection,
+  S007TechnologyPolicyEntry
 } from '../types';
 import { errorMessage } from './type-guards';
+import { isMissingFileError } from './repo-files';
 
 export const DEFAULT_S007_POLICY_PATH = path.resolve(
   __dirname,
@@ -72,6 +74,15 @@ export function policySections(
   return policy.sections.filter(section => section.consumer === consumer && section.area === area);
 }
 
+/** The policy entry listed under `id` or one of its aliases, and the section it is in. */
+export function findPolicyEntry(sections: S007PolicySection[], id: string): { entry: S007TechnologyPolicyEntry; section: S007PolicySection } | undefined {
+  for (const section of sections) {
+    const entry = section.entries.find(candidate => candidate.id === id || candidate.aliases.includes(id));
+    if (entry) return { entry, section };
+  }
+  return undefined;
+}
+
 export function normalizeS007PolicyVersionExpression(expression: string): string {
   const trimmed = expression.trim();
   const majorLine = /^(\d+)(?:\.x)?$/i.exec(trimmed);
@@ -102,8 +113,4 @@ function toSchemaDiagnostic(error: ErrorObject): S007PolicyDiagnostic {
     path: instancePath,
     schemaPath: error.schemaPath
   };
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
 }

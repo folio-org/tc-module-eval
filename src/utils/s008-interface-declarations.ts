@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { ModuleDescriptorArtifact, ModuleKind, S008Declaration, S008DeclarationDiagnostic, S008DeclarationResult } from '../types';
 import { isSupportedEurekaVersionExpression } from './eureka-interface-compatibility';
-import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath, sha256Digest } from './repo-files';
 import { errorMessage } from './type-guards';
 
 const BACKEND_CANDIDATES = [
@@ -163,12 +162,11 @@ function finalize(declarations: S008Declaration[], diagnostics: S008DeclarationD
   const seen = new Set<string>();
   const sorted = declarations.filter(item => !seen.has(key(item)) && seen.add(key(item)))
     .sort((a, b) => key(a).localeCompare(key(b)));
-  return { declarations: sorted, diagnostics, sourcePaths: [sourcePath], fileHashes: { [sourcePath]: hash(content) }, complete: !diagnostics.some(item => item.material) };
+  return { declarations: sorted, diagnostics, sourcePaths: [sourcePath], fileHashes: { [sourcePath]: sha256Digest(content) }, complete: !diagnostics.some(item => item.material) };
 }
 
 function result(declarations: S008Declaration[], diagnostics: S008DeclarationDiagnostic[]): S008DeclarationResult {
   return { declarations, diagnostics, sourcePaths: [], fileHashes: {}, complete: !diagnostics.some(item => item.material) };
 }
 
-function hash(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
 function hasPlaceholder(value: string): boolean { return /\$\{|\{\{|@[^@]+@/.test(value); }

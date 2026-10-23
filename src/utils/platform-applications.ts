@@ -2,6 +2,8 @@
 // application descriptors FAR serves. Shared by the S008 catalog acquisition and S014. Malformed input
 // is reported as diagnostics, never thrown, and each consumer chooses which application tiers it reads.
 
+import { isRecord } from './type-guards';
+
 export type PlatformApplicationTier = 'required' | 'optional' | 'experimental';
 
 export interface PlatformPin {
@@ -119,5 +121,5 @@ function moduleIdentity(reference: Record<string, unknown>): string | undefined 
 }
 
 function asOptionalRecord(value: unknown): Record<string, any> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : undefined;
+  return isRecord(value) ? value : undefined;
 }

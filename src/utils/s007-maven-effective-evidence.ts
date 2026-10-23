@@ -11,6 +11,7 @@ import {
 import { MAVEN_NETWORK_POLICY } from './build-tool-policies';
 import { isWithinRepo } from './repo-files';
 import { finalizeS007TechnologyEvidence, matchJavaIdentity, mavenDependencyKey } from './s007-technology-evidence';
+import { asArray, xmlText } from './manifest-parsers';
 
 const EFFECTIVE_POM_GOAL = 'org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom';
 const MAX_EFFECTIVE_POM_BYTES = 2 * 1024 * 1024;
@@ -293,17 +294,4 @@ function mavenCoordinatesFromDependency(dependency: any): string | undefined {
 
 function isConcreteVersion(value: string): boolean {
   return value.length > 0 && !value.includes('${') && !value.includes('[') && !value.includes('(');
-}
-
-function xmlText(value: unknown): string {
-  if (typeof value === 'string') return value.trim();
-  if (value && typeof value === 'object' && '_' in value && typeof (value as { _: unknown })._ === 'string') {
-    return (value as { _: string })._.trim();
-  }
-  return '';
-}
-
-function asArray<T>(value: T | T[] | undefined): T[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
 }

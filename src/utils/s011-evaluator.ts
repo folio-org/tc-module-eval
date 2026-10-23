@@ -15,7 +15,7 @@ import { renderAgentReviewLines } from './agent-review-report';
 import { collectBuildTestEvidence } from './build-test-evidence';
 import { loadFolioSharedWorkflows } from './folio-shared-workflows';
 import { sourceLine } from './remote-evidence';
-import { reportPath, reportText } from './report-text';
+import { capitalize, count, reportPath, reportText } from './report-text';
 import { groupS011ReviewItems, scanS011Suppressions, suppressionFlags } from './s011-suppressions';
 import { getSonarCloudSnapshot, lookupSonarRules, sonarSnapshotFreshness } from './sonarcloud-snapshot';
 
@@ -397,14 +397,6 @@ function percent(value: number): string {
   return `${Number.isInteger(value) ? value.toFixed(1) : String(value)}%`;
 }
 
-function count(value: number, noun: string): string {
-  return `${value} ${noun}${value === 1 ? '' : 's'}`;
-}
-
 function list(items: string[]): string {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0];
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -4,6 +4,7 @@ import * as xml2js from 'xml2js';
 import { CriterionResult, EvaluationStatus } from '../types';
 import { isWithinRepo, realPath } from './repo-files';
 import { reportText } from './report-text';
+import { errorMessage } from './type-guards';
 
 // Top-level LICENSE, LICENCE or COPYING files in any case, with an optional single suffix (LICENSE-2.0, LICENSE-MIT)
 // and extension (LICENSE.md, LICENSE-2.0.txt). Multi-word names such as LICENSE-THIRD-PARTY.txt or
@@ -400,7 +401,7 @@ function joinNames(names: string[]): string {
 }
 
 function errorText(error: unknown): string {
-  const message = (error instanceof Error ? error.message : String(error)).split('\n')[0];
+  const message = errorMessage(error).split('\n')[0];
   return bound(display(message), MAX_ERROR_LENGTH);
 }
 

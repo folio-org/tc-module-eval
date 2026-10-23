@@ -12,6 +12,7 @@ import {
   S007VersionConstraint
 } from '../types';
 import { normalizeS007PolicyVersionExpression, policySections } from './s007-policy';
+import { listText } from './report-text';
 
 export type VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
 
@@ -508,12 +509,6 @@ function versionDirection(
   if (semver.gtr(lowest, allowed, { includePrerelease: true })) return 'newer';
   const allowedLowest = semver.minVersion(allowed)?.version;
   return allowedLowest && semver.subset(range!, `<${allowedLowest}`, { includePrerelease: true }) ? 'older' : 'unknown';
-}
-
-function listText(items: string[]): string {
-  const shown = items.length > 4 ? [...items.slice(0, 3), `${items.length - 3} more`] : items;
-  if (shown.length <= 2) return shown.join(' and ');
-  return `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`;
 }
 
 function versionSubject(observation: S007TechnologyObservation): string {

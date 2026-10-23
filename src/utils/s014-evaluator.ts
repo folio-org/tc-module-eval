@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { classifyModuleKind } from './module-kind';
 import { sourceLine } from './remote-evidence';
-import { reportPath, reportText } from './report-text';
+import { count, reportPath, reportText } from './report-text';
 import {
   checkApplicationTemplate,
   collectPlatformSnapshot,
@@ -230,10 +230,6 @@ function applicationLabel(membership: S014Membership, withVersion = false): stri
 function applicationList(memberships: S014Membership[]): string {
   const names = memberships.map(item => applicationLabel(item));
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
-}
-
-function count(value: number, noun: string): string {
-  return `${value} ${noun}${value === 1 ? '' : 's'}`;
 }
 
 function statusLabel(status: EvaluationStatus): string {

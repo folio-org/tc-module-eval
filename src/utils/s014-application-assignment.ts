@@ -18,6 +18,7 @@ import {
 } from './platform-applications';
 import { pomArtifactId } from './module-kind';
 import { isWithinRepo, readBoundedFileBytes } from './repo-files';
+import { isRecord } from './type-guards';
 
 export const DEFAULT_PLATFORM_REF = 'snapshot';
 const PLATFORM_TIERS: readonly S014ApplicationTier[] = ['required', 'optional', 'experimental'];
@@ -105,7 +106,7 @@ function readLocalJson(repoPath: string, relativePath: string): Record<string, u
   if (text === undefined) return undefined;
   try {
     const parsed = JSON.parse(text);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }

@@ -15,6 +15,8 @@ import {
 import { findCandidateFiles, isBinaryBuffer, readBoundedFileBytes, relativePosixPath } from './repo-files';
 import { lineLookup } from './s010-evidence';
 import { isSonarTestPath } from './sonarcloud-snapshot';
+import { errorMessage } from './type-guards';
+import { escapeRegExp } from './regexp';
 
 // Finds where the repository and its CI tell Sonar to ignore something: @SuppressWarnings naming a Sonar
 // rule or "all", NOSONAR comments, and analysis-scope settings (exclusions, inclusions, source roots,
@@ -86,7 +88,7 @@ export function scanS011Suppressions(
       return isScanned(relative) && !isOutput(relative);
     }, SKIPPED_DIRS).map(file => relativePosixPath(repoPath, file)).sort();
   } catch (error) {
-    fail({ message: `The repository could not be listed: ${error instanceof Error ? error.message : String(error)}` });
+    fail({ message: `The repository could not be listed: ${errorMessage(error)}` });
     return scan;
   }
   if (files.length > MAX_FILES) {
@@ -333,7 +335,7 @@ function inputLine(repoPath: string, use: SharedWorkflowUse, input: string): num
   } catch {
     return 1;
   }
-  const job = lines.findIndex(line => new RegExp(`^\\s*["']?${use.job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?\\s*:\\s*$`).test(line));
+  const job = lines.findIndex(line => new RegExp(`^\\s*["']?${escapeRegExp(use.job)}["']?\\s*:\\s*$`).test(line));
   const at = lines.findIndex((line, index) => index > job && new RegExp(`^\\s*${input}\\s*:`).test(line));
   return at < 0 ? 1 : at + 1;
 }

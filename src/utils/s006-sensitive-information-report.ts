@@ -15,7 +15,7 @@ import {
 } from './s006-ranking';
 import { renderAgentReviewLines } from './agent-review-report';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
-import { reportPath, reportText } from './report-text';
+import { capitalize, overflowLine, reportPath, reportText } from './report-text';
 import {
   S006_CATEGORY_LABELS,
   S006_CONTEXT_LABELS_PLAIN,
@@ -267,12 +267,4 @@ function appendAgentReviewLines(
 
 function formatKilobytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} bytes` : `${Math.round(bytes / 1024)} KB`;
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function overflowLine(total: number, visible: number, indent: string): string[] {
-  return total > visible ? [`${indent}- ... ${total - visible} more`] : [];
 }

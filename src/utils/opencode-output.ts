@@ -1,4 +1,5 @@
 import { isSensitiveKey, redactSensitiveText } from './redaction';
+import { isRecord } from './type-guards';
 
 const UNSAFE_OUTPUT = '{"type":"unsafe_output"}';
 
@@ -168,7 +169,7 @@ function sanitizeValue(value: unknown, depth = 0, embedded = true): unknown {
     return result + prose.slice(offset);
   }
   if (Array.isArray(value)) return value.map(entry => sanitizeValue(entry, depth + 1, embedded));
-  if (value && typeof value === 'object') {
+  if (isRecord(value)) {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
       const safeKey = sanitizeValue(key, depth + 1, embedded) as string;
       return [safeKey, isSensitiveKey(key) || safeKey !== key ? '[REDACTED]' : sanitizeValue(entry, depth + 1, embedded)];
@@ -208,7 +209,7 @@ function objectSpans(text: string): Array<{ start: number; end: number; value?: 
 export function parseJsonObject(output: string): Record<string, unknown> | undefined {
   try {
     const parsed = JSON.parse(output);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
@@ -284,12 +285,12 @@ export function decodeOpenCodeOutput(output: string, requireMessageStart = false
 }
 
 function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return isRecord(value) ? value : {};
 }
 
 function extractOpenCodeEventText(event: Record<string, unknown>): string | undefined {
   const part = event.part;
-  if (part && typeof part === 'object' && !Array.isArray(part)) {
+  if (isRecord(part)) {
     const candidate = part as Record<string, unknown>;
     if (candidate.type === 'text') return firstString(candidate.text, candidate.content);
   }
@@ -297,7 +298,7 @@ function extractOpenCodeEventText(event: Record<string, unknown>): string | unde
   if (partsText) return partsText;
   if (event.type === 'text') return firstString(event.text, event.content);
   const message = event.message;
-  if (message && typeof message === 'object' && !Array.isArray(message)) {
+  if (isRecord(message)) {
     const candidate = message as Record<string, unknown>;
     return extractTextParts(candidate.content) || extractTextParts(candidate.parts);
   }
@@ -309,7 +310,7 @@ function extractTextParts(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   const parts = value.flatMap(entry => {
     if (typeof entry === 'string') return [entry];
-    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    if (isRecord(entry)) {
       const text = firstString((entry as Record<string, unknown>).text, (entry as Record<string, unknown>).content);
       return text ? [text] : [];
     }

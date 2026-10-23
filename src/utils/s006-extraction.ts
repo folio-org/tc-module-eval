@@ -27,6 +27,7 @@ import {
   S006FingerprintRun
 } from './s006-detectors';
 import {
+  normalizeS006GitleaksPath,
   runS006GitleaksScan,
   S006GitleaksFinding
 } from './s006-gitleaks';
@@ -656,11 +657,6 @@ function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: str
     return 'synthetic';
   }
   return 'live-looking';
-}
-
-function normalizeS006GitleaksPath(filePath: string | undefined): string | undefined {
-  const normalized = filePath?.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
-  return normalized || undefined;
 }
 
 function normalizeS006PositiveInteger(value: number | undefined): number | undefined {

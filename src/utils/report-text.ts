@@ -28,3 +28,31 @@ export function reportPath(path: string): string {
   return path.replace(/[^\w.\-/]/gu, character =>
     [...Buffer.from(character, 'utf8')].map(byte => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`).join(''));
 }
+
+/** "a and b", or "a, b, and c"; after four items, the first three and "N more". */
+export function listText(items: string[]): string {
+  const shown = items.length > 4 ? [...items.slice(0, 3), `${items.length - 3} more`] : items;
+  if (shown.length <= 2) return shown.join(' and ');
+  return `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`;
+}
+
+/** "1 file", "2 files". */
+export function count(value: number, noun: string): string {
+  return `${value} ${noun}${value === 1 ? '' : 's'}`;
+}
+
+export function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * The "... N more" row after a list cut to `visible` of `total` items, or nothing when all are shown. It must be
+ * indented like the list items it follows, or it nests under the last item.
+ */
+export function overflowLine(total: number, visible: number, indent = '    '): string[] {
+  return total > visible ? [`${indent}- ... ${total - visible} more`] : [];
+}
+
+export function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}

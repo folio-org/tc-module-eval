@@ -23,6 +23,7 @@ import {
 import { GENERATED_REPORT_DIRECTORY_PATTERN, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { evidenceStrengthRank } from './evidence-strength';
 import { reportPath } from './report-text';
+import { errorMessage } from './type-guards';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 
@@ -185,7 +186,7 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
       status: 'unreadable',
       attempts: [],
       readError: boundS005Text(
-        error instanceof Error ? error.message : String(error),
+        errorMessage(error),
         MAX_DISCOVERY_READ_ERROR_BYTES
       ),
       warnings
@@ -230,7 +231,7 @@ export function discoverS005PersonalDataDisclosureArtifact(repoPath: string): S0
         reason: 'exact-file-read-error'
       }),
       readError: boundS005Text(
-        error instanceof Error ? error.message : String(error),
+        errorMessage(error),
         MAX_DISCOVERY_READ_ERROR_BYTES
       ),
       warnings
@@ -1203,7 +1204,7 @@ function readBoundedEvidenceText(
   } catch (error) {
     return {
       status: 'read-error',
-      message: boundS005Text(error instanceof Error ? error.message : String(error), 240)
+      message: boundS005Text(errorMessage(error), 240)
     };
   }
 }

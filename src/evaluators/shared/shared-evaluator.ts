@@ -59,6 +59,7 @@ import { analyzeS011, renderS011HumanDetails } from '../../utils/s011-evaluator'
 import { hasS011AgentReviewMaterial, reviewS011WithAgent } from '../../utils/s011-agent-review';
 import { analyzeS014, renderS014HumanDetails } from '../../utils/s014-evaluator';
 import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
+import { errorMessage } from '../../utils/type-guards';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -115,7 +116,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     try {
       descriptorContent = fs.readFileSync(artifact.absolutePath, 'utf-8');
     } catch (error) {
-      return s002ReadFailureResult(artifact, error instanceof Error ? error.message : String(error));
+      return s002ReadFailureResult(artifact, errorMessage(error));
     }
 
     return s002ValidationResult(artifact, validateModuleDescriptorJson(descriptorContent));

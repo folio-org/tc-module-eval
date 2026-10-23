@@ -4,6 +4,7 @@ import {
   okapiModuleDescriptorRootSchema,
   okapiModuleDescriptorSchemas
 } from '../schemas/okapi/module-descriptor';
+import { errorMessage } from './type-guards';
 
 export interface ModuleDescriptorValidationError {
   instancePath: string;
@@ -46,7 +47,7 @@ export function validateModuleDescriptorJson(content: string): ModuleDescriptorV
       valid: false,
       schemaBaseline: OKAPI_MODULE_DESCRIPTOR_SCHEMA_BASELINE,
       errors: [],
-      parseError: error instanceof Error ? error.message : String(error)
+      parseError: errorMessage(error)
     };
   }
 

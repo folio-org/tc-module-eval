@@ -6,6 +6,7 @@ import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
 import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
+import { errorMessage } from './utils/type-guards';
 
 const program = new Command();
 
@@ -75,8 +76,7 @@ program
 
     } catch (error) {
       console.error('\n❌ Evaluation failed:\n');
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(errorMessage);
+      console.error(errorMessage(error));
       process.exit(1);
     }
   });

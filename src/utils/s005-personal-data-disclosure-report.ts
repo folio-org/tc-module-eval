@@ -25,7 +25,7 @@ import {
   boundS005Text
 } from './s005-personal-data-disclosure';
 import { evidenceStrengthRank } from './evidence-strength';
-import { reportPath, reportText } from './report-text';
+import { overflowLine, reportPath, reportText } from './report-text';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 const MAX_REPORT_ANSWER_ITEMS = 60;
@@ -497,11 +497,6 @@ function formatReferences(references: string[]): string {
   }
 
   return ` (evidence: ${references.slice(0, MAX_REPORT_LIST_ITEMS).map(reference => boundS005Text(reference)).join(', ')}${references.length > MAX_REPORT_LIST_ITEMS ? `, ... ${references.length - MAX_REPORT_LIST_ITEMS} more` : ''})`;
-}
-
-// The overflow marker must be indented like the list items it follows, or it nests under the last item.
-function overflowLine(total: number, visible: number, indent = '    '): string[] {
-  return total > visible ? [`${indent}- ... ${total - visible} more`] : [];
 }
 
 function summarizeS005ChecklistItem(item: S005PersonalDataDisclosureChecklistItem): unknown {

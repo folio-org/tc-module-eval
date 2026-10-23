@@ -1,6 +1,6 @@
-import crypto from 'crypto';
 import { RemoteEvidenceAttempt, RemoteEvidenceRecord, RemoteFailureReason, RemoteJsonResult, RemoteLookups } from '../types/remote-evidence';
 import { reportText } from './report-text';
+import { sha256Digest } from './repo-files';
 
 // The only way evaluation code reads the network, and only with --allow-remote-lookups. Every request is
 // an HTTPS GET to an allowlisted host and path (checked again on every redirect), bounded per request and
@@ -111,7 +111,7 @@ export class RemoteEvidenceTransport implements RemoteLookups {
       record.fetchedAt = new Date(this.now()).toISOString();
       record.status = status;
       record.bytes = bytes.length;
-      record.sha256 = `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
+      record.sha256 = sha256Digest(bytes);
       if (finalUrl !== url) record.finalUrl = finalUrl;
       return { ok: true, json, record };
     } catch (error) {

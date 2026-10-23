@@ -12,6 +12,8 @@ import {
   parsePlatformApplicationPins,
   parsePlatformPins
 } from '../utils/platform-applications';
+import { errorMessage, isRecord } from '../utils/type-guards';
+import { sha256Digest } from '../utils/repo-files';
 
 const DEFAULT_PLATFORM_RAW_BASE = 'https://raw.githubusercontent.com/folio-org/platform-lsp';
 const DEFAULT_FAR_URL = 'https://far.ci.folio.org';
@@ -425,7 +427,7 @@ function buildDiscovery(references: ModuleReference[], descriptors: AcquiredDesc
   for (const descriptor of descriptors) {
     const current = identities.get(descriptor.moduleIdentity)!;
     current.descriptorStatus = 'acquired';
-    current.descriptors.push({ moduleId: descriptor.moduleId, source: descriptor.source, digest: digest(stableStringify(descriptor.descriptor)) });
+    current.descriptors.push({ moduleId: descriptor.moduleId, source: descriptor.source, digest: sha256Digest(stableStringify(descriptor.descriptor)) });
     if (!current.suggestions.displayName && typeof descriptor.descriptor.name === 'string') current.suggestions.displayName = descriptor.descriptor.name;
     const repository = repositoryHint(descriptor.descriptor);
     if (repository) current.suggestions.canonicalRepositories = [repository];
@@ -446,7 +448,7 @@ function componentSourceManifest(component: ComponentPin, descriptors: AcquiredD
   };
   const acquired = descriptors.find(descriptor => descriptor.componentProvenance?.name === component.name);
   return acquired?.componentProvenance
-    ? { ...acquired.componentProvenance, descriptorHash: digest(stableStringify(acquired.descriptor)) }
+    ? { ...acquired.componentProvenance, descriptorHash: sha256Digest(stableStringify(acquired.descriptor)) }
     : { name: component.name, version: component.version, status: 'unresolved' };
 }
 
@@ -530,7 +532,7 @@ function diagnoseProvideVersions(descriptor: Record<string, unknown>, moduleId: 
 }
 
 function httpDiagnostic(code: string, error: unknown, source: string): Diagnostic {
-  return { code, material: true, message: error instanceof Error ? error.message : String(error), source };
+  return { code, material: true, message: errorMessage(error), source };
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -550,7 +552,7 @@ function asRecord(value: unknown, label: string): Record<string, any> {
 }
 
 function asOptionalRecord(value: unknown): Record<string, any> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : undefined;
+  return isRecord(value) ? value : undefined;
 }
 
 async function mapLimit<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
@@ -586,7 +588,6 @@ function uniqueByJson<T>(values: T[]): T[] {
 }
 
 function byJson(left: unknown, right: unknown): number { return JSON.stringify(left).localeCompare(JSON.stringify(right)); }
-function digest(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
 function safeName(value: string): string { return value.replace(/[^A-Za-z0-9_.-]/g, '_'); }
 function ensureTrailingSlash(url: URL): URL { return new URL(url.toString().replace(/\/?$/, '/')); }
 function positiveInteger(value: number, label: string): number { if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`); return value; }
@@ -615,7 +616,7 @@ if (require.main === module) {
       });
     });
   program.parseAsync().catch(error => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(errorMessage(error));
     process.exitCode = 1;
   });
 }
