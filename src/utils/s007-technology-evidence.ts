@@ -6,6 +6,7 @@ import {
   S007TechnologyEvidenceResult,
   S007TechnologyObservation
 } from '../types';
+import { CriterionLanguage } from '../criteria-definitions';
 import { isDirectory, isWithinRepo, relativePosixPath } from './repo-files';
 import { escapeRegExp } from './regexp';
 import { errorMessage } from './type-guards';
@@ -104,7 +105,7 @@ const JAVA_EXACT_IDENTITIES: Record<string, Identity> = {
 
 export async function collectS007TechnologyEvidence(
   repoPath: string,
-  language: 'java' | 'javascript'
+  language: CriterionLanguage
 ): Promise<S007TechnologyEvidenceResult> {
   const context: EvidenceContext = {
     repoPath: fs.realpathSync(path.resolve(repoPath)),

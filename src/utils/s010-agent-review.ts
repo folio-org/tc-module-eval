@@ -6,7 +6,7 @@ import {
   S010Analysis,
   S010ScenarioEvidence
 } from '../types';
-import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
 import { errorMessage } from './type-guards';
 
@@ -202,7 +202,7 @@ function compactScenario(scenario: S010ScenarioEvidence): S010ScenarioEvidence &
 }
 
 function unavailable(message: string): CriterionAgentReviewResult {
-  return { available: false, criterionId: 'S010', evidenceReferences: [], warnings: [], errors: [redactSensitiveText(message)] };
+  return { ...unavailableResult('S010'), errors: [redactSensitiveText(message)] };
 }
 
 function redactedErrorMessage(error: unknown): string {

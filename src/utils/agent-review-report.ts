@@ -1,4 +1,5 @@
 import { CriterionAgentReviewResult } from '../types';
+import { S006_FINDING_SUMMARY_PATH } from './criterion-agent-review';
 import { reportPath, reportText } from './report-text';
 
 const ASSESSMENT_LABELS = {
@@ -55,7 +56,7 @@ export function renderAgentReviewLines(
         `      - ${explanation}`,
         `      - Finding: ${prose(assessment.summary)}`,
         '      - Sources:',
-        ...assessment.evidenceReferences.map(reference => `        - ${reference === '.criterion-agent/S006/finding-summary.json'
+        ...assessment.evidenceReferences.map(reference => `        - ${reference === S006_FINDING_SUMMARY_PATH
           ? 'Automated scan coverage diagnostics' : reportPath(reference)}`)
       );
       if (assessment.coverageDisposition) {

@@ -1,5 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, EvaluationStatus, S011Analysis } from '../types';
-import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
 import { errorMessage } from './type-guards';
 
@@ -21,7 +21,7 @@ export async function reviewS011WithAgent(
     request = buildS011AgentReviewRequest(repoPath, analysis);
   } catch (error) {
     return {
-      available: false, criterionId: 'S011', evidenceReferences: [], warnings: [],
+      ...unavailableResult('S011'),
       errors: [redactSensitiveText(`Unable to prepare S011 agent review material: ${errorMessage(error)}`)]
     };
   }

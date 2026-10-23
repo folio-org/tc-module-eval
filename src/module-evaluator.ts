@@ -1,7 +1,7 @@
 import { GitUtils } from './utils/git';
 import { JavaEvaluator } from './evaluators/java-evaluator';
 import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
-import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
+import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult, EvaluationStatus } from './types';
 import { getCriteriaForLanguage } from './criteria-definitions';
 import { getLogger } from './utils/logger';
 import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
@@ -163,10 +163,10 @@ export class ModuleEvaluator {
    * @returns string Summary of results
    */
   private summarizeResults(results: CriterionResult[]): string {
-    const pass = results.filter(r => r.status === 'pass').length;
-    const fail = results.filter(r => r.status === 'fail').length;
-    const manual = results.filter(r => r.status === 'manual').length;
-    const notApplicable = results.filter(r => r.status === 'not_applicable').length;
+    const pass = results.filter(r => r.status === EvaluationStatus.PASS).length;
+    const fail = results.filter(r => r.status === EvaluationStatus.FAIL).length;
+    const manual = results.filter(r => r.status === EvaluationStatus.MANUAL).length;
+    const notApplicable = results.filter(r => r.status === EvaluationStatus.NOT_APPLICABLE).length;
 
     return `${pass} passed, ${fail} failed, ${manual} require manual review, ${notApplicable} not applicable`;
   }

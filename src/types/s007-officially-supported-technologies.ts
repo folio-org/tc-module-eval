@@ -1,3 +1,5 @@
+import type { EvaluationStatus } from './index';
+
 export type S007PolicyArea =
   | 'frontend'
   | 'backend'
@@ -228,6 +230,9 @@ export interface S007MatchedPolicyEntry {
   constraint?: S007VersionConstraint;
 }
 
+/** How a declared version range compares with a policy constraint. */
+export type S007VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
+
 export interface S007FindingEvidence {
   path: string;
   detail: string;
@@ -254,7 +259,7 @@ export interface S007TechnologyFinding {
 
 export interface S007AnalysisResult {
   criterionId: 'S007';
-  status: 'pass' | 'fail' | 'manual' | 'not_applicable';
+  status: EvaluationStatus;
   summary: string;
   policyFormatVersion?: string;
   findings: S007TechnologyFinding[];

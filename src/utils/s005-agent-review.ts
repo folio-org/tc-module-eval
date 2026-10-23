@@ -50,7 +50,7 @@ export async function buildS005AgentReviewRequest(
             order: item.order,
             lineNumber: item.lineNumber,
             checked: item.checked,
-            categories: item.normalizedCategories ?? [item.normalizedCategory]
+            categories: item.normalizedCategories
           }))
         } : undefined,
         contradictions: analysis.contradictions,

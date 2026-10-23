@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Parser } from 'xml2js';
-import { ModuleKindResult } from '../types';
+import { EvaluationRun, ModuleKindResult } from '../types';
 import { xmlText } from './manifest-parsers';
 import { isDirectory, readBoundedFileBytes, readJsonFile } from './repo-files';
 import { errorMessage } from './type-guards';
@@ -18,6 +18,11 @@ const EXPLICIT_LIBRARY_NAMES = new Set([
   'stripes-smart-components',
   'stripes-testing'
 ]);
+
+/** The run's module kind, classified once and shared by the criteria that need it. */
+export function getModuleKind(run: EvaluationRun, repoPath: string): Promise<ModuleKindResult> {
+  return run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+}
 
 export function classifyModuleKind(repoPath: string): ModuleKindResult {
   const evidence: string[] = [];

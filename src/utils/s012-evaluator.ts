@@ -6,16 +6,17 @@ import {
   EvaluationStatus,
   FolioSharedWorkflowTable,
   FolioSharedWorkflowTableLoadResult,
+  S007MatchedPolicyEntry,
   S007PolicyLoadResult,
   S007PolicySection,
   S007TechnologyPolicyEntry,
   S012AnalysisResult,
   S012Finding,
-  S012MatchedPolicy,
   S012VersionCheck,
   SharedWorkflowUse,
   VersionDeclaration
 } from '../types';
+import { CriterionLanguage } from '../criteria-definitions';
 import { findPolicyEntry, policySections } from './s007-policy';
 import { compareObservationToConstraint } from './s007-evaluator';
 import { displayPolicyPath } from './acceptance-ledger';
@@ -93,7 +94,7 @@ export function evaluateS012(
   policyLoad: S007PolicyLoadResult,
   tableLoad: FolioSharedWorkflowTableLoadResult,
   evidence: BuildEvidence,
-  language: 'java' | 'javascript'
+  language: CriterionLanguage
 ): S012AnalysisResult {
   const area = language === 'javascript' ? 'frontend' : 'backend';
   const base = { criterionId: 'S012' as const, area: area as S012AnalysisResult['area'], evidence, findings: [] as S012Finding[] };
@@ -129,8 +130,7 @@ export function evaluateS012(
     : findings.some(finding => finding.contribution === 'manual') || !findings.some(finding => finding.contribution === 'pass')
       ? EvaluationStatus.MANUAL
       : EvaluationStatus.PASS;
-  const deciding = status === EvaluationStatus.FAIL ? 'fail' : status === EvaluationStatus.PASS ? 'pass' : 'manual';
-  for (const finding of findings) finding.statusDetermining = finding.contribution === deciding;
+  for (const finding of findings) finding.statusDetermining = finding.contribution === status;
   if (status === EvaluationStatus.MANUAL && !findings.some(finding => finding.statusDetermining)) {
     findings.push({ ...coverageFinding('No build tool the tool recognizes was found (no pom.xml, build.gradle, package.json, Makefile or other build file at the repository root or in service/).'), statusDetermining: true });
   }
@@ -138,7 +138,7 @@ export function evaluateS012(
   const source = policyLoad.policy.source;
   return {
     ...base,
-    status: status as S012AnalysisResult['status'],
+    status,
     summary: summaryFor(status, findings),
     findings,
     policy: {
@@ -618,7 +618,7 @@ function coverageFinding(rationale: string): S012Finding {
 
 // ---- Helpers ----
 
-function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySection): S012MatchedPolicy {
+function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySection): S007MatchedPolicyEntry {
   return {
     sectionId: section.id,
     entryId: entry.id,

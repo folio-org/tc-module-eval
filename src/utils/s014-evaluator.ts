@@ -9,7 +9,7 @@ import {
   S014PlatformSnapshot,
   S014TemplateCheck
 } from '../types';
-import { classifyModuleKind } from './module-kind';
+import { getModuleKind } from './module-kind';
 import { sourceLine } from './remote-evidence';
 import { count, reportPath, reportText } from './report-text';
 import {
@@ -34,7 +34,7 @@ export interface S014Inputs {
 
 /** Gathers S014's local and remote evidence for one evaluation and evaluates it. */
 export async function analyzeS014(repoPath: string, run: EvaluationRun): Promise<S014Analysis> {
-  const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+  const moduleKind = await getModuleKind(run, repoPath);
   const deployable = moduleKind.kind === 'backend-module' || moduleKind.kind === 'ui-module';
   const inputs: S014Inputs = {
     moduleKind,
