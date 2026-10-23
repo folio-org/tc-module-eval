@@ -10,6 +10,10 @@
       "version": "1.0.0"
     },
     "citedSourcePaths": [
+      ".github/workflows/maven.yml",
+      ".github/workflows/postgres.yml",
+      "Dockerfile",
+      "Jenkinsfile-disabled",
       "PERSONAL_DATA_DISCLOSURE.md",
       "README.md",
       "descriptors/ModuleDescriptor-template.json",
@@ -1816,9 +1820,51 @@
     },
     {
       "criterionId": "S012",
-      "status": "manual",
-      "evidence": "Internationalization requirements - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "S012 pass: The module builds with Maven through FOLIO's shared GitHub Actions workflow, and Maven is an officially supported build tool.",
+      "details": "S012 pass: The module builds with Maven through FOLIO's shared GitHub Actions workflow, and Maven is an officially supported build tool.",
+      "criterionDetails": {
+        "area": "backend",
+        "findings": [
+          {
+            "toolId": "maven",
+            "classification": "compliant",
+            "contribution": "pass",
+            "statusDetermining": true,
+            "versions": [
+              "maven-enforcer-plugin requireMavenVersion: 3.1.1 (overlap)",
+              "FOLIO's maven.yml@v1 workflow: 3.10.0 (compliant)"
+            ]
+          },
+          {
+            "toolId": "docker",
+            "classification": "advisory",
+            "contribution": "note",
+            "statusDetermining": false,
+            "versions": []
+          },
+          {
+            "toolId": "github-actions",
+            "classification": "note",
+            "contribution": "note",
+            "statusDetermining": false,
+            "versions": []
+          },
+          {
+            "toolId": "jenkins-inactive",
+            "classification": "not-used",
+            "contribution": "note",
+            "statusDetermining": false,
+            "versions": []
+          }
+        ],
+        "buildFiles": [
+          "maven-pom:pom.xml",
+          "dockerfile:Dockerfile",
+          "jenkinsfile-inactive:Jenkinsfile-disabled"
+        ],
+        "diagnosticCodes": []
+      }
     },
     {
       "criterionId": "S013",

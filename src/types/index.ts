@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'platformMembership';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -134,6 +134,7 @@ export interface EvaluationRunArtifacts {
   s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
   s009DependencyEvidence?: import('./s009-library-acceptance').S009DependencyEvidence;
   s010ThirdPartyEvidence?: import('./s010-third-party-resilience').S010Evidence;
+  buildTestEvidence?: import('./s012-build-tools').BuildTestEvidence;
   platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
 }
 
@@ -193,6 +194,7 @@ export * from './s007-officially-supported-technologies';
 export * from './s008-interface-acceptance';
 export * from './s009-library-acceptance';
 export * from './s010-third-party-resilience';
+export * from './s012-build-tools';
 export * from './s014-application-assignment';
 export * from './remote-evidence';
 

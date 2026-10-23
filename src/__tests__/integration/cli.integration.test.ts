@@ -35,8 +35,32 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S010') {
         return normalizeS010GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S012') {
+        return normalizeS012GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS012GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      area: details.area,
+      findings: (details.findings ?? []).map((finding: any) => ({
+        toolId: finding.toolId,
+        classification: finding.classification,
+        contribution: finding.contribution,
+        statusDetermining: finding.statusDetermining,
+        versions: (finding.versions ?? []).map((check: any) => `${check.label}: ${check.text} (${check.comparison})`)
+      })),
+      buildFiles: (details.evidence?.files ?? []).map((file: any) => `${file.kind}:${file.path}`),
+      diagnosticCodes: (details.evidence?.diagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort()
+    }
   };
 }
 

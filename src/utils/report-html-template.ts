@@ -17,6 +17,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S008: 'FOLIO interface usage',
   S009: 'FOLIO library dependencies',
   S010: 'Third-party system resilience',
+  S012: 'Officially supported build tools',
   S014: 'Application assignment'
 };
 

@@ -228,6 +228,28 @@ Kafka listeners and consumers, JMS, RabbitMQ, gRPC, and S3, MinIO or `FolioS3Cli
 storage. A JDBC `DataSource` type counts as a datastore client only as a type name such as
 `HikariDataSource`; `dataSource` variables and names like `DataSourceResolver` do not.
 
+## S012 Officially Supported Build Tools
+
+S012 checks the tools that build the module against the build-tool sections of the committed `config/officially-supported-technologies.json` (the frontend section for UI modules and libraries, the backend section for Java modules). It reads build and workflow files only, so it runs the same in safe mode and never makes a network request. `--allow-local-commands` adds nothing.
+
+S012 reads these files at the repository root (Gradle files also in `service/`): `pom.xml` (only the `maven-enforcer-plugin` `requireMavenVersion` rule), `.mvn/wrapper/maven-wrapper.properties`, `build.gradle(.kts)`, `gradle/wrapper/gradle-wrapper.properties`, `package.json` (`packageManager` and `engines.node`), the start of `yarn.lock` (Yarn 1 writes `# yarn lockfile v1`, Yarn 2+ a `__metadata` entry), `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `.yarnrc.yml` (`yarnPath`), `.nvmrc`, `.node-version`, `Makefile`, `go.mod`, `Dockerfile`, `build.sbt`, `WORKSPACE`/`MODULE.bazel`, root `Jenkinsfile*` files, and every `.github/workflows/*.yml`. It reads at most 64 files of up to 1 MB each and never follows a symbolic link; a file it cannot read keeps the result from passing.
+
+The tool that CI runs decides which build is checked: a job that calls `folio-org/.github/.github/workflows/maven.yml`, `gradle.yml` or `ui.yml` at a ref in the shared-workflow table, or an inline step that runs `mvn`, `./gradlew`, `yarn`, `npm ci`/`npm install`, `pnpm`, `make`, `sbt` or `bazel` in the repository root or `service/`. Commands after a `cd` to another folder, `npm run`, and global installs do not count. Without CI evidence the build files decide. Build files of other tools, such as a `package-lock.json` next to a Maven build, are listed as not used by the build. For a UI module the package manager comes from CI, then the `packageManager` field, then the lockfiles; files pointing to a second package manager (for example both `yarn.lock` and `package-lock.json`) need review.
+
+Versions: each declaration becomes a range before it is compared the way S007 compares versions. A Maven or Gradle wrapper, `.nvmrc`, `.node-version`, a workflow `node-version` (including `${{ env.X }}` and `${{ matrix.X }}` values set in the workflow), a `maven-version` for `stCarolas/setup-maven`, the `packageManager` version and the `yarn.lock` format pin the version the build uses. `requireMavenVersion` and `engines.node` only make the build refuse other versions: a bare `3.6` means 3.6 or later (Maven range semantics), `[3.9]` exactly 3.9, `[3.6,3.8)` as written. When the repository pins nothing, the version comes from the shared-workflow table for the shared workflow that builds the module.
+
+- `pass`: every tool the module builds with is listed with a normative rule, and its version is pinned or inherited and allowed, or enforced within the policy.
+- `fail`: the module builds with npm, pnpm, Yarn 2 or later, sbt or Bazel; a pinned version (all of them, when there are several) is outside the policy; or a `requireMavenVersion` or `engines.node` rule allows no supported version. A failure takes precedence over everything below.
+- `manual`: the policy entry is provisional (Gradle, Make), advisory or contested; pinned versions disagree; no version is settled (for example only `requireMavenVersion 3.1.1`, with no CI the table covers); a UI module's only CI is a root `Jenkinsfile` (Jenkins is listed "for legacy projects"); the evidence is incomplete; no build tool is recognized; or the policy or table could not be loaded.
+
+Docker is listed as advisory and never changes the result. GitHub Actions and Jenkins appear only in the frontend list, so for backend modules CI is reported but does not decide. Inactive Jenkins files (`Jenkinsfile-disabled`, `Jenkinsfile.deprecated`, other `Jenkinsfile.*`) are listed as not used by community CI.
+
+The report names the policy page status and export date. The committed policy records no release name, so the report shows `ACCEPTED, exported 2026-07-14` rather than a release.
+
+### FOLIO Shared-Workflow Table
+
+`config/folio-shared-workflows.json` (schema `src/schemas/folio-shared-workflows.schema.json`) records what FOLIO's reusable workflows at one ref (`v1`) supply when a repository does not: the build tool, the Node.js line `ui.yml` installs, and the Maven and Yarn versions that ship with the `ubuntu-latest` runner, each with its source and the date it was recorded. A workflow or ref not in the table supplies nothing. Maintainers refresh the table when `folio-org/.github` moves `v1` or GitHub updates the runner image: check the workflow inputs at the new commit and the runner image readme, update `reviewedCommit`, `reviewedAt` and each `recordedAt`, and run `yarn test --testPathPattern=s012`.
+
 ## S014 Application Assignment
 
 S014 checks that the module is in exactly one application of the FOLIO LSP platform, and that it is the application the evaluation's Jira task names. Jira tasks are not public, so the person running the evaluation passes that application with `--application <name>`.
