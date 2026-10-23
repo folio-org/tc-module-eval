@@ -53,6 +53,24 @@ export const MAX_S006_RETAINED_FINDINGS = 100;
 // Assigned values shorter than this, such as "1" or 'abc', are not secrets worth reviewing.
 const MIN_S006_SECRET_VALUE_LENGTH = 8;
 
+// A short default password such as "admin" in production, deployment, or Docker configuration is still
+// committed credential material, so password keys there are reported at any length.
+const S006_SHORT_PASSWORD_CONTEXTS: ReadonlySet<S006FindingContext> = new Set([
+  'production_source_or_configuration',
+  'ci_or_deployment_configuration',
+  'local_docker_defaults'
+]);
+
+function isS006ShortPasswordReported(context: S006FindingContext, assignment: string, value: string): boolean {
+  const key = assignment.replace(/\s*(?::=|[:=])[\s\S]*$/, '').replace(/^\W+|\W+$/g, '');
+  // An unquoted YAML flow value keeps its closing bracket ({password: null}); YAML nulls and booleans are not passwords.
+  const scalar = value.replace(/\s*[}\],]+$/, '');
+  return S006_SHORT_PASSWORD_CONTEXTS.has(context) &&
+    /(?:password|passwd|pwd)$/i.test(key) &&
+    scalar.length > 0 &&
+    !/^(?:~|null|true|false|yes|no|on|off)$/i.test(scalar);
+}
+
 interface S006LineWithOffset {
   text: string;
   lineNumber: number;
@@ -290,7 +308,7 @@ function shouldSuppressS006LineFinding(
   startsInsideString: boolean
 ): boolean {
   if (detector.id === 'password-secret-assignment') {
-    return shouldSuppressS006SecretAssignment(filePath, detector, rawMatch, lineText.slice(0, matchStart), startsInsideString);
+    return shouldSuppressS006SecretAssignment(filePath, context, detector, rawMatch, lineText.slice(0, matchStart), startsInsideString);
   }
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
@@ -308,6 +326,7 @@ const S006_PROGRAM_SOURCE_PATTERN = /\.(?:java|kt|kts|groovy|gradle|js|jsx|mjs|c
 
 function shouldSuppressS006SecretAssignment(
   filePath: string,
+  context: S006FindingContext,
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
   linePrefix: string,
@@ -328,7 +347,11 @@ function shouldSuppressS006SecretAssignment(
   }
 
   const value = s006AssignedValue(rawMatch);
-  if (value.length < MIN_S006_SECRET_VALUE_LENGTH || isS006GitleaksOwnedSecretShape(value) || isS006HeaderNameConstant(rawMatch, value)) {
+  if (
+    (value.length < MIN_S006_SECRET_VALUE_LENGTH && !isS006ShortPasswordReported(context, rawMatch, value)) ||
+    isS006GitleaksOwnedSecretShape(value) ||
+    isS006HeaderNameConstant(rawMatch, value)
+  ) {
     return true;
   }
 
@@ -498,6 +521,7 @@ function buildS006GitleaksFinding(
   }
 
   const detector = getS006GitleaksDetector(source);
+  const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
   // Generic secret rules only; a specific secret type such as an AWS key or private key keeps any length.
   if (
     (source.RuleID === 'generic-api-key' || source.RuleID === 'password-secret-assignment') &&
@@ -505,7 +529,6 @@ function buildS006GitleaksFinding(
   ) {
     return undefined;
   }
-  const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
   const excerptText = boundS006ExcerptText(source.Match || source.Secret || '');
   const valueClassification = classifyS006GitleaksValue(source, excerptText);
   const confidence = adjustS006FindingConfidenceForContext(

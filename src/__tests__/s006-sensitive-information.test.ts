@@ -2316,6 +2316,34 @@ describe('S006 reviewer decisions', () => {
     ]);
   });
 
+  it('reports short passwords in production, deployment, and Docker configuration, but not elsewhere', async () => {
+    writeRepoFile(repoPath, 'service/grails-app/conf/application-dc.yml', [
+      'dataSource:',
+      '  userpassword: "admin"',
+      '  password: ${DB_PASSWORD}',
+      '  pwd: changeme',
+      '  dbPassword: dummy',
+      '  PASSWORD_REQUIRED: false',
+      '  passwordRequired: true',
+      '  token: abc',
+      '  primary: {password: null}',
+      '  replica: {password: false}',
+      '  admin_pwd: ~'
+    ].join('\n'));
+    writeRepoFile(repoPath, 'docker/.env', 'DB_PASSWORD=folio\n');
+    writeRepoFile(repoPath, 'src/test/resources/application.yml', 'password: admin\n');
+    writeRepoFile(repoPath, 'docs/setup.md', 'DB_PASSWORD=folio\n');
+    writeRepoFile(repoPath, 'scripts/setup.sh', 'admin_password="admin"\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line}`).sort()).toEqual([
+      'docker/.env:1',
+      'service/grails-app/conf/application-dc.yml:2'
+    ]);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
   it('merges the built-in finding into the Gitleaks finding for the same value on the same line, and keeps other values', async () => {
     writeRepoFile(repoPath, 'config/app.conf', 'api.token="Wm4nB7xQ2rT9kL5p" db.password="Zq8vT3kL9mN2pR7x"\n');
 
