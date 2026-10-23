@@ -319,21 +319,56 @@ describe('Dependency Utils', () => {
       expect(result.issues).toHaveLength(0);
     });
 
-    it('should fail when dual-licensed Category B|X with neither documented', () => {
-      const dependencies: Dependency[] = [
-        {
-          name: 'org.example:b-x-lib',
-          version: '1.0.0',
-          licenses: ['MPL-2.0', 'GPL-3.0']
-        }
-      ];
+    // When every alternative fails, the report names the undocumented Category B alternative,
+    // which naming the dependency in the README fixes, wherever it is listed.
+    it.each([
+      ['GPL-3.0 OR MPL-2.0', 'org.example:b-x-lib', ['GPL-3.0', 'MPL-2.0'], 'MPL-2.0'],
+      ['MPL-2.0 OR GPL-3.0', 'org.example:b-x-lib', ['MPL-2.0', 'GPL-3.0'], 'MPL-2.0'],
+      ['(GPL-3.0 AND MPL-2.0) OR (EPL-2.0 AND MIT)', 'org.example:b-x-lib', [['GPL-3.0', 'MPL-2.0'], ['EPL-2.0', 'MIT']], 'EPL-2.0']
+    ])('should report the undocumented Category B alternative of %s', (_case, name, licenses, reported) => {
+      const result = checkLicenseCompliance([{ name, version: '1.0.0', licenses }], 'No license documentation');
 
-      const readmeContent = 'No license documentation';
-      const result = checkLicenseCompliance(dependencies, readmeContent);
+      expect(result.issues.map(issue => [issue.issueType, issue.reason])).toEqual([[
+        LicenseIssueType.UNDOCUMENTED_CATEGORY_B,
+        `'${reported}' is a Category B license, and the README does not name this dependency.`
+      ]]);
+    });
 
-      // Neither MPL (requires docs) nor GPL (prohibited) passes
-      expect(result.compliant).toBe(false);
-      expect(result.issues).toHaveLength(1);
+    it('should report the special exception that the README must name before a Category X alternative', () => {
+      const result = checkLicenseCompliance(
+        [{ name: 'org.hibernate:hibernate-core', version: '1.0.0', licenses: ['GPL-3.0', 'LGPL-2.1'] }],
+        'No license documentation'
+      );
+
+      expect(result.issues.map(issue => [issue.issueType, issue.reason])).toEqual([[
+        LicenseIssueType.UNDOCUMENTED_CATEGORY_B,
+        "'LGPL-2.1' is allowed for this library only if the README names it, and it does not."
+      ]]);
+    });
+
+    it('should still report an unknown alternative rather than an undocumented Category B one', () => {
+      const result = checkLicenseCompliance(
+        [{ name: 'org.example:b-x-unknown-lib', version: '1.0.0', licenses: ['MPL-2.0', 'GPL-3.0', 'Unknown-1.0'] }],
+        'No license documentation'
+      );
+
+      expect(result.issues.map(issue => [issue.issueType, issue.reason])).toEqual([[
+        LicenseIssueType.UNKNOWN_LICENSE,
+        "These licenses are not in the evaluator's list of known licenses: 'Unknown-1.0'."
+      ]]);
+    });
+
+    it('should report the first Category X alternative when no alternative can be fixed by the README', () => {
+      // The Category B license in the AND group does not help: the group also needs GPL-3.0.
+      const result = checkLicenseCompliance(
+        [{ name: 'org.example:x-lib', version: '1.0.0', licenses: ['LGPL-2.1', ['MPL-2.0', 'GPL-3.0']] }],
+        'No license documentation'
+      );
+
+      expect(result.issues.map(issue => [issue.issueType, issue.reason])).toEqual([[
+        LicenseIssueType.CATEGORY_X_VIOLATION,
+        "'LGPL-2.1' is prohibited (Category X)."
+      ]]);
     });
 
     it('should handle multiple dual-licensed dependencies correctly', () => {
