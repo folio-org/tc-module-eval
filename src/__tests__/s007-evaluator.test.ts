@@ -154,8 +154,11 @@ describe('S007 deterministic evaluator', () => {
     expect(result.findings[0]).toMatchObject({ classification: 'advisory-mismatch', contribution: 'manual' });
   });
 
-  it('uses an approved Maven effective-POM version for normative comparison', () => {
-    const lombok = observation('lombok', undefined, '1.18.48');
+  it.each([
+    ['uses an approved Maven effective-POM version for normative comparison', '1.18.48', 'compliant', 'pass'],
+    ['can fail a normative rule from a validated Maven effective-POM version', '1.18.20', 'normative-violation', 'fail']
+  ])('%s', (_name, resolvedVersion, classification, contribution) => {
+    const lombok = observation('lombok', undefined, resolvedVersion);
     lombok.provenance = 'shared-remote-resolution';
     lombok.resolutionSource = 'maven-effective-pom';
 
@@ -163,26 +166,12 @@ describe('S007 deterministic evaluator', () => {
 
     expect(result.findings[0]).toMatchObject({
       technologyId: 'lombok',
-      classification: 'compliant',
-      contribution: 'pass',
+      classification,
+      contribution,
       evidence: [expect.objectContaining({
-        resolvedVersion: '1.18.48',
+        resolvedVersion,
         resolutionSource: 'maven-effective-pom'
       })]
-    });
-  });
-
-  it('can fail a normative rule from a validated Maven effective-POM version', () => {
-    const lombok = observation('lombok', undefined, '1.18.20');
-    lombok.provenance = 'shared-remote-resolution';
-    lombok.resolutionSource = 'maven-effective-pom';
-
-    const result = evaluateS007(policy, evidence([lombok]), 'java');
-
-    expect(result.findings[0]).toMatchObject({
-      technologyId: 'lombok',
-      classification: 'normative-violation',
-      contribution: 'fail'
     });
   });
 

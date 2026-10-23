@@ -9,133 +9,158 @@ import { LicenseIssueType } from '../types';
 describe('License Name Normalization', () => {
   describe('normalizeLicenseName', () => {
     // Test parenthetical extraction (Maven format)
-    test('should extract license from parenthetical format', () => {
-      expect(normalizeLicenseName('(The Apache Software License, Version 2.0) jackson-databind')).toBe('The Apache Software License, Version 2.0');
-      expect(normalizeLicenseName('(Apache-2.0) Apache Commons IO')).toBe('Apache-2.0');
-      expect(normalizeLicenseName('(The MIT License) Project Lombok')).toBe('MIT License');
-      expect(normalizeLicenseName('(BSD-2-Clause) PostgreSQL JDBC Driver')).toBe('BSD-2-Clause');
+    test.each([
+      ['(The Apache Software License, Version 2.0) jackson-databind', 'The Apache Software License, Version 2.0'],
+      ['(Apache-2.0) Apache Commons IO', 'Apache-2.0'],
+      ['(The MIT License) Project Lombok', 'MIT License'],
+      ['(BSD-2-Clause) PostgreSQL JDBC Driver', 'BSD-2-Clause']
+    ])('should extract license from parenthetical format (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test artifact information removal
-    test('should remove trailing artifact information', () => {
-      expect(normalizeLicenseName('(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core')).toBe('The Apache Software License, Version 2.0');
-      expect(normalizeLicenseName('(Apache License, Version 2.0) folio-spring-base (org.folio')).toBe('Apache License 2.0');
-      expect(normalizeLicenseName('Apache License 2.0 - https://www.apache.org/licenses')).toBe('Apache License 2.0');
+    test.each([
+      ['(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core', 'The Apache Software License, Version 2.0'],
+      ['(Apache License, Version 2.0) folio-spring-base (org.folio', 'Apache License 2.0'],
+      ['Apache License 2.0 - https://www.apache.org/licenses', 'Apache License 2.0']
+    ])('should remove trailing artifact information (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test Apache variations from real FOLIO data
-    test('should normalize Apache license variations', () => {
-      expect(normalizeLicenseName('Apache 2')).toBe('Apache-2.0');
-      expect(normalizeLicenseName('Apache License, Version 2.0')).toBe('Apache License 2.0');
-      expect(normalizeLicenseName('Apache 2.0')).toBe('Apache-2.0');
-      expect(normalizeLicenseName('Apache License Version 2.0')).toBe('Apache License 2.0');
-      expect(normalizeLicenseName('The Apache Software License, Version 2.0')).toBe('The Apache Software License, Version 2.0');
-      expect(normalizeLicenseName('Apache Public License 2.0')).toBe('Apache-2.0');
+    test.each([
+      ['Apache 2', 'Apache-2.0'],
+      ['Apache License, Version 2.0', 'Apache License 2.0'],
+      ['Apache 2.0', 'Apache-2.0'],
+      ['Apache License Version 2.0', 'Apache License 2.0'],
+      ['The Apache Software License, Version 2.0', 'The Apache Software License, Version 2.0'],
+      ['Apache Public License 2.0', 'Apache-2.0']
+    ])('should normalize Apache license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test MIT variations from real FOLIO data
-    test('should normalize MIT license variations', () => {
-      expect(normalizeLicenseName('MIT')).toBe('MIT');
-      expect(normalizeLicenseName('MIT License')).toBe('MIT License');
-      expect(normalizeLicenseName('MIT-0')).toBe('MIT');
-      expect(normalizeLicenseName('The MIT License')).toBe('MIT License');
+    test.each([
+      ['MIT', 'MIT'],
+      ['MIT License', 'MIT License'],
+      ['MIT-0', 'MIT'],
+      ['The MIT License', 'MIT License']
+    ])('should normalize MIT license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test BSD variations from real FOLIO data
-    test('should normalize BSD license variations', () => {
-      expect(normalizeLicenseName('3-Clause BSD License')).toBe('BSD-3-Clause');
-      expect(normalizeLicenseName('BSD')).toBe('BSD-3-Clause');
-      expect(normalizeLicenseName('BSD 2-Clause License')).toBe('BSD-2-Clause');
-      expect(normalizeLicenseName('BSD License')).toBe('BSD-3-Clause');
-      expect(normalizeLicenseName('BSD-2-Clause')).toBe('BSD-2-Clause');
-      expect(normalizeLicenseName('The 2-Clause BSD License')).toBe('BSD-2-Clause');
-      expect(normalizeLicenseName('New BSD License')).toBe('BSD-3-Clause');
+    test.each([
+      ['3-Clause BSD License', 'BSD-3-Clause'],
+      ['BSD', 'BSD-3-Clause'],
+      ['BSD 2-Clause License', 'BSD-2-Clause'],
+      ['BSD License', 'BSD-3-Clause'],
+      ['BSD-2-Clause', 'BSD-2-Clause'],
+      ['The 2-Clause BSD License', 'BSD-2-Clause'],
+      ['New BSD License', 'BSD-3-Clause']
+    ])('should normalize BSD license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test LGPL variations from real FOLIO data
-    test('should normalize LGPL license variations', () => {
-      expect(normalizeLicenseName('GNU Lesser General Public License, Version 2.1')).toBe('GNU Lesser General Public License v2.1');
-      expect(normalizeLicenseName('GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1')).toBe('GNU Lesser General Public License v2.1');
-      expect(normalizeLicenseName('GNU Library General Public License v2.1 or later')).toBe('GNU Lesser General Public License v2.1');
-      expect(normalizeLicenseName('LGPL')).toBe('LGPL-2.1');
+    test.each([
+      ['GNU Lesser General Public License, Version 2.1', 'GNU Lesser General Public License v2.1'],
+      ['GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1', 'GNU Lesser General Public License v2.1'],
+      ['GNU Library General Public License v2.1 or later', 'GNU Lesser General Public License v2.1'],
+      ['LGPL', 'LGPL-2.1']
+    ])('should normalize LGPL license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test Eclipse Public License variations from real FOLIO data
-    test('should normalize Eclipse license variations', () => {
-      expect(normalizeLicenseName('Eclipse Public License v2.0')).toBe('EPL-2.0');
-      expect(normalizeLicenseName('Eclipse Public License - v 2.0')).toBe('EPL-2.0');
-      expect(normalizeLicenseName('(Eclipse Public License - v 1.0) AspectJ (org.aspectj:aspectjweaver:1.9.25.1 - https://example.org)')).toBe('EPL-1.0');
-      expect(normalizeLicenseName('Eclipse Public License 1.0')).toBe('EPL-1.0');
-      expect(normalizeLicenseName('Eclipse Public License, Version 2.0')).toBe('Eclipse Public License 2.0');
-      expect(normalizeLicenseName('EPL')).toBe('EPL-1.0');
+    test.each([
+      ['Eclipse Public License v2.0', 'EPL-2.0'],
+      ['Eclipse Public License - v 2.0', 'EPL-2.0'],
+      ['(Eclipse Public License - v 1.0) AspectJ (org.aspectj:aspectjweaver:1.9.25.1 - https://example.org)', 'EPL-1.0'],
+      ['Eclipse Public License 1.0', 'EPL-1.0'],
+      ['Eclipse Public License, Version 2.0', 'Eclipse Public License 2.0'],
+      ['EPL', 'EPL-1.0']
+    ])('should normalize Eclipse license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test other real FOLIO license variations
-    test('should normalize other common license variations', () => {
-      expect(normalizeLicenseName('Universal Permissive License, Version 1.0')).toBe('Universal Permissive License, Version 1.0');
-      expect(normalizeLicenseName('CC0')).toBe('CC0-1.0');
-      expect(normalizeLicenseName('Public Domain, per Creative Commons CC0')).toBe('Public Domain');
-      expect(normalizeLicenseName('Mozilla Public License, Version 2.0')).toBe('Mozilla Public License 2.0');
-      expect(normalizeLicenseName('MPL 2.0')).toBe('MPL-2.0');
-      expect(normalizeLicenseName('ISC')).toBe('ISC');
-      expect(normalizeLicenseName('Go License')).toBe('BSD-3-Clause');
+    test.each([
+      ['Universal Permissive License, Version 1.0', 'Universal Permissive License, Version 1.0'],
+      ['CC0', 'CC0-1.0'],
+      ['Public Domain, per Creative Commons CC0', 'Public Domain'],
+      ['Mozilla Public License, Version 2.0', 'Mozilla Public License 2.0'],
+      ['MPL 2.0', 'MPL-2.0'],
+      ['ISC', 'ISC'],
+      ['Go License', 'BSD-3-Clause']
+    ])('should normalize other common license variations (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test preservation of exact matches
-    test('should preserve exact matches from license policy', () => {
-      expect(normalizeLicenseName('Apache-2.0')).toBe('Apache-2.0');
-      expect(normalizeLicenseName('MIT')).toBe('MIT');
-      expect(normalizeLicenseName('BSD-3-Clause')).toBe('BSD-3-Clause');
-      expect(normalizeLicenseName('LGPL-2.1')).toBe('LGPL-2.1');
+    test.each([
+      ['Apache-2.0', 'Apache-2.0'],
+      ['MIT', 'MIT'],
+      ['BSD-3-Clause', 'BSD-3-Clause'],
+      ['LGPL-2.1', 'LGPL-2.1']
+    ])('should preserve exact matches from license policy (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test unknown licenses
-    test('should return cleaned name for unknown licenses', () => {
-      expect(normalizeLicenseName('Some Unknown License')).toBe('Some Unknown License');
-      expect(normalizeLicenseName('(Custom License) some-artifact')).toBe('Custom License');
+    test.each([
+      ['Some Unknown License', 'Some Unknown License'],
+      ['(Custom License) some-artifact', 'Custom License']
+    ])('should return cleaned name for unknown licenses (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
 
     // Test edge cases
-    test('should handle edge cases', () => {
-      expect(normalizeLicenseName('')).toBe('');
-      expect(normalizeLicenseName('   ')).toBe('');
-      expect(normalizeLicenseName('()')).toBe('');
-      expect(normalizeLicenseName('(   )')).toBe('');
+    test.each([
+      ['', ''],
+      ['   ', ''],
+      ['()', ''],
+      ['(   )', '']
+    ])('should handle edge cases (%p)', (license, expected) => {
+      expect(normalizeLicenseName(license)).toBe(expected);
     });
   });
 
   describe('getLicenseCategoryNormalized', () => {
     // Test mod-search license strings from the actual report
-    test('should categorize mod-search license strings correctly', () => {
+    test.each([
       // Apache 2.0 variations from mod-search
-      expect(getLicenseCategoryNormalized('(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('(Apache-2.0) Apache Commons IO (commons-io')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('(Apache License, Version 2.0) folio-spring-base (org.folio')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('(Apache License 2.0) folio-service-tools-spring-dev (org.folio')).toBe(LicenseCategory.A);
-
+      ['(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core', LicenseCategory.A],
+      ['(Apache-2.0) Apache Commons IO (commons-io', LicenseCategory.A],
+      ['(Apache License, Version 2.0) folio-spring-base (org.folio', LicenseCategory.A],
+      ['(Apache License 2.0) folio-service-tools-spring-dev (org.folio', LicenseCategory.A],
       // MIT License from mod-search
-      expect(getLicenseCategoryNormalized('(The MIT License) Project Lombok (org.projectlombok')).toBe(LicenseCategory.A);
-
+      ['(The MIT License) Project Lombok (org.projectlombok', LicenseCategory.A],
       // BSD License from mod-search
-      expect(getLicenseCategoryNormalized('(BSD-2-Clause) PostgreSQL JDBC Driver (org.postgresql')).toBe(LicenseCategory.A);
-
+      ['(BSD-2-Clause) PostgreSQL JDBC Driver (org.postgresql', LicenseCategory.A],
       // LGPL License from mod-search (should be Category X)
-      expect(getLicenseCategoryNormalized('(GNU Lesser General Public License, Version 2.1) MARC4J (org.marc4j')).toBe(LicenseCategory.X);
+      ['(GNU Lesser General Public License, Version 2.1) MARC4J (org.marc4j', LicenseCategory.X]
+    ])('should categorize mod-search license strings correctly (%p)', (license, expected) => {
+      expect(getLicenseCategoryNormalized(license)).toBe(expected);
     });
 
     // Test exact matches still work
-    test('should handle exact matches from license policy', () => {
-      expect(getLicenseCategoryNormalized('Apache-2.0')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('MIT')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('BSD-2-Clause')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('LGPL-2.1')).toBe(LicenseCategory.X);
-      expect(getLicenseCategoryNormalized('GPL-2.0')).toBe(LicenseCategory.X);
+    test.each([
+      ['Apache-2.0', LicenseCategory.A],
+      ['MIT', LicenseCategory.A],
+      ['BSD-2-Clause', LicenseCategory.A],
+      ['LGPL-2.1', LicenseCategory.X],
+      ['GPL-2.0', LicenseCategory.X]
+    ])('should handle exact matches from license policy (%p)', (license, expected) => {
+      expect(getLicenseCategoryNormalized(license)).toBe(expected);
     });
 
     // Test unknown licenses
-    test('should return undefined for unknown licenses', () => {
-      expect(getLicenseCategoryNormalized('Some Unknown License')).toBeUndefined();
-      expect(getLicenseCategoryNormalized('(Proprietary License) some-artifact')).toBeUndefined();
+    test.each([
+      'Some Unknown License',
+      '(Proprietary License) some-artifact'
+    ])('should return undefined for unknown licenses (%p)', license => {
+      expect(getLicenseCategoryNormalized(license)).toBeUndefined();
     });
 
     // ASF lists GPL-2.0 with the Classpath exception under Category B ("weak copyleft"); its Category X
@@ -181,10 +206,12 @@ describe('License Name Normalization', () => {
     });
 
     // Test normalization fallback
-    test('should fall back to normalization when exact match fails', () => {
-      expect(getLicenseCategoryNormalized('Apache License Version 2.0')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('MIT License')).toBe(LicenseCategory.A);
-      expect(getLicenseCategoryNormalized('GNU Lesser General Public License, Version 2.1')).toBe(LicenseCategory.X);
+    test.each([
+      ['Apache License Version 2.0', LicenseCategory.A],
+      ['MIT License', LicenseCategory.A],
+      ['GNU Lesser General Public License, Version 2.1', LicenseCategory.X]
+    ])('should fall back to normalization when exact match fails (%p)', (license, expected) => {
+      expect(getLicenseCategoryNormalized(license)).toBe(expected);
     });
   });
 
