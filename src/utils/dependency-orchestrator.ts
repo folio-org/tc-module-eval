@@ -71,32 +71,21 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
       return { dependencies: [], errors, warnings };
     }
 
-    const hasMaven = await hasMavenProject(repoPath);
-    const hasGradle = await hasGradleProject(repoPath);
-    const hasNpm = await hasNpmProject(repoPath);
+    const tools = [
+      { present: await hasMavenProject(repoPath), extract: getMavenDependencies },
+      { present: await hasGradleProject(repoPath), extract: getGradleDependencies },
+      { present: await hasNpmProject(repoPath), extract: getNpmDependencies }
+    ];
 
-    if (hasMaven) {
-      const mavenResult = await getMavenDependencies(repoPath, evaluationRun);
-      dependencies.push(...mavenResult.dependencies.filter(isValidDependency));
-      errors.push(...mavenResult.errors);
-      warnings.push(...mavenResult.warnings);
+    for (const tool of tools) {
+      if (!tool.present) continue;
+      const result = await tool.extract(repoPath, evaluationRun);
+      dependencies.push(...result.dependencies.filter(isValidDependency));
+      errors.push(...result.errors);
+      warnings.push(...result.warnings);
     }
 
-    if (hasGradle) {
-      const gradleResult = await getGradleDependencies(repoPath, evaluationRun);
-      dependencies.push(...gradleResult.dependencies.filter(isValidDependency));
-      errors.push(...gradleResult.errors);
-      warnings.push(...gradleResult.warnings);
-    }
-
-    if (hasNpm) {
-      const npmResult = await getNpmDependencies(repoPath, evaluationRun);
-      dependencies.push(...npmResult.dependencies.filter(isValidDependency));
-      errors.push(...npmResult.errors);
-      warnings.push(...npmResult.warnings);
-    }
-
-    if (dependencies.length === 0 && errors.length === 0 && !hasMaven && !hasGradle && !hasNpm) {
+    if (dependencies.length === 0 && errors.length === 0 && !tools.some(tool => tool.present)) {
       warnings.push({
         source: 'dependency-orchestrator',
         message: 'No Maven, Gradle or npm build file was found, so no dependencies could be listed.'
