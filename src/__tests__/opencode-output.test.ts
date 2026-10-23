@@ -9,11 +9,11 @@ const advisory = {
 const textEvent = (text: string) => ({ type: 'text', part: { type: 'text', text } });
 const wire = (...events: unknown[]) => events.map(event => JSON.stringify(event)).join('\n');
 
-async function capture(output: string, maxOutputBytes = 1024 * 1024, captureDebugTrace = false) {
+async function capture(output: string, maxOutputBytes = 1024 * 1024, captureDebugTrace = false, keepStdoutTail = false) {
   const request = {
     command: process.execPath,
     args: ['-e', 'process.stdout.write(process.env.TEST_WIRE ?? "")'],
-    cwd: process.cwd(), env: { TEST_WIRE: output }, maxOutputBytes, captureDebugTrace,
+    cwd: process.cwd(), env: { TEST_WIRE: output }, maxOutputBytes, captureDebugTrace, keepStdoutTail,
     stdoutFormat: 'opencode-json' as const
   };
   return new LocalCommandRunner().run(request);
@@ -251,6 +251,50 @@ describe('final OpenCode answer selection', () => {
       : [start(), text(value.slice(0, split)), text(value.slice(split), 'msg_b'), finish('stop', 'msg_b')];
     const result = await capture(wire(...events));
     expect(parseOpenCodeReviewPayload(result.stdout)).toBeUndefined();
+  });
+
+  it('reads the final answer from the end of output over the capture limit', async () => {
+    const tool = (index: number) => ({ type: 'tool_use', part: { messageID: 'msg_a', type: 'tool', tool: 'read',
+      state: { status: 'completed', output: `${index}:` + 'x'.repeat(4096) } } });
+    const tools = Array.from({ length: 10 }, (_, index) => tool(index));
+    const output = wire(start(), text('Reading files.'), ...tools, finish('tool-calls'),
+      start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
+    const limit = 16 * 1024;
+    expect(Buffer.byteLength(output)).toBeGreaterThan(2 * limit);
+
+    const head = await capture(output, limit);
+    const tail = await capture(output, limit, false, true);
+
+    expect(head.stdoutTruncated).toBe(true);
+    expect(decodeOpenCodeOutput(head.stdout, true).payload).toBeUndefined();
+    expect(tail.stdoutTruncated).toBe(true);
+    expect(tail.stdoutBytes).toBe(Buffer.byteLength(output));
+    expect(tail.stdout.split('\n').every(line => JSON.parse(line).type !== 'unsafe_output')).toBe(true);
+    expect(decodeOpenCodeOutput(tail.stdout, true).payload).toEqual(advisory);
+  });
+
+  it('drops the oldest sanitized records when tail capture still exceeds the limit', () => {
+    const output = wire(start(), text('Reading files.'), finish('tool-calls'), start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
+    const records = sanitizeStructuredOutput(output, 'opencode-json', 1024 * 1024).text.split('\n');
+    const newest = records.slice(3).join('\n');
+
+    const tail = sanitizeStructuredOutput(output, 'opencode-json', Buffer.byteLength(newest), false, true);
+
+    expect(tail).toMatchObject({ text: newest, truncated: true });
+    expect(decodeOpenCodeOutput(tail.text, true).payload).toEqual(advisory);
+  });
+
+  it('rejects a cut output whose final assistant message start was dropped', async () => {
+    // Only the end of the final message survives; its first text part was dropped.
+    const draft = 'Draft, superseded below: ' + 'y'.repeat(70 * 1024);
+    const output = wire(start('msg_b'), text(draft, 'msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
+    const tail = await capture(output, 64 * 1024, false, true);
+
+    expect(tail.stdoutTruncated).toBe(true);
+    expect(decodeOpenCodeOutput(tail.stdout).payload).toEqual(advisory);
+    expect(decodeOpenCodeOutput(tail.stdout, true)).toMatchObject({
+      failure: 'incomplete_response', diagnostic: 'final assistant message start not captured'
+    });
   });
 
   it.each(["{'recommendation': 'likely_insufficient'", '{recommendation: "likely_insufficient"', 'not JSON'])('rejects malformed final JSON fences: %s', async replacement => {
