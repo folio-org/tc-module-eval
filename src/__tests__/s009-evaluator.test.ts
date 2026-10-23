@@ -198,6 +198,14 @@ describe('S009 evaluator', () => {
     expect(details).not.toContain('\nPolicy diagnostics:\n');
   });
 
+  it('lists a hashed file name that imitates a source reference as a path', () => {
+    const input = evidence([observation('npm', '@folio/accepted-js', '1.0.0')]);
+    input.fileHashes['pom.xml:9 [approved]'] = `sha256:${'a'.repeat(64)}`;
+    const details = renderS009HumanDetails(evaluateS009(loadedLedger(), input));
+
+    expect(details).toContain('    - pom.xml%3A9%20%5Bapproved%5D:\n');
+  });
+
   it('retains observed coordinates in human details when policy is unavailable', () => {
     const result = evaluateS009({
       ok: false,

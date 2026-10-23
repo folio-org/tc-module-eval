@@ -12,6 +12,7 @@ import { getDependencies } from './dependency-orchestrator';
 import { checkLicenseCompliance } from './license-compliance';
 import { readRepoTextFile } from './parsers/common';
 import { getLogger } from './logger';
+import { reportText } from './report-text';
 
 export interface ThirdPartyLicenseEvaluatorAdapters {
   extractDependencies(repoPath: string, evaluationRun?: EvaluationRun): Promise<{
@@ -34,7 +35,7 @@ const TOOL_TAGS: Record<string, string> = {
 /** Formats an extraction problem as a report row, tagged with the build tool that reported it. */
 function formatProblem(problem: DependencyExtractionError): string {
   const tag = TOOL_TAGS[problem.source];
-  return `  - ${tag ? `[${tag}] ` : ''}${problem.message}`;
+  return `  - ${tag ? `[${tag}] ` : ''}${reportText(problem.message)}`;
 }
 
 /**
@@ -45,7 +46,7 @@ export function formatExtractionErrors(errors: DependencyExtractionError[]): str
     .map(e => {
       const row = formatProblem(e);
       return e.error?.message && !e.message.includes(e.error.message)
-        ? `${row}\n    Cause: ${e.error.message}`
+        ? `${row}\n    Cause: ${reportText(e.error.message)}`
         : row;
     })
     .join('\n');
@@ -144,7 +145,7 @@ export function determineComplianceStatus(
     .filter(group => group.issues.length > 0);
   const issueDetails = groups
     .map(group => `${group.title}:\n${group.issues
-      .map(issue => `  - ${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)
+      .map(issue => `  - ${reportText(`${issue.dependency.name}:${issue.dependency.version} - ${issue.reason}`)}`)
       .join('\n')}`)
     .join('\n\n');
   const actions = groups.map(group => group.action).join(' ');
@@ -204,19 +205,20 @@ export class ThirdPartyLicenseEvaluator {
       const complianceResult = this.adapters.checkCompliance(dependencies, readmeContent);
       const evidence = buildEvidenceSummary(dependencies);
 
-      return this.withCommandExecutionDetails(determineComplianceStatus(
-        criterionId,
-        complianceResult,
-        evidence,
-        warnings
-      ), commandObservations);
+      return this.withCommandExecutionDetails({
+        ...determineComplianceStatus(criterionId, complianceResult, evidence, warnings),
+        // The HTML report groups dependencies by license from this list rather than from the evidence text.
+        criterionDetails: {
+          dependencies: dependencies.map(({ name, version, licenses }) => ({ name, version, licenses: licenses ?? [] }))
+        }
+      }, commandObservations);
     } catch (error) {
       getLogger().warn(`Error evaluating ${criterionId}:`, error);
       return {
         criterionId,
         status: EvaluationStatus.MANUAL,
         evidence: 'The license check stopped with an unexpected error, so dependency licenses were not checked.',
-        details: `The license check stopped with an unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}.\nWhat to do: Check the dependency licenses by hand.`
+        details: `The license check stopped with an unexpected error: ${reportText(error instanceof Error ? error.message : 'Unknown error')}.\nWhat to do: Check the dependency licenses by hand.`
       };
     }
   }
@@ -271,7 +273,7 @@ export class ThirdPartyLicenseEvaluator {
 
     const lines = observations.map(command => {
       const where = command.commandExecutionEnvironment === 'github-actions' ? ' (in GitHub Actions)' : '';
-      return `  - ${COMMAND_STATUS_LABELS[command.status]}: ${command.command} ${command.args.join(' ')}${where}`;
+      return `  - ${COMMAND_STATUS_LABELS[command.status]}: ${reportText(`${command.command} ${command.args.join(' ')}`)}${where}`;
     });
 
     return {

@@ -1,4 +1,5 @@
 import { CriterionAgentReviewResult } from '../types';
+import { reportPath, reportText } from './report-text';
 
 const ASSESSMENT_LABELS = {
   aligned_fact: ['Supported by evidence', 'The reviewed source supports this finding; this is not a certification of the whole criterion.'],
@@ -16,7 +17,7 @@ const SUBJECT_NAMES: Record<string, string> = {
 
 // Details use indentation as structure. Model-authored newlines must stay prose.
 function prose(value: string | undefined): string {
-  return (value ?? '').replace(/\s+/g, ' ').trim();
+  return reportText((value ?? '').replace(/\s+/g, ' ').trim());
 }
 
 export function renderAgentReviewLines(
@@ -54,7 +55,7 @@ export function renderAgentReviewLines(
         `      - Finding: ${prose(assessment.summary)}`,
         '      - Sources:',
         ...assessment.evidenceReferences.map(reference => `        - ${reference === '.criterion-agent/S006/finding-summary.json'
-          ? 'Automated scan coverage diagnostics' : prose(reference)}`)
+          ? 'Automated scan coverage diagnostics' : reportPath(reference)}`)
       );
       if (assessment.coverageDisposition) {
         const labels = { investigated: 'Investigated directly', immaterial: 'Not material to this scoped decision', unresolved: 'Needs further verification' };
@@ -66,7 +67,7 @@ export function renderAgentReviewLines(
         lines.push(`      - ${phases[bound.phase]} — ${statuses[bound.status]}:`,
           `        - Dependency role: ${bound.requirement}`,
           `        - ${prose(bound.explanation)}`,
-          '        - Sources:', ...bound.evidenceReferences.map(reference => `          - ${prose(reference)}`));
+          '        - Sources:', ...bound.evidenceReferences.map(reference => `          - ${reportPath(reference)}`));
       }
     }
   }
@@ -76,12 +77,12 @@ export function renderAgentReviewLines(
       lines.push(
         `    - ${prose(action.action)}`,
         '      - Sources:',
-        ...action.evidenceReferences.map(reference => `        - ${prose(reference)}`)
+        ...action.evidenceReferences.map(reference => `        - ${reportPath(reference)}`)
       );
     }
   }
   if (review.evidenceReferences.length) {
-    lines.push('  - Sources:', ...review.evidenceReferences.map(reference => `    - ${prose(reference)}`));
+    lines.push('  - Sources:', ...review.evidenceReferences.map(reference => `    - ${reportPath(reference)}`));
   }
   return lines;
 }

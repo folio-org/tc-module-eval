@@ -22,6 +22,7 @@ import {
 } from '../types';
 import { GENERATED_REPORT_DIRECTORY_PATTERN, isBinaryBuffer, isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
 import { evidenceStrengthRank } from './evidence-strength';
+import { reportPath } from './report-text';
 
 export const REQUIRED_DISCLOSURE_FILENAME = 'PERSONAL_DATA_DISCLOSURE.md';
 
@@ -749,7 +750,7 @@ function contradictionMismatches(
     kind: 'contradiction',
     message: contradiction.message,
     category: 'no_personal_data',
-    evidenceReferences: contradiction.lineNumbers.map(lineNumber => `${disclosurePath}:${lineNumber}`),
+    evidenceReferences: contradiction.lineNumbers.map(lineNumber => `${reportPath(disclosurePath)}:${lineNumber}`),
     signalStrengths: [],
     sourceClasses: []
   }));
@@ -800,7 +801,7 @@ function evidenceAssessment(
 }
 
 function signalReferences(signals: S005PersonalDataEvidenceSignal[]): string[] {
-  return signals.map(signal => `${signal.path}${signal.line ? `:${signal.line}` : ''} [${S005_SOURCE_CLASS_TAGS[signal.sourceClass]}]`);
+  return signals.map(signal => `${reportPath(signal.path)}${signal.line ? `:${signal.line}` : ''} [${S005_SOURCE_CLASS_TAGS[signal.sourceClass]}]`);
 }
 
 function uniqueSourceClasses(signals: S005PersonalDataEvidenceSignal[]): S005PersonalDataEvidenceSourceClass[] {

@@ -1,9 +1,18 @@
 import { EvaluationReportRenderer } from '../utils/report-renderer';
-import { EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types';
+import { Dependency, EvaluationResult, EvaluationStatus, S007AnalysisResult } from '../types';
 import { renderS007HumanDetails } from '../utils/s007-report-details';
 import { agentReviewReport } from './helpers/agent-review-report';
 import { runInNewContext } from 'vm';
-import { buildEvidenceSummary } from '../utils/license-compliance-evaluator';
+import { ThirdPartyLicenseEvaluator, buildEvidenceSummary } from '../utils/license-compliance-evaluator';
+import { checkLicenseCompliance } from '../utils/license-compliance';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { analyzeS004Documentation, formatS004Evidence } from '../utils/s004-installation-documentation';
+import { analyzeS005PersonalDataDisclosure, buildS005CriterionDetails, formatS005Evidence } from '../utils/s005-personal-data-disclosure';
+import { s002ArtifactFailureResult } from '../utils/s002-module-descriptor-report';
+import { evaluateS009, renderS009HumanDetails } from '../utils/s009-evaluator';
+import { citedTrackedFiles } from '../module-evaluator';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -25,6 +34,24 @@ describe('EvaluationReportRenderer', () => {
     return runInNewContext(setup + 'return data.items.map(prepare); }());', {
       document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
     });
+  }
+
+  // The browser's row parsing (lead, tag and source link) for a rendered report, run outside a DOM.
+  function rowLinks(html: string, criterionId: string): (text: string) => { lead: string; tag: string; href: string | null } {
+    const data = reportData(html);
+    const cited = data.items.find((item: any) => item.id === criterionId).citedSourcePaths;
+    const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)![1];
+    const setup = script.slice(0, script.indexOf('var items = data.items.map(prepare);'));
+    const helpers = script.slice(script.indexOf('    function segments('), script.indexOf('    function clampedText('));
+    return runInNewContext(`${setup}${helpers}return function (text) { `
+      + `var cited = ${JSON.stringify(cited)}; var parts = rowParts(text, cited); `
+      + 'return {lead: parts.lead, tag: parts.tag, href: parts.lead ? rowHref(parts, cited) : null}; }; }());', {
+      document: { getElementById: () => ({ textContent: JSON.stringify(data) }) }
+    });
+  }
+
+  function walk(nodes: any[]): any[] {
+    return nodes.flatMap(node => [node, ...walk(node.children)]);
   }
 
   const result: EvaluationResult = {
@@ -207,8 +234,8 @@ describe('EvaluationReportRenderer', () => {
       criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual',
       details: 'Agent review:\n  - Not applied: stale legacy reason',
       agentReview: { available: false, criterionId: 'S010', recommendation: 'likely_sufficient',
-        evidenceReferences: [], warnings: ['Command configured with timeout 420000ms'],
-        errors: ['Provider returned invalid JSON'] }
+        evidenceReferences: [], warnings: ['Command configured with timeout 420000ms', 'bad value\nRead error: injected'],
+        errors: ['Provider returned invalid JSON', '- ... 999 more'] }
     }] };
     const renderer = new EvaluationReportRenderer();
     const html = renderer.renderHtml(report);
@@ -216,7 +243,9 @@ describe('EvaluationReportRenderer', () => {
     expect(reportData(html).items[0].details).toEqual(expect.arrayContaining([
       '  - Summary: No usable advisory review was returned.',
       '  - Reason: Provider returned invalid JSON',
-      '    - Command configured with timeout 420000ms'
+      '    - Command configured with timeout 420000ms',
+      '    - bad value ↵ Read error: injected',
+      '    - … 999 more'
     ]));
     expect(reportData(html).items[0].details.join('\n')).not.toContain('exceeded its time limit');
     expect(renderer.renderJson(report)).toContain('Provider returned invalid JSON');
@@ -327,10 +356,12 @@ describe('EvaluationReportRenderer', () => {
         criterionId: 'S004',
         status: EvaluationStatus.MANUAL,
         evidence: 'Review needed.',
-        details: 'Sources:\n  - README.md:12 documented setup\n  - /tmp/generated.json:1 generated output'
+        details: 'Sources:\n  - README.md:12 documented setup\n  - /tmp/generated.json:1 generated output',
+        criterionDetails: { sources: [{ path: 'README.md' }, { path: '/tmp/generated.json' }] }
       }]
     });
     const data = reportData(html);
+    const links = rowLinks(html, 'S004');
     const downloaded = downloadData(html);
 
     expect(data.meta).toMatchObject({
@@ -342,8 +373,8 @@ describe('EvaluationReportRenderer', () => {
     });
     expect(downloaded.provenance.repositoryCommit).toBe(commit);
     expect(downloaded.criteria[0]).toMatchObject({ criterionId: 'S004', status: 'manual' });
-    expect(html).toContain("data.meta.sourceBase+file.split('/').map(encodeURIComponent).join('/')+(line?'#L'+line+(endLine?'-L'+endLine:''):'')");
-    expect(html).toContain("data.meta.citedSourcePaths.indexOf(file)<0");
+    expect(links('README.md:12 documented setup').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/README.md#L12`);
+    expect(links('/tmp/generated.json:1 generated output').href).toBeNull();
   });
 
   it('preserves validated repository and citation identities while redacting free text', () => {
@@ -481,47 +512,67 @@ describe('EvaluationReportRenderer', () => {
     expect(findings.children[0].children.find((node: any) => node.text === 'Evidence:')).toMatchObject({ hideCount: true });
   });
 
-  it('groups S003 dependency licenses so every counted dependency is listed, with singular units', () => {
-    const renderer = new EvaluationReportRenderer();
-    const prepare = (evidence: string) => preparedItems(renderer.renderHtml({
-      ...result,
-      criteria: [{ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' }]
-    }))[0];
+  // Runs the real S003 evaluator on the given dependencies and prepares its report card.
+  async function preparedS003(dependencies: Dependency[]): Promise<any> {
+    const criterion = await new ThirdPartyLicenseEvaluator({
+      extractDependencies: async () => ({ dependencies, errors: [], warnings: [] }),
+      readReadmeContent: () => '',
+      checkCompliance: checkLicenseCompliance
+    }).evaluate('/unused');
+    return preparedItems(new EvaluationReportRenderer().renderHtml({ ...result, criteria: [criterion] }))[0];
+  }
+  const licenseGroups = (item: any) => item.tree.find((node: any) => node.text === 'Dependency licenses');
 
-    const single = prepare(buildEvidenceSummary([{ name: 'org.example:only', version: '1.0', licenses: ['MIT'] }]));
+  it('groups S003 dependency licenses so every counted dependency is listed, with singular units', async () => {
+    const single = await preparedS003([{ name: 'org.example:only', version: '1.0', licenses: ['MIT'] }]);
     expect(single.summary).toBe('Found 1 dependency. License groups are listed below the flagged items.');
-    expect(single.tree.find((node: any) => node.text === 'Dependency licenses').children)
-      .toEqual([expect.objectContaining({ text: 'MIT', unit: 'dep' })]);
+    expect(licenseGroups(single).children).toEqual([expect.objectContaining({ text: 'MIT', unit: 'dep' })]);
 
-    const mixed = prepare(buildEvidenceSummary([
+    const mixed = await preparedS003([
       { name: 'org.example:a', version: '1.0', licenses: ['Apache-2.0'] },
       { name: 'org.example:b', version: '2.0', licenses: ['Apache-2.0'] },
       { name: 'org.example:mystery', version: '0.1' }
-    ]));
-    const groups = mixed.tree.find((node: any) => node.text === 'Dependency licenses');
-    expect(groups.countText).toBe('3');
-    expect(groups.children.map((node: any) => [node.text, node.children.length, node.unit])).toEqual([
+    ]);
+    expect(licenseGroups(mixed).countText).toBe('3');
+    expect(licenseGroups(mixed).children.map((node: any) => [node.text, node.children.length, node.unit])).toEqual([
       ['Apache 2.0', 2, 'deps'],
       ['No license reported', 1, 'dep']
     ]);
   });
 
-  it.each([
-    ['forges an extra entry', 'Custom); org.example:fake:6.6 (MIT'],
-    ['has unbalanced parentheses', 'Custom (v2']
-  ])('keeps the raw S003 evidence when a license name %s', (_case, license) => {
-    const renderer = new EvaluationReportRenderer();
-    const evidence = buildEvidenceSummary([
-      { name: 'org.example:a', version: '1.0', licenses: [license] },
-      { name: 'org.example:b', version: '1.0', licenses: ['MIT'] }
+  it('groups S003 licenses by their exact names from the structured dependency list, not the evidence text', async () => {
+    const item = await preparedS003([
+      { name: 'org.example:a', version: '1.0', licenses: ['GPL-2.0; with Classpath exception'] },
+      { name: 'org.example:b', version: '1.0', licenses: ['MIT'] },
+      { name: 'org.example:c', version: '1.0', licenses: ['The MIT License'] },
+      { name: 'org.example:d', version: '1.0', licenses: ['Apache-1.1'] },
+      { name: 'org.example:e', version: '1.0', licenses: ['MIT', 'GPL-3.0'] },
+      { name: 'org.example:f', version: '1.0', licenses: ['The Apache Software License, Version 2.0'] },
+      { name: 'org.example:g', version: '1.0', licenses: ['Custom (v2'] },
+      { name: 'org.example:h', version: '1.0', licenses: ['Custom); org.example:fake:6.6 (MIT'] }
     ]);
-    const prepared = preparedItems(renderer.renderHtml({
+
+    expect(item.summary).toBe('Found 8 dependencies. License groups are listed below the flagged items.');
+    expect(licenseGroups(item).children.map((node: any) => [node.text, node.children.map((child: any) => child.text)])).toEqual([
+      ['MIT', ['org.example:b:1.0', 'org.example:c:1.0']],
+      ['GPL-2.0; with Classpath exception', ['org.example:a:1.0']],
+      ['Apache-1.1', ['org.example:d:1.0']],
+      ['MIT, GPL-3.0', ['org.example:e:1.0']],
+      ['Apache 2.0', ['org.example:f:1.0']],
+      ['Custom (v2', ['org.example:g:1.0']],
+      ['Custom); org.example:fake:6.6 (MIT', ['org.example:h:1.0']]
+    ]);
+  });
+
+  it('keeps the raw S003 evidence when a report has no structured dependency list', () => {
+    const evidence = buildEvidenceSummary([{ name: 'org.example:a', version: '1.0', licenses: ['MIT'] }]);
+    const item = preparedItems(new EvaluationReportRenderer().renderHtml({
       ...result,
       criteria: [{ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' }]
     }))[0];
 
-    expect(prepared.summary).toBe(evidence);
-    expect(prepared.tree.find((node: any) => node.text === 'Dependency licenses')).toBeUndefined();
+    expect(item.summary).toBe(evidence);
+    expect(licenseGroups(item)).toBeUndefined();
   });
 
   it('turns "... N more" overflow markers into hidden counts instead of list entries', () => {
@@ -616,31 +667,230 @@ describe('EvaluationReportRenderer', () => {
       expect(JSON.stringify(item.tree)).not.toMatch(/advisory|Status:/);
     });
 
+    it('links a crafted file name to that file instead of the source reference its name imitates', () => {
+      const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'renderer-s004-'));
+      const crafted = 'docs/a.md:9 [link] b.md';
+      try {
+        fs.mkdirSync(path.join(repo, 'docs'));
+        fs.writeFileSync(path.join(repo, crafted), 'Run docker compose up to start the module.\n');
+        fs.writeFileSync(path.join(repo, 'docs/a.md'), '# Notes\n');
+        const documentation = analyzeS004Documentation(repo);
+        const rendered = formatS004Evidence(documentation);
+        const commit = '0123456789abcdef0123456789abcdef01234567';
+        const html = new EvaluationReportRenderer().renderHtml({
+          ...result,
+          provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['docs/a.md', crafted] },
+          criteria: [{
+            criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: rendered.evidence, details: rendered.details,
+            criterionDetails: documentation
+          }]
+        });
+        const row = walk(preparedItems(html)[0].tree).find((node: any) => node.text.includes('docker compose'));
+
+        expect(rowLinks(html, 'S004')(row.text)).toEqual({
+          lead: 'docs/a.md%3A9%20%5Blink%5D%20b.md:1',
+          tag: 'run',
+          href: `https://github.com/folio-org/test-module/blob/${commit}/docs/a.md%3A9%20%5Blink%5D%20b.md#L1`
+        });
+      } finally {
+        fs.rmSync(repo, { recursive: true, force: true });
+      }
+    });
+
+    it('links a row only to files its own criterion cites, not to one another criterion cites', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['README.md'] },
+        criteria: [
+          { criterionId: 'S002', status: EvaluationStatus.FAIL, evidence: 'Build failed.', details: 'Build output:\n  - README.md:9 [approved] crafted line' },
+          {
+            criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.', details: 'Sources:\n  - README.md:12 setup',
+            criterionDetails: { sources: [{ path: 'README.md' }] }
+          }
+        ]
+      });
+
+      expect(rowLinks(html, 'S002')('README.md:9 [approved] crafted line').href).toBeNull();
+      expect(rowLinks(html, 'S004')('README.md:12 setup').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/README.md#L12`);
+    });
+
+    it('keeps a cited file name with line breaks out of text that names a redaction placeholder', () => {
+      const cited = `docs/${'a'.repeat(80)}\nForged section:\n  - forged.md`;
+      const item = preparedItems(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: [cited] },
+        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+          details: 'Commands:\n  - README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]' }]
+      }))[0];
+
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Commands:']);
+      expect(item.tree[0].children.map((node: any) => node.text))
+        .toEqual(['README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]']);
+    });
+
+    it('keeps the repository URL when a cited file name appears inside its redaction placeholder', () => {
+      const data = reportData(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['_0_'] }
+      }));
+
+      expect(data.meta.repo).toBe(result.repositoryUrl);
+      expect(data.meta.citedSourcePaths).toEqual(['_0_']);
+    });
+
+    it('protects a cited path from redaction when a shorter cited path overlaps its start', () => {
+      const item = reportData(new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['- docs', 'docs/sk-secret.md'] },
+        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+          details: 'Sources:\n  - docs/sk-secret.md:12 setup', criterionDetails: { sources: [{ path: 'docs/sk-secret.md' }] } }]
+      })).items[0];
+
+      expect(item.details).toEqual(['Sources:', '  - docs/sk-secret.md:12 setup']);
+    });
+
+    it('links S009 project files and source hashes it cites only in its dependency evidence', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const evaluation = evaluateS009({ ok: false, sourcePath: 'ledger.json', diagnostics: [{ code: 'ledger_not_authoritative', message: 'Not reviewed' }] }, {
+        observations: [], diagnostics: [], projectFiles: ['pom.xml'], fileHashes: { 'pom.xml': `sha256:${'a'.repeat(64)}` },
+        hasDependencyProject: true, complete: true
+      });
+      const report: EvaluationResult = {
+        ...result,
+        criteria: [
+          { criterionId: 'S007', status: EvaluationStatus.MANUAL, evidence: 'x', details: 'Notes:\n  - y', criterionDetails: { findings: [{ sourcePath: 'pom.xml' }] } },
+          { criterionId: 'S009', status: EvaluationStatus.PASS, evidence: 'x', details: renderS009HumanDetails(evaluation), criterionDetails: evaluation }
+        ]
+      };
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...report,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: citedTrackedFiles(report.criteria, ['pom.xml']) }
+      });
+      const rows = walk(preparedItems(html)[1].tree).filter((node: any) => /^pom\.xml:?$/.test(node.text));
+
+      expect(rows).toHaveLength(2);
+      // A row with children drops its trailing colon before its lead is read, as renderNodes does.
+      rows.forEach((row: any) => expect(rowLinks(html, 'S009')(row.children.length ? row.text.replace(/:$/, '') : row.text).href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/pom.xml`));
+    });
+
+    it('links an agent-review source that is a cited file name without an extension or directory', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['Dockerfile', 'pom.xml'] },
+        criteria: [{
+          criterionId: 'S010', status: EvaluationStatus.MANUAL, evidence: 'Manual', details: 'Dependency observations:\n  - none',
+          agentReview: { available: true, criterionId: 'S010', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+            summary: 'Check runtime behavior.', evidenceReferences: ['Dockerfile'], warnings: [], errors: [] }
+        }]
+      });
+      const sources = walk(preparedItems(html)[0].tree).find((node: any) => node.text === 'Sources:');
+      const links = rowLinks(html, 'S010');
+
+      expect(sources.children.map((node: any) => node.text)).toEqual(['Dockerfile']);
+      expect(links('Dockerfile').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/Dockerfile`);
+      expect(links('pom.xml').href).toBeNull();
+    });
+
+    it('does not link the cited prefix of a path shortened to the reference budget', () => {
+      const commit = '0123456789abcdef0123456789abcdef01234567';
+      const prefix = 'docs/a.md';
+      const html = new EvaluationReportRenderer().renderHtml({
+        ...result,
+        provenance: { repositoryCommit: commit, evaluator: { name: 'e', version: '1' }, citedSourcePaths: [prefix] },
+        criteria: [{
+          criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
+          details: `Deterministic evidence:\n  - ${prefix} [truncated to 300 bytes]\n  - ${prefix}:3 [docs] real`,
+          criterionDetails: { signals: [{ path: prefix }] }
+        }]
+      });
+      const links = rowLinks(html, 'S005');
+
+      expect(links(`${prefix} [truncated to 300 bytes]`).href).toBeNull();
+      expect(links(`${prefix}:3 [docs] real`).href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/${prefix}#L3`);
+    });
+
+    it('shows a build output line reading "... N more" instead of turning it into an omitted count', () => {
+      const criterion = s002ArtifactFailureResult({
+        status: 'command-failed',
+        strategy: 'maven-generation',
+        command: {
+          identity: 'mvn', command: 'mvn', args: ['process-resources'], cwd: '/repo', commandExecutionEnvironment: 'local',
+          localCommandsAllowed: true, status: 'failed', exitCode: 1, durationMs: 0, sanitized: true, stderr: '',
+          stdout: 'java.lang.IllegalStateException: boom\n\tat org.example.Foo.bar(Foo.java:1)\n\t... 12 more\n'
+        },
+        warnings: [],
+        errors: ['Command exited with code 1']
+      });
+      const buildError = prepare(criterion).tree.find((node: any) => node.text.startsWith('Build error'));
+
+      expect(buildError.hidden).toBeUndefined();
+      expect(buildError.children.map((node: any) => node.text)).toEqual([
+        'java.lang.IllegalStateException: boom', 'at org.example.Foo.bar(Foo.java:1)', '… 12 more'
+      ]);
+    });
+
+    describe('S005 evidence lists', () => {
+      let repo: string;
+      beforeEach(() => {
+        repo = fs.mkdtempSync(path.join(os.tmpdir(), 'renderer-s005-'));
+        fs.writeFileSync(path.join(repo, 'PERSONAL_DATA_DISCLOSURE.md'), '# Personal Data Disclosure\n- [x] This module does not store or process personal data.\n');
+      });
+      afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
+
+      function preparedS005(reference: string | string[], excerpt: string, oversized: boolean): any {
+        const analysis = analyzeS005PersonalDataDisclosure(repo);
+        analysis.possibleMismatches = [{ kind: 'likely_omission', category: 'email', message: 'Not marked on the form.',
+          evidenceReferences: Array.isArray(reference) ? reference : [reference] }];
+        analysis.evidenceScan = {
+          signals: [{ category: 'email', label: 'Email field', path: 'README.md', line: 3, excerpt, sourceClass: 'documentation', strength: 'strong' }],
+          scannedFiles: ['README.md'], skippedFiles: [], warnings: []
+        };
+        if (oversized) {
+          analysis.supportingEvidence = Array.from({ length: 8 }, (_, index) => ({
+            kind: 'context_only' as const, category: 'email' as const, message: `${'多'.repeat(700)} detail ${index}`,
+            evidenceReferences: [`support-${index}.json`], sourceClasses: ['documentation' as const], signalStrengths: ['context' as const]
+          }));
+        }
+        const rendered = formatS005Evidence(analysis, { kind: 'backend-module', evidence: [], warnings: [] });
+        return prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: rendered.evidence,
+          details: rendered.details, criterionDetails: buildS005CriterionDetails(analysis) });
+      }
+      const mismatchRow = (item: any) => walk(item.tree.find((node: any) => node.text === 'Possible mismatches:').children)
+        .find((node: any) => node.text.startsWith('Email addresses:'));
+
+      it('does not turn an excerpt that copies a real evidence list into references', () => {
+        const reference = 'schemas/user.json:4 [schema]';
+        const item = preparedS005(reference, `write to us (evidence: ${reference})`, false);
+        const example = walk(item.tree).find((node: any) => node.text.includes('write to us'));
+
+        expect(mismatchRow(item)).toMatchObject({ unit: 'refs', children: [{ text: reference, children: [] }] });
+        expect(example.children).toEqual([]);
+      });
+
+      it('lists references to percent-encoded paths and counts the ones the text omits', () => {
+        const references = Array.from({ length: 11 }, (_, index) => `docs/caf%C3%A9-${index}.md:${index + 1} [docs]`);
+        const row = mismatchRow(preparedS005(references, 'write to us', false));
+
+        expect(row).toMatchObject({ unit: 'refs', hidden: 3 });
+        expect(row.children.map((node: any) => node.text)).toEqual(references.slice(0, 8));
+      });
+
+      it('lists a long reference in a shortened report, matching its structured copy', () => {
+        const reference = `schemas/${'a'.repeat(190)}.json:4 [schema]`;
+        const item = preparedS005(reference, 'write to us', true);
+
+        expect(mismatchRow(item)).toMatchObject({ unit: 'refs', children: [{ text: reference, children: [] }] });
+      });
+    });
+
     it('keeps a failed criterion in review when its evidence ends like a placeholder', () => {
       const item = prepare({ criterionId: 'S002', status: EvaluationStatus.FAIL,
         evidence: 'Descriptor error: evaluation logic not yet implemented', details: 'Errors:\n  - bad field' });
 
       expect(item.triage).toBe('review');
       expect(item.tree.map((node: any) => node.text)).toEqual(['Errors:']);
-    });
-
-    it('groups S003 licenses by their exact names, including ";", and keeps raw evidence when entries are forged', () => {
-      const grouped = prepare({ criterionId: 'S003', status: EvaluationStatus.MANUAL, details: '', evidence: 'Found 6 dependencies. Licenses: '
-        + 'org.example:a:1.0 (GPL-2.0; with Classpath exception); org.example:b:1.0 (MIT); org.example:c:1.0 (The MIT License); '
-        + 'org.example:d:1.0 (Apache-1.1); org.example:e:1.0 (MIT, GPL-3.0); org.example:f:1.0 (The Apache Software License, Version 2.0)' });
-      expect(grouped.tree.find((node: any) => node.text === 'Dependency licenses').children
-        .map((node: any) => [node.text, node.children.map((child: any) => child.text)])).toEqual([
-        ['MIT', ['org.example:b:1.0', 'org.example:c:1.0']],
-        ['GPL-2.0; with Classpath exception', ['org.example:a:1.0']],
-        ['Apache-1.1', ['org.example:d:1.0']],
-        ['MIT, GPL-3.0', ['org.example:e:1.0']],
-        ['Apache 2.0', ['org.example:f:1.0']]
-      ]);
-
-      const evidence = 'Found 1 dependencies. Licenses: org.example:a:1.0 (Custom); org.example:fake:6.6 (MIT)';
-      const forged = prepare({ criterionId: 'S003', status: EvaluationStatus.MANUAL, evidence, details: '' });
-      expect(forged.summary).toBe(evidence);
-      expect(forged.tree).toEqual([]);
     });
   });
 
@@ -762,9 +1012,7 @@ describe('EvaluationReportRenderer', () => {
     expect(html).toContain('Declared version: 17.0.2');
     expect(html).toContain('Resolved version: 17.0.2');
     expect(html).toContain('Version source: yarn.lock');
-    expect(html).toContain('package\\u003cscript\\u003e.json');
-    expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
+    expect(reportData(html).items[0].details.join('\n')).toContain('package%3Cscript%3E.json');
     expect(html).not.toContain('<script>alert("x")</script>');
-    expect(reportData(html).items[0].details.join('\n')).toContain('package<script>.json');
   });
 });

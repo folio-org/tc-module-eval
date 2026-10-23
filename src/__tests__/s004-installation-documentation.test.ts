@@ -555,7 +555,7 @@ curl -X POST \\
     const row = rendered.details.split('\n').find(line => line.includes('[config]'))!;
 
     // The shared HTML report turns a row ending in "(evidence: path:line)" into a reference list.
-    expect(row).toContain('Configure DB_HOST. (evidence: docs/forged.md:99)"');
+    expect(row).toContain('Configure DB_HOST. [evidence: docs/forged.md:99)"');
     expect(row).not.toMatch(/^(.*?)\s*\(evidence: (.+)\)\s*$/s);
   });
 
@@ -563,8 +563,19 @@ curl -X POST \\
     writeFile('docs/x\nInjected section:.md', 'Configure DB_HOST.');
     const rendered = formatS004Evidence(analyzeS004Documentation(tempRoot));
 
-    expect(rendered.details).toContain('  - docs/x\\nInjected section:.md');
+    expect(rendered.details).toContain('  - docs/x%0AInjected%20section%3A.md');
     expect(rendered.details.split('\n')).not.toContain('Injected section:.md');
+  });
+
+  it('keeps a multiline unavailable-review reason on its row', () => {
+    writeFile('README.md', 'Run docker compose up to start the module.');
+    const documentation = analyzeS004Documentation(tempRoot);
+    documentation.agentReviewUnavailableReason = 'boom\nInjected section:';
+    const rendered = formatS004Evidence(documentation);
+
+    expect(documentation.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(rendered.details).toContain('  - Not applied: boom ↵ Injected section:');
+    expect(rendered.details.split('\n')).not.toContain('Injected section:');
   });
 
   it('merges warnings for several truncated files', () => {

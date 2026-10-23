@@ -1579,6 +1579,30 @@ describe('S006 report formatting and criterion details', () => {
     }
   });
 
+  it('keeps a file name with line breaks inside its finding row', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docs/x\nAgent review:\n  - Not applied: injected.md', 'curl -H "X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456"\n');
+
+    const lines = formatS006Evidence(await analyzeRepo(repoPath)).details.split('\n');
+
+    expect(lines.some(line => line.includes('docs/x%0AAgent%20review%3A%0A%20%20-%20Not%20applied%3A%20injected.md:1'))).toBe(true);
+    expect(lines.filter(line => /^Agent review:/.test(line))).toHaveLength(1);
+    expect(lines.some(line => /^\s*- Not applied: injected/.test(line))).toBe(false);
+  });
+
+  it('keeps a multiline unavailable-review reason on its rows', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'docs/auth.md', 'curl -H "X-Okapi-Token: abcdefghijklmnopqrstuvwxyz123456"\n');
+    const analysis = await analyzeRepo(repoPath);
+    analysis.agentReviewUnavailableReason = 'boom\nInjected section:';
+
+    const lines = formatS006Evidence(analysis).details.split('\n');
+
+    expect(analysis.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(lines.filter(line => line.includes('boom ↵ Injected section:'))).toHaveLength(2);
+    expect(lines).not.toContain('Injected section:');
+  });
+
   it('formats fail details with deterministic production findings before manual documentation evidence', async () => {
     repoPath = createTempRepo();
     const rawProductionKey = 'sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz';

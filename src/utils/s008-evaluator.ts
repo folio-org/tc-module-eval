@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { isEurekaInterfaceCompatible } from './eureka-interface-compatibility';
 import { displayPolicyPath } from './acceptance-ledger';
+import { reportText } from './report-text';
 
 export function evaluateS008(
   moduleKind: ModuleKindResult,
@@ -110,15 +111,15 @@ export function renderS008HumanDetails(analysis: S008AnalysisResult): string {
       lines.push(`Eureka component family: ${component.familyId}@${component.version} [${component.moduleIdentities.join(', ')}]; descriptor=${source}`);
     }
   }
-  for (const [sourcePath, digest] of Object.entries(analysis.declarations.fileHashes)) lines.push(`Declaration source: ${sourcePath} (${digest})`);
+  for (const [sourcePath, digest] of Object.entries(analysis.declarations.fileHashes)) lines.push(`Declaration source: ${reportText(sourcePath)} (${digest})`);
   if (analysis.findings.length) {
     lines.push('Interface findings:');
     for (const item of analysis.findings) {
-      lines.push(`  - ${item.declaration.optional ? 'optional' : 'required'} ${item.declaration.id} ${item.declaration.version}: ${item.classification}`);
+      lines.push(`  - ${item.declaration.optional ? 'optional' : 'required'} ${reportText(`${item.declaration.id} ${item.declaration.version}`)}: ${item.classification}`);
       for (const provider of item.candidates) lines.push(`    - ${provider.moduleId} ${provider.version}: ${provider.compatible ? 'compatible' : 'incompatible'}, ${provider.eligibility}${provider.familyId ? ` (${provider.familyId})` : ''}; source=${provider.source}; descriptor=${provider.descriptorHash}`);
     }
   }
-  if (analysis.policyDiagnostics.length) lines.push('Policy diagnostics:', ...analysis.policyDiagnostics.map(item => `  - ${item.code}: ${item.message}`));
-  if (analysis.declarations.diagnostics.length) lines.push('Declaration diagnostics:', ...analysis.declarations.diagnostics.map(item => `  - ${item.code}: ${item.message}`));
+  if (analysis.policyDiagnostics.length) lines.push('Policy diagnostics:', ...analysis.policyDiagnostics.map(item => `  - ${item.code}: ${reportText(item.message)}`));
+  if (analysis.declarations.diagnostics.length) lines.push('Declaration diagnostics:', ...analysis.declarations.diagnostics.map(item => `  - ${item.code}: ${reportText(item.message)}`));
   return lines.join('\n');
 }

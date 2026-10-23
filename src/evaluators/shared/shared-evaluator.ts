@@ -49,6 +49,7 @@ import { evaluateS009, renderS009HumanDetails } from '../../utils/s009-evaluator
 import { collectS010Evidence } from '../../utils/s010-evidence';
 import { evaluateS010 } from '../../utils/s010-evaluator';
 import { renderS010HumanDetails } from '../../utils/s010-report-details';
+import { reportText } from '../../utils/report-text';
 import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
 
 /**
@@ -350,8 +351,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     return [
       heading,
       'Module-kind evidence:',
-      ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
-      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
+      ...moduleKind.evidence.map(evidence => `  - ${reportText(evidence)}`),
+      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${reportText(warning)}`)] : [])
     ].join('\n');
   }
 }
