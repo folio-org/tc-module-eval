@@ -214,15 +214,16 @@ function frontendFindings(evidence: BuildEvidence, sections: S007PolicySection[]
   const findings: S012Finding[] = [];
   if (hasFile(evidence, 'package-json')) {
     const ci = ciSignals(evidence, table).filter(signal => PACKAGE_MANAGERS.includes(signal.tool));
-    const field = evidence.declarations.filter(item => item.source === 'package-manager-field');
+    const fieldSignals = evidence.declarations.filter(item => item.source === 'package-manager-field')
+      .map(item => ({ tool: item.tool, via: `packageManager in ${reportPath(item.path)}`, path: item.path }));
     const lockfiles = evidence.files.filter(file => LOCKFILE_MANAGERS[file.kind]);
     const signals = [
       ...ci,
-      ...field.map(item => ({ tool: item.tool, via: `packageManager in ${reportPath(item.path)}`, path: item.path })),
+      ...fieldSignals,
       ...lockfiles.map(file => ({ tool: LOCKFILE_MANAGERS[file.kind]!, via: reportPath(file.path), path: file.path }))
     ];
     // CI decides; without CI the packageManager field, and then the lockfiles.
-    const deciding = ci.length ? ci : field.length ? signals.slice(ci.length, ci.length + field.length) : signals;
+    const deciding = ci.length ? ci : fieldSignals.length ? fieldSignals : signals;
     const active = unique(deciding.map(signal => signal.tool));
     const contrary = signals.filter(signal => !active.includes(signal.tool) || active.length > 1);
     if (active.length === 0) {

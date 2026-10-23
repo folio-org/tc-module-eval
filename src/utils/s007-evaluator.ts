@@ -264,7 +264,7 @@ export function compareObservationToConstraint(
 }
 
 /** The semver range a policy constraint allows, or undefined when it has none (latest-lts) or cannot be read. */
-export function constraintToRange(constraint: S007VersionConstraint): string | undefined {
+function constraintToRange(constraint: S007VersionConstraint): string | undefined {
   switch (constraint.kind) {
     case 'exact': {
       const exact = normalizeExactVersion(constraint.expression);

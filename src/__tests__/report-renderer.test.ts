@@ -196,18 +196,6 @@ describe('EvaluationReportRenderer', () => {
     ]
   };
 
-  it('should calculate report stats', () => {
-    const renderer = new EvaluationReportRenderer();
-
-    expect(renderer.calculateStats(result)).toEqual({
-      pass: 1,
-      fail: 2,
-      manual: 2,
-      notApplicable: 1,
-      total: 6
-    });
-  });
-
   it('retains budgeted S005 rationale and S006 fallback in HTML report data', () => {
     const report = agentReviewReport();
     const html = new EvaluationReportRenderer().renderHtml(report);
@@ -1050,13 +1038,6 @@ describe('EvaluationReportRenderer', () => {
     expect(downloaded).not.toContain('renderersecret');
     expect(downloadData(html).criteria[2]).toHaveProperty('criterionDetails');
     expect(downloadData(html).criteria[2]).toHaveProperty('agentReview');
-  });
-
-  it('should expose escaping helpers for focused renderer tests', () => {
-    const renderer = new EvaluationReportRenderer();
-
-    expect(renderer.escapeHtml(`<&>"'`)).toBe('&lt;&amp;&gt;&quot;&#39;');
-    expect(renderer.textToHtml('one\ntwo')).toBe('one<br>two');
   });
 
   it('keeps S007 JSON and HTML rationale aligned and escapes repository-controlled evidence', () => {

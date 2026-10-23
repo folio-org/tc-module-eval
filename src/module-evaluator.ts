@@ -84,7 +84,7 @@ export class ModuleEvaluator {
 
       // Validate criteria filter if provided
       if (this.config.criteriaFilter) {
-        await this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
+        this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
       }
 
       // Get repository info
@@ -199,7 +199,7 @@ export class ModuleEvaluator {
    * @param criteriaFilter Array of criterion IDs to validate
    * @param evaluator The language evaluator being used
    */
-  private async validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): Promise<void> {
+  private validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): void {
     // Get available criteria IDs from the evaluator
     const availableCriteria = Array.from(getCriteriaForLanguage(evaluator.getLanguage()));
 

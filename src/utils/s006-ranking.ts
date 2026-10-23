@@ -50,7 +50,7 @@ export function strongestS006ReportFindings(
     .slice(0, limit);
 }
 
-export function rankS006FindingImpact(finding: S006SensitiveInformationFinding): number {
+function rankS006FindingImpact(finding: S006SensitiveInformationFinding): number {
   return finding.statusImpact === 'deterministic_fail' ? 0 : 1;
 }
 
