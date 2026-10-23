@@ -79,6 +79,20 @@ agent review for broader cited analysis, for example
 `--criterion-agent-opencode --criterion-agent-criteria S010`. Agent advice never changes
 the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-third-party-system-resilience).
 
+### Remote Lookups
+
+Evaluation is offline by default. S014 (assigned to exactly one application on the FOLIO LSP platform)
+needs to read `folio-org/platform-lsp` and FAR, so it is `manual` unless you opt in:
+
+```bash
+folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
+```
+
+`--application` is the application named in the evaluation's Jira task. `--platform-ref` picks the
+platform-lsp branch, tag or commit (default `snapshot`). Remote reads are read-only, allowlisted and
+bounded, and each one is recorded in the report. See
+[Criterion Notes](docs/criterion-notes.md#s014-application-assignment).
+
 ### For Local Development: Use Devcontainer
 
 For local development, use the provided devcontainer configuration in `.devcontainer/`. The container provides isolation with all required tools (Node.js, Java 21, Maven, Gradle).

@@ -15,7 +15,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S007: 'Officially supported technologies',
   S008: 'FOLIO interface usage',
   S009: 'FOLIO library dependencies',
-  S010: 'Third-party system resilience'
+  S010: 'Third-party system resilience',
+  S014: 'Application assignment'
 };
 
 function escapeHtml(text: string): string {

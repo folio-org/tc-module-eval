@@ -1829,8 +1829,23 @@
     {
       "criterionId": "S014",
       "status": "manual",
-      "evidence": "Monitoring and logging - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "S014 manual: Not checked: remote lookups are off. Rerun with --allow-remote-lookups to check which FOLIO LSP platform applications list mod-rtac-cache.",
+      "details": "What to do: Rerun with --allow-remote-lookups --application <the application the Jira task names> so the tool can read the platform-lsp descriptor and FAR, or check by hand that the module is in exactly one platform application and that it is the one the Jira task names.\nModule name: mod-rtac-cache (from the artifactId in pom.xml)",
+      "criterionDetails": {
+        "criterionId": "S014",
+        "status": "manual",
+        "summary": "S014 manual: Not checked: remote lookups are off. Rerun with --allow-remote-lookups to check which FOLIO LSP platform applications list mod-rtac-cache.",
+        "moduleKind": "backend-module",
+        "moduleName": {
+          "name": "mod-rtac-cache",
+          "source": "pom",
+          "path": "pom.xml"
+        },
+        "remoteLookups": false,
+        "memberships": [],
+        "unresolvedApplications": [],
+        "remoteEvidence": []
+      }
     },
     {
       "criterionId": "B001",

@@ -1,0 +1,2473 @@
+{
+  "capturedAt": "2026-10-23T05:47:34.950Z",
+  "description": "folio-org/platform-lsp snapshot at f14ebaef59a40790dd43e8e9269ab1e228abdaa5 (R1-2027-SNAPSHOT.100200000003371), its applications from FAR, and the templates of app-edge-locate",
+  "responses": {
+    "https://api.github.com/repos/folio-org/platform-lsp/commits?sha=snapshot&per_page=1": {
+      "status": 200,
+      "body": [
+        {
+          "sha": "f14ebaef59a40790dd43e8e9269ab1e228abdaa5",
+          "node_id": "C_kwDONHr-0toAKGYxNGViYWVmNTlhNDA3OTBkZDQzZThlOTI2OWFiMWUyMjhhYmRhYTU",
+          "commit": {
+            "author": {
+              "name": "eureka-ci[bot]",
+              "email": "223025417+eureka-ci[bot]@users.noreply.github.com",
+              "date": "2026-10-23T04:07:15Z"
+            },
+            "committer": {
+              "name": "eureka-ci[bot]",
+              "email": "223025417+eureka-ci[bot]@users.noreply.github.com",
+              "date": "2026-10-23T04:07:15Z"
+            },
+            "message": "Update yarn.lock.",
+            "tree": {
+              "sha": "ad365ecfa10dd65c38812c35c41a153ba10fdd6d",
+              "url": "https://api.github.com/repos/folio-org/platform-lsp/git/trees/ad365ecfa10dd65c38812c35c41a153ba10fdd6d"
+            },
+            "url": "https://api.github.com/repos/folio-org/platform-lsp/git/commits/f14ebaef59a40790dd43e8e9269ab1e228abdaa5",
+            "comment_count": 0,
+            "verification": {
+              "verified": false,
+              "reason": "unsigned",
+              "signature": null,
+              "payload": null,
+              "verified_at": null
+            }
+          },
+          "url": "https://api.github.com/repos/folio-org/platform-lsp/commits/f14ebaef59a40790dd43e8e9269ab1e228abdaa5",
+          "html_url": "https://github.com/folio-org/platform-lsp/commit/f14ebaef59a40790dd43e8e9269ab1e228abdaa5",
+          "comments_url": "https://api.github.com/repos/folio-org/platform-lsp/commits/f14ebaef59a40790dd43e8e9269ab1e228abdaa5/comments",
+          "author": {
+            "login": "eureka-ci[bot]",
+            "id": 223025417,
+            "node_id": "BOT_kgDODUsZCQ",
+            "avatar_url": "https://avatars.githubusercontent.com/u/160144272?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/eureka-ci%5Bbot%5D",
+            "html_url": "https://github.com/apps/eureka-ci",
+            "followers_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/followers",
+            "following_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/following{/other_user}",
+            "gists_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/subscriptions",
+            "organizations_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/orgs",
+            "repos_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/repos",
+            "events_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/received_events",
+            "type": "Bot",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "committer": {
+            "login": "eureka-ci[bot]",
+            "id": 223025417,
+            "node_id": "BOT_kgDODUsZCQ",
+            "avatar_url": "https://avatars.githubusercontent.com/u/160144272?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/eureka-ci%5Bbot%5D",
+            "html_url": "https://github.com/apps/eureka-ci",
+            "followers_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/followers",
+            "following_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/following{/other_user}",
+            "gists_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/subscriptions",
+            "organizations_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/orgs",
+            "repos_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/repos",
+            "events_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/eureka-ci%5Bbot%5D/received_events",
+            "type": "Bot",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "parents": [
+            {
+              "sha": "14fab951fd1c0852656e5b837197f8bd24f7102a",
+              "url": "https://api.github.com/repos/folio-org/platform-lsp/commits/14fab951fd1c0852656e5b837197f8bd24f7102a",
+              "html_url": "https://github.com/folio-org/platform-lsp/commit/14fab951fd1c0852656e5b837197f8bd24f7102a"
+            }
+          ]
+        }
+      ]
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-acquisitions-2.1.0-SNAPSHOT.100200000012496&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-acquisitions",
+            "version": "2.1.0-SNAPSHOT.100200000012496",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO Acquisitions application",
+            "id": "app-acquisitions-2.1.0-SNAPSHOT.100200000012496",
+            "modules": [
+              {
+                "name": "mod-orders-storage",
+                "version": "15.0.0-SNAPSHOT.2372",
+                "id": "mod-orders-storage-15.0.0-SNAPSHOT.2372"
+              },
+              {
+                "name": "mod-organizations",
+                "version": "2.3.0-SNAPSHOT.2080",
+                "id": "mod-organizations-2.3.0-SNAPSHOT.2080"
+              },
+              {
+                "name": "mod-organizations-storage",
+                "version": "5.1.0-SNAPSHOT.2110",
+                "id": "mod-organizations-storage-5.1.0-SNAPSHOT.2110"
+              },
+              {
+                "name": "mod-orders",
+                "version": "14.0.0-SNAPSHOT.2627",
+                "id": "mod-orders-14.0.0-SNAPSHOT.2627"
+              },
+              {
+                "name": "mod-invoice",
+                "version": "7.0.0-SNAPSHOT.2155",
+                "id": "mod-invoice-7.0.0-SNAPSHOT.2155"
+              },
+              {
+                "name": "mod-invoice-storage",
+                "version": "7.0.0-SNAPSHOT.2168",
+                "id": "mod-invoice-storage-7.0.0-SNAPSHOT.2168"
+              },
+              {
+                "name": "mod-finance",
+                "version": "6.0.0-SNAPSHOT.2072",
+                "id": "mod-finance-6.0.0-SNAPSHOT.2072"
+              },
+              {
+                "name": "mod-finance-storage",
+                "version": "9.0.0-SNAPSHOT.2155",
+                "id": "mod-finance-storage-9.0.0-SNAPSHOT.2155"
+              },
+              {
+                "name": "edge-orders",
+                "version": "4.0.0-SNAPSHOT.2058",
+                "id": "edge-orders-4.0.0-SNAPSHOT.2058"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_organizations",
+                "version": "7.1.1099000000000241",
+                "id": "folio_organizations-7.1.1099000000000241"
+              },
+              {
+                "name": "folio_orders",
+                "version": "10.0.1099000000001164",
+                "id": "folio_orders-10.0.1099000000001164"
+              },
+              {
+                "name": "folio_invoice",
+                "version": "8.1.1099000000000572",
+                "id": "folio_invoice-8.1.1099000000000572"
+              },
+              {
+                "name": "folio_finance",
+                "version": "9.1.1099000000000737",
+                "id": "folio_finance-9.1.1099000000000737"
+              },
+              {
+                "name": "folio_receiving",
+                "version": "9.0.1099000000000601",
+                "id": "folio_receiving-9.0.1099000000000601"
+              },
+              {
+                "name": "folio_claims",
+                "version": "3.0.1099000000000336",
+                "id": "folio_claims-3.0.1099000000000336"
+              },
+              {
+                "name": "folio_acquisition-units",
+                "version": "7.1.1099000000000145",
+                "id": "folio_acquisition-units-7.1.1099000000000145"
+              },
+              {
+                "name": "folio_plugin-find-organization",
+                "version": "6.2.1099000000000102",
+                "id": "folio_plugin-find-organization-6.2.1099000000000102"
+              },
+              {
+                "name": "folio_plugin-find-contact",
+                "version": "6.2.1099000000000100",
+                "id": "folio_plugin-find-contact-6.2.1099000000000100"
+              },
+              {
+                "name": "folio_plugin-find-interface",
+                "version": "6.2.1099000000000097",
+                "id": "folio_plugin-find-interface-6.2.1099000000000097"
+              },
+              {
+                "name": "folio_plugin-find-fund",
+                "version": "4.2.1099000000000085",
+                "id": "folio_plugin-find-fund-4.2.1099000000000085"
+              },
+              {
+                "name": "folio_plugin-find-po-line",
+                "version": "7.0.1099000000000184",
+                "id": "folio_plugin-find-po-line-7.0.1099000000000184"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-agreements-1.1.0-SNAPSHOT.100200000011997&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-agreements",
+            "version": "1.1.0-SNAPSHOT.100200000011997",
+            "dependencies": [
+              {
+                "name": "app-licenses",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO Agreements application",
+            "id": "app-agreements-1.1.0-SNAPSHOT.100200000011997",
+            "modules": [
+              {
+                "name": "mod-agreements",
+                "version": "7.5.0-SNAPSHOT.2063",
+                "id": "mod-agreements-7.5.0-SNAPSHOT.2063"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_agreements",
+                "version": "12.2.1099000000002114",
+                "id": "folio_agreements-12.2.1099000000002114"
+              },
+              {
+                "name": "folio_plugin-find-agreement",
+                "version": "12.2.1099000000000170",
+                "id": "folio_plugin-find-agreement-12.2.1099000000000170"
+              },
+              {
+                "name": "folio_plugin-find-eresource",
+                "version": "8.2.1099000000000171",
+                "id": "folio_plugin-find-eresource-8.2.1099000000000171"
+              },
+              {
+                "name": "folio_local-kb-admin",
+                "version": "9.2.1099000000000253",
+                "id": "folio_local-kb-admin-9.2.1099000000000253"
+              },
+              {
+                "name": "folio_erm-comparisons",
+                "version": "8.2.1099000000000234",
+                "id": "folio_erm-comparisons-8.2.1099000000000234"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-authority-records-1.1.0-SNAPSHOT.100200000007501&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-authority-records",
+            "version": "1.1.0-SNAPSHOT.100200000007501",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-quick-marc",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Authority Records Application",
+            "id": "app-authority-records-1.1.0-SNAPSHOT.100200000007501",
+            "modules": [
+              {
+                "name": "mod-entities-links",
+                "version": "5.1.0-SNAPSHOT.2494",
+                "id": "mod-entities-links-5.1.0-SNAPSHOT.2494"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_marc-authorities",
+                "version": "8.1.1099000000001747",
+                "id": "folio_marc-authorities-8.1.1099000000001747"
+              },
+              {
+                "name": "folio_plugin-find-authority",
+                "version": "6.0.1099000000000153",
+                "id": "folio_plugin-find-authority-6.0.1099000000000153"
+              },
+              {
+                "name": "folio_stripes-authority-components",
+                "version": "7.1.1099000000000281",
+                "id": "folio_stripes-authority-components-7.1.1099000000000281"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-bulk-edit-2.1.0-SNAPSHOT.100200000011833&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-bulk-edit",
+            "version": "2.1.0-SNAPSHOT.100200000011833",
+            "dependencies": [
+              {
+                "name": "app-fqm",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-data-import",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO bulk-edit application",
+            "id": "app-bulk-edit-2.1.0-SNAPSHOT.100200000011833",
+            "modules": [
+              {
+                "name": "mod-bulk-operations",
+                "version": "2.4.0-SNAPSHOT.2748",
+                "id": "mod-bulk-operations-2.4.0-SNAPSHOT.2748"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_bulk-edit",
+                "version": "5.1.1099000000001200",
+                "id": "folio_bulk-edit-5.1.1099000000001200"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-consortia-1.5.0-SNAPSHOT.100200000012661&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-consortia",
+            "version": "1.5.0-SNAPSHOT.100200000012661",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for Quesnelia",
+            "id": "app-consortia-1.5.0-SNAPSHOT.100200000012661",
+            "modules": [
+              {
+                "name": "mod-consortia-keycloak",
+                "version": "2.0.0-SNAPSHOT.2177",
+                "id": "mod-consortia-keycloak-2.0.0-SNAPSHOT.2177"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-consortia-manager-1.5.0-SNAPSHOT.100200000012325&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-consortia-manager",
+            "version": "1.5.0-SNAPSHOT.100200000012325",
+            "dependencies": [
+              {
+                "name": "app-consortia",
+                "version": "^1.4.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for FOLIO",
+            "id": "app-consortia-manager-1.5.0-SNAPSHOT.100200000012325",
+            "modules": [],
+            "uiModules": [
+              {
+                "name": "folio_consortia-settings",
+                "version": "3.2.1099000000000250",
+                "id": "folio_consortia-settings-3.2.1099000000000250"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-dashboard-1.1.0-SNAPSHOT.100200000010129&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-dashboard",
+            "version": "1.1.0-SNAPSHOT.100200000010129",
+            "dependencies": [
+              {
+                "name": "app-service-interaction",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO Agreements application",
+            "id": "app-dashboard-1.1.0-SNAPSHOT.100200000010129",
+            "modules": [],
+            "uiModules": [
+              {
+                "name": "folio_dashboard",
+                "version": "7.2.1099000000000281",
+                "id": "folio_dashboard-7.2.1099000000000281"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-data-export-1.1.0-SNAPSHOT.100200000010483&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-data-export",
+            "version": "1.1.0-SNAPSHOT.100200000010483",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-authority-records",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the data export application",
+            "id": "app-data-export-1.1.0-SNAPSHOT.100200000010483",
+            "modules": [
+              {
+                "name": "mod-data-export",
+                "version": "5.5.0-SNAPSHOT.2760",
+                "id": "mod-data-export-5.5.0-SNAPSHOT.2760"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_data-export",
+                "version": "7.1.1099000000000329",
+                "id": "folio_data-export-7.1.1099000000000329"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-data-import-1.1.0-SNAPSHOT.100200000004075&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-data-import",
+            "version": "1.1.0-SNAPSHOT.100200000004075",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-authority-records",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Data import application",
+            "id": "app-data-import-1.1.0-SNAPSHOT.100200000004075",
+            "modules": [
+              {
+                "name": "mod-data-import",
+                "version": "3.5.0-SNAPSHOT.2066",
+                "id": "mod-data-import-3.5.0-SNAPSHOT.2066"
+              },
+              {
+                "name": "mod-source-record-manager",
+                "version": "4.1.0-SNAPSHOT.2263",
+                "id": "mod-source-record-manager-4.1.0-SNAPSHOT.2263"
+              },
+              {
+                "name": "mod-di-converter-storage",
+                "version": "2.6.0-SNAPSHOT.2158",
+                "id": "mod-di-converter-storage-2.6.0-SNAPSHOT.2158"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_data-import",
+                "version": "11.0.1099000000000418",
+                "id": "folio_data-import-11.0.1099000000000418"
+              },
+              {
+                "name": "folio_plugin-find-import-profile",
+                "version": "10.0.1099000000000108",
+                "id": "folio_plugin-find-import-profile-10.0.1099000000000108"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-dcb-2.1.0-SNAPSHOT.100200000011015&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-dcb",
+            "version": "2.1.0-SNAPSHOT.100200000011015",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for DCB related transactions in folio",
+            "id": "app-dcb-2.1.0-SNAPSHOT.100200000011015",
+            "modules": [
+              {
+                "name": "edge-dcb",
+                "version": "2.1.0-SNAPSHOT.2068",
+                "id": "edge-dcb-2.1.0-SNAPSHOT.2068"
+              },
+              {
+                "name": "mod-dcb",
+                "version": "2.1.0-SNAPSHOT.2371",
+                "id": "mod-dcb-2.1.0-SNAPSHOT.2371"
+              },
+              {
+                "name": "mod-circulation-item",
+                "version": "2.1.0-SNAPSHOT.2067",
+                "id": "mod-circulation-item-2.1.0-SNAPSHOT.2067"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-ebsconet-1.2.0-SNAPSHOT.100200000009759&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-ebsconet",
+            "version": "1.2.0-SNAPSHOT.100200000009759",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO Ebsconet integration",
+            "id": "app-ebsconet-1.2.0-SNAPSHOT.100200000009759",
+            "modules": [
+              {
+                "name": "mod-ebsconet",
+                "version": "3.0.0-SNAPSHOT.2034",
+                "id": "mod-ebsconet-3.0.0-SNAPSHOT.2034"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-edge-complete-2.3.0-SNAPSHOT.100200000011121&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-edge-complete",
+            "version": "2.3.0-SNAPSHOT.100200000011121",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-agreements",
+                "version": "^1.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application comprised of Folio edge modules",
+            "id": "app-edge-complete-2.3.0-SNAPSHOT.100200000011121",
+            "modules": [
+              {
+                "name": "edge-courses",
+                "version": "1.8.0-SNAPSHOT.2065",
+                "id": "edge-courses-1.8.0-SNAPSHOT.2065"
+              },
+              {
+                "name": "edge-erm",
+                "version": "1.6.0-SNAPSHOT.2056",
+                "id": "edge-erm-1.6.0-SNAPSHOT.2056"
+              },
+              {
+                "name": "edge-connexion",
+                "version": "1.5.1-SNAPSHOT.2020",
+                "id": "edge-connexion-1.5.1-SNAPSHOT.2020"
+              },
+              {
+                "name": "edge-dematic",
+                "version": "3.1.0-SNAPSHOT.2101",
+                "id": "edge-dematic-3.1.0-SNAPSHOT.2101"
+              },
+              {
+                "name": "edge-caiasoft",
+                "version": "3.1.0-SNAPSHOT.2066",
+                "id": "edge-caiasoft-3.1.0-SNAPSHOT.2066"
+              },
+              {
+                "name": "edge-sip2",
+                "version": "4.1.0-SNAPSHOT.2146",
+                "id": "edge-sip2-4.1.0-SNAPSHOT.2146"
+              },
+              {
+                "name": "edge-patron",
+                "version": "5.5.0-SNAPSHOT.2011",
+                "id": "edge-patron-5.5.0-SNAPSHOT.2011"
+              },
+              {
+                "name": "edge-ncip",
+                "version": "1.12.0-SNAPSHOT.2039",
+                "id": "edge-ncip-1.12.0-SNAPSHOT.2039"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-eholdings-1.1.0-SNAPSHOT.100200000012595&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-eholdings",
+            "version": "1.1.0-SNAPSHOT.100200000012595",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "eHoldings Application",
+            "id": "app-eholdings-1.1.0-SNAPSHOT.100200000012595",
+            "modules": [
+              {
+                "name": "mod-kb-ebsco-java",
+                "version": "8.0.0-SNAPSHOT.2363",
+                "id": "mod-kb-ebsco-java-8.0.0-SNAPSHOT.2363"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_eholdings",
+                "version": "11.2.1099000000000756",
+                "id": "folio_eholdings-11.2.1099000000000756"
+              },
+              {
+                "name": "folio_plugin-find-package-title",
+                "version": "7.1.1099000000000137",
+                "id": "folio_plugin-find-package-title-7.1.1099000000000137"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-erm-usage-3.1.0-SNAPSHOT.100200000012271&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-erm-usage",
+            "version": "3.1.0-SNAPSHOT.100200000012271",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-agreements",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for ERM Usage platform installation for Quesnelia",
+            "id": "app-erm-usage-3.1.0-SNAPSHOT.100200000012271",
+            "modules": [
+              {
+                "name": "mod-erm-usage",
+                "version": "6.0.0-SNAPSHOT.2172",
+                "id": "mod-erm-usage-6.0.0-SNAPSHOT.2172"
+              },
+              {
+                "name": "mod-erm-usage-harvester",
+                "version": "6.0.0-SNAPSHOT.2198",
+                "id": "mod-erm-usage-harvester-6.0.0-SNAPSHOT.2198"
+              },
+              {
+                "name": "mod-eusage-reports",
+                "version": "3.1.1-SNAPSHOT.2024",
+                "id": "mod-eusage-reports-3.1.1-SNAPSHOT.2024"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_plugin-eusage-reports",
+                "version": "4.1.1099000000000246",
+                "id": "folio_plugin-eusage-reports-4.1.1099000000000246"
+              },
+              {
+                "name": "folio_erm-usage",
+                "version": "13.0.1099000000001172",
+                "id": "folio_erm-usage-13.0.1099000000001172"
+              },
+              {
+                "name": "folio_plugin-find-erm-usage-data-provider",
+                "version": "7.1.1099000000000183",
+                "id": "folio_plugin-find-erm-usage-data-provider-7.1.1099000000000183"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-finc-1.1.0-SNAPSHOT.100200000010401&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-finc",
+            "version": "1.1.0-SNAPSHOT.100200000010401",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^1.2.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO finc application",
+            "id": "app-finc-1.1.0-SNAPSHOT.100200000010401",
+            "modules": [
+              {
+                "name": "mod-finc-config",
+                "version": "7.1.0-SNAPSHOT.2011",
+                "id": "mod-finc-config-7.1.0-SNAPSHOT.2011"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_finc-config",
+                "version": "8.1.1099000000000595",
+                "id": "folio_finc-config-8.1.1099000000000595"
+              },
+              {
+                "name": "folio_finc-select",
+                "version": "8.2.1099000000000455",
+                "id": "folio_finc-select-8.2.1099000000000455"
+              },
+              {
+                "name": "folio_plugin-find-finc-metadata-collection",
+                "version": "8.1.1099000000000237",
+                "id": "folio_plugin-find-finc-metadata-collection-8.1.1099000000000237"
+              },
+              {
+                "name": "folio_plugin-find-finc-metadata-source",
+                "version": "8.1.1099000000000186",
+                "id": "folio_plugin-find-finc-metadata-source-8.1.1099000000000186"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-fqm-2.1.0-SNAPSHOT.100200000012388&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-fqm",
+            "version": "2.1.0-SNAPSHOT.100200000012388",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO FQM application",
+            "id": "app-fqm-2.1.0-SNAPSHOT.100200000012388",
+            "modules": [
+              {
+                "name": "mod-fqm-manager",
+                "version": "4.2.0-SNAPSHOT.3997",
+                "id": "mod-fqm-manager-4.2.0-SNAPSHOT.3997"
+              },
+              {
+                "name": "edge-fqm",
+                "version": "4.2.0-SNAPSHOT.2138",
+                "id": "edge-fqm-4.2.0-SNAPSHOT.2138"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_plugin-query-builder",
+                "version": "3.0.2099000000001713",
+                "id": "folio_plugin-query-builder-3.0.2099000000001713"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-gobi-1.2.0-SNAPSHOT.100200000011797&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-gobi",
+            "version": "1.2.0-SNAPSHOT.100200000011797",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO Gobi integration",
+            "id": "app-gobi-1.2.0-SNAPSHOT.100200000011797",
+            "modules": [
+              {
+                "name": "mod-gobi",
+                "version": "4.0.0-SNAPSHOT.2096",
+                "id": "mod-gobi-4.0.0-SNAPSHOT.2096"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_gobi-settings",
+                "version": "4.2.1099000000000180",
+                "id": "folio_gobi-settings-4.2.1099000000000180"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-inn-reach-2.1.0-SNAPSHOT.100200000011936&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-inn-reach",
+            "version": "2.1.0-SNAPSHOT.100200000011936",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for mod-inn-reach project in the folio",
+            "id": "app-inn-reach-2.1.0-SNAPSHOT.100200000011936",
+            "modules": [
+              {
+                "name": "mod-inn-reach",
+                "version": "4.1.0-SNAPSHOT.2306",
+                "id": "mod-inn-reach-4.1.0-SNAPSHOT.2306"
+              },
+              {
+                "name": "edge-inn-reach",
+                "version": "4.1.0-SNAPSHOT.2152",
+                "id": "edge-inn-reach-4.1.0-SNAPSHOT.2152"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_inn-reach",
+                "version": "6.2.1099000000000274",
+                "id": "folio_inn-reach-6.2.1099000000000274"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-inventory-1.1.0-SNAPSHOT.100200000005180&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-inventory",
+            "version": "1.1.0-SNAPSHOT.100200000005180",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Inventory Application",
+            "id": "app-inventory-1.1.0-SNAPSHOT.100200000005180",
+            "modules": [
+              {
+                "name": "edge-inventory",
+                "version": "2.4.0-SNAPSHOT.2162",
+                "id": "edge-inventory-2.4.0-SNAPSHOT.2162"
+              },
+              {
+                "name": "mod-inventory",
+                "version": "22.1.0-SNAPSHOT.2376",
+                "id": "mod-inventory-22.1.0-SNAPSHOT.2376"
+              },
+              {
+                "name": "mod-inventory-storage",
+                "version": "31.0.0-SNAPSHOT.2960",
+                "id": "mod-inventory-storage-31.0.0-SNAPSHOT.2960"
+              },
+              {
+                "name": "mod-inventory-update",
+                "version": "5.2.3-SNAPSHOT.2291",
+                "id": "mod-inventory-update-5.2.3-SNAPSHOT.2291"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_inventory",
+                "version": "14.1.1099000000002193",
+                "id": "folio_inventory-14.1.1099000000002193"
+              },
+              {
+                "name": "folio_inventory-import",
+                "version": "4.1.2099000000000276",
+                "id": "folio_inventory-import-4.1.2099000000000276"
+              },
+              {
+                "name": "folio_plugin-create-inventory-records",
+                "version": "7.0.1099000000000165",
+                "id": "folio_plugin-create-inventory-records-7.0.1099000000000165"
+              },
+              {
+                "name": "folio_plugin-find-instance",
+                "version": "10.0.1099000000000208",
+                "id": "folio_plugin-find-instance-10.0.1099000000000208"
+              },
+              {
+                "name": "folio_stripes-inventory-components",
+                "version": "2.1.1099000000000047",
+                "id": "folio_stripes-inventory-components-2.1.1099000000000047"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-licenses-1.1.0-SNAPSHOT.100200000010972&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-licenses",
+            "version": "1.1.0-SNAPSHOT.100200000010972",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO Licenses application",
+            "id": "app-licenses-1.1.0-SNAPSHOT.100200000010972",
+            "modules": [
+              {
+                "name": "mod-licenses",
+                "version": "6.4.0-SNAPSHOT.333",
+                "id": "mod-licenses-6.4.0-SNAPSHOT.333"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_licenses",
+                "version": "12.2.1099000000000397",
+                "id": "folio_licenses-12.2.1099000000000397"
+              },
+              {
+                "name": "folio_plugin-find-license",
+                "version": "12.2.1099000000000166",
+                "id": "folio_plugin-find-license-12.2.1099000000000166"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-linked-data-2.1.0-SNAPSHOT.100200000012478&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-linked-data",
+            "version": "2.1.0-SNAPSHOT.100200000012478",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-authority-records",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Linked Data application installation",
+            "id": "app-linked-data-2.1.0-SNAPSHOT.100200000012478",
+            "modules": [
+              {
+                "name": "mod-linked-data",
+                "version": "3.0.0-SNAPSHOT.2611",
+                "id": "mod-linked-data-3.0.0-SNAPSHOT.2611"
+              },
+              {
+                "name": "mod-linked-data-import",
+                "version": "2.0.0-SNAPSHOT.2130",
+                "id": "mod-linked-data-import-2.0.0-SNAPSHOT.2130"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_ld-folio-wrapper",
+                "version": "2.0.6099000000000525",
+                "id": "folio_ld-folio-wrapper-2.0.6099000000000525"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-lists-1.2.0-SNAPSHOT.100200000012394&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-lists",
+            "version": "1.2.0-SNAPSHOT.100200000012394",
+            "dependencies": [
+              {
+                "name": "app-fqm",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO Lists application",
+            "id": "app-lists-1.2.0-SNAPSHOT.100200000012394",
+            "modules": [
+              {
+                "name": "mod-lists",
+                "version": "4.0.2-SNAPSHOT.2362",
+                "id": "mod-lists-4.0.2-SNAPSHOT.2362"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_lists",
+                "version": "5.0.2099000000001139",
+                "id": "folio_lists-5.0.2099000000001139"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-marc-migrations-3.1.0-SNAPSHOT.100200000011697&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-marc-migrations",
+            "version": "3.1.0-SNAPSHOT.100200000011697",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-authority-records",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-data-import",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "MARC Migrations Application",
+            "id": "app-marc-migrations-3.1.0-SNAPSHOT.100200000011697",
+            "modules": [
+              {
+                "name": "mod-marc-migrations",
+                "version": "3.1.0-SNAPSHOT.2196",
+                "id": "mod-marc-migrations-3.1.0-SNAPSHOT.2196"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-marc-storage-1.1.0-SNAPSHOT.100200000010748&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-marc-storage",
+            "version": "1.1.0-SNAPSHOT.100200000010748",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "MARC Storage Application",
+            "id": "app-marc-storage-1.1.0-SNAPSHOT.100200000010748",
+            "modules": [
+              {
+                "name": "mod-source-record-storage",
+                "version": "6.1.0-SNAPSHOT.2260",
+                "id": "mod-source-record-storage-6.1.0-SNAPSHOT.2260"
+              },
+              {
+                "name": "mod-record-specifications",
+                "version": "3.1.0-SNAPSHOT.2215",
+                "id": "mod-record-specifications-3.1.0-SNAPSHOT.2215"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-mosaic-1.2.0-SNAPSHOT.100200000012118&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-mosaic",
+            "version": "1.2.0-SNAPSHOT.100200000012118",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO Mosaic integration",
+            "id": "app-mosaic-1.2.0-SNAPSHOT.100200000012118",
+            "modules": [
+              {
+                "name": "mod-mosaic",
+                "version": "2.0.0-SNAPSHOT.2083",
+                "id": "mod-mosaic-2.0.0-SNAPSHOT.2083"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_mosaic-settings",
+                "version": "1.2.1099000000000159",
+                "id": "folio_mosaic-settings-1.2.1099000000000159"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-notification-1.1.0-SNAPSHOT.100200000007751&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-notification",
+            "version": "1.1.0-SNAPSHOT.100200000007751",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Notification Application",
+            "id": "app-notification-1.1.0-SNAPSHOT.100200000007751",
+            "modules": [
+              {
+                "name": "mod-email",
+                "version": "1.21.0-SNAPSHOT.2061",
+                "id": "mod-email-1.21.0-SNAPSHOT.2061"
+              },
+              {
+                "name": "mod-template-engine",
+                "version": "1.24.0-SNAPSHOT.2061",
+                "id": "mod-template-engine-1.24.0-SNAPSHOT.2061"
+              },
+              {
+                "name": "mod-batch-print",
+                "version": "1.4.1-SNAPSHOT.2015",
+                "id": "mod-batch-print-1.4.1-SNAPSHOT.2015"
+              },
+              {
+                "name": "mod-event-config",
+                "version": "2.11.0-SNAPSHOT.2027",
+                "id": "mod-event-config-2.11.0-SNAPSHOT.2027"
+              },
+              {
+                "name": "mod-notify",
+                "version": "3.6.0-SNAPSHOT.2039",
+                "id": "mod-notify-3.6.0-SNAPSHOT.2039"
+              },
+              {
+                "name": "mod-sender",
+                "version": "1.16.0-SNAPSHOT.2031",
+                "id": "mod-sender-1.16.0-SNAPSHOT.2031"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-oa-1.0.0-SNAPSHOT.100200000010911&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-oa",
+            "version": "1.0.0-SNAPSHOT.100200000010911",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO OA application",
+            "id": "app-oa-1.0.0-SNAPSHOT.100200000010911",
+            "modules": [
+              {
+                "name": "mod-oa",
+                "version": "3.4.0-SNAPSHOT.213",
+                "id": "mod-oa-3.4.0-SNAPSHOT.213"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_oa",
+                "version": "3.2.1099000000000320",
+                "id": "folio_oa-3.2.1099000000000320"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-oai-pmh-2.1.0-SNAPSHOT.100200000011734&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-oai-pmh",
+            "version": "2.1.0-SNAPSHOT.100200000011734",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO OAI-PMH application",
+            "id": "app-oai-pmh-2.1.0-SNAPSHOT.100200000011734",
+            "modules": [
+              {
+                "name": "mod-oai-pmh",
+                "version": "3.17.0-SNAPSHOT.2204",
+                "id": "mod-oai-pmh-3.17.0-SNAPSHOT.2204"
+              },
+              {
+                "name": "edge-oai-pmh",
+                "version": "2.13.0-SNAPSHOT.2015",
+                "id": "edge-oai-pmh-2.13.0-SNAPSHOT.2015"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_oai-pmh",
+                "version": "7.0.1099000000000206",
+                "id": "folio_oai-pmh-7.0.1099000000000206"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-platform-complete-3.4.0-SNAPSHOT.100200000011276&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-platform-complete",
+            "version": "3.4.0-SNAPSHOT.100200000011276",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-search",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-notification",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application comprised of most Folio modules not present in app-platform-minimal",
+            "id": "app-platform-complete-3.4.0-SNAPSHOT.100200000011276",
+            "modules": [
+              {
+                "name": "mod-circulation-storage",
+                "version": "17.6.0-SNAPSHOT.2368",
+                "id": "mod-circulation-storage-17.6.0-SNAPSHOT.2368"
+              },
+              {
+                "name": "mod-circulation",
+                "version": "24.6.0-SNAPSHOT.2428",
+                "id": "mod-circulation-24.6.0-SNAPSHOT.2428"
+              },
+              {
+                "name": "mod-graphql",
+                "version": "1.15.1000429",
+                "id": "mod-graphql-1.15.1000429"
+              },
+              {
+                "name": "mod-feesfines",
+                "version": "19.5.0-SNAPSHOT.2100",
+                "id": "mod-feesfines-19.5.0-SNAPSHOT.2100"
+              },
+              {
+                "name": "mod-patron-blocks",
+                "version": "1.14.0-SNAPSHOT.2137",
+                "id": "mod-patron-blocks-1.14.0-SNAPSHOT.2137"
+              },
+              {
+                "name": "mod-patron",
+                "version": "6.5.0-SNAPSHOT.2062",
+                "id": "mod-patron-6.5.0-SNAPSHOT.2062"
+              },
+              {
+                "name": "mod-data-export-spring",
+                "version": "3.7.0-SNAPSHOT.2195",
+                "id": "mod-data-export-spring-3.7.0-SNAPSHOT.2195"
+              },
+              {
+                "name": "mod-data-export-worker",
+                "version": "3.6.0-SNAPSHOT.2388",
+                "id": "mod-data-export-worker-3.6.0-SNAPSHOT.2388"
+              },
+              {
+                "name": "mod-remote-storage",
+                "version": "4.1.0-SNAPSHOT.2125",
+                "id": "mod-remote-storage-4.1.0-SNAPSHOT.2125"
+              },
+              {
+                "name": "mod-calendar",
+                "version": "4.1.0-SNAPSHOT.2166",
+                "id": "mod-calendar-4.1.0-SNAPSHOT.2166"
+              },
+              {
+                "name": "mod-audit",
+                "version": "3.1.0-SNAPSHOT.2279",
+                "id": "mod-audit-3.1.0-SNAPSHOT.2279"
+              },
+              {
+                "name": "mod-courses",
+                "version": "1.6.0-SNAPSHOT.2015",
+                "id": "mod-courses-1.6.0-SNAPSHOT.2015"
+              },
+              {
+                "name": "mod-pubsub",
+                "version": "2.18.0-SNAPSHOT.2039",
+                "id": "mod-pubsub-2.18.0-SNAPSHOT.2039"
+              },
+              {
+                "name": "mod-copycat",
+                "version": "1.10.0-SNAPSHOT.2026",
+                "id": "mod-copycat-1.10.0-SNAPSHOT.2026"
+              },
+              {
+                "name": "mod-ncip",
+                "version": "1.18.0-SNAPSHOT.2008",
+                "id": "mod-ncip-1.18.0-SNAPSHOT.2008"
+              },
+              {
+                "name": "mod-user-import",
+                "version": "3.12.0-SNAPSHOT.2010",
+                "id": "mod-user-import-3.12.0-SNAPSHOT.2010"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_servicepoints",
+                "version": "9.0.1099000000000099",
+                "id": "folio_servicepoints-9.0.1099000000000099"
+              },
+              {
+                "name": "folio_checkin",
+                "version": "12.1.1099000000000434",
+                "id": "folio_checkin-12.1.1099000000000434"
+              },
+              {
+                "name": "folio_checkout",
+                "version": "13.1.1099000000000394",
+                "id": "folio_checkout-13.1.1099000000000394"
+              },
+              {
+                "name": "folio_circulation",
+                "version": "12.1.1099000000000492",
+                "id": "folio_circulation-12.1.1099000000000492"
+              },
+              {
+                "name": "folio_plugin-find-user",
+                "version": "8.2.1099000000000180",
+                "id": "folio_plugin-find-user-8.2.1099000000000180"
+              },
+              {
+                "name": "folio_export-manager",
+                "version": "5.1.1099000000000199",
+                "id": "folio_export-manager-5.1.1099000000000199"
+              },
+              {
+                "name": "folio_plugin-bursar-export",
+                "version": "6.0.1099000000000313",
+                "id": "folio_plugin-bursar-export-6.0.1099000000000313"
+              },
+              {
+                "name": "folio_remote-storage",
+                "version": "7.1.1099000000000153",
+                "id": "folio_remote-storage-7.1.1099000000000153"
+              },
+              {
+                "name": "folio_circulation-log",
+                "version": "6.2.1099000000000214",
+                "id": "folio_circulation-log-6.2.1099000000000214"
+              },
+              {
+                "name": "folio_calendar",
+                "version": "13.0.1099000000000259",
+                "id": "folio_calendar-13.0.1099000000000259"
+              },
+              {
+                "name": "folio_courses",
+                "version": "7.1.1099000000000233",
+                "id": "folio_courses-7.1.1099000000000233"
+              },
+              {
+                "name": "folio_requests",
+                "version": "13.1.1099000000000507",
+                "id": "folio_requests-13.1.1099000000000507"
+              },
+              {
+                "name": "folio_tenant-settings",
+                "version": "11.0.1099000000000312",
+                "id": "folio_tenant-settings-11.0.1099000000000312"
+              },
+              {
+                "name": "folio_handler-stripes-registry",
+                "version": "3.2.1099000000000166",
+                "id": "folio_handler-stripes-registry-3.2.1099000000000166"
+              },
+              {
+                "name": "folio_myprofile",
+                "version": "11.0.1099000000000206",
+                "id": "folio_myprofile-11.0.1099000000000206"
+              },
+              {
+                "name": "folio_users",
+                "version": "13.1.1099000000001651",
+                "id": "folio_users-13.1.1099000000001651"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-platform-minimal-2.2.0-SNAPSHOT.100200000011942&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-platform-minimal",
+            "version": "2.2.0-SNAPSHOT.100200000011942",
+            "dependencies": [],
+            "description": "Minimal FOLIO platform installation",
+            "id": "app-platform-minimal-2.2.0-SNAPSHOT.100200000011942",
+            "modules": [
+              {
+                "name": "mod-users-keycloak",
+                "version": "4.1.0-SNAPSHOT.2328",
+                "id": "mod-users-keycloak-4.1.0-SNAPSHOT.2328"
+              },
+              {
+                "name": "mod-roles-keycloak",
+                "version": "4.1.0-SNAPSHOT.2605",
+                "id": "mod-roles-keycloak-4.1.0-SNAPSHOT.2605"
+              },
+              {
+                "name": "mod-scheduler",
+                "version": "4.1.0-SNAPSHOT.2429",
+                "id": "mod-scheduler-4.1.0-SNAPSHOT.2429"
+              },
+              {
+                "name": "edge-users",
+                "version": "2.3.0-SNAPSHOT.2095",
+                "id": "edge-users-2.3.0-SNAPSHOT.2095"
+              },
+              {
+                "name": "mod-configuration",
+                "version": "5.14.0-SNAPSHOT.2030",
+                "id": "mod-configuration-5.14.0-SNAPSHOT.2030"
+              },
+              {
+                "name": "mod-permissions",
+                "version": "6.9.0-SNAPSHOT.2011",
+                "id": "mod-permissions-6.9.0-SNAPSHOT.2011"
+              },
+              {
+                "name": "mod-tags",
+                "version": "3.1.0-SNAPSHOT.2095",
+                "id": "mod-tags-3.1.0-SNAPSHOT.2095"
+              },
+              {
+                "name": "mod-users",
+                "version": "19.7.0-SNAPSHOT.2170",
+                "id": "mod-users-19.7.0-SNAPSHOT.2170"
+              },
+              {
+                "name": "mod-users-bl",
+                "version": "8.1.0-SNAPSHOT.2017",
+                "id": "mod-users-bl-8.1.0-SNAPSHOT.2017"
+              },
+              {
+                "name": "mod-password-validator",
+                "version": "4.1.0-SNAPSHOT.2118",
+                "id": "mod-password-validator-4.1.0-SNAPSHOT.2118"
+              },
+              {
+                "name": "mod-login-keycloak",
+                "version": "4.1.0-SNAPSHOT.2201",
+                "id": "mod-login-keycloak-4.1.0-SNAPSHOT.2201"
+              },
+              {
+                "name": "mod-notes",
+                "version": "8.1.0-SNAPSHOT.2227",
+                "id": "mod-notes-8.1.0-SNAPSHOT.2227"
+              },
+              {
+                "name": "mod-settings",
+                "version": "1.4.0-SNAPSHOT.2496",
+                "id": "mod-settings-1.4.0-SNAPSHOT.2496"
+              },
+              {
+                "name": "mod-okapi-facade",
+                "version": "4.1.0-SNAPSHOT.2139",
+                "id": "mod-okapi-facade-4.1.0-SNAPSHOT.2139"
+              },
+              {
+                "name": "mod-locations",
+                "version": "1.0.0-SNAPSHOT.2102",
+                "id": "mod-locations-1.0.0-SNAPSHOT.2102"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_developer",
+                "version": "11.0.1099000000000419",
+                "id": "folio_developer-11.0.1099000000000419"
+              },
+              {
+                "name": "folio_tags",
+                "version": "10.0.1099000000000115",
+                "id": "folio_tags-10.0.1099000000000115"
+              },
+              {
+                "name": "folio_stripes-core",
+                "version": "11.2.1099000000002045",
+                "id": "folio_stripes-core-11.2.1099000000002045"
+              },
+              {
+                "name": "folio_notes",
+                "version": "12.0.1099000000000187",
+                "id": "folio_notes-12.0.1099000000000187"
+              },
+              {
+                "name": "folio_stripes-smart-components",
+                "version": "10.1.1099000000000874",
+                "id": "folio_stripes-smart-components-10.1.1099000000000874"
+              },
+              {
+                "name": "folio_authorization-policies",
+                "version": "2.0.1099000000000154",
+                "id": "folio_authorization-policies-2.0.1099000000000154"
+              },
+              {
+                "name": "folio_authorization-roles",
+                "version": "3.0.1099000000000270",
+                "id": "folio_authorization-roles-3.0.1099000000000270"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-quick-marc-1.1.0-SNAPSHOT.100200000006683&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-quick-marc",
+            "version": "1.1.0-SNAPSHOT.100200000006683",
+            "dependencies": [
+              {
+                "name": "app-marc-storage",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Quick MARC Application",
+            "id": "app-quick-marc-1.1.0-SNAPSHOT.100200000006683",
+            "modules": [
+              {
+                "name": "mod-quick-marc",
+                "version": "8.1.0-SNAPSHOT.2299",
+                "id": "mod-quick-marc-8.1.0-SNAPSHOT.2299"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_quick-marc",
+                "version": "11.1.1099000000000616",
+                "id": "folio_quick-marc-11.1.1099000000000616"
+              },
+              {
+                "name": "folio_stripes-marc-components",
+                "version": "2.1.1099000000000244",
+                "id": "folio_stripes-marc-components-2.1.1099000000000244"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-reading-room-3.1.0-SNAPSHOT.100200000010933&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-reading-room",
+            "version": "3.1.0-SNAPSHOT.100200000010933",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for Reading Room installation",
+            "id": "app-reading-room-3.1.0-SNAPSHOT.100200000010933",
+            "modules": [
+              {
+                "name": "mod-reading-room",
+                "version": "2.1.0-SNAPSHOT.2101",
+                "id": "mod-reading-room-2.1.0-SNAPSHOT.2101"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_reading-room",
+                "version": "3.0.1099000000000195",
+                "id": "folio_reading-room-3.0.1099000000000195"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-reporting-1.6.0-SNAPSHOT.100200000011333&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-reporting",
+            "version": "1.6.0-SNAPSHOT.100200000011333",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Reporting app for FOLIO Sunflower",
+            "id": "app-reporting-1.6.0-SNAPSHOT.100200000011333",
+            "modules": [
+              {
+                "name": "mod-reporting",
+                "version": "1.7.0-SNAPSHOT.182",
+                "id": "mod-reporting-1.7.0-SNAPSHOT.182"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_ldp",
+                "version": "3.3.1099000000000352",
+                "id": "folio_ldp-3.3.1099000000000352"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-requests-ecs-2.1.0-SNAPSHOT.100200000011727&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-requests-ecs",
+            "version": "2.1.0-SNAPSHOT.100200000011727",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-dcb",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for the ECS Requests installation",
+            "id": "app-requests-ecs-2.1.0-SNAPSHOT.100200000011727",
+            "modules": [
+              {
+                "name": "mod-tlr",
+                "version": "1.3.0-SNAPSHOT.2124",
+                "id": "mod-tlr-1.3.0-SNAPSHOT.2124"
+              },
+              {
+                "name": "mod-circulation-bff",
+                "version": "1.3.0-SNAPSHOT.2122",
+                "id": "mod-circulation-bff-1.3.0-SNAPSHOT.2122"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-requests-mediated-3.1.0-SNAPSHOT.100200000012193&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-requests-mediated",
+            "version": "3.1.0-SNAPSHOT.100200000012193",
+            "dependencies": [
+              {
+                "name": "app-platform-complete",
+                "version": "^3.0.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for the Mediated Requests installation",
+            "id": "app-requests-mediated-3.1.0-SNAPSHOT.100200000012193",
+            "modules": [
+              {
+                "name": "mod-requests-mediated",
+                "version": "1.4.0-SNAPSHOT.2190",
+                "id": "mod-requests-mediated-1.4.0-SNAPSHOT.2190"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-requests-mediated-ui-2.1.0-SNAPSHOT.100200000007941&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-requests-mediated-ui",
+            "version": "2.1.0-SNAPSHOT.100200000007941",
+            "dependencies": [
+              {
+                "name": "app-requests-mediated",
+                "version": "^3.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-requests-ecs",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application for the Mediated Requests installation (UI part)",
+            "id": "app-requests-mediated-ui-2.1.0-SNAPSHOT.100200000007941",
+            "modules": [],
+            "uiModules": [
+              {
+                "name": "folio_requests-mediated",
+                "version": "4.1.1099000000000251",
+                "id": "folio_requests-mediated-4.1.1099000000000251"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-rtac-1.2.0-SNAPSHOT.100200000012141&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-rtac",
+            "version": "1.2.0-SNAPSHOT.100200000012141",
+            "dependencies": [
+              {
+                "name": "app-acquisitions",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO RTAC application",
+            "id": "app-rtac-1.2.0-SNAPSHOT.100200000012141",
+            "modules": [
+              {
+                "name": "edge-rtac",
+                "version": "3.2.0-SNAPSHOT.2062",
+                "id": "edge-rtac-3.2.0-SNAPSHOT.2062"
+              },
+              {
+                "name": "mod-rtac",
+                "version": "3.10.0-SNAPSHOT.2054",
+                "id": "mod-rtac-3.10.0-SNAPSHOT.2054"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-rtac-cache-1.1.0-SNAPSHOT.100200000007986&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-rtac-cache",
+            "version": "1.1.0-SNAPSHOT.100200000007986",
+            "dependencies": [
+              {
+                "name": "app-rtac",
+                "version": "^1.1.0-SNAPSHOT",
+                "optional": false
+              },
+              {
+                "name": "app-inventory",
+                "version": "^1.0.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO RTAC application",
+            "id": "app-rtac-cache-1.1.0-SNAPSHOT.100200000007986",
+            "modules": [
+              {
+                "name": "mod-rtac-cache",
+                "version": "1.2.0-SNAPSHOT.2202",
+                "id": "mod-rtac-cache-1.2.0-SNAPSHOT.2202"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-search-1.1.0-SNAPSHOT.100200000012263&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-search",
+            "version": "1.1.0-SNAPSHOT.100200000012263",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Search Application",
+            "id": "app-search-1.1.0-SNAPSHOT.100200000012263",
+            "modules": [
+              {
+                "name": "mod-search",
+                "version": "6.1.0-SNAPSHOT.2817",
+                "id": "mod-search-6.1.0-SNAPSHOT.2817"
+              }
+            ],
+            "uiModules": []
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-serials-management-1.1.0-SNAPSHOT.100200000010992&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-serials-management",
+            "version": "1.1.0-SNAPSHOT.100200000010992",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application Descriptor Repository for the FOLIO Serials Management application",
+            "id": "app-serials-management-1.1.0-SNAPSHOT.100200000010992",
+            "modules": [
+              {
+                "name": "mod-serials-management",
+                "version": "2.2.0-SNAPSHOT.202",
+                "id": "mod-serials-management-2.2.0-SNAPSHOT.202"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_serials-management",
+                "version": "2.2.1099000000001176",
+                "id": "folio_serials-management-2.2.1099000000001176"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://far.ci.folio.org/applications?query=id%3D%3Dapp-service-interaction-1.1.0-SNAPSHOT.100200000010785&full=false&limit=2": {
+      "status": 200,
+      "body": {
+        "applicationDescriptors": [
+          {
+            "name": "app-service-interaction",
+            "version": "1.1.0-SNAPSHOT.100200000010785",
+            "dependencies": [
+              {
+                "name": "app-platform-minimal",
+                "version": "^2.1.0-SNAPSHOT",
+                "optional": false
+              }
+            ],
+            "description": "Application descriptor for the FOLIO Agreements application",
+            "id": "app-service-interaction-1.1.0-SNAPSHOT.100200000010785",
+            "modules": [
+              {
+                "name": "mod-service-interaction",
+                "version": "4.4.0-SNAPSHOT.168",
+                "id": "mod-service-interaction-4.4.0-SNAPSHOT.168"
+              }
+            ],
+            "uiModules": [
+              {
+                "name": "folio_service-interaction",
+                "version": "4.2.1099000000000399",
+                "id": "folio_service-interaction-4.2.1099000000000399"
+              }
+            ]
+          }
+        ],
+        "totalRecords": 1
+      }
+    },
+    "https://raw.githubusercontent.com/folio-org/app-edge-locate/HEAD/app-edge-locate.template.json": {
+      "status": 200,
+      "body": {
+        "name": "${project.name}",
+        "version": "${project.version}",
+        "description": "${project.description}",
+        "platform": "complete",
+        "dependencies": [
+          {
+            "name": "app-platform-complete",
+            "version": "^2.1.0"
+          },
+          {
+            "name": "app-acquisitions",
+            "version": "^1.0.0"
+          }
+        ],
+        "modules": [
+          {
+            "name": "edge-inventory",
+            "version": "latest"
+          },
+          {
+            "name": "edge-users",
+            "version": "latest"
+          }
+        ],
+        "uiModules": []
+      }
+    },
+    "https://raw.githubusercontent.com/folio-org/platform-lsp/f14ebaef59a40790dd43e8e9269ab1e228abdaa5/platform-descriptor.json": {
+      "status": 200,
+      "body": {
+        "name": "FOLIO LSP",
+        "description": "FOLIO LSP (Library Services Platform) is a set of microservices and applications that provide a complete library management system.",
+        "version": "R1-2027-SNAPSHOT.100200000003371",
+        "eureka-components": [
+          {
+            "name": "folio-kong",
+            "version": "3.10.0-SNAPSHOT.42"
+          },
+          {
+            "name": "folio-keycloak",
+            "version": "26.9.0-SNAPSHOT.134"
+          },
+          {
+            "name": "folio-module-sidecar",
+            "version": "4.1.0-SNAPSHOT.2432"
+          },
+          {
+            "name": "mgr-applications",
+            "version": "4.1.0-SNAPSHOT.2392"
+          },
+          {
+            "name": "mgr-tenants",
+            "version": "4.1.0-SNAPSHOT.2221"
+          },
+          {
+            "name": "mgr-tenant-entitlements",
+            "version": "4.1.0-SNAPSHOT.2406"
+          }
+        ],
+        "applications": {
+          "required": [
+            {
+              "name": "app-platform-minimal",
+              "version": "2.2.0-SNAPSHOT.100200000011942"
+            },
+            {
+              "name": "app-platform-complete",
+              "version": "3.4.0-SNAPSHOT.100200000011276"
+            }
+          ],
+          "optional": [
+            {
+              "name": "app-acquisitions",
+              "version": "2.1.0-SNAPSHOT.100200000012496"
+            },
+            {
+              "name": "app-agreements",
+              "version": "1.1.0-SNAPSHOT.100200000011997"
+            },
+            {
+              "name": "app-authority-records",
+              "version": "1.1.0-SNAPSHOT.100200000007501"
+            },
+            {
+              "name": "app-bulk-edit",
+              "version": "2.1.0-SNAPSHOT.100200000011833"
+            },
+            {
+              "name": "app-consortia",
+              "version": "1.5.0-SNAPSHOT.100200000012661"
+            },
+            {
+              "name": "app-consortia-manager",
+              "version": "1.5.0-SNAPSHOT.100200000012325"
+            },
+            {
+              "name": "app-dashboard",
+              "version": "1.1.0-SNAPSHOT.100200000010129"
+            },
+            {
+              "name": "app-data-export",
+              "version": "1.1.0-SNAPSHOT.100200000010483"
+            },
+            {
+              "name": "app-data-import",
+              "version": "1.1.0-SNAPSHOT.100200000004075"
+            },
+            {
+              "name": "app-dcb",
+              "version": "2.1.0-SNAPSHOT.100200000011015"
+            },
+            {
+              "name": "app-ebsconet",
+              "version": "1.2.0-SNAPSHOT.100200000009759"
+            },
+            {
+              "name": "app-edge-complete",
+              "version": "2.3.0-SNAPSHOT.100200000011121"
+            },
+            {
+              "name": "app-eholdings",
+              "version": "1.1.0-SNAPSHOT.100200000012595"
+            },
+            {
+              "name": "app-erm-usage",
+              "version": "3.1.0-SNAPSHOT.100200000012271"
+            },
+            {
+              "name": "app-fqm",
+              "version": "2.1.0-SNAPSHOT.100200000012388"
+            },
+            {
+              "name": "app-gobi",
+              "version": "1.2.0-SNAPSHOT.100200000011797"
+            },
+            {
+              "name": "app-inn-reach",
+              "version": "2.1.0-SNAPSHOT.100200000011936"
+            },
+            {
+              "name": "app-inventory",
+              "version": "1.1.0-SNAPSHOT.100200000005180"
+            },
+            {
+              "name": "app-licenses",
+              "version": "1.1.0-SNAPSHOT.100200000010972"
+            },
+            {
+              "name": "app-linked-data",
+              "version": "2.1.0-SNAPSHOT.100200000012478"
+            },
+            {
+              "name": "app-lists",
+              "version": "1.2.0-SNAPSHOT.100200000012394"
+            },
+            {
+              "name": "app-marc-migrations",
+              "version": "3.1.0-SNAPSHOT.100200000011697"
+            },
+            {
+              "name": "app-marc-storage",
+              "version": "1.1.0-SNAPSHOT.100200000010748"
+            },
+            {
+              "name": "app-mosaic",
+              "version": "1.2.0-SNAPSHOT.100200000012118"
+            },
+            {
+              "name": "app-notification",
+              "version": "1.1.0-SNAPSHOT.100200000007751"
+            },
+            {
+              "name": "app-oa",
+              "version": "1.0.0-SNAPSHOT.100200000010911"
+            },
+            {
+              "name": "app-oai-pmh",
+              "version": "2.1.0-SNAPSHOT.100200000011734"
+            },
+            {
+              "name": "app-quick-marc",
+              "version": "1.1.0-SNAPSHOT.100200000006683"
+            },
+            {
+              "name": "app-reading-room",
+              "version": "3.1.0-SNAPSHOT.100200000010933"
+            },
+            {
+              "name": "app-reporting",
+              "version": "1.6.0-SNAPSHOT.100200000011333"
+            },
+            {
+              "name": "app-requests-ecs",
+              "version": "2.1.0-SNAPSHOT.100200000011727"
+            },
+            {
+              "name": "app-requests-mediated",
+              "version": "3.1.0-SNAPSHOT.100200000012193"
+            },
+            {
+              "name": "app-requests-mediated-ui",
+              "version": "2.1.0-SNAPSHOT.100200000007941"
+            },
+            {
+              "name": "app-rtac",
+              "version": "1.2.0-SNAPSHOT.100200000012141"
+            },
+            {
+              "name": "app-search",
+              "version": "1.1.0-SNAPSHOT.100200000012263"
+            },
+            {
+              "name": "app-service-interaction",
+              "version": "1.1.0-SNAPSHOT.100200000010785"
+            },
+            {
+              "name": "app-serials-management",
+              "version": "1.1.0-SNAPSHOT.100200000010992"
+            }
+          ],
+          "experimental": [
+            {
+              "name": "app-finc",
+              "version": "1.1.0-SNAPSHOT.100200000010401"
+            },
+            {
+              "name": "app-rtac-cache",
+              "version": "1.1.0-SNAPSHOT.100200000007986"
+            }
+          ]
+        },
+        "dependencies": {
+          "postgres": ">=16.0",
+          "kafka": ">=3.8.0",
+          "opensearch": ">=3.0.0"
+        }
+      }
+    }
+  }
+}

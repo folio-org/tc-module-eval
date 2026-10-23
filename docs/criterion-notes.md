@@ -228,6 +228,33 @@ Kafka listeners and consumers, JMS, RabbitMQ, gRPC, and S3, MinIO or `FolioS3Cli
 storage. A JDBC `DataSource` type counts as a datastore client only as a type name such as
 `HikariDataSource`; `dataSource` variables and names like `DataSourceResolver` do not.
 
+## S014 Application Assignment
+
+S014 checks that the module is in exactly one application of the FOLIO LSP platform, and that it is the application the evaluation's Jira task names. Jira tasks are not public, so the person running the evaluation passes that application with `--application <name>`.
+
+The check reads the network, so it runs only with `--allow-remote-lookups`. It resolves `--platform-ref` (default `snapshot`, the branch with the current platform; `master` is stale) in `folio-org/platform-lsp` to a commit, reads `platform-descriptor.json` there, and reads each pinned application's descriptor from FAR (`far.ci.folio.org`), about 40 requests. Required, optional and experimental applications all count; experimental ones are labelled as such. Applications outside the platform, such as `app-platform-full` or `app-edge-locate`, never count. When the module is in no platform application and the named application is not on the platform, S014 also reads that application's own `<name>.template.json` from its `folio-org` repository.
+
+The module name is the one applications list: for a backend module, the name part of the committed descriptor's `id` (for example `mod-search` from `mod-search-${version}`), else the project's own `artifactId` in `pom.xml` (not its parent's), else the repository name; for a UI module, the `package.json` name with `@folio/x` read as `folio_x` (ui-users is `folio_users`).
+
+- `pass`: exactly one platform application lists the module, and it is the one `--application` names.
+- `fail`: two or more platform applications list the module; exactly one lists it and `--application` names another; or none lists it and the named application, if any, is on the platform or its own template does not list the module either. A proven violation fails even when other applications could not be read.
+- `manual`: remote lookups are off; the module name could not be determined; the platform descriptor could not be read or lists no applications; some applications could not be read and those that could list the module at most once (and in the named application, if one is given); exactly one application lists the module but `--application` was not given; or no platform application lists it and the named application is not yet on the platform but its own template lists the module (or could not be read).
+- `not_applicable`: the repository is an explicit FOLIO library.
+
+An application whose FAR descriptor is missing, not exactly one record, for another version, or has module entries the tool cannot read counts as unread, never as empty. An application pinned twice at the same version is one application; pinned at two versions, it is unread.
+
+### Remote lookups
+
+`--allow-remote-lookups` turns on the evaluator's only network reads during evaluation (catalog refresh commands are separate). Every read goes through `src/utils/remote-evidence.ts`:
+
+- HTTPS `GET` only, to `far.ci.folio.org/applications`, `sonarcloud.io/api/`, and `raw.githubusercontent.com` or `api.github.com` paths of `folio-org/platform-lsp` and `folio-org/app-*`. Every redirect is checked against the same list, and at most 3 are followed.
+- Per request: 15 s and 4 MiB, and the response must be JSON. One retry on HTTP 429 or 5xx, waiting for `Retry-After` only up to 10 s.
+- Per evaluation: at most 150 requests, 32 MiB and 120 s, with at most 4 requests in flight. A read that hits a limit fails; it never returns partial or empty data.
+- Optional tokens: `SONAR_TOKEN` is sent only to `sonarcloud.io` and `GITHUB_TOKEN` only to `api.github.com`, so a redirect to another host drops it. Tokens are never recorded. Without a token, GitHub allows 60 anonymous API requests an hour; S014 uses one per evaluation.
+- Every read is recorded in `criterionDetails.remoteEvidence` with its URL, time, HTTP status and the SHA-256 of the response, and the report lists them under "Sources".
+
+Tests never touch the network: they replay responses recorded by `yarn capture:remote-fixtures` into `src/__tests__/fixtures/remote/`, and an unrecorded URL fails the test.
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

@@ -6,6 +6,7 @@ import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitio
 import { getLogger } from './utils/logger';
 import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
 import { LocalCommandRunner } from './utils/command-runner';
+import { RemoteEvidenceTransport } from './utils/remote-evidence';
 import packageMetadata from '../package.json';
 
 export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
@@ -104,7 +105,16 @@ export class ModuleEvaluator {
         criteriaFilter: this.config.criteriaFilter,
         commandRunner,
         agentReview: this.config.agentReview,
-        s008CatalogChannel: this.config.s008CatalogChannel
+        s008CatalogChannel: this.config.s008CatalogChannel,
+        repositoryCommit: repoInfo.commit,
+        requestedBranch: this.config.branch,
+        remoteLookups: this.config.remoteLookups ?? (this.config.allowRemoteLookups
+          ? new RemoteEvidenceTransport({
+              credentials: { sonarToken: process.env.SONAR_TOKEN || undefined, githubToken: process.env.GITHUB_TOKEN || undefined }
+            })
+          : undefined),
+        s014Application: this.config.s014Application,
+        s014PlatformRef: this.config.s014PlatformRef
       });
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);

@@ -199,6 +199,87 @@ describe('S008 catalog network acquisition', () => {
     }
   });
 
+  it('keeps its application pins, FAR checks and diagnostics unchanged now that it shares the platform and FAR parsers with S014', async () => {
+    const requested: string[] = [];
+    const server = await fixtureServer((request, response) => {
+      requested.push(request.url!);
+      if (request.url === `/platform/${COMMIT}/platform-descriptor.json`) return json(response, {
+        version: 'dev',
+        applications: {
+          required: [{ name: 'app-b', version: '1.0.0' }, { name: 'app-a', version: '1.0.0' }],
+          optional: [{ name: 'app-c', version: '1.0.0' }, { name: 'app-d' }],
+          // S014 counts experimental applications; S008 must neither acquire nor diagnose them.
+          experimental: [{ name: 'app-x', version: '1.0.0' }, {}]
+        },
+        'eureka-components': []
+      });
+      if (request.url?.startsWith('/applications?')) {
+        const query = new URL(request.url, 'http://localhost').searchParams.get('query');
+        if (query === 'id==app-a-1.0.0') return json(response, { applicationDescriptors: [{
+          id: 'app-a-1.0.0', name: 'app-a', version: '1.0.0',
+          modules: [{ id: 'mod-a-1.0.0', name: 'mod-a', version: '1.0.0' }, { name: 'no-id' }, { id: 'mod-odd', name: 'mod-even', version: '1.0.0' }],
+          moduleDescriptors: [{ id: 'mod-a-1.0.0', provides: [{ id: 'alpha', version: '1.0' }] }]
+        }], totalRecords: 1 });
+        if (query === 'id==app-b-1.0.0') return json(response, { applicationDescriptors: [{ id: 'app-b-1.0.0', name: 'app-other', version: '1.0.0' }], totalRecords: 1 });
+        if (query === 'id==app-c-1.0.0') return json(response, { applicationDescriptors: [{ id: 'app-c-1.0.0' }], totalRecords: 2 });
+      }
+      response.writeHead(404).end();
+    });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 's008-acquire-regression-'));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const output = path.join(root, 'output');
+      await acquireS008Catalog({
+        platformCommit: COMMIT, channel: 'development', outputDir: output,
+        farUrl: base, registryUrl: base, platformRawBaseUrl: `${base}/platform/`
+      });
+      const manifest = await fs.readJson(path.join(output, 'snapshot-manifest.json'));
+      expect(manifest.applications).toEqual([{
+        name: 'app-a', version: '1.0.0', optional: false,
+        farSource: `${base}/applications?query=id%3D%3Dapp-a-1.0.0&full=true&limit=2`,
+        descriptorPath: 'snapshots/applications/app-a-1.0.0.json'
+      }]);
+      expect(manifest.providers).toEqual([{ moduleIdentity: 'mod-a', source: 'FAR:app-a-1.0.0', descriptorPath: 'snapshots/descriptors/mod-a-1.0.0.json' }]);
+      expect(await fs.readJson(path.join(output, 'acquisition-diagnostics.json'))).toEqual({
+        schemaVersion: '1.0',
+        complete: false,
+        diagnostics: [
+          { code: 'far_cardinality', material: true, message: 'Expected exactly one FAR result for app-c-1.0.0; received 2.', source: `${base}/applications?query=id%3D%3Dapp-c-1.0.0&full=true&limit=2` },
+          { code: 'far_identity_mismatch', material: true, message: 'FAR result did not exactly match app-b-1.0.0.', source: `${base}/applications?query=id%3D%3Dapp-b-1.0.0&full=true&limit=2` },
+          { code: 'invalid_application_pin', material: true, message: 'Platform application pin 1 lacks concrete name/version.' },
+          { code: 'invalid_module_reference', material: true, message: 'app-a-1.0.0 contains a module reference without an exact ID.' },
+          { code: 'unresolved_module_version', material: true, message: 'Unable to derive exact module version for mod-odd.', source: 'app-a-1.0.0' }
+        ]
+      });
+      expect(requested.filter(url => url.startsWith('/applications?')).map(url => new URL(url, base).searchParams.get('query')).sort())
+        .toEqual(['id==app-a-1.0.0', 'id==app-b-1.0.0', 'id==app-c-1.0.0']);
+    } finally {
+      await close(server);
+      await fs.remove(root);
+    }
+  });
+
+  it('treats a Platform descriptor without an applications object as having no applications', async () => {
+    const server = await fixtureServer((request, response) => {
+      if (request.url === `/platform/${COMMIT}/platform-descriptor.json`) return json(response, { version: 'dev', 'eureka-components': [] });
+      response.writeHead(404).end();
+    });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 's008-acquire-no-applications-'));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const output = path.join(root, 'output');
+      await acquireS008Catalog({
+        platformCommit: COMMIT, channel: 'development', outputDir: output,
+        farUrl: base, registryUrl: base, platformRawBaseUrl: `${base}/platform/`
+      });
+      expect((await fs.readJson(path.join(output, 'snapshot-manifest.json'))).applications).toEqual([]);
+      expect(await fs.readJson(path.join(output, 'acquisition-diagnostics.json'))).toEqual({ schemaVersion: '1.0', complete: true, diagnostics: [] });
+    } finally {
+      await close(server);
+      await fs.remove(root);
+    }
+  });
+
   it('marks a malformed Platform application container incomplete', async () => {
     const server = await fixtureServer((request, response) => {
       if (request.url === `/platform/${COMMIT}/platform-descriptor.json`) return json(response, {
