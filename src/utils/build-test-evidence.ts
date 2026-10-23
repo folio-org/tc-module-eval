@@ -128,8 +128,15 @@ async function readDeclarations(context: Context): Promise<void> {
       malformed(context, file.path, parsed.reason === 'invalid-xml' ? `Not valid XML (${parsed.message}).` : 'Has no <project> element.');
       continue;
     }
-    for (const version of pomRequiredMavenVersions(parsed.project)) {
-      declare('maven', 'maven-enforcer', file.path, 'maven-enforcer-plugin requireMavenVersion', resolvePomProperties(version, parsed.project));
+    for (const rule of pomRequiredMavenVersions(parsed.project)) {
+      context.declarations.push({
+        tool: 'maven',
+        source: 'maven-enforcer',
+        path: file.path,
+        detail: 'maven-enforcer-plugin requireMavenVersion',
+        text: resolvePomProperties(rule.version, parsed.project),
+        inactive: rule.inactiveReason
+      });
     }
   }
   for (const file of has('package-json')) {
@@ -186,9 +193,13 @@ function readWorkflows(context: Context): void {
     if (!isObject(workflow) || !isObject(workflow.jobs)) continue;
     const workflowEnv = scalarMap(workflow.env);
     const workflowDirectory = workingDirectory(workflow.defaults);
-    for (const [job, definition] of Object.entries(workflow.jobs)) {
-      if (!isObject(definition)) continue;
-      readJob(context, workflowPath, job, definition, workflowEnv, workflowDirectory);
+    try {
+      for (const [job, definition] of Object.entries(workflow.jobs)) {
+        if (!isObject(definition)) continue;
+        if (!readJob(context, workflowPath, job, definition, workflowEnv, workflowDirectory)) return;
+      }
+    } catch (error) {
+      malformed(context, workflowPath, `Could not be read as a workflow (${error instanceof Error ? error.message : String(error)}).`);
     }
   }
 }
@@ -200,10 +211,10 @@ function readJob(
   definition: Record<string, unknown>,
   workflowEnv: Record<string, string>,
   workflowDirectory: string | undefined
-): void {
-  const env = { ...workflowEnv, ...scalarMap(definition.env) };
+): boolean {
+  const jobEnv = { ...workflowEnv, ...scalarMap(definition.env) };
   const matrix = isObject(definition.strategy) && isObject(definition.strategy.matrix) ? definition.strategy.matrix : {};
-  const declare = (tool: BuildToolId, source: VersionDeclarationSource, detail: string, value: unknown) => {
+  const declare = (tool: BuildToolId, source: VersionDeclarationSource, detail: string, value: unknown, env = jobEnv) => {
     for (const text of expandValue(value, env, matrix)) {
       context.declarations.push({ tool, source, path: workflowPath, detail: `job ${job}, ${detail}`, text });
     }
@@ -217,7 +228,7 @@ function readJob(
         declare('node', 'workflow-input', `${shared[1]} node-version`, definition.with['node-version']);
       }
     }
-    return;
+    return true;
   }
 
   const jobDirectory = workingDirectory(definition.defaults) ?? workflowDirectory;
@@ -225,20 +236,26 @@ function readJob(
     if (!isObject(step)) continue;
     const action = typeof step.uses === 'string' ? step.uses.trim().split('@')[0] : undefined;
     const inputs = isObject(step.with) ? step.with : {};
+    // A step's env overrides the job's and the workflow's when its inputs are evaluated.
+    const stepEnv = { ...jobEnv, ...scalarMap(step.env) };
     if (action === 'actions/setup-node' && inputs['node-version'] !== undefined) {
-      declare('node', 'setup-node', 'actions/setup-node node-version', inputs['node-version']);
+      declare('node', 'setup-node', 'actions/setup-node node-version', inputs['node-version'], stepEnv);
     }
     if ((action === 'stCarolas/setup-maven' || action === 's4u/setup-maven-action') && inputs['maven-version'] !== undefined) {
-      declare('maven', 'setup-maven', `${action} maven-version`, inputs['maven-version']);
+      declare('maven', 'setup-maven', `${action} maven-version`, inputs['maven-version'], stepEnv);
     }
     const stepDirectory = typeof step['working-directory'] === 'string' ? step['working-directory'] : jobDirectory;
     if (typeof step.run === 'string' && ROOT_DIRECTORIES.has((stepDirectory ?? '').trim())) {
       for (const { tool, command } of buildCommandsIn(step.run)) {
-        if (context.buildCommands.length >= MAX_COMMANDS) return;
+        if (context.buildCommands.length >= MAX_COMMANDS) {
+          addDiagnostic(context, 'command_limit', `Stopped after ${MAX_COMMANDS} build commands in workflows; the rest were not read.`, workflowPath);
+          return false;
+        }
         context.buildCommands.push({ path: workflowPath, job, tool, command });
       }
     }
   }
+  return true;
 }
 
 /**
@@ -247,22 +264,104 @@ function readJob(
  */
 export function buildCommandsIn(script: string): Array<{ tool: BuildToolId; command: string }> {
   const commands: Array<{ tool: BuildToolId; command: string }> = [];
-  const lines = script.replace(/\\\r?\n/g, ' ').split(/\r?\n/);
-  for (const line of lines) {
-    for (const segment of line.split(/&&|\|\||[;|]/)) {
-      const text = segment.trim()
-        .replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/, '')
-        .replace(/^sudo\s+/, '');
-      if (!text || text.startsWith('#')) continue;
-      const [program, ...args] = text.split(/\s+/);
-      if (program === 'cd') {
-        if (!/^(?:\.\/?|"?\$\{?GITHUB_WORKSPACE\}?"?|"?\$\{\{\s*github\.workspace\s*\}\}"?)$/.test(args[0] ?? '')) return commands;
+  for (const command of shellCommands(script)) {
+    const first = command.findIndex(word => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+    const words = first === -1 ? [] : command.slice(first);
+    if (words[0] === 'sudo') words.shift();
+    const [program, ...args] = words;
+    if (!program) continue;
+    if (program === 'cd') {
+      if (!/^(?:\.\/?|\$\{?GITHUB_WORKSPACE\}?|\$\{\{\s*github\.workspace\s*\}\})$/.test(args.join(' '))) return commands;
+      continue;
+    }
+    const tool = commandTool(program.replace(/^\.\//, ''), args);
+    const text = words.join(' ');
+    if (tool) commands.push({ tool, command: text.length > 120 ? `${text.slice(0, 117)}...` : text });
+  }
+  return commands;
+}
+
+/**
+ * The simple commands of a shell script as word lists. Quotes, backslash escapes, comments, line continuations and
+ * here-documents are honoured, so "echo 'a; sbt test'", "# sbt test" and here-document text are not commands.
+ * Command separators (; & | ( ) and backquotes) and line ends start a new command. Linear in the script length.
+ */
+function shellCommands(script: string): string[][] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word = '';
+  let inWord = false;
+  let quote: '"' | "'" | undefined;
+  const heredocs: string[] = [];
+  const endWord = () => {
+    if (inWord) words.push(word);
+    word = '';
+    inWord = false;
+  };
+  const endCommand = () => {
+    endWord();
+    if (words.length) commands.push(words);
+    words = [];
+  };
+  const lines = script.split(/\r?\n/);
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (!quote && heredocs.length) {
+      if (line.replace(/^\t+/, '').trim() === heredocs[0]) heredocs.shift();
+      continue;
+    }
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (quote === "'") {
+        if (character === "'") quote = undefined;
+        else word += character;
         continue;
       }
-      const tool = commandTool(program.replace(/^\.\//, ''), args);
-      if (tool) commands.push({ tool, command: text.length > 120 ? `${text.slice(0, 117)}...` : text });
+      if (quote === '"') {
+        if (character === '\\' && index + 1 < line.length) word += line[++index];
+        else if (character === '"') quote = undefined;
+        else word += character;
+        continue;
+      }
+      if (character === '\\') {
+        if (index + 1 < line.length) {
+          word += line[++index];
+          inWord = true;
+        }
+        // A backslash at the end of a line continues the command on the next line.
+        continue;
+      }
+      if (character === "'" || character === '"') {
+        quote = character;
+        inWord = true;
+        continue;
+      }
+      if (character === '#' && !inWord) break;
+      if (line.startsWith('<<', index)) {
+        const heredoc = /^<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1/.exec(line.slice(index, index + 260));
+        if (heredoc) {
+          heredocs.push(heredoc[2]);
+          index += heredoc[0].length - 1;
+          endWord();
+          continue;
+        }
+      }
+      if (/\s/.test(character)) {
+        endWord();
+      } else if (';&|()`'.includes(character)) {
+        endCommand();
+      } else {
+        word += character;
+        inWord = true;
+      }
+    }
+    if (quote) {
+      word += '\n';
+    } else if (!line.endsWith('\\') || line.endsWith('\\\\')) {
+      endCommand();
     }
   }
+  endCommand();
   return commands;
 }
 
@@ -293,15 +392,28 @@ function commandTool(program: string, args: string[]): BuildToolId | undefined {
   }
 }
 
-/** A workflow value as the texts it can take: ${{ env.X }} and ${{ matrix.X }} are resolved within the workflow. */
+const UNREADABLE_VALUE = '(not a plain version)';
+
+/**
+ * A workflow version input as the texts it can take. ${{ env.X }} and ${{ matrix.X }} are resolved within the
+ * workflow; a matrix include adds values. Anything else (an expression, a nested or cyclic YAML value, a matrix
+ * with exclude, which may remove values) stays unresolved text, which cannot be compared and so cannot decide.
+ */
 function expandValue(value: unknown, env: Record<string, string>, matrix: Record<string, unknown>): string[] {
-  if (Array.isArray(value)) return value.flatMap(item => expandValue(item, env, matrix));
-  if (typeof value !== 'string') return [];
-  const reference = /^\$\{\{\s*(env|matrix)\.([A-Za-z0-9_-]+)\s*\}\}$/.exec(value.trim());
-  if (!reference) return [value.trim()];
-  const resolved = reference[1] === 'env' ? env[reference[2]] : matrix[reference[2]];
-  if (resolved === undefined) return [value.trim()];
-  return Array.isArray(resolved) ? resolved.filter((item): item is string => typeof item === 'string') : expandValue(resolved, {}, {});
+  if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? item.trim() : UNREADABLE_VALUE);
+  if (typeof value !== 'string') return [UNREADABLE_VALUE];
+  const text = value.trim();
+  const reference = /^\$\{\{\s*(env|matrix)\.([A-Za-z0-9_-]+)\s*\}\}$/.exec(text);
+  if (!reference) return [text];
+  const [, scope, name] = reference;
+  if (scope === 'env') return [env[name] ?? text];
+  if (matrix.exclude !== undefined) return [text];
+  const included = Array.isArray(matrix.include)
+    ? matrix.include.flatMap(entry => isObject(entry) && entry[name] !== undefined ? [entry[name]] : [])
+    : [];
+  const base = matrix[name];
+  const values = [...(Array.isArray(base) ? base : base === undefined ? [] : [base]), ...included];
+  return values.length ? values.map(item => typeof item === 'string' ? item.trim() : UNREADABLE_VALUE) : [text];
 }
 
 function workingDirectory(defaults: unknown): string | undefined {

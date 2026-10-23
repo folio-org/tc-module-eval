@@ -170,14 +170,37 @@ function knownSharedWorkflows(evidence: BuildTestEvidence, table: FolioSharedWor
   return evidence.sharedWorkflows.filter(use => use.ref === table.ref && Object.prototype.hasOwnProperty.call(table.workflows, use.name));
 }
 
+/**
+ * Whether a workflow file (or the CI command list) could not be read in full. Then CI may run a different tool than
+ * the build files suggest, so a tool chosen from the build files alone cannot fail the module.
+ */
+function ciIncomplete(evidence: BuildTestEvidence): boolean {
+  return evidence.diagnostics.some(item =>
+    item.code === 'file_limit' || item.code === 'command_limit' || (item.path ?? '').startsWith('.github'));
+}
+
+/** A failure that depends on which tool builds the module, when unread CI could change that choice, needs review. */
+function unlessSelectionUncertain(finding: S012Finding, uncertain: boolean): S012Finding {
+  if (!uncertain || finding.contribution !== 'fail') return finding;
+  return {
+    ...finding,
+    classification: 'version-unsettled',
+    contribution: 'manual',
+    rationale: `${finding.rationale.replace(/\s*Change it to a version the policy allows\.|\s*Build it with [^.]+ instead\./, '')} `
+      + 'Some workflow files could not be read, so it is not certain that this is what CI builds with; a reviewer must check.'
+  };
+}
+
 function backendFindings(evidence: BuildTestEvidence, sections: S007PolicySection[], table: FolioSharedWorkflowTable): S012Finding[] {
   const ci = ciSignals(evidence, table).filter(signal => BACKEND_TOOLS.includes(signal.tool));
   const fromFiles = BACKEND_TOOLS.filter(tool => TOOL_FILES[tool].some(kind => hasFile(evidence, kind)));
   let active = ci.length ? unique(ci.map(signal => signal.tool)) : fromFiles;
   // Go modules build with Make; the policy's Make entry covers them.
   if (active.includes('go') && hasFile(evidence, 'makefile')) active = unique(active.map(tool => tool === 'go' ? 'make' : tool));
+  const uncertain = !ci.length && active.length > 1 && ciIncomplete(evidence);
 
-  const findings = active.map(tool => toolFinding(tool, evidence, sections, table, ci.filter(signal => signal.tool === tool)));
+  const findings = active.map(tool =>
+    unlessSelectionUncertain(toolFinding(tool, evidence, sections, table, ci.filter(signal => signal.tool === tool)), uncertain));
   const unused = fromFiles.filter(candidate => !active.includes(candidate) && !(candidate === 'go' && active.includes('make')));
   findings.push(...dockerFindings(evidence, sections), ...notUsedFindings(evidence, [
     ...unused.flatMap(tool => TOOL_FILES[tool]),
@@ -208,7 +231,7 @@ function frontendFindings(evidence: BuildTestEvidence, sections: S007PolicySecti
       findings.push(manualFinding('package-manager', 'Package manager', 'primary', 'conflicting', unique(signals.map(signal => signal.path)),
         `The repository points to more than one package manager (${listText(unique(signals.map(signal => `${TOOL_NAMES[signal.tool]} from ${signal.via}`)))}), so it is not clear which one builds the module. Keep only the files for Yarn 1, the supported one.`));
     } else {
-      findings.push(toolFinding(active[0], evidence, sections, table, deciding));
+      findings.push(unlessSelectionUncertain(toolFinding(active[0], evidence, sections, table, deciding), !ci.length && ciIncomplete(evidence)));
     }
     findings.push(toolFinding('node', evidence, sections, table, ci));
   }
@@ -250,7 +273,7 @@ function toolFinding(
   const matchedPolicy = toMatchedPolicy(match.entry, match.section);
   const versions = versionChecks(tool, evidence, table, toolSignals, match.entry);
   const withPolicy = { ...base, matchedPolicy, versions };
-  const pinned = versions.find(check => check.kind === 'pin' && !check.inherited && check.range);
+  const pinned = versions.find(check => check.kind === 'pin' && !check.inherited && !check.inactive && check.range);
   if (match.entry.strength === 'provisional' || match.entry.provisional) {
     return { ...withPolicy, classification: 'provisional', contribution: 'manual',
       rationale: `The module builds with ${name}${pinned ? ` ${pinned.range}` : ''}${pinned?.path ? ` (${reportPath(pinned.path)})` : ''}, and the supported-technologies page lists ${name} without settled version guidance ("${match.entry.sourceStatement}"), so a reviewer must confirm it.` };
@@ -294,9 +317,9 @@ function versionChecks(
     : compareObservationToConstraint({ declaredVersion: range, ecosystem: tool === 'node' || tool === 'yarn' ? 'javascript' : 'java' }, entry.constraint);
   const checks: S012VersionCheck[] = evidence.declarations.filter(item => item.tool === tool).map(item => {
     const { range, kind } = declarationRange(item);
-    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range) };
+    return { label: DECLARATION_LABELS[item.source], path: item.path, text: item.text, range, kind, comparison: compare(range), inactive: item.inactive };
   });
-  if (!checks.some(check => check.kind === 'pin')) {
+  if (!checks.some(check => check.kind === 'pin' && !check.inactive)) {
     for (const use of unique(signals.flatMap(signal => signal.shared ? [signal.shared] : []))) {
       const workflow = table.workflows[use.name];
       const supplied = tool === 'maven' ? workflow.maven : tool === 'yarn' ? workflow.yarn : undefined;
@@ -354,18 +377,32 @@ export function declarationRange(declaration: Pick<VersionDeclaration, 'source' 
 /** Maven version-range semantics: a bare 3.6 means 3.6 or later, [3.9] exactly 3.9, and [a,b) an interval. */
 function mavenRequirementRange(text: string): string | undefined {
   if (/^\d+(?:\.\d+){0,2}$/.test(text)) return `>=${fullVersion(text)}`;
-  const parts = text.split(/(?<=[\])])\s*,\s*(?=[[(])/);
-  const ranges = parts.map(part => {
-    const singleton = /^\[\s*(\d+(?:\.\d+){0,2})\s*\]$/.exec(part);
-    if (singleton) return fullVersion(singleton[1]);
-    const interval = /^([[(])\s*(\d+(?:\.\d+){0,2})?\s*,\s*(\d+(?:\.\d+){0,2})?\s*([\])])$/.exec(part);
-    if (!interval || (!interval[2] && !interval[3])) return undefined;
-    return [
-      interval[2] ? `${interval[1] === '[' ? '>=' : '>'}${fullVersion(interval[2])}` : '',
-      interval[3] ? `${interval[4] === ']' ? '<=' : '<'}${fullVersion(interval[3])}` : ''
-    ].filter(Boolean).join(' ');
-  });
-  return ranges.every(Boolean) ? ranges.join(' || ') : undefined;
+  // Split "[a,b),[c,d)" into its intervals by the brackets, then read each bound on its own (no nested quantifiers).
+  const ranges: string[] = [];
+  let rest = text;
+  while (rest) {
+    const close = rest.search(/[\])]/);
+    if (!/^[[(]/.test(rest) || close === -1) return undefined;
+    const body = rest.slice(1, close);
+    const comma = body.indexOf(',');
+    const bounds = (comma === -1 ? [body] : [body.slice(0, comma), body.slice(comma + 1)]).map(bound => bound.trim());
+    if (bounds.some(bound => bound && !/^\d+(?:\.\d+){0,2}$/.test(bound)) || bounds.length > 2 || body.indexOf(',', comma + 1) !== -1) return undefined;
+    if (comma === -1) {
+      if (rest[0] !== '[' || rest[close] !== ']' || !bounds[0]) return undefined;
+      ranges.push(fullVersion(bounds[0])!);
+    } else {
+      const [lower, upper] = bounds;
+      if (!lower && !upper) return undefined;
+      ranges.push([
+        lower ? `${rest[0] === '[' ? '>=' : '>'}${fullVersion(lower)}` : '',
+        upper ? `${rest[close] === ']' ? '<=' : '<'}${fullVersion(upper)}` : ''
+      ].filter(Boolean).join(' '));
+    }
+    rest = rest.slice(close + 1).trim();
+    if (rest.startsWith(',')) rest = rest.slice(1).trim();
+    else if (rest) return undefined;
+  }
+  return ranges.length ? ranges.join(' || ') : undefined;
 }
 
 function fullVersion(version: string | undefined): string | undefined {
@@ -380,8 +417,9 @@ function versionVerdict(
   versions: S012VersionCheck[],
   statement: string
 ): Pick<S012Finding, 'classification' | 'contribution' | 'rationale'> {
-  const pins = versions.filter(check => check.kind === 'pin');
-  const requirements = versions.filter(check => check.kind === 'requirement');
+  // A rule the build does not apply (an Enforcer rule that does not run) is shown but does not count.
+  const pins = versions.filter(check => check.kind === 'pin' && !check.inactive);
+  const requirements = versions.filter(check => check.kind === 'requirement' && !check.inactive);
   const where = (check: S012VersionCheck) => check.inherited
     ? `from FOLIO's ${check.inherited.workflow}@${check.inherited.ref} workflow`
     : `in ${reportPath(check.path ?? '')}`;

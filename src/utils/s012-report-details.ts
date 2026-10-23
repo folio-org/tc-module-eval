@@ -25,7 +25,7 @@ export function renderS012HumanDetails(analysis: S012AnalysisResult): string {
         // Without a version rule (Gradle, Make) versions are shown, not judged. A passing rationale already names
         // the versions that settle it, so only requirements (which do not pick a version) are listed below it.
         const judged = Boolean(finding.matchedPolicy?.constraint);
-        const shown = finding.contribution === 'pass' ? finding.versions.filter(check => check.kind === 'requirement') : finding.versions;
+        const shown = finding.contribution === 'pass' ? finding.versions.filter(check => check.kind === 'requirement' || check.inactive) : finding.versions;
         for (const check of shown) lines.push(`    - ${versionLine(check, judged)}`);
       } else {
         lines.push(`  - ${finding.displayName}: ${finding.rationale}`);
@@ -56,7 +56,9 @@ export function renderS012HumanDetails(analysis: S012AnalysisResult): string {
 }
 
 function versionLine(check: S012VersionCheck, judged: boolean): string {
-  const verdict = judged ? ` - ${COMPARISONS[check.comparison]}` : '';
+  const verdict = check.inactive
+    ? ` - not applied (${reportText(check.inactive)}), so it does not count`
+    : judged ? ` - ${COMPARISONS[check.comparison]}` : '';
   if (check.inherited) {
     const recorded = check.inherited.source ? ` (${check.inherited.source}, recorded ${check.inherited.recordedAt})` : '';
     return `Version from ${check.label}: ${check.text}${recorded}, not pinned in the repository${verdict}`;

@@ -58,24 +58,55 @@ export function pomDependencies(value: unknown): PomDependency[] {
   }));
 }
 
-/**
- * Every maven-enforcer-plugin requireMavenVersion <version> in the POM's <build> plugins and plugin management,
- * at plugin or execution level, as written (properties are not resolved).
- */
-export function pomRequiredMavenVersions(project: Record<string, any>): string[] {
-  const plugins = [
-    ...asArray(project.build?.plugins?.plugin),
-    ...asArray(project.build?.pluginManagement?.plugins?.plugin)
-  ].filter(plugin => xmlText(plugin?.artifactId) === 'maven-enforcer-plugin'
-    && ['', 'org.apache.maven.plugins'].includes(xmlText(plugin?.groupId)));
-  const configurations = plugins.flatMap(plugin => [
-    plugin?.configuration,
-    ...asArray(plugin?.executions?.execution).map(execution => execution?.configuration)
-  ]);
-  return configurations
-    .flatMap(configuration => asArray(configuration?.rules?.requireMavenVersion))
-    .map(rule => xmlText(rule?.version))
-    .filter(Boolean);
+export interface RequiredMavenVersion {
+  /** The <version> as written (properties are not resolved). */
+  version: string;
+  /**
+   * Whether this POM shows the rule runs: the plugin is in <build><plugins>, the execution (or, for a plugin-level
+   * rule, some execution) has the enforce goal, and no <skip> is set. A rule in <pluginManagement> only configures
+   * a plugin that something else must declare, and a skip that is a property may be set at build time, so neither
+   * is active as far as this POM shows.
+   */
+  active: boolean;
+  /** Why the rule is not active, for the report. */
+  inactiveReason?: string;
+}
+
+/** Every maven-enforcer-plugin requireMavenVersion rule in the POM's <build>, with whether it runs. */
+export function pomRequiredMavenVersions(project: Record<string, any>): RequiredMavenVersion[] {
+  const isEnforcer = (plugin: any) => xmlText(plugin?.artifactId) === 'maven-enforcer-plugin'
+    && ['', 'org.apache.maven.plugins'].includes(xmlText(plugin?.groupId));
+  const rules = (configuration: any) => asArray(configuration?.rules?.requireMavenVersion)
+    .map(rule => xmlText(rule?.version)).filter(Boolean);
+  const skipped = (configuration: any) => {
+    const skip = xmlText(configuration?.skip);
+    return skip === '' || skip === 'false' ? undefined : skip === 'true' ? 'skip is true' : `skip is set by ${skip}`;
+  };
+  const result: RequiredMavenVersion[] = [];
+  for (const plugin of asArray(project.build?.pluginManagement?.plugins?.plugin).filter(isEnforcer)) {
+    for (const configuration of [plugin?.configuration, ...asArray(plugin?.executions?.execution).map(execution => execution?.configuration)]) {
+      for (const version of rules(configuration)) {
+        result.push({ version, active: false, inactiveReason: 'set in <pluginManagement>, which does not run the plugin' });
+      }
+    }
+  }
+  for (const plugin of asArray(project.build?.plugins?.plugin).filter(isEnforcer)) {
+    const executions = asArray(plugin?.executions?.execution);
+    const enforcing = (execution: any) => asArray(execution?.goals?.goal).map(xmlText).includes('enforce');
+    const pluginSkip = skipped(plugin?.configuration);
+    for (const version of rules(plugin?.configuration)) {
+      const runs = executions.some(execution => enforcing(execution) && !skipped(execution?.configuration));
+      const reason = pluginSkip ?? (runs ? undefined : 'no execution runs the enforce goal');
+      result.push({ version, active: !reason, inactiveReason: reason });
+    }
+    for (const execution of executions) {
+      for (const version of rules(execution?.configuration)) {
+        const reason = pluginSkip ?? skipped(execution?.configuration) ?? (enforcing(execution) ? undefined : 'its execution does not run the enforce goal');
+        result.push({ version, active: !reason, inactiveReason: reason });
+      }
+    }
+  }
+  return result;
 }
 
 // ---- Java .properties (gradle.properties, wrapper properties) ----

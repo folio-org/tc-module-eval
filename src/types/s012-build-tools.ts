@@ -95,6 +95,8 @@ export interface VersionDeclaration {
   detail: string;
   /** The value as written, or for yarn.lock "v1" or "berry". */
   text: string;
+  /** Why the build does not apply it (a Maven Enforcer rule that does not run); such a rule is reported, not judged. */
+  inactive?: string;
 }
 
 /** A job that calls one of FOLIO's reusable workflows, folio-org/.github/.github/workflows/<name>@<ref>. */
@@ -116,7 +118,7 @@ export interface BuildCommand {
 }
 
 export interface BuildEvidenceDiagnostic {
-  code: 'file_too_large' | 'symlink_not_followed' | 'outside_repository' | 'read_error' | 'malformed' | 'file_limit';
+  code: 'file_too_large' | 'symlink_not_followed' | 'outside_repository' | 'read_error' | 'malformed' | 'file_limit' | 'command_limit' | 'value_unreadable';
   message: string;
   path?: string;
   /** A material problem leaves the evidence incomplete. */
@@ -166,6 +168,8 @@ export interface S012VersionCheck {
   /** The version comes from FOLIO's shared workflow, not the repository. */
   inherited?: { workflow: string; ref: string; source?: string; recordedAt?: string };
   comparison: S012VersionComparison;
+  /** Why the build does not apply it; it is shown but does not count. */
+  inactive?: string;
 }
 
 export interface S012MatchedPolicy {
