@@ -189,7 +189,7 @@ describe('criterion agent review', () => {
       }, config)
     });
 
-    const results = [await review('S004'), await review('S005')];
+    const results = await Promise.all([review('S004'), review('S005')]);
 
     expect(results.map(result => result.agentReview)).toEqual([
       expect.objectContaining({ available: true, criterionId: 'S004', evidenceReferences: ['README.md'] }),

@@ -31,6 +31,7 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
 
   const artifacts: EvaluationRunArtifacts = {};
   const commandObservations = new Map<string, CommandExecutionResult>();
+  const pendingArtifacts = new Map<ArtifactKey, Promise<unknown>>();
 
   const run: EvaluationRun = {
     repositoryPath: options.repositoryPath,
@@ -57,9 +58,17 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
         return existing as NonNullable<EvaluationRunArtifacts[K]>;
       }
 
-      const created = await producer();
-      artifacts[key] = created as EvaluationRunArtifacts[K];
-      return created;
+      // Concurrent callers share the in-flight producer; a failed one is evicted so a later call retries.
+      let pending = pendingArtifacts.get(key) as Promise<NonNullable<EvaluationRunArtifacts[K]>> | undefined;
+      if (!pending) {
+        pending = producer().then(created => {
+          artifacts[key] = created as EvaluationRunArtifacts[K];
+          return created;
+        });
+        pendingArtifacts.set(key, pending);
+        pending.then(() => pendingArtifacts.delete(key), () => pendingArtifacts.delete(key));
+      }
+      return pending;
     }
   };
 

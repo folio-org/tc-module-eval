@@ -1,4 +1,4 @@
-import { CriterionResult, EvaluationStatus, SectionEvaluator, CriterionFunction } from '../types';
+import { CriterionResult, EvaluationStatus, SectionEvaluator, CriterionFunction, ModuleKindResult } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { CompositeLanguageEvaluator } from '../evaluators/base/composite-language-evaluator';
@@ -125,11 +125,35 @@ describe('EvaluationRun', () => {
       errors: ['not found']
     });
 
-    const first = await run.getOrCreateArtifact('moduleDescriptor', producer);
-    const second = await run.getOrCreateArtifact('moduleDescriptor', producer);
+    // Concurrent callers share the in-flight producer rather than each starting one.
+    const [first, second] = await Promise.all([
+      run.getOrCreateArtifact('moduleDescriptor', producer),
+      run.getOrCreateArtifact('moduleDescriptor', producer)
+    ]);
+    const third = await run.getOrCreateArtifact('moduleDescriptor', producer);
 
     expect(first).toBe(second);
+    expect(third).toBe(first);
+    expect(run.artifacts.moduleDescriptor).toBe(first);
     expect(producer).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry an artifact whose producer failed', async () => {
+    const run = createEvaluationRun({ repositoryPath: '/repo', language: 'java' });
+    const moduleKind: ModuleKindResult = { kind: 'library', evidence: [], warnings: [] };
+    const producer = jest.fn()
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValue(moduleKind);
+
+    const failed = await Promise.allSettled([
+      run.getOrCreateArtifact('moduleKind', producer),
+      run.getOrCreateArtifact('moduleKind', producer)
+    ]);
+
+    expect(failed.map(result => result.status)).toEqual(['rejected', 'rejected']);
+    expect(run.artifacts.moduleKind).toBeUndefined();
+    await expect(run.getOrCreateArtifact('moduleKind', producer)).resolves.toBe(moduleKind);
+    expect(producer).toHaveBeenCalledTimes(2);
   });
 });
 
