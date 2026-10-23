@@ -14,7 +14,7 @@ import type { CommittedSourceSnapshot } from './committed-source';
 import { prepareRepositoryBrowsing, readRepositorySnapshot } from './agent-review-repository';
 import { isWithinRepo, relativePosixPath } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { redactEvaluatorSecrets, truncateToByteBudget } from './redaction';
 import { errorMessage, isRecord } from './type-guards';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
@@ -121,9 +121,9 @@ export async function reviewCriterionWithAgent(
         criterionId: request.criterionId,
         evidenceReferences: [],
         warnings: [],
-        errors: [`Agent review failed unexpectedly: ${redactSensitiveText(message)}`]
+        errors: [`Agent review failed unexpectedly: ${redactEvaluatorSecrets(message)}`]
       },
-      unavailableReason: `Agent review failed unexpectedly: ${redactSensitiveText(message)}`
+      unavailableReason: `Agent review failed unexpectedly: ${redactEvaluatorSecrets(message)}`
     };
   }
   if (!agentReview.available) {
@@ -161,14 +161,14 @@ export async function runCriterionAgentReview(
   try {
     prepared = await prepareCriterionAgentReviewEvidence(request, config.readRepositorySnapshot);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${errorMessage(error)}`)] };
+    return { ...unavailable, errors: [redactEvaluatorSecrets(`Unable to prepare agent review evidence: ${errorMessage(error)}`)] };
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
   try {
     workspace = prepareCriterionReviewWorkspace(prepared.request);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review workspace: ${errorMessage(error)}`)] };
+    return { ...unavailable, errors: [redactEvaluatorSecrets(`Unable to prepare agent review workspace: ${errorMessage(error)}`)] };
   }
   try {
     if (config.adapter === 'fake') {
@@ -415,10 +415,10 @@ function normalizeFakeCriterionReviewResult(
     request.files.map(file => file.repoRelativePath)
   );
   const warnings = [
-    ...stringArray(rawResult.warnings).map(warning => redactSensitiveText(warning)),
+    ...stringArray(rawResult.warnings).map(warning => redactEvaluatorSecrets(warning)),
     ...normalized.warnings
   ];
-  const errors = stringArray(rawResult.errors).map(error => redactSensitiveText(error));
+  const errors = stringArray(rawResult.errors).map(error => redactEvaluatorSecrets(error));
   const metadata = rawResult.metadata ?? {
     adapter: 'fake' as const,
     modelLabel: config.modelLabel,
@@ -489,8 +489,8 @@ export function normalizeCriterionAgentAdvisoryPayload(
   const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries, errors);
   const recommendation = parseAdvisoryRecommendation(payload.recommendation);
   const confidence = parseAdvisoryConfidence(payload.confidence);
-  const summary = typeof payload.summary === 'string' ? redactSensitiveText(payload.summary).trim() : undefined;
-  const rationale = typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale).trim() : undefined;
+  const summary = typeof payload.summary === 'string' ? redactEvaluatorSecrets(payload.summary).trim() : undefined;
+  const rationale = typeof payload.rationale === 'string' ? redactEvaluatorSecrets(payload.rationale).trim() : undefined;
   if (!recommendation) errors.push('recommendation must be a supported advisory recommendation');
   if (!confidence) errors.push('confidence must be low, medium, high, or a finite number between 0 and 1');
   if (!summary) errors.push('summary must be a nonblank string');
@@ -539,7 +539,7 @@ function normalizeAssessments(
       manifestEntries
     );
     const summary = typeof candidate.summary === 'string'
-      ? redactSensitiveText(candidate.summary).trim()
+      ? redactEvaluatorSecrets(candidate.summary).trim()
       : '';
     const coverageDisposition = candidate.coverageDisposition as NonNullable<CriterionAgentReviewResult['assessments']>[number]['coverageDisposition'];
     if (coverageDisposition !== undefined && !['investigated', 'immaterial', 'unresolved'].includes(coverageDisposition)) return reject('invalid coverageDisposition');
@@ -577,7 +577,7 @@ function normalizeFailureBounds(value: unknown, manifestEntries: string[]): Crit
     const evidenceReferences = normalizeAdvisoryEvidenceReferences(item.evidenceReferences, manifestEntries);
     if (!evidenceReferences.length || evidenceReferences.length !== item.evidenceReferences.length) return undefined;
     bounds.push({ phase: item.phase, requirement: item.requirement, status: item.status,
-      explanation: redactSensitiveText(item.explanation).trim(), evidenceReferences });
+      explanation: redactEvaluatorSecrets(item.explanation).trim(), evidenceReferences });
   }
   return bounds;
 }
@@ -600,7 +600,7 @@ function normalizeReviewerActions(
       manifestEntries
     );
     const action = typeof candidate.action === 'string'
-      ? redactSensitiveText(candidate.action).trim()
+      ? redactEvaluatorSecrets(candidate.action).trim()
       : '';
     if (!action || evidenceReferences.length === 0) return reject('missing nonblank action or source-manifest citation');
     return [{ action, evidenceReferences }];

@@ -1,5 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { CriterionAgentGeneratedProvider, CriterionAgentReviewConfig } from '../types';
 import { validateEndpointUrl } from './criterion-agent-review';
+import { addEvaluatorSecretEnvNames, addEvaluatorSecretValues } from './redaction';
 
 interface GeneratedProviderResolution {
   provider?: CriterionAgentGeneratedProvider;
@@ -67,6 +70,10 @@ export function buildCriterionAgentReviewConfig(options: CriterionAgentCliOption
     parseCsv(options.criterionAgentProviderEnv),
     generatedProvider ? [generatedProvider.apiKeyEnv] : undefined
   );
+  const proxyEnvAllowlist = parseCsv(options.criterionAgentProxyEnv);
+  // OpenCode receives these variables for provider and proxy access, so their values are the evaluator's secrets.
+  addEvaluatorSecretEnvNames([...(providerEnvAllowlist ?? []), ...(proxyEnvAllowlist ?? [])]);
+  if (options.criterionAgentAuthStore) addEvaluatorSecretValues('AUTH_STORE', authStoreValues(options.criterionAgentAuthStore));
 
   return {
     enabled: true,
@@ -78,7 +85,7 @@ export function buildCriterionAgentReviewConfig(options: CriterionAgentCliOption
     trustedConfigPath: options.criterionAgentTrustedConfig,
     trustedAuthStorePath: options.criterionAgentAuthStore,
     providerEnvAllowlist,
-    proxyEnvAllowlist: parseCsv(options.criterionAgentProxyEnv),
+    proxyEnvAllowlist,
     endpoint: options.criterionAgentEndpoint,
     endpointFamily: options.criterionAgentEndpointFamily ?? generatedProvider?.name,
     endpointAllowlist,
@@ -86,6 +93,21 @@ export function buildCriterionAgentReviewConfig(options: CriterionAgentCliOption
     generatedProvider,
     providerConfigError: providerResolution.error
   };
+}
+
+// Every string in the store's JSON files: API keys and OAuth tokens. Tokens OpenCode refreshes during a run are not known here.
+function authStoreValues(storePath: string): string[] {
+  const strings = (value: unknown): string[] => typeof value === 'string' ? [value]
+    : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
+  try {
+    const files = fs.statSync(storePath).isDirectory()
+      ? fs.readdirSync(storePath).filter(name => name.endsWith('.json')).map(name => path.join(storePath, name))
+      : [storePath];
+    return files.flatMap(file => strings(JSON.parse(fs.readFileSync(file, 'utf8'))));
+  } catch {
+    // A store that cannot be read or parsed gives OpenCode no key to print.
+    return [];
+  }
 }
 
 function parseCsv(value: string | undefined): string[] | undefined {

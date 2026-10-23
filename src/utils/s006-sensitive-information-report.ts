@@ -14,7 +14,7 @@ import {
   strongestS006ReportFindings
 } from './s006-ranking';
 import { renderAgentReviewLines } from './agent-review-report';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { truncateToByteBudget } from './redaction';
 import { capitalize, overflowLine, reportPath, reportText } from './report-text';
 import {
   S006_CATEGORY_LABELS,
@@ -242,15 +242,7 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    // Agent prose may quote a value it read, so it is redacted like the rest of the S006 report.
-    const redacted: CriterionAgentReviewResult = {
-      ...agentReview,
-      summary: agentReview.summary && redactSensitiveText(agentReview.summary),
-      rationale: agentReview.rationale && redactSensitiveText(agentReview.rationale),
-      assessments: agentReview.assessments?.map(item => ({ ...item, summary: redactSensitiveText(item.summary) })),
-      reviewerActions: agentReview.reviewerActions?.map(item => ({ ...item, action: redactSensitiveText(item.action) }))
-    };
-    lines.push('', ...renderAgentReviewLines(redacted, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the S006 result stays Manual review.');
+    lines.push('', ...renderAgentReviewLines(agentReview, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the S006 result stays Manual review.');
     return;
   }
 

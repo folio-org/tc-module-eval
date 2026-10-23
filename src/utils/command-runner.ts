@@ -8,7 +8,7 @@ import {
   CommandRunner,
   EvaluationRun
 } from '../types';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { isDirectory } from './repo-files';
 import { sanitizeStructuredOutput } from './opencode-output';
 
@@ -49,8 +49,8 @@ export function normalizeCommandRequest(
   });
 }
 
-export function sanitizeCommandOutput(output: string, maxBytes: number = DEFAULT_MAX_OUTPUT_BYTES): string {
-  return redactSensitiveText(output, maxBytes);
+export function sanitizeCommandOutput(output: string, maxBytes: number = DEFAULT_MAX_OUTPUT_BYTES, outputCut = false): string {
+  return redactEvaluatorSecrets(output, maxBytes, outputCut);
 }
 
 export interface LocalCommandRunnerOptions {
@@ -216,7 +216,7 @@ export class LocalCommandRunner implements CommandRunner {
           ? sanitizeStructuredOutput(captured.toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace, keepStdoutTail, cutStart)
           : undefined;
         const stdout = structured?.text ?? (cutStart
-          ? `[output truncated: kept the last ${captured.length} of ${stdoutBytes} bytes]\n${redactSensitiveText(captured.toString('utf-8'))}`
+          ? `[output truncated: kept the last ${captured.length} of ${stdoutBytes} bytes]\n${redactEvaluatorSecrets(captured.toString('utf-8'))}`
           : this.formatCapturedOutput([captured], stdoutBytes, maxOutputBytes));
         const stderr = this.formatCapturedOutput(stderrChunks, stderrBytes, maxOutputBytes);
         const status = timedOut ? 'timed_out' : code === 0 ? 'success' : 'failed';
@@ -243,7 +243,7 @@ export class LocalCommandRunner implements CommandRunner {
   }
 
   private formatCapturedOutput(chunks: Buffer[], totalBytes: number, maxOutputBytes: number): string {
-    const output = sanitizeCommandOutput(Buffer.concat(chunks).toString('utf-8'), maxOutputBytes);
+    const output = sanitizeCommandOutput(Buffer.concat(chunks).toString('utf-8'), maxOutputBytes, totalBytes > maxOutputBytes);
     if (totalBytes <= maxOutputBytes || output.includes('output truncated')) {
       return output;
     }

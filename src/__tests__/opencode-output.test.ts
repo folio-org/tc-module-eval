@@ -1,13 +1,15 @@
 import { LocalCommandRunner } from '../utils/command-runner';
+import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 import { decodeOpenCodeOutput, openCodeEventTrace, parseOpenCodeReviewPayload, sanitizeStructuredOutput } from '../utils/opencode-output';
 
 const advisory = {
   recommendation: 'needs_reviewer_judgment', confidence: 'medium',
-  summary: 'Example password=[REDACTED]', rationale: 'Inspect README.md.',
+  summary: 'Example password=hunter2', rationale: 'Inspect README.md.',
   evidenceReferences: ['README.md']
 };
 const textEvent = (text: string) => ({ type: 'text', part: { type: 'text', text } });
 const wire = (...events: unknown[]) => events.map(event => JSON.stringify(event)).join('\n');
+const OPENROUTER_KEY = EVALUATOR_SECRETS.OPENROUTER_API_KEY;
 
 async function capture(output: string, maxOutputBytes = 1024 * 1024, captureDebugTrace = false, keepStdoutTail = false) {
   const request = {
@@ -52,17 +54,6 @@ describe('structured OpenCode capture', () => {
     expect(runner.normalize(request)).not.toBe(runner.normalize({ ...request, captureDebugTrace: true }));
   });
 
-  it.each(['summary', 'rationale'])('rejects an unsafe advisory %s rather than accepting a placeholder', async field => {
-    const payload = { ...advisory, [field]: '"password": "SYNTHETIC_SECRET\\' };
-    const result = await capture(wire(textEvent(JSON.stringify(payload))));
-    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({
-      failure: 'malformed_json', diagnostic: 'sanitization rejected a record'
-    });
-    expect(parseOpenCodeReviewPayload(result.stdout)).toBeUndefined();
-    expect(result.stdoutDiagnostics).toContain('record 1: text; Incomplete secret assignment');
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
-  });
-
   it('keeps provider error metadata when the message contains truncated JSON', async () => {
     const result = await capture(wire({ type: 'error', error: { name: 'APIError', data: {
       statusCode: 400, message: 'Bad request: {"error": truncated'
@@ -70,30 +61,6 @@ describe('structured OpenCode capture', () => {
     expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({ failure: 'provider_error', providerError: {
       name: 'APIError', statusCode: 400, message: expect.stringContaining('Bad request:')
     } });
-  });
-
-  it.each(['{summary: string}', 'function f() {'])('keeps debug configuration containing %s', prompt => {
-    const result = sanitizeStructuredOutput(JSON.stringify({ prompt, plugin: [], tools: { read: true }, password: 'SYNTHETIC_SECRET' }), 'json', 10000);
-    expect(JSON.parse(result.text)).toMatchObject({ plugin: [], tools: { read: true }, password: '[REDACTED]' });
-    expect(result.text).not.toContain('SYNTHETIC_SECRET');
-  });
-
-  it.each([
-    'Bad request: {"password":{"value":"SYNTHETIC_SECRET"',
-    'Bad request: password="SYNTHETIC_SECRET'
-  ])('preserves error classification without publishing unsafe fragments: %s', async message => {
-    const result = await capture(wire({ type: 'error', error: { name: 'APIError', data: { statusCode: 400, message } } }));
-    expect(decodeOpenCodeOutput(result.stdout)).toMatchObject({ failure: 'provider_error', providerError: { name: 'APIError', statusCode: 400 } });
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
-  });
-
-  it.each([
-    `password='{"value":"SYNTHETIC_SECRET"}'`,
-    `password='{"value":"SYNTHETIC_SECRET"}`,
-    '-----BEGIN PRIVATE KEY-----\n{"value":"SYNTHETIC_SECRET"}\n-----END PRIVATE KEY-----'
-  ])('redacts secret context enclosing inline JSON', async output => {
-    const result = await capture(wire({ type: 'tool_use', part: { output } }));
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
   });
 
   it.each([
@@ -105,17 +72,6 @@ describe('structured OpenCode capture', () => {
     const result = await capture(output);
     expect(result.status).toBe('success');
     expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
-  });
-
-  it('redacts secrets at nested encoding boundaries and in property names', async () => {
-    const secret = 'synthetic-credential';
-    const result = await capture(wire(
-      { type: 'tool_use', part: { output: JSON.stringify({ password: { value: secret } }) } },
-      textEvent(JSON.stringify({ ...advisory, summary: 'password="synthetic-credential\\tail"',
-        password: [secret], ['https://user:synthetic-credential@example.org']: secret }))
-    ));
-    expect(JSON.stringify(result)).not.toContain(secret);
-    expect(parseOpenCodeReviewPayload(result.stdout)?.summary).toContain('[REDACTED]');
   });
 
   it.each([
@@ -157,15 +113,6 @@ describe('final OpenCode answer selection', () => {
       start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b')));
     expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
     expect(result.stdout).not.toContain('entry 0');
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
-  });
-
-  it.each(['prose', 'fenced'])('redacts decoded values in %s JSON without corrupting escapes', async wrapper => {
-    const payload = { ...advisory, summary: 'Use password="SYNTHETIC_SECRET" in docs.' };
-    const value = JSON.stringify(payload);
-    const answer = wrapper === 'prose' ? 'Result:\n' + value : '```json\n' + value + '\n```';
-    const result = await capture(wire(start(), text(answer), finish()));
-    expect(parseOpenCodeReviewPayload(result.stdout)).toEqual({ ...payload, summary: 'Use password="[REDACTED]" in docs.' });
     expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
   });
 
@@ -238,9 +185,14 @@ describe('final OpenCode answer selection', () => {
     expect(parseOpenCodeReviewPayload(result.stdout)).toEqual(advisory);
   });
 
-  it('redacts an enclosing secret split across native text parts', async () => {
-    const result = await capture(wire(start(), text("password='"), text('{"value":"SYNTHETIC_SECRET"}'), text("'"), finish()));
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
+  it('masks an evaluator secret split across native text parts', async () => {
+    const payload = JSON.stringify({ ...advisory, summary: `Key ${OPENROUTER_KEY} and again ${OPENROUTER_KEY}.` });
+    const split = payload.indexOf(OPENROUTER_KEY) + 10;
+    const result = await withEvaluatorSecrets(() =>
+      capture(wire(start(), text(payload.slice(0, split)), text(payload.slice(split)), finish())));
+    expect(JSON.stringify(result)).not.toContain(OPENROUTER_KEY.slice(10));
+    expect(parseOpenCodeReviewPayload(result.stdout)?.summary)
+      .toBe('Key [REDACTED_OPENROUTER_API_KEY] and again [REDACTED_OPENROUTER_API_KEY].');
   });
 
   it.each(['step', 'message'])('does not assemble JSON across a %s boundary', async boundary => {
@@ -284,13 +236,15 @@ describe('final OpenCode answer selection', () => {
     expect(decodeOpenCodeOutput(inside.stdout, true).payload).toBeUndefined();
   });
 
-  it('does not publish text from a message whose start, and secret context, was cut', async () => {
-    const output = wire(start(), text("password='" + 'p'.repeat(70 * 1024)), text('{"value":"SYNTHETIC_SECRET"}'), text("'"),
+  it('does not publish the rest of an evaluator secret whose start was cut with its message', async () => {
+    // The kept part parses on its own, so only dropping the cut message keeps the key's end out.
+    const output = wire(start(), text('p'.repeat(70 * 1024) + OPENROUTER_KEY.slice(0, 10)),
+      text(JSON.stringify({ ...advisory, summary: OPENROUTER_KEY.slice(10) })),
       finish('tool-calls'), start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
-    const tail = await capture(output, 64 * 1024, false, true);
+    const tail = await withEvaluatorSecrets(() => capture(output, 64 * 1024, false, true));
 
     expect(tail.stdoutTruncated).toBe(true);
-    expect(JSON.stringify(tail)).not.toContain('SYNTHETIC_SECRET');
+    expect(JSON.stringify(tail)).not.toContain(OPENROUTER_KEY.slice(10));
     expect(decodeOpenCodeOutput(tail.stdout, true).payload).toEqual(advisory);
   });
 

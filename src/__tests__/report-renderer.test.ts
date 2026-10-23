@@ -19,6 +19,7 @@ import { renderFrontendChecklistLines } from '../utils/frontend-checklist';
 import { FrontendEvaluator } from '../evaluators/javascript/frontend-evaluator';
 import { evaluateB001, renderB001HumanDetails } from '../utils/b001-descriptor-template';
 import { FrontendChecklist } from '../types';
+import { EVALUATOR_SECRETS, SECRET_NAMES, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
 describe('EvaluationReportRenderer', () => {
   function reportData(html: string): any {
@@ -408,7 +409,7 @@ describe('EvaluationReportRenderer', () => {
     expect(details).not.toContain('  - Status: Skipped');
   });
 
-  it('keeps complete sanitized legacy-only diagnostics in the download while bounding HTML details', () => {
+  it('keeps complete legacy-only diagnostics in the download while bounding HTML details', () => {
     const longDiagnostic = `seventh ${'x'.repeat(600)} token=legacy-secret`;
     const diagnostics = [
       'first failure', 'second detail', 'third detail', 'fourth detail',
@@ -424,8 +425,7 @@ describe('EvaluationReportRenderer', () => {
 
     expect(displayed).toContain('... 1 more in the downloaded JSON report');
     expect(displayed).not.toContain('seventh');
-    expect(downloaded).toContain(`seventh ${'x'.repeat(600)} token=[REDACTED]`);
-    expect(downloaded).not.toContain('legacy-secret');
+    expect(downloaded).toContain(longDiagnostic);
   });
 
   it('should render JSON with stable indentation', () => {
@@ -492,33 +492,6 @@ describe('EvaluationReportRenderer', () => {
     expect(downloaded.criteria[0]).toMatchObject({ criterionId: 'S004', status: 'manual' });
     expect(links('README.md:12 documented setup').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/README.md#L12`);
     expect(links('/tmp/generated.json:1 generated output').href).toBeNull();
-  });
-
-  it('preserves validated repository and citation identities while redacting free text', () => {
-    const commit = '0123456789abcdef0123456789abcdef01234567';
-    const repositoryUrl = 'https://github.com/folio-org/password=public-repository';
-    const citedPath = 'docs/api_key=public-path.md';
-    const html = new EvaluationReportRenderer().renderHtml({
-      ...result,
-      repositoryUrl,
-      provenance: {
-        repositoryCommit: commit,
-        evaluator: { name: 'folio-module-evaluator', version: '1.2.3' },
-        citedSourcePaths: [citedPath]
-      },
-      criteria: [{
-        criterionId: 'S004', status: EvaluationStatus.MANUAL,
-        evidence: 'token=private-value',
-        details: `Sources:\n  - ${citedPath}:12 setup`
-      }]
-    });
-    const data = reportData(html);
-
-    expect(data.meta.repo).toBe(repositoryUrl);
-    expect(data.meta.citedSourcePaths).toEqual([citedPath]);
-    expect(data.items[0].details.join('\n')).toContain(`${citedPath}:12`);
-    expect(data.items[0].evidence).toBe('token=[REDACTED]');
-    expect(data.meta.sourceBase).toBe(`${repositoryUrl}/blob/${commit}/`);
   });
 
   it('removes repository URL credentials before preserving report links', () => {
@@ -832,41 +805,6 @@ describe('EvaluationReportRenderer', () => {
       expect(rowLinks(html, 'S004')('README.md:12 setup').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/README.md#L12`);
     });
 
-    it('keeps a cited file name with line breaks out of text that names a redaction placeholder', () => {
-      const cited = `docs/${'a'.repeat(80)}\nForged section:\n  - forged.md`;
-      const item = preparedItems(new EvaluationReportRenderer().renderHtml({
-        ...result,
-        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: [cited] },
-        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
-          details: 'Commands:\n  - README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]' }]
-      }))[0];
-
-      expect(item.tree.map((node: any) => node.text)).toEqual(['Commands:']);
-      expect(item.tree[0].children.map((node: any) => node.text))
-        .toEqual(['README.md:1 [run] Run docker compose up [REPORT_IDENTITY_0] [REPORT_IDENTITY_0_0]']);
-    });
-
-    it('keeps the repository URL when a cited file name appears inside its redaction placeholder', () => {
-      const data = reportData(new EvaluationReportRenderer().renderHtml({
-        ...result,
-        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['_0_'] }
-      }));
-
-      expect(data.meta.repo).toBe(result.repositoryUrl);
-      expect(data.meta.citedSourcePaths).toEqual(['_0_']);
-    });
-
-    it('protects a cited path from redaction when a shorter cited path overlaps its start', () => {
-      const item = reportData(new EvaluationReportRenderer().renderHtml({
-        ...result,
-        provenance: { repositoryCommit: '0123456789abcdef0123456789abcdef01234567', evaluator: { name: 'e', version: '1' }, citedSourcePaths: ['- docs', 'docs/sk-secret.md'] },
-        criteria: [{ criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'Review needed.',
-          details: 'Sources:\n  - docs/sk-secret.md:12 setup', criterionDetails: { sources: [{ path: 'docs/sk-secret.md' }] } }]
-      })).items[0];
-
-      expect(item.details).toEqual(['Sources:', '  - docs/sk-secret.md:12 setup']);
-    });
-
     it('links S009 project files and source hashes it cites only in its dependency evidence', () => {
       const commit = '0123456789abcdef0123456789abcdef01234567';
       const evaluation = evaluateS009({ ok: false, sourcePath: 'ledger.json', diagnostics: [{ code: 'ledger_not_authoritative', message: 'Not reviewed' }] }, {
@@ -1022,6 +960,30 @@ describe('EvaluationReportRenderer', () => {
     expect(html).not.toContain('</title><script>');
   });
 
+  it("masks each of the evaluator's secrets in both reports, wherever and however often they appear", async () => {
+    const mentions = SECRET_NAMES.map(name => `${name} ${EVALUATOR_SECRETS[name]} and ${EVALUATOR_SECRETS[name]}`).join('; ');
+    const masked = SECRET_NAMES.map(name => `${name} [REDACTED_${name}] and [REDACTED_${name}]`).join('; ');
+    const report: EvaluationResult = { ...result, criteria: [{
+      criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: mentions, details: mentions,
+      criterionDetails: { nested: [{ note: mentions }], [EVALUATOR_SECRETS.GITHUB_TOKEN]: 'key' },
+      agentReview: { available: true, criterionId: 'S005', recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+        summary: mentions, rationale: mentions, evidenceReferences: ['README.md'], warnings: [mentions], errors: [] }
+    }] };
+    const renderer = new EvaluationReportRenderer();
+    const [json, html] = await withEvaluatorSecrets(() => [renderer.renderJson(report), renderer.renderHtml(report)]);
+
+    for (const value of Object.values(EVALUATOR_SECRETS)) {
+      expect(json).not.toContain(value);
+      expect(html).not.toContain(value);
+    }
+    const criterion = JSON.parse(json).criteria[0];
+    expect([criterion.evidence, criterion.details, criterion.criterionDetails.nested[0].note, criterion.agentReview.summary])
+      .toEqual([masked, masked, masked, masked]);
+    expect(Object.keys(criterion.criterionDetails)).toEqual(['nested', '[REDACTED_GITHUB_TOKEN]']);
+    expect(reportData(html).items[0].evidence).toBe(masked);
+    expect(downloadData(html).criteria[0].agentReview.rationale).toBe(masked);
+  });
+
   it('escapes untrusted criterion and advisory fields', () => {
     const renderer = new EvaluationReportRenderer();
     const json = renderer.renderJson(result);
@@ -1037,9 +999,6 @@ describe('EvaluationReportRenderer', () => {
     expect(html).not.toContain('</script> password=');
     expect(html).not.toContain('<script>bad()</script>');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
-    expect(downloaded).not.toContain('sk-details-secret');
-    expect(downloaded).not.toContain('sk-proj-renderersecret1234567890');
-    expect(downloaded).not.toContain('renderersecret');
     expect(downloadData(html).criteria[2]).toHaveProperty('criterionDetails');
     expect(downloadData(html).criteria[2]).toHaveProperty('agentReview');
   });

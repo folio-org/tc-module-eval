@@ -1,46 +1,80 @@
-const SECRET_KEYWORD = '(?:token|password|passwd|secret|api[_-]?key|access[_-]?key|refresh[_-]?token)';
-const SECRET_KEY_PATTERN = new RegExp(`^(?:[A-Za-z0-9_-]*${SECRET_KEYWORD}[A-Za-z0-9_-]*|authorization)$`, 'i');
+// Evaluated repositories are open source, so their content, command output and agent output are reported as
+// they are. Only the evaluator's own credentials, the values of the variables it uses for remote lookups and
+// agent review and the keys in a trusted OpenCode auth store, are masked.
+const SECRET_ENV_NAMES = new Set(['OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'SONAR_TOKEN', 'GITHUB_TOKEN']);
+// Masking a short value such as "1" or "true" would rewrite ordinary text without protecting anything.
+const MIN_SECRET_LENGTH = 8;
 
-export function isSensitiveKey(key: string): boolean {
-  return SECRET_KEY_PATTERN.test(key);
+interface EvaluatorSecret {
+  name: string;
+  value: string;
 }
 
-// An assigned key is a whole run of [A-Za-z0-9_-] from its first letter, digit, or underscore to its end, and contains a
-// keyword: whitespace, a separator, or a quote follows it, so it always ends where the run ends. The lookbehind starts it
-// once per run and the lookahead finds a keyword in one scan, because a key that could start at every word boundary and
-// split around every keyword backtracks quadratically on long runs (cubically when keywords repeat). Giving back the run
-// char by char afterwards is cheap: what follows a key fails at once on a run char.
-const SECRET_KEY = `(?<![A-Za-z0-9_]-*)(?=[A-Za-z0-9_-]*?${SECRET_KEYWORD})[A-Za-z0-9_-]*`;
-const QUOTED_SECRET_ASSIGNMENT_PATTERN = new RegExp(`(["']?)\\b(${SECRET_KEY})\\b\\1\\s*([:=])\\s*(["'])((?:\\\\.|(?!\\4)[^\\\\])+)\\4`, 'gi');
-// `(?<!\s)` tries the next-assignment lookahead only where whitespace starts: it holds at every position of a whitespace
-// run or none, and trying it at each one costs quadratic time on long runs. The value never starts inside a whitespace run,
-// except when `\s*` gives one back before a delimiter or the end, where this alternative fails anyway.
-const SECRET_ASSIGNMENT_PATTERN = new RegExp(`\\b(${SECRET_KEY})\\b\\s*([:=])\\s*([^\\r\\n"'\\\`,;]+?)(?=(?<!\\s)\\s+\\b(?:${SECRET_KEY}|Authorization)\\b\\s*[:=]|[\\r\\n"'\\\`,;]|$)`, 'gi');
-const PROVIDER_TOKEN_PATTERN = /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{2,}|sk-or-v1-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]{8,}|AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{8,})\b/g;
-const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/g;
-const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const OKAPI_TOKEN_PATTERN = /\b(?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*[A-Za-z0-9._~+/=-]{8,}/gi;
-export const URL_CREDENTIAL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
-export const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
-export const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
+const SECRET_VALUES = new Map<string, string>();
 
-export function redactSensitiveText(input: string, maxBytes?: number): string {
-  let redacted = input
-    .replace(PRIVATE_KEY_BLOCK_PATTERN, '[REDACTED_PRIVATE_KEY_BLOCK]')
-    .replace(OKAPI_TOKEN_PATTERN, match => match.replace(/^((?:X-Okapi-Token|Okapi-Token)\s*[:=]\s*)[A-Za-z0-9._~+/=-]+$/i, '$1[REDACTED]'))
-    .replace(QUOTED_SECRET_ASSIGNMENT_PATTERN, (_match, quote, key, separator, valueQuote) => `${quote}${key}${quote}${separator}${valueQuote}[REDACTED]${valueQuote}`)
-    .replace(SECRET_ASSIGNMENT_PATTERN, (match, key, _separator, value) => value === '[REDACTED]' ? match : `${key}=[REDACTED]`)
-    .replace(PROVIDER_TOKEN_PATTERN, '[REDACTED_PROVIDER_TOKEN]')
-    .replace(BEARER_PATTERN, 'Bearer [REDACTED]')
-    .replace(JWT_PATTERN, '[REDACTED_TOKEN]')
-    .replace(URL_CREDENTIAL_PATTERN, '[REDACTED_CREDENTIAL_URL]')
-    .replace(PRIVATE_URL_PATTERN, '[REDACTED_PRIVATE_URL]');
+/** Masks the values of further variables, such as those passed to OpenCode for provider or proxy access. */
+export function addEvaluatorSecretEnvNames(names: string[]): void {
+  names.forEach(name => SECRET_ENV_NAMES.add(name));
+}
 
-  if (maxBytes === undefined) {
-    return redacted;
+/** Masks credentials that are not held in variables, such as the keys in an OpenCode auth store, as [REDACTED_<name>]. */
+export function addEvaluatorSecretValues(name: string, values: string[]): void {
+  values.forEach(value => SECRET_VALUES.set(value, name));
+}
+
+function evaluatorSecrets(): EvaluatorSecret[] {
+  return [...SECRET_ENV_NAMES]
+    .map(name => ({ name, value: process.env[name] ?? '' }))
+    .concat([...SECRET_VALUES].map(([value, name]) => ({ name, value })))
+    .filter(secret => secret.value.length >= MIN_SECRET_LENGTH)
+    // Longest first, so a secret that contains another is masked whole.
+    .sort((left, right) => right.value.length - left.value.length);
+}
+
+function mask(text: string, secrets: EvaluatorSecret[]): string {
+  return secrets.reduce((masked, { name, value }) => masked.split(value).join(`[REDACTED_${name}]`), text);
+}
+
+/**
+ * Replaces each current value of the evaluator's secret variables with [REDACTED_<NAME>], then fits the text in
+ * maxBytes. Pass inputCut when the text has already lost its end, so a secret's start left there is dropped too.
+ */
+export function redactEvaluatorSecrets(input: string, maxBytes?: number, inputCut = false): string {
+  const secrets = evaluatorSecrets();
+  // Whole secrets first: a whole secret at the cut can end with the start of another.
+  const masked = mask(input, secrets);
+  const kept = inputCut ? withoutTrailingSecretStart(masked, secrets) : masked;
+  return maxBytes === undefined ? kept : truncateToByteBudget(kept, maxBytes);
+}
+
+/** Masks every string, including object keys, in a report value. */
+export function redactEvaluatorSecretsInValue<T>(value: T): T {
+  const secrets = evaluatorSecrets();
+  const walk = (item: unknown): unknown => {
+    if (typeof item === 'string') return mask(item, secrets);
+    if (item instanceof Date) return item;
+    if (Array.isArray(item)) return item.map(walk);
+    if (item && typeof item === 'object') {
+      return Object.fromEntries(Object.entries(item).map(([key, entry]) => [mask(key, secrets), walk(entry)]));
+    }
+    return item;
+  };
+  return (secrets.length ? walk(value) : value) as T;
+}
+
+function withoutTrailingSecretStart(text: string, secrets: EvaluatorSecret[]): string {
+  // A byte cut inside a multi-byte character decodes to a trailing replacement character.
+  const decoded = text.replace(/\uFFFD$/, '');
+  let cut = 0;
+  for (const { value } of secrets) {
+    for (let length = Math.min(value.length - 1, decoded.length); length > cut; length--) {
+      if (decoded.endsWith(value.slice(0, length))) {
+        cut = length;
+        break;
+      }
+    }
   }
-
-  return truncateToByteBudget(redacted, maxBytes);
+  return decoded.slice(0, decoded.length - cut);
 }
 
 export function truncateToByteBudget(text: string, maxBytes: number): string {

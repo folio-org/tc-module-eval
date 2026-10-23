@@ -1,5 +1,5 @@
 import { SectionEvaluator, CriterionResult, EvaluationStatus, CriterionFunction, EvaluationRun } from '../../types';
-import { redactSensitiveText } from '../../utils/redaction';
+import { redactEvaluatorSecrets } from '../../utils/redaction';
 import { errorMessage } from '../../utils/type-guards';
 
 export abstract class BaseSectionEvaluator implements SectionEvaluator {
@@ -71,7 +71,7 @@ export abstract class BaseSectionEvaluator implements SectionEvaluator {
   }
 
   protected createErrorResult(criterionId: string, error: any): CriterionResult {
-    const message = redactSensitiveText(errorMessage(error));
+    const message = redactEvaluatorSecrets(errorMessage(error));
     return this.createResult(
       criterionId,
       EvaluationStatus.MANUAL,

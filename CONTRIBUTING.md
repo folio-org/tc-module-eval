@@ -81,6 +81,8 @@ Filter with: `--criteria S001,S002,B005`
 
 **JSON**: Machine-readable format with complete evaluation data
 
+Reports are not redacted, except that the evaluator's own credentials are masked by value (`src/utils/redaction.ts`). If you add an environment variable that holds a credential, add its name to `SECRET_ENV_NAMES` there; register other credentials with `addEvaluatorSecretValues`.
+
 ## Configuration
 
 License policy files in `config/`:

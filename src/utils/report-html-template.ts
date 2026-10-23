@@ -1,6 +1,6 @@
 import { EvaluationResult, S006ReportDetails, S007AnalysisResult, S010Analysis, S011Analysis } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecretsInValue } from './redaction';
 import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
 import { s011AgentReviewNames } from './s011-evaluator';
@@ -53,37 +53,6 @@ function jsonForHtml(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
-function reportSafeValue<T>(value: T, redactText: (value: string) => string): T {
-  if (typeof value === 'string') return redactText(value) as T;
-  if (value instanceof Date) return value;
-  if (Array.isArray(value)) return value.map(item => reportSafeValue(item, redactText)) as T;
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, reportSafeValue(item, redactText)])) as T;
-  }
-  return value;
-}
-
-function createReportRedactor(protectedStrings: string[]): (value: string) => string {
-  const identities = [...new Set(protectedStrings.filter(Boolean))].sort((left, right) => right.length - left.length);
-  return value => {
-    // The placeholder tag never occurs in the value, so repository text cannot name a placeholder and
-    // have a protected string (with its raw line breaks) substituted into it.
-    let tag = 0;
-    while (value.includes(`REPORT_IDENTITY_${tag}_`)) tag++;
-    // Longest identities first, each searched only in text no identity has claimed, so one identity can
-    // neither match inside another's placeholder nor split a longer identity.
-    let parts: Array<string | number> = [value];
-    identities.forEach((identity, index) => {
-      parts = parts.flatMap(part => typeof part === 'number'
-        ? [part]
-        : part.split(identity).flatMap((text, position) => position ? [index, text] : [text]));
-    });
-    const protectedValue = parts.map(part => typeof part === 'number' ? `[REPORT_IDENTITY_${tag}_${part}]` : part).join('');
-    return redactSensitiveText(protectedValue)
-      .replace(new RegExp(`\\[REPORT_IDENTITY_${tag}_(\\d+)\\]`, 'g'), (_placeholder, index) => identities[Number(index)]);
-  };
-}
-
 function repositoryUrlWithoutCredentials(repositoryUrl: string): string {
   try {
     const parsed = new URL(repositoryUrl);
@@ -94,7 +63,7 @@ function repositoryUrlWithoutCredentials(repositoryUrl: string): string {
     parsed.password = '';
     return parsed.toString();
   } catch {
-    return redactSensitiveText(repositoryUrl);
+    return repositoryUrl;
   }
 }
 
@@ -253,8 +222,7 @@ function dependencyLicenses(criterion: EvaluationResult['criteria'][number]) {
 export function createHtmlReport(result: EvaluationResult): string {
   const repositoryUrl = repositoryUrlWithoutCredentials(result.repositoryUrl);
   const reportInput = { ...result, repositoryUrl };
-  const redactText = createReportRedactor([repositoryUrl, ...(result.provenance?.citedSourcePaths ?? [])]);
-  const safeResult = reportSafeValue(reportInput, redactText);
+  const safeResult = redactEvaluatorSecretsInValue(reportInput);
   const citedSourcePaths = safeResult.provenance?.citedSourcePaths ?? [];
   const report = {
     meta: {
@@ -266,7 +234,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       commit: safeResult.provenance?.repositoryCommit,
       evaluator: safeResult.provenance?.evaluator,
       agentReviewModel: safeResult.provenance?.agentReviewModel,
-      sourceBase: pinnedSourceBase(reportInput),
+      sourceBase: pinnedSourceBase(safeResult),
       citedSourcePaths
     },
     items: safeResult.criteria.map((criterion, index) => {
@@ -305,7 +273,7 @@ export function createHtmlReport(result: EvaluationResult): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FOLIO Module Evaluation Report - ${escapeHtml(result.moduleName)}</title>
+  <title>FOLIO Module Evaluation Report - ${escapeHtml(safeResult.moduleName)}</title>
   <style>
     :root{color-scheme:light;--page:#F5F4EF;--surface:#FFF;--border:#E6E3DA;--line:#EFEDE6;--control:#DCD9CF;--chip:#F0EEE8;--segment:#ECEAE3;--ink:#1B1A17;--ink2:#4A4843;--muted:#77746B;--faint:#9A968C;--accent:#2C5BA8;--sans:"IBM Plex Sans",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace}
     *{box-sizing:border-box}html{overflow-y:scroll;scrollbar-gutter:stable}body{margin:0;overflow-x:clip;background:var(--page);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}button,input{font:inherit}button{color:inherit}a{color:var(--accent);text-decoration:none}a:hover{color:#1B3F7A;text-decoration:underline}::selection{background:#F4DFA8}

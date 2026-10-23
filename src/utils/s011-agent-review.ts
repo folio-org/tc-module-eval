@@ -1,6 +1,6 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, EvaluationStatus, S011Analysis } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
 
 const SUMMARY_BYTES = 64 * 1024;
@@ -22,7 +22,7 @@ export async function reviewS011WithAgent(
   } catch (error) {
     return {
       ...unavailableResult('S011'),
-      errors: [redactSensitiveText(`Unable to prepare S011 agent review material: ${errorMessage(error)}`)]
+      errors: [redactEvaluatorSecrets(`Unable to prepare S011 agent review material: ${errorMessage(error)}`)]
     };
   }
   return runCriterionAgentReview(request, config, commandRunner);

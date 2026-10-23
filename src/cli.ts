@@ -7,6 +7,7 @@ import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } f
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
 import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
 import { errorMessage } from './utils/type-guards';
+import { redactEvaluatorSecrets } from './utils/redaction';
 
 const program = new Command();
 
@@ -80,7 +81,7 @@ program
 
     } catch (error) {
       console.error('\n❌ Evaluation failed:\n');
-      console.error(errorMessage(error));
+      console.error(redactEvaluatorSecrets(errorMessage(error)));
       process.exit(1);
     }
   });

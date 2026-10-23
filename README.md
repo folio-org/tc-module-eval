@@ -33,6 +33,8 @@ When this flag is used, reports record where commands ran: `github-actions` in G
 
 Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
+Evaluated repositories are open source, so reports show repository text, command output, and agent advice as written. Only the evaluator's own credentials are masked: the values of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SONAR_TOKEN`, `GITHUB_TOKEN`, and any variable passed to OpenCode with `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` become `[REDACTED_<VARIABLE>]` in all output, and the keys in an OpenCode auth store become `[REDACTED_AUTH_STORE]`. See [Output masking](docs/agent-review.md#output-masking).
+
 ### S007 Officially Supported Technologies
 
 S007 evaluates a module against the current policy committed at

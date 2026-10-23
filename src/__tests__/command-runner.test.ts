@@ -4,6 +4,7 @@ import * as path from 'path';
 import { setTimeout as delay } from 'timers/promises';
 import { LocalCommandRunner, sanitizeCommandOutput } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
+import { EVALUATOR_SECRETS, SECRET_NAMES, withEnvironment, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
 describe('CommandRunner', () => {
   it('should block build-tool commands when local commands are not allowed', async () => {
@@ -130,17 +131,28 @@ describe('CommandRunner', () => {
     expect(result.stderr).toBe('bad');
   });
 
-  it('should sanitize failed command error messages', async () => {
-    const runner = new LocalCommandRunner(true);
-    const result = await runner.run({
-      command: 'node',
-      args: ['-e', 'process.stderr.write("token=supersecret"); process.exit(2)'],
-      cwd: process.cwd()
-    });
+  it("masks each of the evaluator's secrets, every time it appears, in stdout, stderr and the error message", async () => {
+    const values = Object.values(EVALUATOR_SECRETS);
+    const script = `const text = ${JSON.stringify(values.map(value => `${value} then ${value}`).join('\n'))};`
+      + 'process.stdout.write(text); process.stderr.write(text); process.exit(2)';
+    const result = await withEvaluatorSecrets(() =>
+      new LocalCommandRunner(true).run({ command: 'node', args: ['-e', script], cwd: process.cwd() }));
 
     expect(result.status).toBe('failed');
-    expect(result.errorMessage).toContain('token=[REDACTED]');
-    expect(result.errorMessage).not.toContain('supersecret');
+    const expected = SECRET_NAMES.map(name => `[REDACTED_${name}] then [REDACTED_${name}]`).join('\n');
+    expect(result.stdout).toBe(expected);
+    expect(result.stderr).toBe(expected);
+    expect(result.errorMessage).toBe(`Command exited with code 2: ${expected}`);
+  });
+
+  it.each(['stdout', 'stderr'] as const)('drops the start of a secret that the %s capture limit cut', async stream => {
+    const secret = EVALUATOR_SECRETS.SONAR_TOKEN;
+    const script = `process.${stream}.write('x'.repeat(100) + ${JSON.stringify(secret)} + ' rest')`;
+    const result = await withEvaluatorSecrets(() => new LocalCommandRunner(true).run({
+      command: 'node', args: ['-e', script], cwd: process.cwd(), maxOutputBytes: 110
+    }));
+
+    expect(result[stream]).toBe(`${'x'.repeat(100)}\n[output truncated to 110 bytes]`);
   });
 
   it('should include timeout details for timed out commands', async () => {
@@ -227,7 +239,8 @@ describe('CommandRunner', () => {
       maxOutputBytes: 1000
     };
     const runner = new LocalCommandRunner();
-    const tail = await runner.run({ ...request, keepStdoutTail: true });
+    // The kept tail is masked too.
+    const tail = await withEnvironment({ SONAR_TOKEN: 'SECRET1999' }, () => runner.run({ ...request, keepStdoutTail: true }));
     const head = await runner.run(request);
 
     const [marker, ...lines] = tail.stdout.trimEnd().split('\n');
@@ -235,11 +248,10 @@ describe('CommandRunner', () => {
     expect(tail.stdoutBytes).toBe(head.stdoutBytes);
     expect(tail.stdoutBytes).toBeGreaterThan(40000);
     expect(marker).toMatch(/^\[output truncated: kept the last \d+ of \d+ bytes\]$/);
-    expect(lines[lines.length - 1]).toBe('line 1999 token=[REDACTED]');
+    expect(lines[lines.length - 1]).toBe('line 1999 token=[REDACTED_SONAR_TOKEN]');
     expect(lines.length).toBeGreaterThan(20);
-    expect(Buffer.byteLength(lines.join('\n'))).toBeLessThanOrEqual(1000);
-    expect(lines.every(line => /^line \d{4} token=\[REDACTED\]$/.test(line))).toBe(true);
-    expect(tail.stdout).not.toContain('SECRET');
+    expect(Buffer.byteLength(lines.join('\n').replace('[REDACTED_SONAR_TOKEN]', 'SECRET1999'))).toBeLessThanOrEqual(1000);
+    expect(lines.slice(0, -1).every(line => /^line \d{4} token=SECRET\d+$/.test(line))).toBe(true);
     expect(head.stdout).toContain('line 0000');
     expect(head.stdout).not.toContain('line 1999');
     expect(runner.normalize({ ...request, keepStdoutTail: true })).not.toBe(runner.normalize(request));
@@ -247,12 +259,11 @@ describe('CommandRunner', () => {
     expect(none).toMatchObject({ status: 'success', stdoutBytes: tail.stdoutBytes, stdoutTruncated: true });
   });
 
-  it('should sanitize and bound command output', () => {
-    const output = sanitizeCommandOutput('token=abc123\n' + 'x'.repeat(40), 30);
+  it('masks a secret before bounding output, so the bound cannot cut it', async () => {
+    const secret = EVALUATOR_SECRETS.GITHUB_TOKEN;
+    const output = await withEvaluatorSecrets(() => sanitizeCommandOutput(`${'x'.repeat(20)}${secret}`, 30));
 
-    expect(output).toContain('token=[REDACTED]');
-    expect(output).toContain('output truncated');
-    expect(output).not.toContain('abc123');
+    expect(output).toBe(`${'x'.repeat(20)}[REDACTED_\n[output truncated to 30 bytes]`);
   });
 
   it('distinguishes exact byte capture, overflow, and a literal truncation marker', async () => {
@@ -273,10 +284,11 @@ describe('CommandRunner', () => {
   });
 
   it('reports sanitized representation overflow without publishing broken JSON', async () => {
-    const output = '{"password":"x"}';
-    const result = await new LocalCommandRunner().run({ command: process.execPath,
+    // The placeholder is longer than the short key it replaces.
+    const output = '{"key":"k3y-1234"}';
+    const result = await withEnvironment({ OPENAI_API_KEY: 'k3y-1234' }, () => new LocalCommandRunner().run({ command: process.execPath,
       args: ['-e', 'process.stdout.write(process.env.TEST_WIRE)'], cwd: process.cwd(),
-      env: { TEST_WIRE: output }, stdoutFormat: 'json', maxOutputBytes: Buffer.byteLength(output) });
+      env: { TEST_WIRE: output }, stdoutFormat: 'json', maxOutputBytes: Buffer.byteLength(output) }));
     expect(result.stdoutTruncated).toBe(true);
     expect(result.stdoutBytes).toBe(Buffer.byteLength(output));
     expect(result.stdout).toBe('');
