@@ -55,6 +55,31 @@ describe('module kind classifier', () => {
   });
 
   it.each([
+    ['a library parent and its own non-library artifactId', pom('mod-example', { parent: 'folio-spring-base' }), 'ambiguous'],
+    ['a non-library parent and its own library artifactId', pom('folio-spring-support', { parent: 'folio-spring-parent' }), 'library'],
+    // Maven accepts <project>'s children in any order, so a dependency can come before the project's own artifactId.
+    ['no parent and its own library artifactId after a dependency', pom('folio-kafka-wrapper', { dependency: 'vertx-core' }), 'library'],
+    ['no parent and a library dependency before its own artifactId', pom('mod-example', { dependency: 'folio-spring-base' }), 'ambiguous']
+  ])('classifies a pom.xml with %s', (_label, pomXml, kind) => {
+    writeFile('pom.xml', pomXml);
+
+    const result = classifyModuleKind(tempRoot);
+    expect(result.kind).toBe(kind);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it.each([
+    ['is not well-formed', '<project><artifactId>folio-spring-base</artifactId>', 'Unable to parse pom.xml'],
+    ['is over the 1 MiB read limit', pom('folio-spring-base').replace('<modelVersion>', `<!-- ${'x'.repeat(1024 * 1024)} --><modelVersion>`), 'larger than']
+  ])('warns and does not classify a pom.xml that %s', (_label, pomXml, warning) => {
+    writeFile('pom.xml', pomXml);
+
+    const result = classifyModuleKind(tempRoot);
+    expect(result.kind).toBe('ambiguous');
+    expect(result.warnings).toEqual([expect.stringContaining(warning)]);
+  });
+
+  it.each([
     ['missing', { type: 'components' }, 'library'],
     ['an empty list', { actsAs: [] }, 'library'],
     ['only empty strings', { actsAs: [''] }, 'library'],
@@ -92,6 +117,19 @@ describe('module kind classifier', () => {
 
     expect(classifyModuleKind(tempRoot).kind).toBe('ambiguous');
   });
+
+  function pom(artifactId: string, { parent, dependency }: { parent?: string; dependency?: string } = {}): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  ${parent ? `<parent><groupId>org.folio</groupId><artifactId>${parent}</artifactId><version>1.0.0</version></parent>` : ''}
+  ${dependency ? `<dependencies><dependency><groupId>org.folio</groupId><artifactId>${dependency}</artifactId></dependency></dependencies>` : ''}
+  <groupId>org.folio</groupId>
+  <artifactId>${artifactId}</artifactId>
+  <version>1.0.0</version>
+  <build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId></plugin></plugins></build>
+</project>`;
+  }
 
   function writeFile(relativePath: string, content: string): void {
     const absolutePath = path.join(tempRoot, relativePath);

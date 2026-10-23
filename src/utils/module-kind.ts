@@ -1,7 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { Parser } from 'xml2js';
 import { ModuleKindResult } from '../types';
-import { isDirectory, readJsonFile, readTextFile } from './repo-files';
+import { xmlText } from './manifest-parsers';
+import { isDirectory, readBoundedFileBytes, readJsonFile } from './repo-files';
+import { errorMessage } from './type-guards';
+
+const MAX_POM_BYTES = 1024 * 1024;
 
 const EXPLICIT_LIBRARY_NAMES = new Set([
   'folio-spring-base',
@@ -19,14 +24,14 @@ export function classifyModuleKind(repoPath: string): ModuleKindResult {
   const warnings: string[] = [];
   const basename = path.basename(repoPath);
   const packageJson = readJsonFile(path.join(repoPath, 'package.json'), warnings);
-  const pomXml = readTextFile(path.join(repoPath, 'pom.xml'), warnings);
+  const pomArtifactId = readPomArtifactId(path.join(repoPath, 'pom.xml'), warnings);
 
   if (hasBackendModuleMarker(repoPath, evidence)) {
     return { kind: 'backend-module', evidence, warnings };
   }
 
   // Checked before the UI markers: stripes-components and similar libraries carry Stripes metadata.
-  if (hasExplicitLibraryMarker(packageJson, pomXml, evidence) || hasStripesLibraryMarker(packageJson, evidence)) {
+  if (hasExplicitLibraryMarker(packageJson, pomArtifactId, evidence) || hasStripesLibraryMarker(packageJson, evidence)) {
     return { kind: 'library', evidence, warnings };
   }
 
@@ -97,7 +102,7 @@ function hasStripesLibraryMarker(packageJson: Record<string, unknown> | undefine
 // Matches package names only: real runs clone into `<repo>/<timestamp>`, so the directory name says nothing.
 function hasExplicitLibraryMarker(
   packageJson: Record<string, unknown> | undefined,
-  pomXml: string | undefined,
+  pomArtifactId: string | undefined,
   evidence: string[]
 ): boolean {
   const packageName = typeof packageJson?.name === 'string' ? packageJson.name.replace(/^@folio\//, '') : undefined;
@@ -106,11 +111,53 @@ function hasExplicitLibraryMarker(
     return true;
   }
 
-  const artifactMatch = pomXml?.match(/<artifactId>([^<]+)<\/artifactId>/);
-  if (artifactMatch && EXPLICIT_LIBRARY_NAMES.has(artifactMatch[1])) {
-    evidence.push(`Explicit allowlisted Maven library artifact: ${artifactMatch[1]}`);
+  if (pomArtifactId && EXPLICIT_LIBRARY_NAMES.has(pomArtifactId)) {
+    evidence.push(`Explicit allowlisted Maven library artifact: ${pomArtifactId}`);
     return true;
   }
 
   return false;
+}
+
+// The project's own <artifactId>, not the <parent>'s or a dependency's. Synchronous: xml2js calls back before
+// parseString returns unless its async option is set.
+function readPomArtifactId(pomPath: string, warnings: string[]): string | undefined {
+  if (!fs.existsSync(pomPath)) {
+    return undefined;
+  }
+  let bytes: Buffer;
+  try {
+    bytes = readBoundedFileBytes(pomPath, MAX_POM_BYTES + 1);
+  } catch (error) {
+    warnings.push(`Unable to read pom.xml: ${errorMessage(error)}`);
+    return undefined;
+  }
+  if (bytes.length > MAX_POM_BYTES) {
+    warnings.push(`pom.xml is larger than ${MAX_POM_BYTES} bytes and was not read`);
+    return undefined;
+  }
+
+  let done = false;
+  let project: unknown;
+  let parseError: unknown;
+  try {
+    new Parser({ explicitArray: false, trim: true }).parseString(bytes.toString('utf-8'), (error, result) => {
+      done = true;
+      if (error) {
+        parseError = error;
+      } else {
+        project = result?.project;
+      }
+    });
+  } catch (error) {
+    // xml2js can throw on content after the root element once it has already called back; keep that result.
+    if (!done) {
+      parseError = error;
+    }
+  }
+  if (parseError) {
+    warnings.push(`Unable to parse pom.xml: ${errorMessage(parseError)}`);
+    return undefined;
+  }
+  return xmlText((project as Record<string, unknown> | undefined)?.artifactId) || undefined;
 }
