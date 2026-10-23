@@ -181,7 +181,8 @@ describe('npm-dependency-parser', () => {
       const expected: Record<string, LicenseIssueType | 'pass'> = {
         'MIT AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
         'MIT AND Apache-2.0': 'pass',
-        'MIT AND Zlib': LicenseIssueType.UNKNOWN_LICENSE,
+        'MIT AND Zlib': 'pass',
+        'MIT AND Unlisted-1.0': LicenseIssueType.UNKNOWN_LICENSE,
         'MPL-2.0 AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
         '(MIT OR Apache-2.0) AND BSD-3-Clause': 'pass',
         '(MIT OR Apache-2.0) AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
