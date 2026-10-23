@@ -37,7 +37,7 @@ describe('S014 application assignment', () => {
 
   async function uiRepo(name: string, packageName: string): Promise<string> {
     const repo = path.join(root, name);
-    await fs.outputJson(path.join(repo, 'package.json'), { name: packageName, stripes: { type: 'app' } });
+    await fs.outputJson(path.join(repo, 'package.json'), { name: packageName, stripes: { actsAs: ['app'] } });
     return repo;
   }
 

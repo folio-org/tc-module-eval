@@ -25,12 +25,13 @@ export function classifyModuleKind(repoPath: string): ModuleKindResult {
     return { kind: 'backend-module', evidence, warnings };
   }
 
-  if (hasUiModuleMarker(basename, packageJson, evidence)) {
-    return { kind: 'ui-module', evidence, warnings };
+  // Checked before the UI markers: stripes-components and similar libraries carry Stripes metadata.
+  if (hasExplicitLibraryMarker(packageJson, pomXml, evidence) || hasStripesLibraryMarker(packageJson, evidence)) {
+    return { kind: 'library', evidence, warnings };
   }
 
-  if (hasExplicitLibraryMarker(basename, packageJson, pomXml, evidence)) {
-    return { kind: 'library', evidence, warnings };
+  if (hasUiModuleMarker(basename, packageJson, evidence)) {
+    return { kind: 'ui-module', evidence, warnings };
   }
 
   return { kind: 'ambiguous', evidence: ['No explicit deployable module or allowlisted library marker found'], warnings };
@@ -79,20 +80,30 @@ function hasUiModuleMarker(
   return false;
 }
 
+// A Stripes package without an actsAs role is a library whatever its name, e.g. stripes-acq-components' `"actsAs": [""]`.
+function hasStripesLibraryMarker(packageJson: Record<string, unknown> | undefined, evidence: string[]): boolean {
+  const stripes = packageJson?.stripes;
+  if (!stripes || typeof stripes !== 'object') {
+    return false;
+  }
+  const actsAs = ([] as unknown[]).concat((stripes as Record<string, unknown>).actsAs ?? []);
+  if (actsAs.some(role => typeof role === 'string' && role.trim() !== '')) {
+    return false;
+  }
+  evidence.push('Stripes metadata in package.json declares no actsAs role');
+  return true;
+}
+
+// Matches package names only: real runs clone into `<repo>/<timestamp>`, so the directory name says nothing.
 function hasExplicitLibraryMarker(
-  basename: string,
   packageJson: Record<string, unknown> | undefined,
   pomXml: string | undefined,
   evidence: string[]
 ): boolean {
   const packageName = typeof packageJson?.name === 'string' ? packageJson.name.replace(/^@folio\//, '') : undefined;
-  const names = [basename, packageName].filter((name): name is string => Boolean(name));
-
-  for (const name of names) {
-    if (EXPLICIT_LIBRARY_NAMES.has(name)) {
-      evidence.push(`Explicit allowlisted library marker: ${name}`);
-      return true;
-    }
+  if (packageName && EXPLICIT_LIBRARY_NAMES.has(packageName)) {
+    evidence.push(`Explicit allowlisted library marker: ${packageName}`);
+    return true;
   }
 
   const artifactMatch = pomXml?.match(/<artifactId>([^<]+)<\/artifactId>/);

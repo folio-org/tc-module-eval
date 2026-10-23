@@ -24,7 +24,7 @@ describe('S008 shared evaluator integration', () => {
   });
 
   it('selects development explicitly and reports a missing selected catalog', async () => {
-    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { okapiInterfaces: {} } });
+    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: {} } });
     const run = createEvaluationRun({ repositoryPath: repo, language: 'javascript', criteriaFilter: ['S008'], s008CatalogChannel: 'development' });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo, run);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
@@ -36,7 +36,7 @@ describe('S008 shared evaluator integration', () => {
   it('accepts mod-circulation-bff interfaces from the checked-in catalog and ledger', async () => {
     // mod-circulation-bff moved to app-requests-ecs, which R1-2026.27 does not include; the user accepted it.
     await fs.writeJson(path.join(repo, 'package.json'), {
-      name: 'ui-example', stripes: { okapiInterfaces: { 'circulation-bff-loans': '1.6' }, optionalOkapiInterfaces: { 'circulation-bff-users': '1.0' } }
+      name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: { 'circulation-bff-loans': '1.6' }, optionalOkapiInterfaces: { 'circulation-bff-users': '1.0' } }
     });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo);
     expect(result.status).toBe(EvaluationStatus.PASS);
@@ -62,7 +62,7 @@ describe('S008 shared evaluator integration', () => {
   });
 
   it('runs S008 both alone and as part of the full shared criterion set', async () => {
-    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { okapiInterfaces: {} } });
+    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: {} } });
     const evaluator = new TestEvaluator('javascript');
     const only = await evaluator.evaluate(repo, ['S008']);
     const full = await evaluator.evaluate(repo);
