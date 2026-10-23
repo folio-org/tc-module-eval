@@ -39,9 +39,9 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
 /**
  * Main orchestrator for module evaluation
  *
- * S001-S014, F003 and F005 have automated evaluation logic and return MANUAL only
- * when the evidence is inconclusive. The other 22 of the 38 criteria always return
- * MANUAL: A001 is a manual review by design, and B001-B016 (Java) and
+ * S001-S014, B001, F003 and F005 have automated evaluation logic and return MANUAL
+ * only when the evidence is inconclusive. The other 21 of the 38 criteria always
+ * return MANUAL: A001 is a manual review by design, and B002-B016 (Java) and
  * F001-F002, F004 and F006-F007 (JavaScript) have no evaluation logic yet.
  */
 export class ModuleEvaluator {
@@ -104,7 +104,8 @@ export class ModuleEvaluator {
             })
           : undefined),
         s014Application: this.config.s014Application,
-        s014PlatformRef: this.config.s014PlatformRef
+        s014PlatformRef: this.config.s014PlatformRef,
+        existingModule: this.config.existingModule
       });
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);

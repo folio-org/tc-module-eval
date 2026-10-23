@@ -265,7 +265,7 @@ function commandFailure(command: CommandExecutionResult | undefined): string {
 }
 
 // Ajv reports JSON pointers and schema keywords; name the descriptor field instead.
-function describeSchemaProblem(error: ModuleDescriptorValidationError): string {
+export function describeSchemaProblem(error: ModuleDescriptorValidationError): string {
   const field = fieldPath(error.instancePath);
   const child = (name: unknown) => (field ? `${field}.${String(name)}` : String(name));
   switch (error.keyword) {

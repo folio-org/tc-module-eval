@@ -24,7 +24,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S013: 'Unit test coverage and technologies',
   S014: 'Application assignment',
   F003: 'Internationalization',
-  F005: 'Stripes version'
+  F005: 'Stripes version',
+  B001: 'Module descriptor template'
 };
 
 function escapeHtml(text: string): string {
@@ -422,7 +423,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     function prepare(item) {
       // Criteria without an automated check have exactly this details text; a prefix or evidence suffix could be repository text.
       var human = item.status === 'manual' && item.details.length === 1 && item.details[0] === 'This criterion requires manual evaluation by a human reviewer';
-      var evidence = item.evidence.replace(/^[SF]\d+ manual:\s*/,'');
+      var evidence = item.evidence.replace(/^[SFB]\d+ manual:\s*/,'');
       var tree = human ? [] : buildTree(item.details, item.referenceLists || []);
       if (item.id === 'S007' || item.id === 'F005') {
         // F005 shows S007's Stripes rows under its own heading.
@@ -442,8 +443,8 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      // An F criterion's checklist items, and where to start on each, are what the reviewer works through.
-      var checklist = /^F\d+$/.test(item.id) && tree.find(function (node) { return node.text === 'Checklist for the reviewer:'; });
+      // An F or B criterion's checklist items, and where to start on each, are what the reviewer works through.
+      var checklist = /^[FB]\d+$/.test(item.id) && tree.find(function (node) { return node.text === 'Checklist for the reviewer:'; });
       if (checklist) checklist.children.forEach(function (checkItem) {
         checkItem.openByDefault = true; checkItem.hideCount = true;
         checkItem.children.forEach(function (node) { if (node.text === 'Start with:') { node.openByDefault = true; node.hideCount = true; } });

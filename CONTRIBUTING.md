@@ -100,6 +100,7 @@ folio-eval evaluate <repo-url> --output ./my-reports
 folio-eval evaluate <repo-url> --json-only
 folio-eval evaluate <repo-url> --no-cleanup
 folio-eval evaluate <repo-url> --allow-remote-lookups --application app-search [--platform-ref snapshot]
+folio-eval evaluate <repo-url> --existing-module
 
 # Other
 folio-eval list-languages

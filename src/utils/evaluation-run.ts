@@ -25,6 +25,7 @@ export interface CreateEvaluationRunOptions {
   remoteLookups?: EvaluationRun['remoteLookups'];
   s014Application?: string;
   s014PlatformRef?: string;
+  existingModule?: boolean;
 }
 
 export function createEvaluationRun(options: CreateEvaluationRunOptions): EvaluationRun {
@@ -55,6 +56,7 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     remoteLookups: options.remoteLookups,
     s014Application: options.s014Application,
     s014PlatformRef: options.s014PlatformRef,
+    existingModule: options.existingModule ?? false,
     async getOrCreateArtifact<K extends ArtifactKey>(
       key: K,
       producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>

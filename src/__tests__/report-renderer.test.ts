@@ -17,6 +17,7 @@ import { analyzeS006SensitiveInformation, buildS006CriterionDetails, formatS006E
 import { FakeS006GitleaksRunner } from './helpers/fake-s006-gitleaks-runner';
 import { renderFrontendChecklistLines } from '../utils/frontend-checklist';
 import { FrontendEvaluator } from '../evaluators/javascript/frontend-evaluator';
+import { evaluateB001, renderB001HumanDetails } from '../utils/b001-descriptor-template';
 import { FrontendChecklist } from '../types';
 
 describe('EvaluationReportRenderer', () => {
@@ -1220,5 +1221,28 @@ describe('EvaluationReportRenderer', () => {
         fs.rmSync(repo, { recursive: true, force: true });
       }
     });
+  });
+
+  it('renders B001 as a Backend criterion whose open checklist links to the cited build file', () => {
+    const analysis = evaluateB001({
+      kind: 'ambiguous', kindEvidence: ['No module descriptor found'], moduleKind: { kind: 'ambiguous', evidence: [], warnings: [] },
+      templateCandidates: [], framework: { name: 'unknown', evidence: [] }, storage: { present: false, evidence: [] },
+      snapshot: { revision: 'x', complete: true, diagnostics: [], files: [{ path: 'pom.xml', oid: 'x', size: 1, content: '<project/>' }] }
+    });
+    const b001 = { criterionId: 'B001', status: analysis.status, evidence: analysis.summary, details: renderB001HumanDetails(analysis), criterionDetails: analysis };
+    const commit = '0123456789abcdef0123456789abcdef01234567';
+    const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [b001], provenance: {
+      repositoryCommit: commit, evaluator: { name: 'folio-module-evaluator', version: '1.0.0' },
+      citedSourcePaths: citedTrackedFiles([b001], ['pom.xml']) } });
+    const item = preparedItems(html)[0];
+
+    expect(item).toMatchObject({ id: 'B001', title: 'Module descriptor template', category: 'Backend', triage: 'review' });
+    expect(item.summary).toBe('No module descriptor was found, and the repository is not a known shared library. A module must have one; a library need not.');
+    const checklistNode = item.tree.find((node: any) => node.text === 'Checklist for the reviewer:');
+    expect(checklistNode.children[0]).toMatchObject({
+      text: 'B001-C2 The repository is a shared library, or it is a module and commits its module descriptor template.',
+      openByDefault: true, children: [{ text: 'Start with:', openByDefault: true }]
+    });
+    expect(rowLinks(html, 'B001')('pom.xml — what the build produces').href).toBe(`https://github.com/folio-org/test-module/blob/${commit}/pom.xml`);
   });
 });

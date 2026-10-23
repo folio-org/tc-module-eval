@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'backendEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -133,6 +133,8 @@ export interface EvaluationRunArtifacts {
   agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
   /** The committed production source, package.json and English translations the F criteria read. */
   frontendSource?: import('../utils/frontend-source').FrontendSource;
+  /** The B criteria's shared evidence: repository kind, descriptor template, framework and storage. */
+  backendEvidence?: import('./backend-evidence').BackendEvidence;
 }
 
 export interface EvaluationRun {
@@ -156,6 +158,8 @@ export interface EvaluationRun {
   s014Application?: string;
   /** The platform-lsp branch, tag or commit S014 reads (--platform-ref). */
   s014PlatformRef?: string;
+  /** Evaluate an existing module rather than a new one (--existing-module), which relaxes some new-module rules. */
+  existingModule: boolean;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -186,6 +190,8 @@ export interface EvaluationConfig {
   remoteLookups?: import('./remote-evidence').RemoteLookups;
   s014Application?: string;
   s014PlatformRef?: string;
+  /** Evaluate an existing module rather than a new one (--existing-module). */
+  existingModule?: boolean;
 }
 
 export * from './s004-installation-documentation';
@@ -204,6 +210,7 @@ export * from './remote-evidence';
 export * from './frontend-checklist';
 export * from './f003-internationalization';
 export * from './f005-stripes-version';
+export * from './backend-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
