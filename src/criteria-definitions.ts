@@ -165,14 +165,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'S013',
     description: '80%+ unit test coverage',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Configuration management',
-      languageReasons: {
-        javascript: 'Unit test coverage (Jest/Istanbul)'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S014',

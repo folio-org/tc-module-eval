@@ -20,6 +20,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S010: 'Third-party system resilience',
   S011: 'SonarQube findings',
   S012: 'Officially supported build tools',
+  S013: 'Unit test coverage and technologies',
   S014: 'Application assignment'
 };
 

@@ -75,8 +75,8 @@ function versionLine(check: S012VersionCheck, judged: boolean): string {
   return `${check.label} in ${reportPath(check.path ?? '')}: ${exact ?? reportText(check.text)}${meaning}${verdict}`;
 }
 
-// Problems with the same message are merged into one row that lists every file.
-function warningLines(diagnostics: S012AnalysisResult['evidence']['diagnostics']): string[] {
+// Problems with the same message are merged into one row that lists every file (S012 and S013).
+export function warningLines(diagnostics: S012AnalysisResult['evidence']['diagnostics']): string[] {
   if (!diagnostics.length) return [];
   const groups = new Map<string, string[]>();
   for (const diagnostic of diagnostics) {

@@ -1,7 +1,7 @@
 import semver from 'semver';
 import {
   BuildFileKind,
-  BuildTestEvidence,
+  BuildEvidence,
   BuildToolId,
   EvaluationStatus,
   FolioSharedWorkflowTable,
@@ -92,7 +92,7 @@ interface ToolSignal {
 export function evaluateS012(
   policyLoad: S007PolicyLoadResult,
   tableLoad: FolioSharedWorkflowTableLoadResult,
-  evidence: BuildTestEvidence,
+  evidence: BuildEvidence,
   language: 'java' | 'javascript'
 ): S012AnalysisResult {
   const area = language === 'javascript' ? 'frontend' : 'backend';
@@ -155,7 +155,7 @@ export function evaluateS012(
 // ---- Which tools build the module ----
 
 /** CI evidence: FOLIO shared workflows the table knows, and build commands of inline jobs whose build file exists. */
-function ciSignals(evidence: BuildTestEvidence, table: FolioSharedWorkflowTable): ToolSignal[] {
+function ciSignals(evidence: BuildEvidence, table: FolioSharedWorkflowTable): ToolSignal[] {
   const signals: ToolSignal[] = [];
   for (const use of knownSharedWorkflows(evidence, table)) {
     signals.push({ tool: table.workflows[use.name].buildTool, via: `FOLIO's ${use.name}@${use.ref} workflow (${reportPath(use.path)})`, path: use.path, job: use.job, ci: true, shared: use });
@@ -168,7 +168,7 @@ function ciSignals(evidence: BuildTestEvidence, table: FolioSharedWorkflowTable)
   return signals;
 }
 
-function knownSharedWorkflows(evidence: BuildTestEvidence, table: FolioSharedWorkflowTable): SharedWorkflowUse[] {
+function knownSharedWorkflows(evidence: BuildEvidence, table: FolioSharedWorkflowTable): SharedWorkflowUse[] {
   return evidence.sharedWorkflows.filter(use => use.ref === table.ref && Object.prototype.hasOwnProperty.call(table.workflows, use.name));
 }
 
@@ -176,7 +176,7 @@ function knownSharedWorkflows(evidence: BuildTestEvidence, table: FolioSharedWor
  * Whether a workflow file (or the CI command list) could not be read in full. Then CI may run a different tool than
  * the build files suggest, so a tool chosen from the build files alone cannot fail the module.
  */
-function ciIncomplete(evidence: BuildTestEvidence): boolean {
+function ciIncomplete(evidence: BuildEvidence): boolean {
   return evidence.diagnostics.some(item =>
     item.code === 'file_limit' || item.code === 'command_limit' || (item.path ?? '').startsWith('.github'));
 }
@@ -192,7 +192,7 @@ function unlessSelectionUncertain(finding: S012Finding, uncertain: boolean): S01
   };
 }
 
-function backendFindings(evidence: BuildTestEvidence, sections: S007PolicySection[], table: FolioSharedWorkflowTable): S012Finding[] {
+function backendFindings(evidence: BuildEvidence, sections: S007PolicySection[], table: FolioSharedWorkflowTable): S012Finding[] {
   const ci = ciSignals(evidence, table).filter(signal => BACKEND_TOOLS.includes(signal.tool));
   const fromFiles = BACKEND_TOOLS.filter(tool => TOOL_FILES[tool].some(kind => hasFile(evidence, kind)));
   let active = ci.length ? unique(ci.map(signal => signal.tool)) : fromFiles;
@@ -210,7 +210,7 @@ function backendFindings(evidence: BuildTestEvidence, sections: S007PolicySectio
   return findings;
 }
 
-function frontendFindings(evidence: BuildTestEvidence, sections: S007PolicySection[], table: FolioSharedWorkflowTable): S012Finding[] {
+function frontendFindings(evidence: BuildEvidence, sections: S007PolicySection[], table: FolioSharedWorkflowTable): S012Finding[] {
   const findings: S012Finding[] = [];
   if (hasFile(evidence, 'package-json')) {
     const ci = ciSignals(evidence, table).filter(signal => PACKAGE_MANAGERS.includes(signal.tool));
@@ -244,7 +244,7 @@ function frontendFindings(evidence: BuildTestEvidence, sections: S007PolicySecti
 
 function toolFinding(
   tool: BuildToolId,
-  evidence: BuildTestEvidence,
+  evidence: BuildEvidence,
   sections: S007PolicySection[],
   table: FolioSharedWorkflowTable,
   signals: ToolSignal[]
@@ -308,7 +308,7 @@ function wrapperKinds(tool: BuildToolId): BuildFileKind[] {
  */
 function versionChecks(
   tool: BuildToolId,
-  evidence: BuildTestEvidence,
+  evidence: BuildEvidence,
   table: FolioSharedWorkflowTable,
   signals: ToolSignal[],
   entry: S007TechnologyPolicyEntry
@@ -503,7 +503,7 @@ function inheritedText(name: string, check: S012VersionCheck): string {
 // ---- CI, Docker and other files ----
 
 function ciFindings(
-  evidence: BuildTestEvidence,
+  evidence: BuildEvidence,
   sections: S007PolicySection[],
   table: FolioSharedWorkflowTable,
   area: 'frontend' | 'backend'
@@ -539,7 +539,7 @@ function ciFindings(
   return findings;
 }
 
-function dockerFindings(evidence: BuildTestEvidence, sections: S007PolicySection[]): S012Finding[] {
+function dockerFindings(evidence: BuildEvidence, sections: S007PolicySection[]): S012Finding[] {
   const files = filesFor(evidence, ['dockerfile']);
   if (!files.length) return [];
   const match = findEntry(sections, 'docker');
@@ -568,7 +568,7 @@ const FILE_TOOLS: Partial<Record<BuildFileKind, string>> = {
 };
 
 /** Build files of tools the module does not build with, such as a stray package-lock.json next to a Maven build. */
-function notUsedFindings(evidence: BuildTestEvidence, kinds: BuildFileKind[]): S012Finding[] {
+function notUsedFindings(evidence: BuildEvidence, kinds: BuildFileKind[]): S012Finding[] {
   const files = evidence.files.filter(file => kinds.includes(file.kind));
   if (!files.length) return [];
   return [{
@@ -636,11 +636,11 @@ function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySe
   };
 }
 
-function hasFile(evidence: BuildTestEvidence, kind: BuildFileKind): boolean {
+function hasFile(evidence: BuildEvidence, kind: BuildFileKind): boolean {
   return evidence.files.some(file => file.kind === kind);
 }
 
-function filesFor(evidence: BuildTestEvidence, kinds: BuildFileKind[]): string[] {
+function filesFor(evidence: BuildEvidence, kinds: BuildFileKind[]): string[] {
   return evidence.files.filter(file => kinds.includes(file.kind)).map(file => file.path);
 }
 

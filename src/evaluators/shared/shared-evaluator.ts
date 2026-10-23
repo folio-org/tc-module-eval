@@ -53,6 +53,7 @@ import { collectBuildTestEvidence } from '../../utils/build-test-evidence';
 import { loadFolioSharedWorkflows } from '../../utils/folio-shared-workflows';
 import { evaluateS012 } from '../../utils/s012-evaluator';
 import { renderS012HumanDetails } from '../../utils/s012-report-details';
+import { analyzeS013, renderS013HumanDetails } from '../../utils/s013-evaluator';
 import { reportText } from '../../utils/report-text';
 import { analyzeS011, renderS011HumanDetails } from '../../utils/s011-evaluator';
 import { hasS011AgentReviewMaterial, reviewS011WithAgent } from '../../utils/s011-agent-review';
@@ -81,6 +82,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun),
       S011: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS011(repoPath, evaluationRun),
       S012: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS012(repoPath, evaluationRun),
+      S013: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS013(repoPath, evaluationRun),
       S014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS014(repoPath, evaluationRun)
     });
   }
@@ -369,7 +371,9 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       loadFolioSharedWorkflows(),
       run.getOrCreateArtifact('buildTestEvidence', () => collectBuildTestEvidence(repoPath))
     ]);
-    const analysis = evaluateS012(policyLoad, tableLoad, evidence, this.language);
+    // The artifact also carries S013's test declarations; S012 neither uses nor reports them.
+    const { testTechnologies: _technologies, testDiagnostics: _diagnostics, testComplete: _complete, ...buildEvidence } = evidence;
+    const analysis = evaluateS012(policyLoad, tableLoad, buildEvidence, this.language);
     return {
       criterionId: 'S012',
       status: analysis.status as EvaluationStatus,
@@ -401,6 +405,23 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       details: renderS011HumanDetails(analysis, agentReview),
       criterionDetails: analysis,
       agentReview
+    };
+  }
+
+  // Coverage from SonarCloud (with --allow-remote-lookups) and test technologies from build files; no tests are run.
+  private async evaluateS013(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = evaluationRun ?? createEvaluationRun({
+      repositoryPath: repoPath,
+      language: this.language,
+      criteriaFilter: ['S013']
+    });
+    const analysis = await analyzeS013(repoPath, run, this.language);
+    return {
+      criterionId: 'S013',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS013HumanDetails(analysis),
+      criterionDetails: analysis
     };
   }
 
