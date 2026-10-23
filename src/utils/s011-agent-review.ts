@@ -33,6 +33,7 @@ export function buildS011AgentReviewRequest(repoPath: string, analysis: S011Anal
     kind: group.kind,
     ...(group.rule ? { rule: group.rule } : {}),
     ...(group.ruleName ? { ruleName: group.ruleName } : {}),
+    ...(group.appliesTo ? { javacWarningNameSuppressingSonarRules: group.appliesTo } : {}),
     path: group.path,
     lines: group.lines.slice(0, 50),
     ...(group.lines.length > 50 ? { omittedLines: group.lines.length - 50 } : {}),
@@ -56,7 +57,7 @@ export function buildS011AgentReviewRequest(repoPath: string, analysis: S011Anal
     instructions: [
       'Act as an advisory reviewer for S011: SonarQube has found no security issues, no issues of high or greater severity, and no excessive duplication, and any disabled or ignored rules are reasonably justified.',
       'Your only question is whether each Sonar rule suppression or analysis-scope setting the repository makes is reasonably justified. Do not re-judge SonarCloud findings, duplication or the deterministic status.',
-      'review-groups.json lists every group: suppressions of one Sonar rule in one file (suppression:<rule>:<path>), NOSONAR comments in one file (nosonar:<path>), @SuppressWarnings("all") in one file (all:<path>), and Sonar analysis-scope settings in one build or CI file (scope:<path>). Lines are 1-based.',
+      'review-groups.json lists every group: suppressions of one Sonar rule in one file (suppression:<rule>:<path>; the rule can be a javac warning name such as unused or null, which sonar-java treats as suppressing the listed Sonar rules), NOSONAR comments in one file (nosonar:<path>), @SuppressWarnings("all") in one file (all:<path>), and Sonar analysis-scope settings in one build or CI file (scope:<path>). Lines are 1-based.',
       'For each group, read the suppressed code at the listed lines and enough surrounding code and callers to tell whether the rule\'s concern applies. For a security rule (for example java:S2077 SQL formatting or java:S5542 encryption mode), trace where the values come from: a suppression is justified only when the code shows the risk cannot occur, for example identifiers from constants or validated input.',
       'For a scope group, decide whether each excluded path or narrowed source root is generated, third-party, test-only or otherwise reasonably outside analysis, by checking what the excluded files contain.',
       'FOLIO guidance (dev.folio.org): suppress false positives with @SuppressWarnings("<rule>") at method or variable level, never at class level, always with a comment naming the rule and giving the justification, and never with NOSONAR or @SuppressWarnings("all"). guidanceFlags lists where a group departs from it. A missing comment is a guidance gap worth noting but does not by itself make a technically sound suppression unjustified.',

@@ -24,15 +24,32 @@ const MAX_FILES = 20_000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_ANNOTATION_CHARS = 2_000;
 const MAX_COMMENT_CHARS = 200;
-const SKIPPED_DIRS: ReadonlySet<string> = new Set(['.git', 'node_modules', 'target', 'build', 'dist', '.gradle', 'coverage', 'artifacts']);
+const SKIPPED_DIRS: ReadonlySet<string> = new Set(['.git', 'node_modules']);
+/** Build output, skipped only at the root of the repository or of a module; a source package can be named build. */
+const OUTPUT_DIRS: ReadonlySet<string> = new Set(['target', 'build', 'dist', '.gradle', 'coverage', 'artifacts']);
+const MODULE_FILES = ['pom.xml', 'build.gradle', 'build.gradle.kts', 'package.json'];
 const ANNOTATED_SOURCE = /\.(java|groovy|kt|kts|scala)$/;
 /** Build files that can set the Sonar analysis scope; pom.xml has its own reader. */
 const SCOPE_FILES: ReadonlySet<string> = new Set(['pom.xml', 'sonar-project.properties', '.sonarcloud.properties', 'gradle.properties']);
 const SCRIPT_SOURCE = /\.(js|jsx|mjs|cjs|ts|tsx|vue)$/;
 const OTHER_SOURCE = /\.(py|go|rb|php|cs|html?|xml|css|scss|less|sql|sh|ya?ml|properties|gradle)$/;
 /** Rule prefixes of the Sonar analysers FOLIO's JVM code uses; other @SuppressWarnings values belong to javac or IDEs. */
-const SONAR_RULE = /^(?:java|squid|javabugs|javasecurity|kotlin|groovy):S\d{1,5}$/;
-const SCOPE_KEY = /^sonar\.(?:sources|inclusions|exclusions|test\.exclusions|test\.inclusions|coverage\.exclusions|cpd\.exclusions|issue\.ignore\.[A-Za-z0-9_.-]+)$/;
+/** squid: also has old rule names, such as squid:HiddenFieldCheck, that sonar-java still honours. */
+const SONAR_RULE = /^(?:(?:java|squid|javabugs|javasecurity|kotlin|groovy):S\d{1,5}|squid:[A-Za-z][A-Za-z0-9]{2,60})$/;
+const SCOPE_KEY = /^sonar\.(?:sources|inclusions|exclusions|test\.exclusions|test\.inclusions|coverage\.exclusions|cpd\.exclusions|issue\.(?:ignore|enforce)\.[A-Za-z0-9_.-]+|(?:java|javascript|typescript|css|html|xml)\.(?:exclusions|file\.suffixes))$/;
+/**
+ * javac and Eclipse warning names that sonar-java also reads as suppressing these Sonar rules
+ * (SuppressWarningFilter.JAVAC_WARNING_SUPPRESSING_RULES in SonarSource/sonar-java). Java files only.
+ */
+const JAVAC_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  cast: ['java:S1905'], deprecation: ['java:S1874'], 'dep-ann': ['java:S1123'], divzero: ['java:S3518'],
+  empty: ['java:S1116', 'java:S108'], fallthrough: ['java:S128'], finally: ['java:S1143'], overrides: ['java:S1206'],
+  removal: ['java:S5738'], serial: ['java:S2057'], static: ['java:S2696', 'java:S2209'], rawtypes: ['java:S3740'],
+  parameternumber: ['java:S107'], boxing: ['java:S2153', 'java:S5411'], hiding: ['java:S4977'], javadoc: ['java:S1176'],
+  null: ['java:S2259'], resource: ['java:S2093', 'java:S2095'], 'static-access': ['java:S2696', 'java:S2209'],
+  'static-method': ['java:S2325'], 'sync-override': ['java:S3551'],
+  unused: ['java:S1481', 'java:S1065', 'java:S1854', 'java:S1068', 'java:S3985', 'java:S2326', 'java:S1144', 'java:S1128', 'java:S2583']
+};
 
 /**
  * `ci` is S012's build evidence (FOLIO shared-workflow calls with their inputs, read as YAML); `workflows` is the
@@ -52,8 +69,21 @@ export function scanS011Suppressions(
   };
   let files: string[];
   try {
-    files = findCandidateFiles(repoPath, repoPath, file => isScanned(relativePosixPath(repoPath, file)), SKIPPED_DIRS)
-      .map(file => relativePosixPath(repoPath, file)).sort();
+    const moduleRoots = new Map<string, boolean>();
+    const isModuleRoot = (directory: string) => {
+      if (!moduleRoots.has(directory)) {
+        moduleRoots.set(directory, directory === '' || MODULE_FILES.some(file => fs.existsSync(path.join(repoPath, directory, file))));
+      }
+      return moduleRoots.get(directory)!;
+    };
+    const isOutput = (relative: string) => {
+      const segments = relative.split('/');
+      return segments.slice(0, -1).some((segment, index) => OUTPUT_DIRS.has(segment) && isModuleRoot(segments.slice(0, index).join('/')));
+    };
+    files = findCandidateFiles(repoPath, repoPath, file => {
+      const relative = relativePosixPath(repoPath, file);
+      return isScanned(relative) && !isOutput(relative);
+    }, SKIPPED_DIRS).map(file => relativePosixPath(repoPath, file)).sort();
   } catch (error) {
     fail({ message: `The repository could not be listed: ${error instanceof Error ? error.message : String(error)}` });
     return scan;
@@ -133,7 +163,9 @@ function adjacentComment(lines: string[], index: number, sameLineFrom: number): 
 }
 
 function scanAnnotations(relative: string, text: string, lines: string[], out: S011Suppression[]): void {
-  const pattern = /@(?:java\.lang\.)?Suppress(?:Warnings)?\s*\(/g;
+  // Java's @SuppressWarnings and Kotlin's @Suppress, with Kotlin use-site targets such as @file: or @get:.
+  const pattern = /@((?:file|get|set|field|param|property|receiver|setparam|delegate):)?(?:java\.lang\.|kotlin\.)?Suppress(?:Warnings)?\s*\(/g;
+  const java = relative.endsWith('.java');
   for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
     const line = lineAt(text, match.index);
     const lineStart = text.lastIndexOf('\n', match.index) + 1;
@@ -143,14 +175,16 @@ function scanAnnotations(relative: string, text: string, lines: string[], out: S
     const close = closingParen(text, pattern.lastIndex);
     if (close < 0) continue;
     const values = [...text.slice(pattern.lastIndex, close).matchAll(/"([^"\\]{1,100})"|'([^'\\]{1,100})'/g)].map(item => item[1] ?? item[2]);
-    const sonar = values.filter(value => value === 'all' || SONAR_RULE.test(value));
+    const sonar = values.filter(value => value === 'all' || SONAR_RULE.test(value)
+      || (java && Object.prototype.hasOwnProperty.call(JAVAC_ALIASES, value)));
     if (!sonar.length) continue;
-    const target = annotationTarget(text, close + 1);
+    const target = match[1] === 'file:' ? 'class' : annotationTarget(text, close + 1);
     const comment = adjacentComment(lines, line - 1, close + 1 - lineStart > lines[line - 1].length ? lines[line - 1].length : close + 1 - lineStart);
     for (const value of new Set(sonar)) {
       out.push({
         kind: value === 'all' ? 'all' : 'annotation',
         ...(value === 'all' ? {} : { rule: value }),
+        ...(SONAR_RULE.test(value) || value === 'all' ? {} : { appliesTo: [...JAVAC_ALIASES[value]] }),
         path: relative, line, target, ...(comment ? { comment } : {}), test: isSonarTestPath(relative)
       });
     }
@@ -314,7 +348,8 @@ export function groupS011ReviewItems(scan: S011SuppressionScan, rules: Record<st
     const id = item.kind === 'annotation' ? `suppression:${item.rule}:${item.path}` : `${kind}:${item.path}`;
     const group = groups.get(id) ?? {
       id, kind, path: item.path, lines: [], flags: [], comments: [],
-      ...(item.rule ? { rule: item.rule, ...(rules[item.rule] ? { ruleName: rules[item.rule].name } : {}) } : {})
+      ...(item.rule ? { rule: item.rule, ...(rules[item.rule] ? { ruleName: rules[item.rule].name } : {}) } : {}),
+      ...(item.appliesTo ? { appliesTo: item.appliesTo } : {})
     };
     group.lines.push(item.line);
     if (item.comment && !group.comments.includes(item.comment)) group.comments.push(item.comment);

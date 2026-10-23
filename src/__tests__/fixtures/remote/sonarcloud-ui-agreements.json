@@ -1,7 +1,35 @@
 {
-  "capturedAt": "2026-10-23T11:55:03.524Z",
+  "capturedAt": "2026-10-23T12:21:04.200Z",
   "description": "SonarCloud org.folio:ui-agreements as S011 reads it, evaluated at ui-agreements commit 802a80e929f1b8ef2cb65aa3685bb4434599754a",
   "responses": {
+    "https://sonarcloud.io/api/ce/component?component=org.folio%3Aui-agreements": {
+      "status": 200,
+      "body": {
+        "queue": [],
+        "current": {
+          "id": "AaC0vxiC8WyLALO_wrRs",
+          "type": "REPORT",
+          "componentId": "AWb0iPpnTnw0J_G3HL_5",
+          "componentKey": "org.folio:ui-agreements",
+          "componentName": "ui-agreements",
+          "componentQualifier": "TRK",
+          "analysisId": "3532ef46-4bf9-463d-8d62-0bada3af2b0d",
+          "status": "SUCCESS",
+          "submittedAt": "2026-09-18T13:40:17+0000",
+          "submitterLogin": "ankitasen-ubmainz@github",
+          "startedAt": "2026-09-18T13:40:17+0000",
+          "executedAt": "2026-09-18T13:40:25+0000",
+          "executionTimeMs": 7454,
+          "logs": false,
+          "hasScannerContext": true,
+          "organization": "folio-org",
+          "branch": "master",
+          "branchType": "LONG",
+          "warningCount": 0,
+          "warnings": []
+        }
+      }
+    },
     "https://sonarcloud.io/api/components/show?component=org.folio%3Aui-agreements": {
       "status": 200,
       "body": {
@@ -22,7 +50,7 @@
         "ancestors": []
       }
     },
-    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-agreements&status=REVIEWED&resolution=SAFE&ps=100&branch=master": {
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-agreements&status=REVIEWED&ps=100&branch=master": {
       "status": 200,
       "body": {
         "paging": {
@@ -2397,11 +2425,11 @@
             "cleanCodeAttributeCategory": "INTENTIONAL",
             "impacts": [
               {
-                "softwareQuality": "MAINTAINABILITY",
+                "softwareQuality": "RELIABILITY",
                 "severity": "HIGH"
               },
               {
-                "softwareQuality": "RELIABILITY",
+                "softwareQuality": "MAINTAINABILITY",
                 "severity": "HIGH"
               }
             ],
@@ -3551,7 +3579,7 @@
             "activeRuleCount": 671,
             "activeDeprecatedRuleCount": 0,
             "rulesUpdatedAt": "2026-10-22T16:39:30+0000",
-            "lastUsed": "2026-10-23T11:15:15+0000",
+            "lastUsed": "2026-10-23T12:18:18+0000",
             "userUpdatedAt": "2026-03-09T09:15:49+0000",
             "organization": "folio-org",
             "isBuiltIn": false,
@@ -4199,7 +4227,7 @@
             "activeRuleCount": 39,
             "activeDeprecatedRuleCount": 0,
             "rulesUpdatedAt": "2026-09-02T15:02:12+0000",
-            "lastUsed": "2026-10-23T11:15:15+0000",
+            "lastUsed": "2026-10-23T12:18:18+0000",
             "organization": "folio-org",
             "isBuiltIn": true,
             "actions": {
@@ -4293,11 +4321,11 @@
             "type": "BUG",
             "impacts": [
               {
-                "softwareQuality": "MAINTAINABILITY",
+                "softwareQuality": "RELIABILITY",
                 "severity": "HIGH"
               },
               {
-                "softwareQuality": "RELIABILITY",
+                "softwareQuality": "MAINTAINABILITY",
                 "severity": "HIGH"
               }
             ],

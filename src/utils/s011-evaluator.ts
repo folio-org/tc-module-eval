@@ -67,7 +67,7 @@ function ruleKeysIn(snapshot: SonarCloudSnapshot | undefined): string[] {
     ...(snapshot.highIssues.rules ?? []).slice(0, MAX_RULE_ROWS).map(item => item.rule),
     ...snapshot.securityIssues.examples.map(item => item.rule),
     ...snapshot.ignoredIssues.examples.map(item => item.rule),
-    ...[snapshot.hotspotsToReview, snapshot.hotspotsSafe].flatMap(query => query.examples.flatMap(item => item.rule ? [item.rule] : []))
+    ...[snapshot.hotspotsToReview, snapshot.hotspotsReviewed].flatMap(query => query.examples.flatMap(item => item.rule ? [item.rule] : []))
   ];
 }
 
@@ -106,9 +106,6 @@ export function evaluateS011(inputs: S011Inputs): S011Analysis {
   if (snapshot.problem || !snapshot.analysis) {
     return result(EvaluationStatus.MANUAL, `${reportText(snapshot.problem ?? 'SonarCloud has no analysis of the project.')} A reviewer needs to check the module in SonarCloud (${key}).${local}`, 'sonarcloud-unavailable');
   }
-  if (snapshot.measuresProblem) {
-    return result(EvaluationStatus.MANUAL, `${reportText(snapshot.measuresProblem)} A reviewer needs to check the module in SonarCloud (${key}).${local}`, 'sonarcloud-unavailable');
-  }
   const freshness = sonarSnapshotFreshness(snapshot, inputs.repositoryCommit);
   if (!freshness.fresh) {
     return result(EvaluationStatus.MANUAL, `${reportText(freshness.message)} Rerun once SonarCloud has analysed the evaluated commit, or check SonarCloud by hand.${local}`, 'stale-analysis');
@@ -138,7 +135,7 @@ export function evaluateS011(inputs: S011Inputs): S011Analysis {
   const suppressions = scan.suppressions.length;
   const scope = scan.scope.filter(item => item.affectsS011);
   const ignoredIssues = snapshot.ignoredIssues.total;
-  const reviewedHotspots = snapshot.hotspotsSafe.total;
+  const reviewedHotspots = snapshot.hotspotsReviewed.total;
   const customProfiles = snapshot.qualityProfiles?.filter(profile => !profile.isDefault) ?? [];
   const projectSettings = snapshot.settings.values.filter(item => item.key !== 'sonar.coverage.exclusions');
   const ignored = [
@@ -146,12 +143,12 @@ export function evaluateS011(inputs: S011Inputs): S011Analysis {
     scope.length ? `the repository or CI ${scope.length === 1 ? 'sets 1 Sonar analysis-scope setting' : `sets ${scope.length} Sonar analysis-scope settings`} (exclusions or source roots)` : undefined,
     projectSettings.length ? `SonarCloud's project settings set ${count(projectSettings.length, 'analysis-scope value')}` : undefined,
     ignoredIssues ? `${count(ignoredIssues, 'issue')} ${ignoredIssues === 1 ? 'is' : 'are'} accepted or marked false positive in SonarCloud` : undefined,
-    reviewedHotspots ? `${count(reviewedHotspots, 'security hotspot')} ${reviewedHotspots === 1 ? 'was' : 'were'} reviewed as safe in SonarCloud` : undefined,
+    reviewedHotspots ? `${count(reviewedHotspots, 'security hotspot')} ${reviewedHotspots === 1 ? 'was' : 'were'} reviewed as safe or fixed in SonarCloud but still found by analysis` : undefined,
     customProfiles.length ? `the project uses ${customProfiles.length === 1 ? 'a quality profile' : 'quality profiles'} other than the organization default (${customProfiles.map(item => `${reportText(item.name)} for ${reportText(item.language)}`).join(', ')})` : undefined
   ].filter((item): item is string => Boolean(item));
   const unknown = [
     ignoredIssues === undefined ? 'issues accepted or marked false positive' : undefined,
-    reviewedHotspots === undefined ? 'security hotspots reviewed as safe' : undefined,
+    reviewedHotspots === undefined ? 'security hotspots closed by review' : undefined,
     snapshot.qualityProfiles ? undefined : 'the project\'s quality profiles'
   ].filter((item): item is string => Boolean(item));
   base.manualReasons.push(...missing.map(item => `SonarCloud did not report ${item}.`), ...ignored.map(item => `${capitalize(item)}.`),
@@ -160,7 +157,7 @@ export function evaluateS011(inputs: S011Inputs): S011Analysis {
   if (!snapshot.settings.read) base.manualReasons.push(`${SETTINGS_UNREAD}.`);
 
   const found = [
-    security === 0 ? 'no security issues' : undefined,
+    snapshot.securityIssues.total === 0 && snapshot.vulnerabilities.total === 0 ? 'no security issues' : undefined,
     high === 0 ? 'no high or blocker issues' : undefined,
     hotspots === 0 ? 'no security hotspots to review' : undefined,
     duplication !== undefined ? `${percent(duplication)} duplication` : undefined
@@ -290,7 +287,8 @@ function ignoredLines(analysis: S011Analysis): string[] {
     const flags = [...new Set(items.flatMap(item => suppressionFlags(item, rules)).filter(flag => flag !== 'no comment'))];
     const comment = uncommented === items.length ? (items.length === 1 ? ' with no comment explaining why' : ', none with a comment explaining why')
       : uncommented ? `, ${uncommented} with no comment explaining why` : '';
-    rows.push(`  - ${count(items.length, 'suppression')} of ${ruleLabel(key, rules)}${comment}${flags.length ? ` [${flags.join(', ')}]` : ''}, for example ${where}`);
+    const label = items[0].appliesTo ? `"${reportText(key)}" (a javac warning name that also hides Sonar rule${items[0].appliesTo.length === 1 ? '' : 's'} ${items[0].appliesTo.join(', ')})` : ruleLabel(key, rules);
+    rows.push(`  - ${count(items.length, 'suppression')} of ${label}${comment}${flags.length ? ` [${flags.join(', ')}]` : ''}, for example ${where}`);
   }
   if (rows.length > MAX_ROWS) rows.splice(MAX_ROWS, rows.length - MAX_ROWS, `  - ... ${rows.length - MAX_ROWS} more`);
   for (const setting of scan.scope) rows.push(`  - ${scopeRow(setting)}`);
@@ -298,8 +296,8 @@ function ignoredLines(analysis: S011Analysis): string[] {
     const ignored = snapshot.ignoredIssues;
     rows.push(`  - Issues accepted or marked false positive in SonarCloud: ${countText(ignored.total)}`);
     for (const issue of ignored.examples.slice(0, 5)) rows.push(`    - ${issueRow(issue, rules)}`);
-    const reviewed = snapshot.hotspotsSafe.total;
-    rows.push(`  - Security hotspots reviewed as safe in SonarCloud: ${countText(reviewed)}`);
+    const reviewed = snapshot.hotspotsReviewed.total;
+    rows.push(`  - Security hotspots closed by review in SonarCloud (safe, or fixed but still found): ${countText(reviewed)}`);
     const custom = snapshot.qualityProfiles?.filter(profile => !profile.isDefault);
     rows.push(`  - Quality profiles: ${!snapshot.qualityProfiles ? 'not reported'
       : custom!.length ? custom!.map(item => `${reportText(item.name)} for ${reportText(item.language)} is not the organization default`).join('; ')
@@ -377,7 +375,8 @@ function whatToDo(analysis: S011Analysis): string | undefined {
 export function s011AgentReviewNames(analysis: S011Analysis): Record<string, string> {
   return Object.fromEntries(analysis.reviewGroups.map(group => {
     const file = reportPath(group.path);
-    const name = group.kind === 'suppression' ? `${group.rule} suppressions in ${file}`
+    const name = group.appliesTo ? `@SuppressWarnings("${group.rule}") in ${file}`
+      : group.kind === 'suppression' ? `${group.rule} suppressions in ${file}`
       : group.kind === 'nosonar' ? `NOSONAR comments in ${file}`
         : group.kind === 'all' ? `@SuppressWarnings("all") in ${file}`
           : `Sonar analysis scope in ${file}`;

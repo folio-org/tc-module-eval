@@ -78,8 +78,8 @@ export interface SonarCloudSnapshot {
   /** The --branch value when SonarCloud has no analysis of it, so the main branch was read instead. */
   requestedBranchNotAnalysed?: string;
   analysis?: { key: string; date: string; revision?: string };
-  /** The latest analysis again, read after every other request. */
-  recheck?: { key?: string; date?: string; revision?: string; problem?: string };
+  /** The latest analysis again, read after every other request, and whether an analysis of the branch was then queued or running. */
+  recheck?: { key?: string; date?: string; revision?: string; problem?: string; pending?: boolean };
   /** Metrics SonarCloud returned, by key. A metric it did not return is absent, never 0. */
   measures: Record<string, number>;
   measuresProblem?: string;
@@ -88,7 +88,8 @@ export interface SonarCloudSnapshot {
   highIssues: SonarHighIssueQuery;
   ignoredIssues: SonarIssueQuery & { statuses?: Record<string, number> };
   hotspotsToReview: SonarHotspotQuery;
-  hotspotsSafe: SonarHotspotQuery;
+  /** Hotspots reviewed as safe, or marked fixed while analysis still finds them. */
+  hotspotsReviewed: SonarHotspotQuery;
   qualityProfiles?: Array<{ language: string; name: string; isDefault: boolean }>;
   qualityProfilesProblem?: string;
   settings: SonarProjectSettings;
@@ -97,4 +98,4 @@ export interface SonarCloudSnapshot {
 
 export type SonarFreshness =
   | { fresh: true }
-  | { fresh: false; reason: 'no-analysis' | 'unknown-commit' | 'no-revision' | 'different-commit' | 'recheck-failed' | 'reanalysed'; message: string };
+  | { fresh: false; reason: 'no-analysis' | 'unknown-commit' | 'no-revision' | 'different-commit' | 'recheck-failed' | 'reanalysed' | 'analysis-pending'; message: string };

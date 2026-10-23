@@ -1,7 +1,35 @@
 {
-  "capturedAt": "2026-10-23T11:54:58.092Z",
+  "capturedAt": "2026-10-23T12:20:58.831Z",
   "description": "SonarCloud org.folio:mod-search as S011 reads it, evaluated at mod-search commit 187df603d24a8e01115dc80085da6760ed3d2853",
   "responses": {
+    "https://sonarcloud.io/api/ce/component?component=org.folio%3Amod-search": {
+      "status": 200,
+      "body": {
+        "queue": [],
+        "current": {
+          "id": "AaE_OWthV2rTsw5aeSNG",
+          "type": "REPORT",
+          "componentId": "AXZRKpsv9jdhW6JjgfcN",
+          "componentKey": "org.folio:mod-search",
+          "componentName": "mod-search",
+          "componentQualifier": "TRK",
+          "analysisId": "5140d085-9a4a-4082-95d9-0e9a943142db",
+          "status": "SUCCESS",
+          "submittedAt": "2026-10-15T11:01:30+0000",
+          "submitterLogin": "ankitasen-ubmainz@github",
+          "startedAt": "2026-10-15T11:01:30+0000",
+          "executedAt": "2026-10-15T11:01:39+0000",
+          "executionTimeMs": 9097,
+          "logs": false,
+          "hasScannerContext": true,
+          "organization": "folio-org",
+          "branch": "master",
+          "branchType": "LONG",
+          "warningCount": 0,
+          "warnings": []
+        }
+      }
+    },
     "https://sonarcloud.io/api/components/show?component=org.folio%3Amod-search": {
       "status": 200,
       "body": {
@@ -20,7 +48,7 @@
         "ancestors": []
       }
     },
-    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-search&status=REVIEWED&resolution=SAFE&ps=100&branch=master": {
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-search&status=REVIEWED&ps=100&branch=master": {
       "status": 200,
       "body": {
         "paging": {
@@ -1824,12 +1852,12 @@
             "cleanCodeAttributeCategory": "INTENTIONAL",
             "impacts": [
               {
-                "softwareQuality": "RELIABILITY",
-                "severity": "HIGH"
-              },
-              {
                 "softwareQuality": "MAINTAINABILITY",
                 "severity": "MEDIUM"
+              },
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
               }
             ],
             "issueStatus": "OPEN",
@@ -1871,12 +1899,12 @@
             "cleanCodeAttributeCategory": "INTENTIONAL",
             "impacts": [
               {
-                "softwareQuality": "RELIABILITY",
-                "severity": "HIGH"
-              },
-              {
                 "softwareQuality": "MAINTAINABILITY",
                 "severity": "MEDIUM"
+              },
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
               }
             ],
             "issueStatus": "OPEN",
@@ -3625,7 +3653,7 @@
             "activeRuleCount": 671,
             "activeDeprecatedRuleCount": 0,
             "rulesUpdatedAt": "2026-10-22T16:39:30+0000",
-            "lastUsed": "2026-10-23T11:15:15+0000",
+            "lastUsed": "2026-10-23T12:18:18+0000",
             "userUpdatedAt": "2026-03-09T09:15:49+0000",
             "organization": "folio-org",
             "isBuiltIn": false,
@@ -4273,7 +4301,7 @@
             "activeRuleCount": 39,
             "activeDeprecatedRuleCount": 0,
             "rulesUpdatedAt": "2026-09-02T15:02:12+0000",
-            "lastUsed": "2026-10-23T11:15:15+0000",
+            "lastUsed": "2026-10-23T12:18:18+0000",
             "organization": "folio-org",
             "isBuiltIn": true,
             "actions": {
@@ -4341,12 +4369,12 @@
             "type": "VULNERABILITY",
             "impacts": [
               {
-                "softwareQuality": "SECURITY",
-                "severity": "MEDIUM"
-              },
-              {
                 "softwareQuality": "MAINTAINABILITY",
                 "severity": "LOW"
+              },
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "MEDIUM"
               }
             ],
             "securityStandards": [],
@@ -4397,12 +4425,12 @@
             "type": "BUG",
             "impacts": [
               {
-                "softwareQuality": "MAINTAINABILITY",
-                "severity": "MEDIUM"
-              },
-              {
                 "softwareQuality": "RELIABILITY",
                 "severity": "HIGH"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
               }
             ],
             "securityStandards": [],

@@ -34,8 +34,12 @@ const MAX_EXAMPLES = 20;
 const SEVERITY_RANK: Record<string, number> = { INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, BLOCKER: 4 };
 /** Analysis-scope settings S011 reads from SonarCloud's project administration. */
 export const SONAR_SCOPE_SETTING_KEYS = [
-  'sonar.sources', 'sonar.inclusions', 'sonar.exclusions', 'sonar.test.exclusions', 'sonar.coverage.exclusions',
-  'sonar.cpd.exclusions', 'sonar.issue.ignore.multicriteria', 'sonar.issue.ignore.allfile', 'sonar.issue.ignore.block'
+  'sonar.sources', 'sonar.inclusions', 'sonar.exclusions', 'sonar.test.inclusions', 'sonar.test.exclusions',
+  'sonar.coverage.exclusions', 'sonar.cpd.exclusions', 'sonar.issue.ignore.multicriteria', 'sonar.issue.ignore.allfile',
+  'sonar.issue.ignore.block', 'sonar.issue.enforce.multicriteria',
+  // Language scope; their built-in defaults are inherited from INSTANCE and skipped.
+  'sonar.java.file.suffixes', 'sonar.javascript.file.suffixes', 'sonar.typescript.file.suffixes', 'sonar.javascript.exclusions',
+  'sonar.typescript.exclusions', 'sonar.css.file.suffixes', 'sonar.html.file.suffixes', 'sonar.xml.file.suffixes'
 ] as const;
 /** A Sonar rule key as SonarCloud and FOLIO code write it, for example java:S2077. */
 export const SONAR_RULE_KEY = /^[a-z][a-z0-9_-]{0,39}:[A-Za-z0-9_-]{1,60}$/;
@@ -80,6 +84,9 @@ export function sonarSnapshotFreshness(snapshot: SonarCloudSnapshot, repositoryC
   if (!recheck || recheck.problem || !recheck.key) {
     return { fresh: false, reason: 'recheck-failed', message: `The tool could not confirm that SonarCloud did not re-analyse the project while it was being read${recheck?.problem ? `: ${recheck.problem}` : '.'}` };
   }
+  if (recheck.pending) {
+    return { fresh: false, reason: 'analysis-pending', message: `SonarCloud was processing a new analysis of branch ${snapshot.branch} while the tool was reading it, so its answers may mix two analyses.` };
+  }
   if (recheck.key !== analysis.key) {
     return { fresh: false, reason: 'reanalysed', message: `SonarCloud analysed the project again while the tool was reading it (${analysis.date.slice(0, 10)} and ${(recheck.date ?? '').slice(0, 10)}), so its answers may mix two analyses.` };
   }
@@ -101,7 +108,7 @@ function emptySnapshot(projectKey: string, remoteEvidence: RemoteEvidenceRecord[
     highIssues: { problem: notRead, examples: [] },
     ignoredIssues: { problem: notRead, examples: [] },
     hotspotsToReview: { problem: notRead, groups: [], examples: [] },
-    hotspotsSafe: { problem: notRead, groups: [], examples: [] },
+    hotspotsReviewed: { problem: notRead, groups: [], examples: [] },
     settings: { read: false, problem: notRead, values: [] },
     remoteEvidence
   };
@@ -172,19 +179,20 @@ export async function collectSonarCloudSnapshot(
     projectKey, status, ...(resolution ? { resolution } : {}), ps: String(PAGE)
   }));
   // Started together; recorded in this fixed order, not the order they finish.
-  const [measures, security, vulnerabilities, high, ignored, toReview, safe, profiles, navigation] = await Promise.all([
+  const [measures, security, vulnerabilities, high, ignored, toReview, reviewed, profiles, navigation] = await Promise.all([
     get('measures/component', onBranch({ component: projectKey, metricKeys: SONAR_METRICS.join(',') })),
     issues({ issueStatuses: OPEN, impactSoftwareQualities: 'SECURITY', ps: String(PAGE) }),
     issues({ issueStatuses: OPEN, types: 'VULNERABILITY', ps: '1' }),
     issues({ issueStatuses: OPEN, impactSeverities: 'HIGH,BLOCKER', facets: 'rules', ps: String(HIGH_PAGE) }),
     issues({ issueStatuses: 'ACCEPTED,FALSE_POSITIVE', facets: 'issueStatuses', ps: String(PAGE) }),
     hotspots('TO_REVIEW'),
-    // SonarCloud's only other resolution is FIXED; it has no ACKNOWLEDGED.
-    hotspots('REVIEWED', 'SAFE'),
+    // Safe, or marked fixed while analysis still finds it: either way a person, not the code, closed it.
+    // SonarCloud has no ACKNOWLEDGED resolution.
+    hotspots('REVIEWED'),
     get('qualityprofiles/search', { project: projectKey, organization: ORGANIZATION }),
     get('navigation/component', { component: projectKey })
   ]);
-  [measures, security, vulnerabilities, high, ignored, toReview, safe, profiles, navigation].forEach(record);
+  [measures, security, vulnerabilities, high, ignored, toReview, reviewed, profiles, navigation].forEach(record);
 
   readMeasures(snapshot, measures);
   snapshot.securityIssues = readIssues(security, projectKey);
@@ -192,13 +200,24 @@ export async function collectSonarCloudSnapshot(
   snapshot.highIssues = readHighIssues(high, projectKey);
   snapshot.ignoredIssues = { ...readIssues(ignored, projectKey), statuses: facetCounts(ignored, 'issueStatuses') };
   snapshot.hotspotsToReview = readHotspots(toReview, projectKey);
-  snapshot.hotspotsSafe = readHotspots(safe, projectKey);
+  snapshot.hotspotsReviewed = readHotspots(reviewed, projectKey);
   readProfiles(snapshot, profiles);
   snapshot.settings = await readSettings(navigation, projectKey, get, record);
 
-  // A different latest analysis means SonarCloud re-analysed while the answers above were being read.
-  const recheck = await latestAnalysis();
-  snapshot.recheck = recheck;
+  // A different latest analysis means SonarCloud re-analysed while the answers above were being read. An analysis
+  // still being processed may already have changed measures and issues before it is listed, so it is stale too.
+  const [recheck, tasks] = await Promise.all([
+    latestAnalysis(),
+    get('ce/component', { component: projectKey })
+  ]);
+  record(tasks);
+  const queue = tasks.ok ? arrayAt(tasks.json, 'queue') : undefined;
+  snapshot.recheck = 'problem' in recheck ? recheck : { ...recheck };
+  if (!queue) {
+    snapshot.recheck.problem ??= `SonarCloud's analysis queue could not be read${tasks.ok ? '.' : `: ${tasks.record.error}`}`;
+  } else if (queue.some(task => !task || (task.pullRequest === undefined && (task.branch === undefined || task.branch === branch.name)))) {
+    snapshot.recheck.pending = true;
+  }
   return snapshot;
 }
 
@@ -308,7 +327,8 @@ async function readSettings(
 ): Promise<SonarProjectSettings> {
   const unread = (problem: string): SonarProjectSettings => ({ read: false, problem, values: [] });
   if (!navigation.ok) return unread(`SonarCloud could not be asked whether SONAR_TOKEN may administer the project: ${navigation.record.error}`);
-  if (objectAt(navigation.json, 'configuration')?.showSettings !== true) {
+  const answeredFor = navigation.json && typeof navigation.json === 'object' ? (navigation.json as { key?: unknown }).key : undefined;
+  if (answeredFor !== projectKey || objectAt(navigation.json, 'configuration')?.showSettings !== true) {
     return unread('SonarCloud did not confirm that SONAR_TOKEN may administer this project (no token was supplied, or it lacks admin rights).');
   }
   const result = record(await get('settings/values', { component: projectKey, keys: SONAR_SCOPE_SETTING_KEYS.join(',') }));
@@ -316,7 +336,9 @@ async function readSettings(
   if (!settings) return unread(`SonarCloud's project settings could not be read${result.ok ? '.' : `: ${result.record.error}`}`);
   const values: SonarProjectSettings['values'] = [];
   for (const setting of settings) {
-    if (typeof setting?.key !== 'string' || !(SONAR_SCOPE_SETTING_KEYS as readonly string[]).includes(setting.key)) continue;
+    // An entry the tool cannot read might be a scope setting, so the settings count as unread.
+    if (typeof setting?.key !== 'string') return unread('SonarCloud returned a project setting the tool could not read.');
+    if (!(SONAR_SCOPE_SETTING_KEYS as readonly string[]).includes(setting.key)) continue;
     // Built-in defaults are not the module's choice; organization and project values are.
     const origin = setting.inherited === true ? (typeof setting.parentOrigin === 'string' ? setting.parentOrigin : 'UNKNOWN') : 'PROJECT';
     if (origin === 'INSTANCE') continue;
@@ -336,7 +358,7 @@ function settingValue(setting: Record<string, unknown>): string | undefined {
       ? Object.entries(row as Record<string, string>).map(([field, value]) => `${field}=${value}`).join(', ') : undefined);
     return rows.every(row => row !== undefined) ? rows.join('; ') : undefined;
   }
-  return '';
+  return undefined;
 }
 
 /** Rule names for the report. Enrichment only: a failure leaves rule keys without names. */

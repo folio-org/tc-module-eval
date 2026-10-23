@@ -4,6 +4,7 @@ import path from 'path';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { CriterionResult, EvaluationStatus, RemoteLookups, S011Analysis } from '../types';
 import { createEvaluationRun } from '../utils/evaluation-run';
+import { SONAR_SCOPE_SETTING_KEYS } from '../utils/sonarcloud-snapshot';
 import { loadRemoteFixture, RecordedResponses, replayTransport } from './helpers/remote-replay';
 
 class TestEvaluator extends SharedEvaluator {}
@@ -36,6 +37,20 @@ function withMeasures(responses: RecordedResponses, project: string, measures: R
     status: 200,
     body: { component: { ...body.component, key: `org.folio:${project}`, measures: Object.entries(measures).map(([metric, value]) => ({ metric, value })) } }
   }));
+}
+
+/** mod-users' responses with SonarCloud confirming that the token administers the project, and these project settings. */
+function admin(responses: RecordedResponses, settings: unknown[], settingsResponse?: { status: number; body: unknown }): RecordedResponses {
+  const params = new URLSearchParams({ component: 'org.folio:mod-users', keys: SONAR_SCOPE_SETTING_KEYS.join(',') });
+  return {
+    ...patched(responses, 'navigation/component', body => ({ status: 200, body: { ...body, configuration: { showSettings: true } } })),
+    [`https://sonarcloud.io/api/settings/values?${params}`]: settingsResponse ?? { status: 200, body: { settings } }
+  };
+}
+
+/** Without the rule-name lookup, for a repository with no suppressions. */
+function clean(responses: RecordedResponses): RecordedResponses {
+  return patched(responses, 'rules/search', () => undefined);
 }
 
 // mod-users' own suppressions, so the rule-name lookup asks for the same rules it was recorded with.
@@ -225,6 +240,36 @@ describe('S011 SonarQube findings', () => {
       expect(result.evidence).toContain('SonarCloud analysed the project again while the tool was reading it (2026-10-15 and 2026-10-16)');
     });
 
+    it('is manual when SonarCloud is still processing an analysis of the branch', async () => {
+      const responses = patched(MOD_SEARCH, 'ce/component', body => ({ status: 200, body: { ...body, queue: [{ status: 'IN_PROGRESS', branch: 'master' }] } }));
+      const result = await evaluate(await repo('mod-search'), { responses });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain('SonarCloud was processing a new analysis of branch master while the tool was reading it');
+    });
+
+    it('is manual when it cannot confirm SonarCloud did not re-analyse, and ignores tasks for other branches', async () => {
+      const otherBranch = patched(MOD_SEARCH, 'ce/component', body => ({ status: 200, body: { ...body, queue: [{ status: 'PENDING', branch: 'release-1' }, { status: 'PENDING', pullRequest: '12' }] } }));
+      const unreadable = patched(MOD_SEARCH, 'ce/component', () => ({ status: 403, body: {} }));
+
+      expect((await evaluate(await repo('mod-search'), { responses: otherBranch })).status).toBe(EvaluationStatus.FAIL);
+      const result = await evaluate(await repo('mod-search'), { responses: unreadable });
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain('could not confirm that SonarCloud did not re-analyse the project');
+    });
+
+    it('reads a requested branch SonarCloud has, sending it on every branch request', async () => {
+      const onFeature = Object.fromEntries(Object.entries(MOD_SEARCH).map(([url, response]) => [url.replace('&branch=master', '&branch=feature-x'), response]));
+      const responses = patched(onFeature, 'project_branches/list', body => ({ status: 200, body: { branches: [...body.branches, { name: 'feature-x', isMain: false }] } }));
+      const result = await evaluate(await repo('mod-search'), { responses, branch: 'feature-x' });
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.details).toContain('  - Project: org.folio:mod-search, branch feature-x');
+      // The two analysis reads, measures, four issue queries and two hotspot queries.
+      expect(result.requested.filter(url => url.includes('branch=feature-x'))).toHaveLength(9);
+      expect(result.requested.some(url => url.includes('branch=master'))).toBe(false);
+    });
+
     it('reads the main branch when SonarCloud has no analysis of the requested one, and says so', async () => {
       const result = await evaluate(await repo('mod-search'), { responses: MOD_SEARCH, branch: 'feature-x' });
 
@@ -236,9 +281,9 @@ describe('S011 SonarQube findings', () => {
 
   describe('rules', () => {
     it('allows exactly 3.0% duplication and fails 3.1%', async () => {
-      const clean = await repo('mod-users');
-      const at = await evaluate(clean, { responses: withMeasures(MOD_USERS, 'mod-users', { duplicated_lines_density: '3.0' }) });
-      const over = await evaluate(clean, { responses: withMeasures(MOD_USERS, 'mod-users', { duplicated_lines_density: '3.1' }) });
+      const directory = await repo('mod-users');
+      const at = await evaluate(directory, { responses: withMeasures(MOD_USERS, 'mod-users', { duplicated_lines_density: '3.0' }) });
+      const over = await evaluate(directory, { responses: withMeasures(MOD_USERS, 'mod-users', { duplicated_lines_density: '3.1' }) });
 
       expect(at.status).toBe(EvaluationStatus.MANUAL);
       expect(at.evidence).toContain('3.0% duplication');
@@ -277,6 +322,48 @@ describe('S011 SonarQube findings', () => {
       expect(search.evidence).toContain('SonarCloud did not report duplication.');
     });
 
+it('fails on an open vulnerability even when no issue has a security impact', async () => {
+      const responses = patched(MOD_USERS, 'types=VULNERABILITY', body => ({ status: 200, body: { ...body, paging: { ...body.paging, total: 1 } } }));
+      const result = await evaluate(await repo('mod-users'), { responses: clean(responses) });
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toContain('SonarCloud reports 1 open security issue.');
+    });
+
+    it.each([
+      ['an issue accepted in SonarCloud', 'issueStatuses=ACCEPTED', (body: any) => ({ ...body, paging: { ...body.paging, total: 1 } }),
+        '1 issue is accepted or marked false positive in SonarCloud'],
+      ['a hotspot closed by review', 'status=REVIEWED', (body: any) => ({ ...body, paging: { ...body.paging, total: 2 } }),
+        '2 security hotspots were reviewed as safe or fixed in SonarCloud but still found by analysis'],
+      ['a quality profile that is not the organization default', 'qualityprofiles/search', (body: any) => ({
+        profiles: body.profiles.map((profile: any) => profile.language === 'java' ? { ...profile, name: 'Lenient', isDefault: false } : profile)
+      }), 'the project uses a quality profile other than the organization default (Lenient for java)']
+    ])('is manual, not a pass, for %s', async (_name, fragment, change, reason) => {
+      const result = await evaluate(await repo('mod-users'), {
+        responses: admin(clean(patched(MOD_USERS, fragment, body => ({ status: 200, body: change(body) }))), [])
+      });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain(reason);
+    });
+
+
+    it('still fails on proven findings when the measures cannot be read', async () => {
+      const result = await evaluate(await repo('mod-search'), { responses: patched(MOD_SEARCH, 'measures/component', () => ({ status: 503, body: 'down' })) });
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.evidence).toContain('SonarCloud did not report duplication.');
+    });
+
+    it('does not claim "no security issues" when only one of the two security counts was read', async () => {
+      const responses = patched(MOD_USERS, 'impactSoftwareQualities=SECURITY', () => ({ status: 503, body: 'down' }));
+      const result = await evaluate(await repo('mod-users'), { responses: clean(responses) });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).not.toContain('no security issues');
+      expect(result.evidence).toContain('SonarCloud did not report open security issues');
+    });
+
     it('is manual when an issue count cannot be read', async () => {
       const responses = patched(MOD_USERS, 'impactSeverities=HIGH', () => ({ status: 503, body: 'unavailable' }));
       const result = await evaluate(await repo('mod-users'), { responses });
@@ -287,12 +374,6 @@ describe('S011 SonarQube findings', () => {
   });
 
   describe('SonarCloud project settings', () => {
-    const admin = (responses: RecordedResponses, settings: unknown[]): RecordedResponses => ({
-      ...patched(responses, 'navigation/component', body => ({ status: 200, body: { ...body, configuration: { showSettings: true } } })),
-      'https://sonarcloud.io/api/settings/values?component=org.folio%3Amod-users&keys=sonar.sources%2Csonar.inclusions%2Csonar.exclusions%2Csonar.test.exclusions%2Csonar.coverage.exclusions%2Csonar.cpd.exclusions%2Csonar.issue.ignore.multicriteria%2Csonar.issue.ignore.allfile%2Csonar.issue.ignore.block':
-        { status: 200, body: { settings } }
-    });
-    const clean = (responses: RecordedResponses) => patched(responses, 'rules/search', () => undefined);
 
     it('stays manual for a clean module when the token cannot administer the project', async () => {
       const result = await evaluate(await repo('mod-users'), { responses: clean(MOD_USERS) });
@@ -319,10 +400,36 @@ describe('S011 SonarQube findings', () => {
       expect(result.evidence).toContain('SonarCloud\'s project settings set 1 analysis-scope value');
       expect(result.details).toContain('  - SonarCloud project settings: sonar.exclusions = src/main/java/legacy/** (project)');
     });
+
+    it.each([
+      ['a project-level value inherited from the organization', [{ key: 'sonar.exclusions', values: ['src/legacy/**'], inherited: true, parentOrigin: 'ORGANIZATION' }], undefined,
+        'SonarCloud\'s project settings set 1 analysis-scope value'],
+      ['a language exclusion set on the project', [{ key: 'sonar.javascript.exclusions', value: 'src/**', inherited: false }], undefined,
+        'SonarCloud\'s project settings set 1 analysis-scope value'],
+      ['a setting in a shape the tool does not know', [{ key: 'sonar.exclusions', valueList: ['src/**'] }], undefined,
+        'Exclusions set in SonarCloud\'s project settings could not be read'],
+      ['a settings request that fails', [], { status: 503, body: 'unavailable' },
+        'Exclusions set in SonarCloud\'s project settings could not be read']
+    ])('is manual for %s', async (_name, settings, settingsResponse, reason) => {
+      const result = await evaluate(await repo('mod-users'), { responses: admin(clean(MOD_USERS), settings, settingsResponse) });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain(reason);
+    });
+
+    it('does not trust an admin flag SonarCloud gives for another project', async () => {
+      const responses = admin(clean(MOD_USERS), []);
+      const navigation = Object.keys(responses).find(url => url.includes('navigation/component'))!;
+      responses[navigation] = { status: 200, body: { ...(responses[navigation].body as object), key: 'org.folio:mod-other' } };
+      const result = await evaluate(await repo('mod-users'), { responses: patched(responses, 'settings/values', () => undefined) });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.evidence).toContain('could not be read without a SonarCloud admin token');
+    });
   });
 
   describe('suppression and scope scan', () => {
-    it('counts Sonar rules and "all" only, ignoring javac and eslint suppressions and commented-out code', async () => {
+    it('counts Sonar rules, "all" and the javac names sonar-java honours, ignoring other names, eslint and commented-out code', async () => {
       const result = await evaluate(await repo('mod-users', {
         'src/main/java/A.java': [
           'class A {',
@@ -331,20 +438,29 @@ describe('S011 SonarQube findings', () => {
           '  // @SuppressWarnings("java:S9")',
           '  @SuppressWarnings(value = {"all"})',
           '  void method() {}',
-          '  @SuppressWarnings("rawtypes") void other() {}',
+          '  @SuppressWarnings({"null", "checkstyle:MethodLength", "squid:HiddenFieldCheck"}) void other() {}',
           '}'
         ].join('\n'),
+        // A source package may be named build; only build output at a module root is skipped.
+        'src/main/java/org/folio/build/B.java': 'class B {\n  @SuppressWarnings("java:S2")\n  void b() {}\n}\n',
+        'target/classes/C.java': '@SuppressWarnings("java:S3") class C {}',
+        'src/main/kotlin/K.kt': '@file:Suppress("kotlin:S100")\npackage k\n// "unused" is a javac name; Kotlin code is not filtered by it\n@Suppress("unused") fun k() {}\n',
         'src/components/View.js': '// eslint-disable-next-line no-console\nconsole.log(1); // NOSONAR\n/* eslint-disable */\n'
       }));
       const { scan } = result.criterionDetails;
 
-      expect(scan.suppressions.map(item => [item.path, item.kind, item.rule, item.line, item.target])).toEqual([
-        ['src/components/View.js', 'nosonar', undefined, 2, undefined],
-        ['src/main/java/A.java', 'annotation', 'java:S1', 2, 'field'],
-        ['src/main/java/A.java', 'all', undefined, 5, 'method']
+      expect(scan.suppressions.map(item => [item.path, item.kind, item.rule, item.line, item.target, item.appliesTo])).toEqual([
+        ['src/components/View.js', 'nosonar', undefined, 2, undefined, undefined],
+        ['src/main/java/A.java', 'annotation', 'java:S1', 2, 'field', undefined],
+        ['src/main/java/A.java', 'all', undefined, 5, 'method', undefined],
+        ['src/main/java/A.java', 'annotation', 'null', 7, 'method', ['java:S2259']],
+        ['src/main/java/A.java', 'annotation', 'squid:HiddenFieldCheck', 7, 'method', undefined],
+        ['src/main/java/org/folio/build/B.java', 'annotation', 'java:S2', 2, 'method', undefined],
+        ['src/main/kotlin/K.kt', 'annotation', 'kotlin:S100', 1, 'class', undefined]
       ]);
       expect(scan.eslintDisableCount).toBe(2);
       expect(result.details).toContain('eslint-disable comments: 2 (ESLint, not Sonar, so not counted)');
+      expect(result.details).toContain('  - 1 suppression of "null" (a javac warning name that also hides Sonar rule java:S2259) with no comment explaining why');
     });
 
     it('counts only workflow exclusions FOLIO\'s shared workflow does not already pass, and not coverage-only exclusions', async () => {

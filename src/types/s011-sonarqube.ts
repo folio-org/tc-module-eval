@@ -8,8 +8,10 @@ export type S011AnnotationTarget = 'class' | 'method' | 'field' | 'unknown';
 /** One in-source suppression of a Sonar rule. */
 export interface S011Suppression {
   kind: S011SuppressionKind;
-  /** The Sonar rule key, for annotation suppressions. */
+  /** The Sonar rule key, or the javac warning name, for annotation suppressions. */
   rule?: string;
+  /** For a javac warning name (such as "unused"), the Sonar rules sonar-java suppresses with it. */
+  appliesTo?: string[];
   path: string;
   line: number;
   target?: S011AnnotationTarget;
@@ -53,6 +55,8 @@ export interface S011ReviewGroup {
   kind: 'suppression' | 'nosonar' | 'all' | 'scope';
   rule?: string;
   ruleName?: string;
+  /** For a javac warning name, the Sonar rules it suppresses. */
+  appliesTo?: string[];
   path: string;
   lines: number[];
   /** FOLIO guidance this group does not follow. */
