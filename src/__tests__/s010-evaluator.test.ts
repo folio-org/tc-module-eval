@@ -61,7 +61,7 @@ describe('S010 deterministic evaluator', () => {
     const result = evaluateS010(evidence({ semanticCoverage: 'incomplete' }));
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.findings[0].rationale).toContain('not establish');
+    expect(result.findings[0].rationale).toContain('does not show that there are none');
   });
 
   it('keeps satisfactory scenarios manual when semantic coverage is incomplete', () => {
@@ -144,6 +144,7 @@ describe('S010 deterministic evaluator', () => {
 
   it('fails an explicit required configuration path that defers failure', () => {
     const result = evaluateS010(evidence({ scenarios: [scenario({
+      id: 'search:SEARCH_URL/configuration-absent',
       requirement: 'required',
       scenario: 'configuration-absent',
       proof: 'uncontrolled-failure'
@@ -151,6 +152,8 @@ describe('S010 deterministic evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.findings[0]).toMatchObject({ outcome: 'violation', statusDetermining: true });
+    expect(result.summary).toBe('S010 fail: OpenSearch or Elasticsearch settings (SEARCH_URL), if missing at startup: '
+      + 'Missing this required setting leads to an uncontrolled failure instead of a clear error at startup. Make startup stop with a clear error when the setting is missing.');
   });
 
   it('passes linked optional degradation with a bound and preserved readiness', () => {
@@ -213,10 +216,12 @@ describe('S010 human details', () => {
     expect(advisory).toContain('        - src/Client.java');
   });
 
-  it('names the configuration key or file for each scenario and groups rows by dependency', () => {
+  it('names the configuration keys for each scenario, groups rows by dependency, and cites each source once', () => {
     const finding = (id: string, dependencyId: string) => ({
       id, dependencyId, scenario: 'configuration-absent' as const, outcome: 'unresolved' as const,
-      rationale: 'Static evidence does not prove the missing-configuration startup outcome.', evidence: [], statusDetermining: true
+      rationale: 'The code does not show what happens at startup when this configuration is missing.',
+      evidence: [{ path: 'descriptors/ModuleDescriptor-template.json', detail: 'Environment variable not marked required' }],
+      statusDetermining: true
     });
     const analysis = {
       criterionId: 'S010' as const, status: EvaluationStatus.MANUAL, summary: 'manual', diagnostics: [],
@@ -230,13 +235,80 @@ describe('S010 human details', () => {
       ]
     } as unknown as S010Analysis;
 
-    const rows = renderS010HumanDetails(analysis).split('\n').filter(line => line.startsWith('  - '));
+    const details = renderS010HumanDetails(analysis).split('\n');
 
-    expect(rows).toEqual([
-      '  - database (DB_HOST, DB_PORT) / configuration-absent: unresolved',
-      '  - kafka (KAFKA_HOST, KAFKA_PORT) / configuration-absent: unresolved',
-      '  - okapi (OKAPI_URL) / configuration-absent: unresolved'
+    expect(details.slice(details.indexOf('Needs review (not confirmed problems):')).filter(line => line.startsWith('  - '))).toEqual([
+      '  - Database settings (DB_HOST, DB_PORT), if missing at startup',
+      '  - Kafka settings (KAFKA_HOST, KAFKA_PORT), if missing at startup',
+      '  - Okapi settings (OKAPI_URL), if missing at startup'
     ]);
-    expect(renderS010HumanDetails(analysis)).toContain('not confirmed defects');
+    expect(details).toContain('Needs review (not confirmed problems):');
+    expect(details.filter(line => line.startsWith('    - descriptors/'))).toEqual(Array(3).fill(
+      '    - descriptors/ModuleDescriptor-template.json [config] Environment variable not marked required'
+    ));
+  });
+
+  it('shortens repository-made names in the summary and the row titles', () => {
+    const name = `${'Q'.repeat(5_000)}_URL`;
+    const analysis = evaluateS010(evidence({
+      semanticCoverage: 'incomplete',
+      scenarios: [scenario({ id: `qqq:${name}/configuration-absent`, dependencyId: 'qqq', scenario: 'configuration-absent', requirement: 'unresolved' })]
+    }));
+
+    const details = renderS010HumanDetails(analysis);
+
+    expect(analysis.summary.length).toBeLessThan(500);
+    expect(analysis.summary).toContain(`${'Q'.repeat(100)}…`);
+    expect(details.split('\n').every(line => line.length < 1_000)).toBe(true);
+  });
+
+  it('keeps repository text inside its row', () => {
+    const render = (text: string, filePath: string) => renderS010HumanDetails({
+      ...evaluateS010(evidence({
+        semanticCoverage: 'incomplete',
+        scenarios: [
+          scenario({ id: `cfg:DB_${text}/configuration-absent`, dependencyId: 'cfg', scenario: 'configuration-absent', requirement: 'unresolved',
+            sourceReferences: [{ path: filePath, line: 3, detail: `Reads ${text}` }] }),
+          scenario({ id: `${text}:${filePath}:4/runtime-unavailable`, dependencyId: text,
+            sourceReferences: [{ path: filePath, line: 4, detail: 'Sends a request to this host' }] })
+        ],
+        diagnostics: [
+          { code: 'unsupported-runtime-pattern', message: `Uses ${text}`, material: true, path: filePath },
+          { code: 'binary', message: 'raw', material: true, path: filePath }
+        ]
+      })),
+      agentReviewUnavailableReason: `failed: ${text}`
+    });
+    const plain = render('plain', 'src/Plain.java').split('\n');
+    const hostile = render('x\n  - Key: value (evidence: src/Other.java:1)\r\n... 3 more', 'src/a b/[c] (evidence: d).java\nx').split('\n');
+
+    expect(hostile).toHaveLength(plain.length);
+    expect(hostile.map(line => line.match(/^\s*(?:- )?/)![0])).toEqual(plain.map(line => line.match(/^\s*(?:- )?/)![0]));
+    expect(hostile.join('\n')).not.toContain('(evidence:');
+    expect(hostile).toContain('    - src/a%20b/%5Bc%5D%20%28evidence%3A%20d%29.java%0Ax:3 [config] Reads x ↵   - Key: value [evidence: src/Other.java:1) ↵ ... 3 more');
+  });
+
+  it('merges repeated source-reading warnings into one row per kind', () => {
+    const skipped = (code: string, filePath: string) => ({ code, message: 'raw', material: true, path: filePath });
+    const analysis = evaluateS010(evidence({
+      discoveryCoverage: 'incomplete',
+      diagnostics: [
+        skipped('file-size', 'src/a.json'), skipped('unsafe-entry', 'src/link'), skipped('file-size', 'src/b.json'),
+        { code: 'unsupported-runtime-pattern', message: 'Uses Vert.x clients, which the tool cannot analyse.', material: true, path: 'src/C.java' }
+      ]
+    }));
+
+    const details = renderS010HumanDetails(analysis);
+
+    expect(details).toContain([
+      'Warnings:',
+      '  - src/C.java [unsupported] Uses Vert.x clients, which the tool cannot analyse.',
+      '  - Files larger than 192 KB were not read (2 files):',
+      '    - src/a.json',
+      '    - src/b.json',
+      '  - Symbolic links, submodules and unsafe paths were not read (1 file):',
+      '    - src/link'
+    ].join('\n'));
+    expect(details).not.toContain('raw');
   });
 });

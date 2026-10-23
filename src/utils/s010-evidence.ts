@@ -20,19 +20,66 @@ const LIBRARY_NAMES = new Set([
   'stripes-testing'
 ]);
 
+export const S010_SOURCE_LIMITS = {
+  maxFiles: 1_500,
+  maxFileBytes: 192 * 1024,
+  maxTotalBytes: 6 * 1024 * 1024
+};
+
+const MAX_SCENARIOS = 1_000;
+
 const SOURCE_PATTERN = /(?:^|\/)(?:src|descriptors?|config)(?:\/|$)|(?:^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|README(?:\.md)?|ENV_VARS\.md)$/i;
-const EXTERNAL_CONFIG_PATTERN = /(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
+const EXTERNAL_CONFIG_PATTERN = /^AWS_|(?:URL|URI|HOST|BROKER|ENDPOINT|BUCKET|DATABASE|DB_|KAFKA|S3_|ELASTIC|OPENSEARCH|SMTP|OKAPI)/i;
 const JAVA_DATABASE_PATTERN = /\b(?:JdbcTemplate|NamedParameterJdbcTemplate|DataSource|JpaRepository|CrudRepository|EntityManager|R2dbcEntityTemplate|DatabaseClient|FolioSpringLiquibase|SpringLiquibase|Flyway)\b/;
 const JAVA_OPENSEARCH_PATTERN = /\borg\.opensearch\.client\.(?:RestHighLevelClient|RestClient|opensearch\.OpenSearch(?:Async)?Client)\b/;
-const UNSUPPORTED_PATTERNS = [
-  { category: 'dynamic runtime discovery', pattern: /java\.lang\.reflect|Class\.forName|ServiceLoader/i },
-  { category: 'generated or framework client', pattern: /generated[-_/ ]client|vertx|raml-module-builder/i },
-  { category: 'HTTP client wrapper', pattern: /URLConnection|FeignClient|Retrofit/i },
-  { category: 'datastore client', pattern: /JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i },
-  { category: 'messaging or RPC client', pattern: /RabbitTemplate|ManagedChannelBuilder/i },
+// A browser fetch call whose URL starts with a literal absolute address; the host is captured. The host
+// must end at a delimiter, so `https://api.${domain}` is a computed address, not host "api.".
+const LITERAL_HOST = String.raw`['"\x60]https?:\/\/([^/'"\x60?#$\s:\\]+)(?=[/'"\x60?#:])`;
+const LITERAL_FETCH_PATTERN = new RegExp(String.raw`(?<![\w$])fetch\s*\(\s*` + LITERAL_HOST, 'g');
+// Each entry lists patterns any of which marks a file; `searchFilePatterns` replace them in files with a
+// recognized OpenSearch client, whose RestClient and elasticsearchClient names are already covered.
+// Quantifiers stay bounded so repository content cannot make matching slow.
+const UNSUPPORTED_PATTERNS: Array<{
+  category: string;
+  patterns: RegExp[];
+  searchFilePatterns?: RegExp[];
+  javascriptOnly?: boolean;
+  excludeDatabaseFiles?: boolean;
+}> = [
+  { category: 'code loaded at runtime (reflection or ServiceLoader)', patterns: [/java\.lang\.reflect|Class\.forName|ServiceLoader/i] },
+  { category: 'Vert.x, RAML Module Builder or generated clients', patterns: [/generated[-_/ ]client|vertx|raml-module-builder/i] },
   {
-    category: 'browser client wrapper',
-    pattern: /\baxios\b|\bky\s*\(|\bokapi\b|\bmutator\b|process\.env\[[^\]]+\]/i,
+    category: 'HTTP clients (Spring HTTP interfaces, RestClient, Feign, Retrofit, OkHttp, Apache HttpClient or URLConnection)',
+    patterns: [/URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i, /\bRestClient\b/],
+    // Beside an OpenSearch client, a bare RestClient is OpenSearch's; Spring's is recognized by its import.
+    searchFilePatterns: [
+      /URLConnection|FeignClient|Retrofit|OkHttpClient|CloseableHttpClient|\bHttpClients\b|@(?:Http|Get|Post|Put|Patch|Delete)Exchange\b/i,
+      /\borg\.springframework\.web\.client\.RestClient\b/
+    ]
+  },
+  {
+    category: 'datastore clients (JDBC, Redis, MongoDB or Elasticsearch)',
+    // Plain DataSource is the database recognizer's; here only type names such as HikariDataSource count, not
+    // dataSource props, MetadataSource or DataSourceResolver.
+    patterns: [/JdbcTemplate|RedisTemplate|MongoClient|ElasticsearchClient|OpenSearchClient/i, /\b[A-Z][A-Za-z0-9]*DataSource\b/],
+    // Beside an OpenSearch client, elasticsearchClient and openSearchClient names are that client's.
+    searchFilePatterns: [/\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/, /\b[A-Z][A-Za-z0-9]*DataSource\b/],
+    excludeDatabaseFiles: true
+  },
+  { category: 'object storage clients (AWS S3, MinIO or the FOLIO S3 client)', patterns: [/\b(?:AmazonS3|S3AsyncClient|MinioClient|MinioAsyncClient|FolioS3Client)\b/] },
+  {
+    category: 'messaging or RPC clients (Kafka listeners and consumers, JMS, RabbitMQ or gRPC)',
+    patterns: [/RabbitTemplate|ManagedChannelBuilder|@KafkaListener\b|\bKafkaConsumer\b|\bKafkaProducer\b|@RabbitListener\b|\bJmsTemplate\b|@JmsListener\b/i]
+  },
+  {
+    category: 'Stripes or browser request helpers (stripes-connect, ky, axios or process.env)',
+    patterns: [/\baxios\b|\bky\s*\(|\bokapi\b|\bmutator\b|process\.env\[[^\]]{1,256}\]/i],
+    javascriptOnly: true
+  },
+  {
+    category: 'browser requests the tool cannot follow (fetch with a computed or relative URL, XMLHttpRequest, WebSocket or EventSource)',
+    // The lookahead holds the whitespace so it cannot be backtracked to dodge the literal-address check.
+    patterns: [new RegExp(String.raw`(?<![\w$])fetch\s*\((?!\s*` + LITERAL_HOST + String.raw`)|\bXMLHttpRequest\b|\bnew\s+(?:WebSocket|EventSource)\s*\(|\bsendBeacon\s*\(`)],
     javascriptOnly: true
   }
 ];
@@ -46,6 +93,7 @@ interface PackageJson {
 
 interface EnvDeclaration {
   name: string;
+  line?: number;
   dependencyId: string;
   required: boolean;
   hasDefault: boolean;
@@ -57,12 +105,7 @@ export async function collectS010Evidence(
   repoPath: string,
   language: CriterionLanguage
 ): Promise<S010Evidence> {
-  const snapshot = await readCommittedSource(repoPath, {
-    include: isDeterministicS010Path,
-    maxFiles: 1_500,
-    maxFileBytes: 192 * 1024,
-    maxTotalBytes: 6 * 1024 * 1024
-  });
+  const snapshot = await readCommittedSource(repoPath, { include: isDeterministicS010Path, ...S010_SOURCE_LIMITS });
   const diagnostics: S010Diagnostic[] = snapshot.diagnostics.map(item => ({ ...item }));
   const files = new Map(snapshot.files.map(file => [file.path, file]));
   const packageJson = parsePackageJson(files.get('package.json'), diagnostics);
@@ -74,14 +117,10 @@ export async function collectS010Evidence(
 
   const declarations = collectEnvDeclarations(snapshot.files, diagnostics);
   const javaFiles = snapshot.files.filter(file => file.path.endsWith('.java') && isProductionSource(file.path));
+  const bindings = springBindings(javaFiles);
   for (const declaration of declarations) {
-    const binding = javaFiles.find(file => springBinding(file.content, declaration));
-    const clearFailFast = Boolean(
-      declaration.required
-      && !declaration.hasDefault
-      && binding
-      && springPlaceholder(binding.content, declaration, false)
-    );
+    const binding = bindings.get(declaration.name);
+    const clearFailFast = Boolean(declaration.required && !declaration.hasDefault && binding?.withoutDefault);
     scenarios.push({
       id: `${declaration.dependencyId}:${declaration.name}/configuration-absent`,
       dependencyId: declaration.dependencyId,
@@ -90,12 +129,14 @@ export async function collectS010Evidence(
       scenario: 'configuration-absent',
       proof: clearFailFast ? 'clear-fail-fast' : 'unresolved',
       sourceReferences: [
-        { path: declaration.path, detail: `${declaration.required ? 'Required configuration input' : 'Configuration input not marked required'}; this declaration does not establish whether the service is optional` },
-        ...(binding ? [{ path: binding.path, line: lineOf(binding.content, '@Value'), detail: 'Spring configuration binding' }] : [])
+        { path: declaration.path, ...(declaration.line ? { line: declaration.line } : {}), detail: declaration.required
+          ? `${declaration.name} is marked required`
+          : `${declaration.name} is not marked required (this does not show whether the service is optional)` },
+        ...(binding ? [{ path: binding.path, line: binding.line, detail: `Reads ${declaration.name} with a Spring @Value binding` }] : [])
       ],
       boundedFailure: 'not-applicable',
       readiness: 'not-applicable',
-      ...(!clearFailFast ? { rationale: 'Static evidence does not prove the missing-configuration startup outcome.' } : {})
+      ...(!clearFailFast ? { rationale: 'The code does not show what happens at startup when this configuration is missing.' } : {})
     });
     if (!clearFailFast) semanticIncomplete = true;
   }
@@ -124,11 +165,11 @@ export async function collectS010Evidence(
       sourceReferences: searchFiles.map(file => ({
         path: file.path,
         line: lineAtOffset(file.content, JAVA_OPENSEARCH_PATTERN.exec(file.content)!.index),
-        detail: 'OpenSearch Java client reference; client presence does not establish outage handling'
+        detail: 'Uses an OpenSearch client'
       })),
       boundedFailure: 'unknown',
       readiness: 'unknown',
-      rationale: 'OpenSearch client usage is recognized. Verify operation-level failure bounds, startup or tenant-initialization effects, readiness, and recovery; client configuration or exception handling alone does not prove resilience.'
+      rationale: 'The module uses an OpenSearch client, but the tool does not follow its calls. Check that search calls have time limits, how an outage affects startup, tenant setup and readiness, and how the module recovers. A timeout setting or a catch block alone does not show this.'
     });
     semanticIncomplete = true;
   }
@@ -137,8 +178,10 @@ export async function collectS010Evidence(
     if (!hasJavaClientOperation(file.content)) continue;
     const dependencyId = dependencyFromFile(file.path);
     const conditional = /@ConditionalOnProperty\b|@Profile\b/.test(file.content);
-    const bounded = /\.timeout\s*\(|TimeLimiter|connectTimeout|readTimeout|responseTimeout/.test(file.content);
-    const handled = /onErrorResume\s*\(|onErrorReturn\s*\(|fallbackMethod\s*=|catch\s*\(/.test(file.content);
+    const { complete, calls } = javaClientCalls(file.content);
+    // Every call through the client needs its own time limit and error handling; signals elsewhere in the file do not count.
+    const bounded = complete && calls.length > 0 && calls.every(call => call.bounded);
+    const handled = complete && calls.length > 0 && calls.every(call => call.handled);
     const startupCoupled = /@PostConstruct\b|ApplicationReadyEvent|HealthIndicator|ReadinessState/.test(file.content);
     const controlled = conditional && bounded && handled && !startupCoupled;
     scenarios.push({
@@ -147,34 +190,46 @@ export async function collectS010Evidence(
       requirement: conditional ? 'optional' : 'unresolved',
       scenario: 'runtime-unavailable',
       proof: controlled ? 'controlled-degradation' : 'unresolved',
-      sourceReferences: [{ path: file.path, line: clientLine(file.content), detail: 'Runtime client operation' }],
+      sourceReferences: [{ path: file.path, line: clientLine(file.content), detail: 'Uses an HTTP, Kafka or S3 client' }],
       boundedFailure: bounded ? 'proven' : 'unknown',
       readiness: controlled ? 'preserved' : 'unknown',
-      ...(!controlled ? { rationale: 'Client operation, failure bound, handling, optionality, and readiness were not linked conclusively.' } : {})
+      ...(!controlled ? { rationale: 'The tool could not confirm that calls through the client have a time limit and error handling, whether the service is optional, or how an outage affects readiness.' } : {})
     });
     if (!controlled) semanticIncomplete = true;
   }
 
   if (runtimeKind === 'stripes-react') {
+    const optionalInterfaces = packageStripesInterfaces(packageJson, ['optionalOkapiInterfaces']).length > 0;
     for (const file of snapshot.files.filter(isJavaScriptProductionSource)) {
-      for (const match of file.content.matchAll(/fetch\s*\(\s*['"]https?:\/\/([^/'"?]+)/g)) {
+      const matches = [...file.content.matchAll(LITERAL_FETCH_PATTERN)];
+      if (!matches.length) continue;
+      const lineAt = lineLookup(file.content);
+      // File-wide signals, checked once per file rather than once per request.
+      const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
+      const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
+      const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
+        || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
+      // Optional only with evidence that the feature can be turned off: a setting, or a check that an
+      // interface is present. A timeout and catch alone do not show that the service is optional.
+      const switchable = optionalInterfaces || /\bhasInterface\s*\(|\bstripes\.config\.\w/.test(maskJavaScriptSource(file.content));
+      const controlled = bounded && handled && !bootstrap && switchable;
+      for (const match of matches) {
         const dependencyId = match[1].toLowerCase();
-        const operationLine = lineAtOffset(file.content, match.index ?? 0);
-        const bounded = /AbortController|AbortSignal\.timeout|signal\s*:|\btimeout\s*:/.test(file.content);
-        const handled = /catch\s*\(|\.catch\s*\(|onError\s*:/.test(file.content);
-        const bootstrap = /ReactDOM\.render|createRoot\s*\(|bootstrap|module\.exports\s*=/.test(file.content)
-          || /(?:^|\/)(?:index|bootstrap)\.[jt]sx?$/.test(file.path);
-        const controlled = bounded && handled && !bootstrap;
+        const operationLine = lineAt(match.index ?? 0);
         scenarios.push({
           id: `${dependencyId}:${file.path}:${operationLine}/runtime-unavailable`,
           dependencyId,
           requirement: controlled ? 'optional' : 'unresolved',
           scenario: 'runtime-unavailable',
           proof: controlled ? 'controlled-degradation' : 'unresolved',
-          sourceReferences: [{ path: file.path, line: operationLine, detail: 'Direct browser request' }],
+          sourceReferences: [{ path: file.path, line: operationLine, detail: 'Sends a request to this host' }],
           boundedFailure: bounded ? 'proven' : 'unknown',
           readiness: controlled ? 'preserved' : 'unknown',
-          ...(!controlled ? { rationale: 'Direct browser dependency behavior is not bounded and feature-local in the available evidence.' } : {})
+          ...(!controlled ? {
+            rationale: bounded && handled && !bootstrap
+              ? 'The request has a time limit and error handling, but the tool found no setting or interface check that turns the feature off, so it cannot tell whether the service is optional.'
+              : 'The tool could not confirm that this request has a time limit and error handling and only affects the feature that sends it.'
+          } : {})
         });
         if (!controlled) semanticIncomplete = true;
       }
@@ -187,10 +242,10 @@ export async function collectS010Evidence(
         requirement: 'unresolved',
         scenario: 'runtime-unavailable',
         proof: 'unresolved',
-        sourceReferences: [{ path: 'package.json', detail: 'Declared FOLIO runtime interface' }],
+        sourceReferences: [{ path: 'package.json', detail: 'Lists the interfaces the UI needs' }],
         boundedFailure: 'unknown',
         readiness: 'unknown',
-        rationale: 'Interface declaration does not establish runtime failure handling.'
+        rationale: 'The UI needs these interfaces, but the tool does not follow how it behaves when the modules behind them are down.'
       });
       semanticIncomplete = true;
     }
@@ -199,16 +254,11 @@ export async function collectS010Evidence(
   const productionCode = snapshot.files.filter(file => isProductionCode(file.path));
   for (const unsupported of UNSUPPORTED_PATTERNS) {
     const matchingPaths = productionCode
-      .filter(file => !('javascriptOnly' in unsupported) || /\.[cm]?[jt]sx?$/.test(file.path))
-      .filter(file => unsupported.category !== 'datastore client'
-        || !databaseFiles.some(databaseFile => databaseFile.path === file.path))
+      .filter(file => !unsupported.javascriptOnly || /\.[cm]?[jt]sx?$/.test(file.path))
+      .filter(file => !unsupported.excludeDatabaseFiles || !databaseFiles.includes(file))
       .filter(file => {
-        // Recognized OpenSearch files may use legacy elasticsearchClient field/setter names.
-        // Keep diagnostics for other actual datastore types, not these identifiers.
-        const pattern = unsupported.category === 'datastore client' && searchFiles.includes(file)
-          ? /\b(?:JdbcTemplate|DataSource|RedisTemplate|MongoClient|ElasticsearchClient)\b/
-          : unsupported.pattern;
-        return pattern.test(file.content);
+        const patterns = searchFiles.includes(file) ? unsupported.searchFilePatterns ?? unsupported.patterns : unsupported.patterns;
+        return patterns.some(pattern => pattern.test(file.content));
       })
       .map(file => file.path);
     if (matchingPaths.length === 0) continue;
@@ -221,6 +271,16 @@ export async function collectS010Evidence(
     semanticIncomplete = true;
   }
 
+  // Keep the report proportionate to the module, not to however many calls a repository repeats.
+  const uniqueScenarios = deduplicateScenarios(scenarios);
+  if (uniqueScenarios.length > MAX_SCENARIOS) {
+    diagnostics.push({
+      code: 'scenario-limit',
+      message: `Found ${uniqueScenarios.length} dependency checks; only the first ${MAX_SCENARIOS} are listed.`,
+      material: true
+    });
+  }
+
   return {
     moduleKind,
     runtimeKind,
@@ -230,7 +290,7 @@ export async function collectS010Evidence(
       : semanticIncomplete || diagnostics.some(item => item.material)
         ? 'incomplete'
         : 'complete',
-    scenarios: deduplicateScenarios(scenarios),
+    scenarios: uniqueScenarios.slice(0, MAX_SCENARIOS),
     diagnostics
   };
 }
@@ -252,13 +312,15 @@ function collectJavaDatabaseScenario(
     ...(startupOwner ? [{
       path: startupOwner.path,
       line: databaseLine(startupOwner.content),
-      detail: 'Unconditional database startup lifecycle owner'
+      detail: 'Runs database setup (migrations) at startup'
     }] : [{
       path: databaseFiles[0].path,
       line: databaseLine(databaseFiles[0].content),
-      detail: `${databaseFiles.length} production file${databaseFiles.length === 1 ? '' : 's'} use database framework APIs`
+      detail: databaseFiles.length === 1
+        ? 'Uses the database'
+        : `Uses the database (first of ${databaseFiles.length} files that do)`
     }]),
-    ...(configFile ? [{ path: configFile.path, detail: 'Datasource configuration' }] : [])
+    ...(configFile ? [{ path: configFile.path, detail: 'Database connection settings' }] : [])
   ];
 
   if (startupOwner) {
@@ -274,8 +336,8 @@ function collectJavaDatabaseScenario(
       readiness: 'not-applicable',
       ...(!clearFailFast || !bounded ? {
         rationale: !clearFailFast
-          ? 'Database startup ownership is visible, but local evidence does not prove clear exception propagation.'
-          : 'Database startup failure propagates, but no complete finite connection and operation bound is visible.'
+          ? 'The module sets up the database at startup, but the code does not show that a failure stops startup with a clear error.'
+          : 'A database failure at startup stops the module, but the settings do not give both a connection timeout and a socket timeout, so startup could hang.'
       } : {})
     };
   }
@@ -291,7 +353,7 @@ function collectJavaDatabaseScenario(
     boundedFailure: bounded ? 'proven' : 'unknown',
     readiness: controlled ? 'preserved' : 'unknown',
     ...(!controlled ? {
-      rationale: 'Database usage is visible, but optionality, complete failure bounds, handling, and readiness were not linked conclusively.'
+      rationale: 'The module uses a database, but the tool could not confirm whether it is optional, whether calls have time limits and error handling, or how an outage affects readiness.'
     } : {})
   };
 }
@@ -304,8 +366,8 @@ function isDatabaseStartupOwner(content: string): boolean {
 }
 
 function databaseStartupPropagates(content: string): boolean {
-  return /afterPropertiesSet\s*\([^)]*\)\s*throws\b/.test(content)
-    || /\b(?:run|migrate)\s*\([^)]*\)\s*throws\b/.test(content);
+  return /afterPropertiesSet\s*\([^()]{0,256}\)\s*throws\b/.test(content)
+    || /\b(?:run|migrate)\s*\([^()]{0,256}\)\s*throws\b/.test(content);
 }
 
 function hasGlobalDatabaseFailureBound(files: CommittedSourceFile[], startup: boolean): boolean {
@@ -341,12 +403,13 @@ function databaseConfiguration(file: CommittedSourceFile): string {
     }
     if (!line.trim() || /^\s*#/.test(line)) continue;
 
-    const mapping = /^(\s*)([^:#][^:]*):(?:\s*(.*))?$/.exec(line);
+    // Split at the first colon instead of matching the value with overlapping whitespace quantifiers.
+    const mapping = /^\s*([^\s:#][^:]*):/.exec(line);
     if (!mapping) continue;
     while (parents.length > 0 && parents[parents.length - 1].indentation >= indentation) parents.pop();
 
-    const key = mapping[2].trim().replace(/^['"]|['"]$/g, '');
-    const value = (mapping[3] ?? '').replace(/\s+#.*$/, '').trim();
+    const key = mapping[1].trim().replace(/^['"]|['"]$/g, '');
+    const value = line.slice(mapping[0].length).replace(/(?<!\s)\s+#.*$/, '').trim();
     const path = [...parents.map(parent => parent.key), key].join('.');
     if (/^(?:(?:[&!]\S+)\s+)*[>|](?:[1-9][+-]?|[+-][1-9]?)?$/.test(value)) {
       scalarIndentation = indentation;
@@ -420,7 +483,7 @@ function parsePackageJson(file: CommittedSourceFile | undefined, diagnostics: S0
   try {
     return JSON.parse(file.content) as PackageJson;
   } catch {
-    diagnostics.push({ code: 'package-json-invalid', message: 'Unable to parse committed package.json.', material: true, path: file.path });
+    diagnostics.push({ code: 'package-json-invalid', message: 'Not valid JSON, so the tool could not read it.', material: true, path: file.path });
     return undefined;
   }
 }
@@ -433,12 +496,14 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
       const launch = descriptor.launchDescriptor as Record<string, unknown> | undefined;
       const env = (launch?.env ?? descriptor.env) as unknown;
       if (!Array.isArray(env)) continue;
+      const nameLines = jsonNameLines(file.content);
       for (const value of env) {
         if (!value || typeof value !== 'object') continue;
         const entry = value as Record<string, unknown>;
         if (typeof entry.name !== 'string' || !EXTERNAL_CONFIG_PATTERN.test(entry.name)) continue;
         declarations.push({
           name: entry.name,
+          line: nameLines.get(entry.name),
           dependencyId: dependencyFromConfig(entry.name),
           required: entry.required === true,
           hasDefault: typeof entry.value === 'string' && entry.value.length > 0,
@@ -447,30 +512,63 @@ function collectEnvDeclarations(files: CommittedSourceFile[], diagnostics: S010D
         });
       }
     } catch {
-      diagnostics.push({ code: 'descriptor-invalid', message: 'Unable to parse a committed module descriptor.', material: true, path: file.path });
+      diagnostics.push({ code: 'descriptor-invalid', message: 'Not valid JSON, so the tool could not read its environment variables.', material: true, path: file.path });
     }
   }
   return declarations;
 }
 
-function springBinding(content: string, declaration: EnvDeclaration): boolean {
-  return springPlaceholder(content, declaration, false) || springPlaceholder(content, declaration, true);
+interface SpringBinding {
+  path: string;
+  line: number;
+  withoutDefault: boolean;
 }
 
-function springPlaceholder(content: string, declaration: EnvDeclaration, withDefault: boolean): boolean {
-  const name = escapeRegExp(declaration.name);
-  const suffix = withDefault ? ':[^}]*' : '';
-  return new RegExp(`@Value\\s*\\(\\s*["']\\$\\{${name}${suffix}\\}["']\\s*\\)`).test(content);
+// One pass over each file, instead of one regular expression per declaration and file. A placeholder
+// belongs to the first file that binds it; that file proves fail-fast if it binds it without a default.
+function springBindings(files: CommittedSourceFile[]): Map<string, SpringBinding> {
+  const bindings = new Map<string, SpringBinding>();
+  for (const file of files) {
+    const lineAt = lineLookup(file.content);
+    const inFile = new Map<string, SpringBinding>();
+    for (const match of file.content.matchAll(/@Value\s*\(\s*["']\$\{([^}:"'\s]{1,256})(:[^}]{0,1024})?\}["']\s*\)/g)) {
+      const existing = inFile.get(match[1]);
+      if (!existing || (!match[2] && !existing.withoutDefault)) {
+        inFile.set(match[1], { path: file.path, line: lineAt(match.index ?? 0), withoutDefault: !match[2] });
+      }
+    }
+    for (const [name, binding] of inFile) {
+      if (!bindings.has(name)) bindings.set(name, binding);
+    }
+  }
+  return bindings;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Line of each `"name": "<value>"` member whose value appears only once in the file. A value named
+// more than once may belong to another member or a duplicate entry, so it is cited without a line.
+function jsonNameLines(content: string): Map<string, number> {
+  const lines = new Map<string, number>();
+  const repeated = new Set<string>();
+  const lineAt = lineLookup(content);
+  for (const match of content.matchAll(/"name"\s*:\s*("(?:[^"\\\n]|\\.){0,1024}")/g)) {
+    let name: string;
+    try {
+      name = JSON.parse(match[1]) as string;
+    } catch {
+      continue;
+    }
+    if (lines.has(name)) repeated.add(name);
+    else lines.set(name, lineAt(match.index ?? 0));
+  }
+  for (const name of repeated) lines.delete(name);
+  return lines;
 }
 
 function dependencyFromConfig(name: string): string {
   const upper = name.toUpperCase();
   if (/^(?:DB_|DATABASE)/.test(upper)) return 'database';
-  if (/^S3_|BUCKET/.test(upper)) return 'object-storage';
+  // AWS_* and S3_* settings configure the same object storage (AWS_* names are being renamed to S3_*).
+  if (/^(?:S3|AWS)_|BUCKET/.test(upper)) return 'object-storage';
   if (/KAFKA|BROKER/.test(upper)) return 'kafka';
   if (/ELASTIC|OPENSEARCH/.test(upper)) return 'search';
   if (/OKAPI/.test(upper)) return 'okapi';
@@ -486,28 +584,326 @@ function hasJavaClientOperation(content: string): boolean {
   return /\bWebClient\b|\bHttpClient\b|\bRestTemplate\b|\bKafkaTemplate\b|\bS3Client\b/.test(content);
 }
 
+const JAVA_CLIENT_TYPES = String.raw`(?:WebClient|HttpClient|RestTemplate|KafkaTemplate|S3Client)`;
+const TIMEOUT_METHODS = new Set(['timeout', 'orTimeout', 'completeOnTimeout', 'setTimeout']);
+const ERROR_METHODS = new Set(['onErrorResume', 'onErrorReturn', 'onErrorComplete', 'exceptionally', 'handle', 'recover', 'otherwise']);
+const BLOCKING_METHODS = new Set(['block', 'blockOptional', 'blockFirst', 'blockLast', 'get', 'join']);
+const MAX_JAVA_CALLS = 200;
+const MAX_CLIENT_NAMES = 50;
+const MAX_STATEMENT_CHARS = 4_000;
+const MAX_BLOCK_CHARS = 20_000;
+
+interface JavaClientCalls {
+  // False when some use of a client could not be analysed; the file then proves nothing.
+  complete: boolean;
+  calls: Array<{ bounded: boolean; handled: boolean }>;
+}
+
+// Calls through a client: a method call on a variable declared with a client type, or a client
+// created and used in one statement. A call is bounded when its own call chain sets a timeout, and
+// handled when that chain handles errors, or when it waits for the result inside a try block with
+// a catch directly around it. Arguments and lambdas are not part of the chain, and comments and
+// strings are ignored.
+function javaClientCalls(source: string): JavaClientCalls {
+  const content = maskJavaSource(source);
+  const incomplete = { complete: false, calls: [] };
+  const types = new Map<string, string>();
+  const accounted = new Set<number>();
+  for (const match of content.matchAll(new RegExp(String.raw`\b(${JAVA_CLIENT_TYPES})(?:<[^<>;{}]{0,200}>)?\s+(\w+)\s*[;=,)]`, 'g'))) {
+    // `HttpClient a, b;` or `WebClient a = x, b = y;` declares b as well.
+    if (declaresMore(content, (match.index ?? 0) + match[0].length - 1)) return incomplete;
+    types.set(match[2], match[1]);
+    accounted.add(match.index ?? 0);
+    if (types.size > MAX_CLIENT_NAMES) return incomplete;
+  }
+  const factories = [...content.matchAll(new RegExp(String.raw`\b(${JAVA_CLIENT_TYPES})\s*\.\s*(?:create|builder|newHttpClient|newBuilder)\s*\(`, 'g'))];
+  if (factories.length > MAX_JAVA_CALLS) return incomplete;
+  for (const match of content.matchAll(new RegExp(String.raw`\b${JAVA_CLIENT_TYPES}\b`, 'g'))) {
+    const offset = match.index ?? 0;
+    if (accounted.has(offset)) continue;
+    const before = content.slice(Math.max(0, offset - 100), offset);
+    const after = content.slice(offset + match[0].length, offset + match[0].length + 100);
+    // Imports, `new RestTemplate(...)` and static members such as WebClient.builder() are not uses.
+    if (/\bimport\s+(?:static\s+)?[\w.]*$/.test(before) || /\bnew\s+$/.test(before) || /^\s*\./.test(after)) continue;
+    return incomplete; // a client type in a generic, cast, return type or other place the tool cannot follow
+  }
+
+  const calls: JavaClientCalls['calls'] = [];
+  const analyse = (start: number, type: string): boolean => {
+    if (calls.length >= MAX_JAVA_CALLS) return false;
+    const chain = callChain(content, start);
+    const methods = chain.map(call => call.name);
+    const timedGet = chain.some(call => call.name === 'get' && /,\s*(?:TimeUnit|ChronoUnit)\.|^\s*Duration\./.test(call.args));
+    // A catch handles only failures that happen while the try block runs: the result must be awaited there.
+    // The first method starts the request (WebClient's get() only builds it); waits come after it.
+    const awaited = methods.slice(1).some(name => BLOCKING_METHODS.has(name))
+      || type === 'RestTemplate' || type === 'S3Client' || (type === 'HttpClient' && methods[0] === 'send');
+    calls.push({
+      bounded: timedGet || methods.some(name => TIMEOUT_METHODS.has(name)),
+      handled: methods.some(name => ERROR_METHODS.has(name)) || (awaited && insideTryWithCatch(content, start))
+    });
+    return true;
+  };
+  for (const [name, type] of types) {
+    const declaration = new RegExp(String.raw`\b${type}(?:<[^<>;{}]{0,200}>)?\s*$`);
+    const fieldAssignment = new RegExp(String.raw`\bthis\s*\.\s*${name}\s*=\s*$`);
+    for (const use of content.matchAll(new RegExp(String.raw`\b${name}\b`, 'g'))) {
+      const offset = use.index ?? 0;
+      const before = content.slice(Math.max(0, offset - 300), offset);
+      const after = content.slice(offset + name.length, offset + name.length + 300);
+      if (/\.\s*$/.test(before) && !/\bthis\s*\.\s*$/.test(before)) continue; // another object's member
+      if (declaration.test(before) || /^\s*=(?!=)/.test(after)) continue; // declaration or assignment target
+      if (fieldAssignment.test(before) && /^\s*;/.test(after)) continue; // constructor injection: this.client = client;
+      if (!/^\s*\.\s*(?:<[^<>;(){}]{0,200}>\s*)?\w+\s*\(/.test(after) || !analyse(offset, type)) return incomplete;
+    }
+  }
+  for (const match of factories) {
+    const start = match.index ?? 0;
+    if (callChain(content, start).some(call => /^(?:get|post|put|patch|delete|head|method|send|sendAsync|retrieve|exchange\w*)$/.test(call.name))) {
+      if (!analyse(start, match[1])) return incomplete;
+    } else if (!/(?:^|[^=!<>])=\s*$/.test(content.slice(Math.max(0, start - 100), start))) {
+      // A client that is only built is configuration when it is assigned to a variable; built and handed
+      // to other code or returned (a @Bean, say), its calls happen where the tool cannot follow them.
+      return incomplete;
+    }
+  }
+  return { complete: true, calls };
+}
+
+// The method calls chained directly on the identifier at `start` (`client.a(..).<T>b(..)`), with
+// their argument text. The chain ends at the first token that is not `.name(`; calls inside
+// arguments, lambda bodies and later expressions are not part of it.
+function callChain(content: string, start: number): Array<{ name: string; args: string }> {
+  const chain: Array<{ name: string; args: string }> = [];
+  const end = Math.min(content.length, start + MAX_STATEMENT_CHARS);
+  const link = /\s*\.\s*(?:<[^<>;(){}]{0,200}>\s*)?(\w+)\s*\(/y;
+  let index = /^\w+/.exec(content.slice(start, start + 200))?.[0].length ?? 0;
+  index += start;
+  while (index < end) {
+    link.lastIndex = index;
+    const match = link.exec(content);
+    if (!match) break;
+    let depth = 0;
+    let position = link.lastIndex;
+    for (; position < end; position++) {
+      const character = content[position];
+      if (character === '(' || character === '{' || character === '[') depth++;
+      else if (character === ')' || character === '}' || character === ']') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    if (position >= end || content[position] !== ')') break;
+    chain.push({ name: match[1], args: content.slice(link.lastIndex, position) });
+    index = position + 1;
+  }
+  return chain;
+}
+
+// Whether the declaration whose name is followed by `content[end]` (`;`, `=`, `,` or `)`) declares
+// another variable before its `;`. A parameter list ends at an unmatched `)` instead. Generic commas
+// (`Map<A, B>`) also count, which only makes the file manual.
+function declaresMore(content: string, end: number): boolean {
+  if (content[end] === ';' || content[end] === ')') return false;
+  let depth = 0;
+  for (let index = end + 1; index < Math.min(content.length, end + MAX_STATEMENT_CHARS); index++) {
+    const character = content[index];
+    if (character === '(' || character === '{' || character === '[') depth++;
+    else if (character === ')' || character === '}' || character === ']') {
+      if (depth === 0) return false;
+      depth--;
+    } else if (depth === 0 && character === ';') return content[end] === ',';
+    else if (depth === 0 && character === ',' && content[end] === '=') return true;
+  }
+  return true;
+}
+
+// Replaces comments, string, text-block and character literals with spaces, keeping offsets.
+function maskJavaSource(content: string): string {
+  const out = content.split('');
+  let index = 0;
+  const blank = (from: number, to: number): void => {
+    for (let position = from; position < to && position < out.length; position++) if (out[position] !== '\n') out[position] = ' ';
+  };
+  while (index < content.length) {
+    const rest2 = content.slice(index, index + 2);
+    if (rest2 === '//') {
+      const end = content.indexOf('\n', index);
+      const stop = end < 0 ? content.length : end;
+      blank(index, stop);
+      index = stop;
+    } else if (rest2 === '/*') {
+      const end = content.indexOf('*/', index + 2);
+      const stop = end < 0 ? content.length : end + 2;
+      blank(index, stop);
+      index = stop;
+    } else if (content.startsWith('"""', index)) {
+      const end = content.indexOf('"""', index + 3);
+      const stop = end < 0 ? content.length : end + 3;
+      blank(index + 1, stop - 1);
+      index = stop;
+    } else if (content[index] === '"' || content[index] === '\'') {
+      const quote = content[index];
+      let position = index + 1;
+      while (position < content.length && content[position] !== quote && content[position] !== '\n') {
+        position += content[position] === '\\' ? 2 : 1;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+    } else {
+      index++;
+    }
+  }
+  return out.join('');
+}
+
+// Replaces comments and the contents of string, template and regular expression literals with
+// spaces, keeping offsets. Template substitutions stay code. A `/` starts a regular expression
+// when it cannot be division, judged from the previous code character, as JavaScript tokenizers do.
+function maskJavaScriptSource(content: string): string {
+  const out = content.split('');
+  const blank = (from: number, to: number): void => {
+    for (let position = from; position < to && position < out.length; position++) if (out[position] !== '\n') out[position] = ' ';
+  };
+  // Brace depth inside each open template substitution, innermost last.
+  const substitutions: number[] = [];
+  let previous = '';
+  let index = 0;
+  const readTemplate = (from: number): number => {
+    let position = from;
+    while (position < content.length && content[position] !== '`') {
+      if (content[position] === '\\') position += 2;
+      else if (content[position] === '$' && content[position + 1] === '{') {
+        blank(from, position);
+        substitutions.push(0);
+        return position + 2;
+      } else position++;
+    }
+    blank(from, position);
+    return position + 1;
+  };
+  while (index < content.length) {
+    const character = content[index];
+    const next = content[index + 1];
+    if (/\s/.test(character)) {
+      index++;
+      continue;
+    }
+    if (character === '/' && next === '/') {
+      const end = content.indexOf('\n', index);
+      const stop = end < 0 ? content.length : end;
+      blank(index, stop);
+      index = stop;
+    } else if (character === '/' && next === '*') {
+      const end = content.indexOf('*/', index + 2);
+      const stop = end < 0 ? content.length : end + 2;
+      blank(index, stop);
+      index = stop;
+    } else if (character === '"' || character === '\'') {
+      let position = index + 1;
+      while (position < content.length && content[position] !== character && content[position] !== '\n') {
+        position += content[position] === '\\' ? 2 : 1;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+      previous = character;
+    } else if (character === '`') {
+      index = readTemplate(index + 1);
+      previous = '`';
+    } else if (character === '}' && substitutions.length && substitutions[substitutions.length - 1] === 0) {
+      substitutions.pop();
+      index = readTemplate(index + 1);
+      previous = '`';
+    } else if (character === '/' && (!previous || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous)
+      || /\b(?:return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(content.slice(Math.max(0, index - 12), index).trimEnd()))) {
+      let position = index + 1;
+      let inClass = false;
+      while (position < content.length && content[position] !== '\n' && (inClass || content[position] !== '/')) {
+        if (content[position] === '\\') position++;
+        else if (content[position] === '[') inClass = true;
+        else if (content[position] === ']') inClass = false;
+        position++;
+      }
+      blank(index + 1, position);
+      index = position + 1;
+      previous = '/';
+    } else {
+      if (substitutions.length) {
+        if (character === '{') substitutions[substitutions.length - 1]++;
+        else if (character === '}') substitutions[substitutions.length - 1]--;
+      }
+      previous = character;
+      index++;
+    }
+  }
+  return out.join('');
+}
+
+// Whether the innermost block around `offset` is a try block followed by a catch.
+function insideTryWithCatch(content: string, offset: number): boolean {
+  let depth = 0;
+  let open = -1;
+  for (let index = offset - 1; index >= Math.max(0, offset - MAX_BLOCK_CHARS); index--) {
+    const character = content[index];
+    if (character === '}') depth++;
+    else if (character === '{') {
+      if (depth === 0) {
+        open = index;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (open < 0 || !/\btry\s*(?:\([^{}]{0,500}\))?\s*$/.test(content.slice(Math.max(0, open - 600), open))) return false;
+  depth = 0;
+  for (let index = open + 1; index < Math.min(content.length, open + MAX_BLOCK_CHARS); index++) {
+    const character = content[index];
+    if (character === '{') depth++;
+    else if (character === '}') {
+      if (depth === 0) return /^\s*catch\s*\(/.test(content.slice(index + 1, index + 200));
+      depth--;
+    }
+  }
+  return false;
+}
+
 function clientLine(content: string): number {
   const match = /\b(?:WebClient|HttpClient|RestTemplate|KafkaTemplate|S3Client)\b/.exec(content);
   return lineAtOffset(content, match?.index ?? 0);
 }
 
-function packageStripesInterfaces(packageJson: PackageJson | undefined): string[] {
+function packageStripesInterfaces(
+  packageJson: PackageJson | undefined,
+  keys = ['okapiInterfaces', 'optionalOkapiInterfaces']
+): string[] {
   const stripes = packageJson?.stripes;
   if (!stripes) return [];
-  const values = [stripes.okapiInterfaces, stripes.optionalOkapiInterfaces];
-  return values.flatMap(value => Array.isArray(value) ? value : [])
+  // Stripes declares interfaces as an object of interface → version; older packages use a list of "id version".
+  const values = keys.map(key => stripes[key]);
+  return values.flatMap(value => Array.isArray(value) ? value : value && typeof value === 'object' ? Object.keys(value) : [])
     .flatMap(value => typeof value === 'string' ? [value] : [])
-    .map(value => value.split(/\s+/)[0])
+    .map(value => value.trim().split(/\s+/)[0])
     .filter(Boolean);
 }
 
+// Merges scenarios with the same id, keeping each distinct source reference once. References are
+// tracked in a set so that many repeated declarations cost linear, not quadratic, time.
 function deduplicateScenarios(scenarios: S010ScenarioEvidence[]): S010ScenarioEvidence[] {
-  const unique = new Map<string, S010ScenarioEvidence>();
+  const unique = new Map<string, { scenario: S010ScenarioEvidence; referenceKeys: Set<string> }>();
   for (const scenario of scenarios) {
     const existing = unique.get(scenario.id);
-    unique.set(scenario.id, existing ? mergeScenarios(existing, scenario) : scenario);
+    const entry = existing
+      ? { scenario: { ...mergeScenarios(existing.scenario, scenario), sourceReferences: existing.scenario.sourceReferences }, referenceKeys: existing.referenceKeys }
+      : { scenario: { ...scenario, sourceReferences: [] as S010ScenarioEvidence['sourceReferences'] }, referenceKeys: new Set<string>() };
+    for (const reference of scenario.sourceReferences) {
+      const key = JSON.stringify([reference.path, reference.line, reference.detail]);
+      if (entry.referenceKeys.has(key)) continue;
+      entry.referenceKeys.add(key);
+      entry.scenario.sourceReferences.push(reference);
+    }
+    unique.set(scenario.id, entry);
   }
-  return [...unique.values()];
+  return [...unique.values()].map(entry => entry.scenario);
 }
 
 function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence): S010ScenarioEvidence {
@@ -521,26 +917,21 @@ function mergeScenarios(left: S010ScenarioEvidence, right: S010ScenarioEvidence)
     : left.readiness === right.readiness
       ? left.readiness
       : 'unknown';
-  const sourceReferences = [...left.sourceReferences, ...right.sourceReferences].filter((reference, index, all) =>
-    all.findIndex(candidate => candidate.path === reference.path
-      && candidate.line === reference.line
-      && candidate.detail === reference.detail) === index
-  );
   return {
     ...left,
     requirement: left.requirement === right.requirement ? left.requirement : 'unresolved',
     proof,
     boundedFailure: left.boundedFailure === right.boundedFailure ? left.boundedFailure : 'unknown',
     readiness,
-    sourceReferences,
     ...(proof === 'unresolved' ? {
-      rationale: left.rationale ?? right.rationale ?? 'Conflicting repository evidence remains unresolved.'
+      rationale: left.rationale ?? right.rationale ?? 'The code gives conflicting evidence for this service.'
     } : {})
   };
 }
 
 function isProductionSource(filePath: string): boolean {
-  return !/(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?|docs?|target|dist|build)(?:\/|$)/i.test(filePath);
+  return !/(?:^|\/)(?:test|tests|__tests__|__mocks__|fixtures?|examples?|docs?|target|dist|build)(?:\/|$)/i.test(filePath)
+    && !/\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(filePath);
 }
 
 function isProductionCode(filePath: string): boolean {
@@ -554,19 +945,31 @@ function isDeterministicS010Path(candidate: string): boolean {
 
 function unsupportedDiagnosticMessage(category: string, paths: string[]): string {
   if (paths.length === 1) {
-    return `A production file uses an unsupported ${category} pattern.`;
+    return `Uses ${category}, which the tool cannot analyse.`;
   }
   const representatives = paths.slice(0, 3).join(', ');
   const remainder = paths.length > 3 ? ` (+${paths.length - 3} more)` : '';
-  return `${paths.length} production files use unsupported ${category} patterns; representative paths: ${representatives}${remainder}.`;
+  return `${paths.length} files use ${category}, which the tool cannot analyse, for example ${representatives}${remainder}.`;
 }
 
 function isJavaScriptProductionSource(file: CommittedSourceFile): boolean {
   return isProductionCode(file.path) && /\.[cm]?[jt]sx?$/.test(file.path);
 }
 
-function lineOf(content: string, needle: string): number {
-  return lineAtOffset(content, Math.max(0, content.indexOf(needle)));
+// Line numbers for many offsets in one file, without rescanning the file for each offset.
+function lineLookup(content: string): (offset: number) => number {
+  const starts = [0];
+  for (let index = content.indexOf('\n'); index !== -1; index = content.indexOf('\n', index + 1)) starts.push(index + 1);
+  return offset => {
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle] <= offset) low = middle;
+      else high = middle - 1;
+    }
+    return low + 1;
+  };
 }
 
 function lineAtOffset(content: string, offset: number): number {

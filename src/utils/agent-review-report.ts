@@ -12,6 +12,7 @@ const ASSESSMENT_LABELS = {
 const SUBJECT_NAMES: Record<string, string> = {
   search: 'Search service', kafka: 'Kafka', database: 'Database',
   'object-storage': 'Object storage', okapi: 'Okapi', java: 'Java',
+  'folio-interfaces': 'FOLIO interfaces',
   'spring-boot': 'Spring Boot', lombok: 'Lombok'
 };
 

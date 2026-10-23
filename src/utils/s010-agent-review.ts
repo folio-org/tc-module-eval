@@ -3,12 +3,26 @@ import {
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
   EvaluationStatus,
-  S010Analysis
+  S010Analysis,
+  S010ScenarioEvidence
 } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { redactSensitiveText } from './redaction';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
+const SUMMARY_BYTES = 48 * 1024;
+const MAX_SUMMARY_REFERENCES = 5;
+// UI modules can list dozens of interfaces; the agent assesses them as one dependency.
+const FOLIO_INTERFACES_ID = 'folio-interfaces';
+
+/** The dependency the agent assesses for a scenario dependency. */
+export function s010CandidateId(dependencyId: string): string {
+  return dependencyId.startsWith('folio-interface:') ? FOLIO_INTERFACES_ID : dependencyId;
+}
+
+function candidateIds(analysis: S010Analysis): Set<string> {
+  return new Set(analysis.evidence.scenarios.map(scenario => s010CandidateId(scenario.dependencyId)));
+}
 
 export function hasS010AgentReviewMaterial(analysis: S010Analysis): boolean {
   return analysis.status === EvaluationStatus.MANUAL && analysis.evidence.moduleKind.kind !== 'library';
@@ -36,21 +50,7 @@ export async function buildS010AgentReviewRequest(
   repoPath: string,
   analysis: S010Analysis
 ): Promise<CriterionAgentReviewRequest> {
-  const summary = truncateToByteBudget(JSON.stringify({
-    criterionId: 'S010',
-    deterministicStatus: analysis.status,
-    summary: analysis.summary,
-    runtimeKind: analysis.evidence.runtimeKind,
-    discoveryCoverage: analysis.evidence.discoveryCoverage,
-    semanticCoverage: analysis.evidence.semanticCoverage,
-    scenarios: analysis.evidence.scenarios.map(scenario => ({
-      ...scenario,
-      proof: scenario.proof === 'clear-fail-fast' && scenario.boundedFailure !== 'proven'
-        ? 'failure-propagation-observed-duration-unverified' : scenario.proof
-    })),
-    findings: analysis.findings,
-    diagnostics: analysis.diagnostics
-  }, null, 2), 48 * 1024);
+  const summary = deterministicSummary(analysis);
   return {
     criterionId: 'S010',
     repositoryPath: repoPath,
@@ -70,7 +70,8 @@ export async function buildS010AgentReviewRequest(
       'Tests strengthen evidence but are not mandatory. General Node.js behavior is outside deterministic phase-one support and needs reviewer judgment.',
       'This review is advisory only. Do not change, approve, pass, fail, or override the deterministic S010 status.',
       'Every assessment and reviewer action must cite one or more actual repository repoRelativePath values in repository-files.json; generated summary and snapshot-manifest files do not count as repository citations.',
-      'Use a deterministic dependencyId from the summary as technologyId, or discovered:<normalized-id> for a missed dependency found in repository source.',
+      'Use a candidate id from candidate-dependencies.json as technologyId, or discovered:<normalized-id> for a missed dependency found in repository source.',
+      `Scenarios whose dependencyId starts with folio-interface: are the FOLIO interfaces a UI module needs; assess them together as one dependency with technologyId ${FOLIO_INTERFACES_ID}, naming any interface that behaves differently.`,
       'Use likely_insufficient only with a cited substantive_concern. Use needs_reviewer_judgment only with a cited narrow reviewer action naming the missing fact and the decision it resolves.',
       'Return at least one assessment, accounting for every ID in candidateDependencyIds and every additional discovered dependency. Candidates are analyzer suggestions, not established external dependencies. Each assessment must contain technologyId, type, summary, and evidenceReferences. Allowed type values are aligned_fact, substantive_concern, analyzer_limitation, evidence_gap, and policy_question.',
       'For an internal component that is not an independent external dependency, use type analyzer_limitation with coverageDisposition immaterial and omit failureBounds. Cite why it is internal and incorporate relevant configuration into the actual service assessment. Do not exclude a candidate by filename alone. Actual external dependencies must include failureBounds.',
@@ -83,7 +84,7 @@ export async function buildS010AgentReviewRequest(
     files: [
       { repoRelativePath: SUMMARY_PATH, content: summary },
       { repoRelativePath: '.criterion-agent/S010/candidate-dependencies.json', content: JSON.stringify({
-        candidateDependencyIds: [...new Set(analysis.evidence.scenarios.map(scenario => scenario.dependencyId))]
+        candidateDependencyIds: [...candidateIds(analysis)]
       }) },
       { repoRelativePath: '.criterion-agent/S010/response-shape.json', content: JSON.stringify({
         note: 'Shape example only, not findings. Replace IDs, prose, roles, statuses, and citations with investigated evidence. Account for every candidate. Internal components may use analyzer_limitation with coverageDisposition immaterial and no failureBounds. Do not omit record fields for not_applicable phases of actual dependencies.',
@@ -109,7 +110,7 @@ function validateS010Review(
   review: CriterionAgentReviewResult
 ): string | undefined {
   if (!review.assessments?.length) return 'S010 agent review returned no cited practical assessments.';
-  const dependencyIds = new Set(analysis.evidence.scenarios.map(scenario => scenario.dependencyId));
+  const dependencyIds = candidateIds(analysis);
   for (const assessment of review.assessments) {
     if (!dependencyIds.has(assessment.technologyId) && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(assessment.technologyId)) {
       return 'S010 agent review returned an assessment for an unknown dependency.';
@@ -142,6 +143,61 @@ function validateS010Review(
     return 'S010 likely_sufficient conflicts with unresolved assessments.';
   }
   return undefined;
+}
+
+// The analysis as valid JSON within the byte budget: references are capped per scenario, and when the
+// whole still does not fit, the scenarios and findings that decide the status are kept and the rest
+// are counted as omitted, rather than cutting the JSON text.
+function deterministicSummary(analysis: S010Analysis): string {
+  const scenarios = analysis.evidence.scenarios.map(scenario => ({
+    ...compactScenario(scenario),
+    proof: scenario.proof === 'clear-fail-fast' && scenario.boundedFailure !== 'proven'
+      ? 'failure-propagation-observed-duration-unverified' : scenario.proof
+  }));
+  const findings = [...analysis.findings]
+    .sort((left, right) => Number(right.statusDetermining) - Number(left.statusDetermining))
+    .map(finding => ({
+      id: finding.id, dependencyId: finding.dependencyId, scenario: finding.scenario, outcome: finding.outcome,
+      statusDetermining: finding.statusDetermining, rationale: finding.rationale.slice(0, 1_000)
+    }));
+  const render = (kept: number): string => JSON.stringify({
+    criterionId: 'S010',
+    deterministicStatus: analysis.status,
+    summary: analysis.summary.slice(0, 2_000),
+    runtimeKind: analysis.evidence.runtimeKind,
+    discoveryCoverage: analysis.evidence.discoveryCoverage,
+    semanticCoverage: analysis.evidence.semanticCoverage,
+    scenarios: scenarios.slice(0, kept),
+    ...(scenarios.length > kept ? { omittedScenarios: scenarios.length - kept } : {}),
+    findings: findings.slice(0, kept),
+    ...(findings.length > kept ? { omittedFindings: findings.length - kept } : {}),
+    diagnostics: analysis.diagnostics.slice(0, 20).map(diagnostic => ({
+      ...diagnostic, message: diagnostic.message.slice(0, 1_000), ...(diagnostic.path ? { path: diagnostic.path.slice(0, 500) } : {})
+    })),
+    ...(analysis.diagnostics.length > 20 ? { omittedDiagnostics: analysis.diagnostics.length - 20 } : {})
+  }, null, 2);
+  let kept = Math.max(scenarios.length, findings.length);
+  let text = render(kept);
+  while (Buffer.byteLength(text) > SUMMARY_BYTES && kept > 0) {
+    kept = Math.floor(kept / 2);
+    text = render(kept);
+  }
+  // Only repository-made identifiers (a huge environment variable name, say) can still overflow;
+  // the agent must quote ids exactly, so they are not cut, and the review is skipped instead.
+  if (Buffer.byteLength(text) > SUMMARY_BYTES) throw new Error('the dependency summary is too large to send');
+  return text;
+}
+
+function compactScenario(scenario: S010ScenarioEvidence): S010ScenarioEvidence & { omittedSourceReferences?: number } {
+  const references = scenario.sourceReferences.slice(0, MAX_SUMMARY_REFERENCES)
+    .map(reference => ({ ...reference, path: reference.path.slice(0, 500), detail: reference.detail.slice(0, 300) }));
+  return {
+    ...scenario,
+    ...(scenario.rationale ? { rationale: scenario.rationale.slice(0, 1_000) } : {}),
+    sourceReferences: references,
+    ...(scenario.sourceReferences.length > MAX_SUMMARY_REFERENCES
+      ? { omittedSourceReferences: scenario.sourceReferences.length - MAX_SUMMARY_REFERENCES } : {})
+  };
 }
 
 function unavailable(message: string): CriterionAgentReviewResult {

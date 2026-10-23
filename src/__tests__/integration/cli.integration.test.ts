@@ -799,14 +799,29 @@ describe('CLI Integration Tests', () => {
         files: { 'pom.xml': '<project><artifactId>folio-spring-base</artifactId></project>' }
       },
       {
+        // A timeout and catch do not show that the service is optional.
         name: 's010-stripes-ui',
-        expected: EvaluationStatus.PASS,
+        expected: EvaluationStatus.MANUAL,
         files: {
           'package.json': JSON.stringify({ name: 's010-stripes-ui', dependencies: { react: '^18', '@folio/stripes-core': '^10' } }),
           'src/components/Lookup.tsx': [
             'export async function lookup() {',
             '  const controller = new AbortController();',
             '  try { return await fetch("https://example.org/search", { signal: controller.signal }); }',
+            '  catch (error) { return []; }',
+            '}'
+          ].join('\n')
+        }
+      },
+      {
+        name: 's010-stripes-ui-switchable',
+        expected: EvaluationStatus.PASS,
+        files: {
+          'package.json': JSON.stringify({ name: 's010-stripes-ui-switchable', dependencies: { react: '^18', '@folio/stripes-core': '^10' } }),
+          'src/components/Lookup.tsx': [
+            'export async function lookup(stripes) {',
+            "  if (!stripes.hasInterface('search')) return [];",
+            '  try { return await fetch("https://example.org/search", { signal: AbortSignal.timeout(2000) }); }',
             '  catch (error) { return []; }',
             '}'
           ].join('\n')

@@ -1791,8 +1791,8 @@
     {
       "criterionId": "S010",
       "status": "manual",
-      "evidence": "S010 manual: runtime dependency behavior or evidence coverage requires reviewer judgment.",
-      "details": "S010 manual: runtime dependency behavior or evidence coverage requires reviewer judgment.",
+      "evidence": "S010 manual: The tool found services the module depends on (Database, Kafka, Okapi) but could not confirm how the module behaves when they are missing or down. A reviewer needs to check the items under \"Needs review\".",
+      "details": "S010 manual: The tool found services the module depends on (Database, Kafka, Okapi) but could not confirm how the module behaves when they are missing or down. A reviewer needs to check the items under \"Needs review\".",
       "criterionDetails": {
         "runtimeKind": "java",
         "moduleKind": "backend-module",
@@ -1801,7 +1801,10 @@
         "findingOutcomes": {
           "unresolved": 22
         },
-        "diagnosticCodes": [],
+        "diagnosticCodes": [
+          "unsupported-runtime-pattern",
+          "unsupported-runtime-pattern"
+        ],
         "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
       }
     },

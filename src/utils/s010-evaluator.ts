@@ -5,13 +5,22 @@ import {
   S010Finding,
   S010ScenarioEvidence
 } from '../types';
+import { s010FindingTitle, s010ServiceName } from './s010-report-details';
+
+const RUNTIME_NAMES: Record<S010Evidence['runtimeKind'], string> = {
+  java: 'Java',
+  'stripes-react': 'a Stripes/React UI',
+  node: 'Node.js',
+  mixed: 'a mix of Java and JavaScript',
+  unknown: 'not a recognized type'
+};
 
 export function evaluateS010(evidence: S010Evidence): S010Analysis {
   if (evidence.moduleKind.kind === 'library') {
     return analysis(
       evidence,
       EvaluationStatus.NOT_APPLICABLE,
-      'S010 does not apply to explicit library repositories.',
+      'S010 not applicable: This repository is a FOLIO library, not a deployable module, so S010 does not apply.',
       []
     );
   }
@@ -20,13 +29,13 @@ export function evaluateS010(evidence: S010Evidence): S010Analysis {
     const finding = unresolvedFinding(
       'runtime-support',
       'runtime-support',
-      `S010 automation does not support runtime kind ${evidence.runtimeKind}.`
+      `The tool can only analyse Java and Stripes/React modules, and this repository is ${RUNTIME_NAMES[evidence.runtimeKind]}.`
     );
     finding.statusDetermining = true;
     return analysis(
       evidence,
       EvaluationStatus.MANUAL,
-      'S010 requires manual review because the repository runtime is unsupported or unresolved.',
+      `S010 manual: The tool can only analyse Java and Stripes/React modules, and this repository is ${RUNTIME_NAMES[evidence.runtimeKind]}. A reviewer needs to check how it behaves when the services and settings it depends on are missing or down.`,
       [finding]
     );
   }
@@ -38,7 +47,7 @@ export function evaluateS010(evidence: S010Evidence): S010Analysis {
     findings.push(unresolvedFinding(
       'evidence-coverage/incomplete',
       'evidence-coverage',
-      'Repository evidence coverage is incomplete or unsupported, so satisfactory scenarios cannot establish S010 compliance.'
+      'The tool could not read or analyse all of the code (see Warnings and the items above), so there may be services it did not find.'
     ));
   }
 
@@ -56,30 +65,30 @@ export function evaluateS010(evidence: S010Evidence): S010Analysis {
       || (status === EvaluationStatus.PASS && finding.outcome === 'satisfactory');
   }
 
-  return analysis(evidence, status, summary(status), findings);
+  return analysis(evidence, status, summary(status, findings), findings);
 }
 
 function classifyScenario(scenario: S010ScenarioEvidence): S010Finding {
   if (scenario.requirement === 'required' && scenario.scenario === 'configuration-absent') {
     if (scenario.proof === 'clear-fail-fast') {
-      return finding(scenario, 'satisfactory', 'Missing required configuration has a clear fail-fast startup path.');
+      return finding(scenario, 'satisfactory', 'The setting is required and has no default, so the module stops at startup with an error when it is missing.');
     }
     if (scenario.proof === 'uncontrolled-failure') {
-      return finding(scenario, 'violation', 'Repository evidence proves missing required configuration is deferred or handled uncontrollably.');
+      return finding(scenario, 'violation', 'Missing this required setting leads to an uncontrolled failure instead of a clear error at startup. Make startup stop with a clear error when the setting is missing.');
     }
-    return finding(scenario, 'unresolved', 'Required configuration behavior could not be established conclusively.');
+    return finding(scenario, 'unresolved', 'The setting is required, but the code does not show that startup stops with a clear error when it is missing.');
   }
 
   if (scenario.requirement === 'required') {
     if (scenario.proof === 'uncontrolled-failure') {
-      return finding(scenario, 'violation', 'Repository evidence proves the required dependency outage has an uncontrolled outcome.');
+      return finding(scenario, 'violation', 'The code shows that an outage of this required service is not handled. Add a time limit and error handling so the failure is clear and bounded.');
     }
     if (
       scenario.scenario === 'startup-unavailable'
       && scenario.proof === 'clear-fail-fast'
       && scenario.boundedFailure === 'proven'
     ) {
-      return finding(scenario, 'satisfactory', 'Required dependency startup failure is clear and bounded.');
+      return finding(scenario, 'satisfactory', 'If this required service is down at startup, the module stops with a clear error within a time limit.');
     }
     if (
       scenario.scenario === 'runtime-unavailable'
@@ -87,26 +96,26 @@ function classifyScenario(scenario: S010ScenarioEvidence): S010Finding {
       && scenario.boundedFailure === 'proven'
       && (scenario.readiness === 'preserved' || scenario.readiness === 'not-preserved')
     ) {
-      return finding(scenario, 'satisfactory', 'Required dependency runtime failure is bounded and controlled.');
+      return finding(scenario, 'satisfactory', 'If this required service goes down while the module runs, calls fail within a time limit and the errors are handled.');
     }
   }
 
   if (scenario.requirement === 'optional') {
     if (scenario.proof === 'uncontrolled-failure' || scenario.readiness === 'not-preserved') {
       return finding(scenario, 'violation', scenario.readiness === 'not-preserved'
-        ? 'Repository evidence proves optional dependency loss makes the module unready.'
-        : 'Repository evidence proves optional dependency loss has an uncontrolled outcome.');
+        ? 'Losing this optional service makes the module report itself as not ready. Keep the module ready and turn off only the features that need the service.'
+        : 'Losing this optional service is not handled. Add a time limit and error handling so that only the features that use it fail.');
     }
     const bounded = scenario.boundedFailure === 'proven' || scenario.boundedFailure === 'not-applicable';
     if (scenario.proof === 'controlled-degradation' && bounded && scenario.readiness === 'preserved') {
-      return finding(scenario, 'satisfactory', 'Optional dependency failure is bounded, controlled, and preserves readiness.');
+      return finding(scenario, 'satisfactory', 'If this optional service fails, calls end within a time limit, the errors are handled, and the module stays ready.');
     }
   }
 
   return finding(
     scenario,
     'unresolved',
-    scenario.rationale ?? 'Repository evidence does not establish the complete dependency failure path.'
+    scenario.rationale ?? 'The code does not show what happens from a failure of this service through to its outcome.'
   );
 }
 
@@ -116,7 +125,7 @@ function emptyScopeFinding(evidence: S010Evidence): S010Finding {
       id: 'dependency-scope/empty',
       dependencyId: 'dependency-scope',
       outcome: 'satisfactory',
-      rationale: 'Complete repository evidence found no external runtime dependencies.',
+      rationale: 'The tool read and analysed all of the relevant code and found no external services.',
       evidence: [],
       statusDetermining: false
     };
@@ -124,7 +133,7 @@ function emptyScopeFinding(evidence: S010Evidence): S010Finding {
   return unresolvedFinding(
     'dependency-scope/unknown',
     'dependency-scope',
-    'An empty detector result does not establish that the module has no external runtime dependencies.'
+    'The tool found no external services it recognises, but it could not read or analyse all of the code (see Warnings), so this does not show that there are none.'
   );
 }
 
@@ -171,13 +180,23 @@ function analysis(
   };
 }
 
-function summary(status: EvaluationStatus): string {
+function summary(status: EvaluationStatus, findings: S010Finding[]): string {
+  const deciding = findings.filter(finding => finding.statusDetermining);
+  const services = [...new Set(deciding.flatMap(finding => s010ServiceName(finding) ?? []))];
   switch (status) {
-    case EvaluationStatus.FAIL:
-      return 'S010 fail: repository evidence proves at least one runtime dependency failure path violates the criterion.';
+    case EvaluationStatus.FAIL: {
+      const [first] = deciding;
+      const more = deciding.length > 1 ? ` ${deciding.length - 1} more ${deciding.length === 2 ? 'problem is' : 'problems are'} listed below.` : '';
+      return `S010 fail: ${s010FindingTitle([first])}: ${first.rationale}${more}`;
+    }
     case EvaluationStatus.PASS:
-      return 'S010 pass: all applicable runtime dependency scenarios are supported by complete satisfactory evidence.';
+      return findings.some(finding => finding.dependencyId === 'dependency-scope')
+        ? 'S010 pass: The tool read all of the relevant code and found no external services that the module depends on.'
+        : 'S010 pass: When a service or setting the tool found is missing or unavailable, the module either stops at startup with a clear error or handles the failure in a controlled way.';
     default:
-      return 'S010 manual: runtime dependency behavior or evidence coverage requires reviewer judgment.';
+      if (!services.length) {
+        return 'S010 manual: The tool found no problems, but it could not read or analyse all of the code, so a reviewer needs to check for services it did not find.';
+      }
+      return `S010 manual: The tool found services the module depends on (${services.slice(0, 5).join(', ')}${services.length > 5 ? `, +${services.length - 5} more` : ''}) but could not confirm how the module behaves when they are missing or down. A reviewer needs to check the items under "Needs review".`;
   }
 }
