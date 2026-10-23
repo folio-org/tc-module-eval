@@ -72,9 +72,13 @@ export function resolveS014ModuleName(repoPath: string, kind: ModuleKind, reposi
   return { problem: 'Neither the module descriptor, pom.xml nor the repository name gives a FOLIO module name.' };
 }
 
-// "mod-search-1.2.3" and "mod-search-${version}" name mod-search; "@artifactId@-@version@" names nothing.
+// The id is "<name>-<version>". The version is a whole dotted version or a build placeholder, so
+// "mod-foo-2fa-1.0.0" names mod-foo-2fa and "mod-search-${version}" names mod-search; "@artifactId@-@version@"
+// names nothing.
+const DESCRIPTOR_ID = /^([a-z0-9][a-z0-9._-]{0,99}?)-(?:\d+\.\d+(?:\.\d+)?(?:[-+.][A-Za-z0-9.+-]{0,100})?|\$\{[^}]{1,100}\}|@[^@]{1,100}@)$/;
+
 function descriptorIdName(id: string): string | undefined {
-  const match = /^([a-z0-9][a-z0-9._-]{0,99}?)-(?:\d|[@$])/.exec(id);
+  const match = id.length <= 300 ? DESCRIPTOR_ID.exec(id) : null;
   return match && isValidRemoteName(match[1]) ? match[1] : undefined;
 }
 
@@ -257,7 +261,12 @@ export async function checkApplicationTemplate(lookups: RemoteLookups, applicati
   if (!template || typeof template !== 'object' || !lists.length || !lists.every(Array.isArray)) {
     return { check: { application, url, problem: 'The template has no readable modules or uiModules list.' }, record: result.record };
   }
-  const listsModule = (lists as unknown[][]).some(list => list.some(entry =>
-    Boolean(entry) && typeof entry === 'object' && (entry as { name?: unknown }).name === moduleName));
-  return { check: { application, url, listsModule }, record: result.record };
+  const names = (lists as unknown[][]).flat().map(entry =>
+    entry && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string' ? (entry as { name: string }).name : undefined);
+  if (names.includes(moduleName)) return { check: { application, url, listsModule: true }, record: result.record };
+  // An entry without a name might be the module, so "does not list it" needs every entry readable.
+  if (names.some(name => !name)) {
+    return { check: { application, url, problem: 'The template has module entries without a name.' }, record: result.record };
+  }
+  return { check: { application, url, listsModule: false }, record: result.record };
 }

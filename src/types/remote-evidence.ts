@@ -1,3 +1,8 @@
+export interface RemoteEvidenceAttempt {
+  url: string;
+  status?: number;
+}
+
 /** One remote read, as recorded for the report. Credentials are never recorded. */
 export interface RemoteEvidenceRecord {
   url: string;
@@ -7,8 +12,8 @@ export interface RemoteEvidenceRecord {
   status?: number;
   sha256?: string;
   bytes?: number;
-  /** HTTP requests made for this read, counting redirects and the retry; omitted when 1. */
-  requests?: number;
+  /** Every HTTP request made for this read (redirect hops and the retry); omitted when there was one. */
+  attempts?: RemoteEvidenceAttempt[];
   /** Why no usable response was returned. */
   error?: string;
 }
@@ -22,6 +27,7 @@ export type RemoteFailureReason =
   | 'too-large'
   | 'invalid-json'
   | 'network'
+  | 'invalid-credentials'
   | 'budget-requests'
   | 'budget-bytes'
   | 'budget-time';

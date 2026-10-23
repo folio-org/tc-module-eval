@@ -250,8 +250,8 @@ An application whose FAR descriptor is missing, not exactly one record, for anot
 - HTTPS `GET` only, to `far.ci.folio.org/applications`, `sonarcloud.io/api/`, and `raw.githubusercontent.com` or `api.github.com` paths of `folio-org/platform-lsp` and `folio-org/app-*`. Every redirect is checked against the same list, and at most 3 are followed.
 - Per request: 15 s and 4 MiB, and the response must be JSON. One retry on HTTP 429 or 5xx, waiting for `Retry-After` only up to 10 s.
 - Per evaluation: at most 150 requests, 32 MiB and 120 s, with at most 4 requests in flight. A read that hits a limit fails; it never returns partial or empty data.
-- Optional tokens: `SONAR_TOKEN` is sent only to `sonarcloud.io` and `GITHUB_TOKEN` only to `api.github.com`, so a redirect to another host drops it. Tokens are never recorded. Without a token, GitHub allows 60 anonymous API requests an hour; S014 uses one per evaluation.
-- Every read is recorded in `criterionDetails.remoteEvidence` with its URL, time, HTTP status and the SHA-256 of the response, and the report lists them under "Sources".
+- Optional tokens: `SONAR_TOKEN` is sent only to `sonarcloud.io` and `GITHUB_TOKEN` only to `api.github.com`, so a redirect to another host drops it. A token that is not a valid header value is not sent. Tokens are never recorded, and network error text, which can quote request headers, is not either. Without a token, GitHub allows 60 anonymous API requests an hour; S014 uses one per evaluation.
+- Every read is recorded in `criterionDetails.remoteEvidence` with its URL, time, HTTP status and the SHA-256 of the response, plus each redirect hop and retry with its status, and the report lists them under "Sources". A response that completes after its time limit is rejected even if it arrived in full.
 
 Tests never touch the network: they replay responses recorded by `yarn capture:remote-fixtures` into `src/__tests__/fixtures/remote/`, and an unrecorded URL fails the test.
 

@@ -89,7 +89,32 @@ describe('remote evidence transport', () => {
       { url: RAW, authorization: undefined },
       { url: FAR, authorization: undefined }
     ]);
-    expect(remote.records[0]).toMatchObject({ url: SONAR, finalUrl: RAW, requests: 3 });
+    expect(remote.records[0]).toMatchObject({
+      url: SONAR, finalUrl: RAW, status: 200,
+      attempts: [{ url: SONAR, status: 307 }, { url: GITHUB, status: 302 }, { url: RAW, status: 200 }]
+    });
+    expect(JSON.stringify(remote.records)).not.toMatch(/secret/);
+  });
+
+  it('does not send, record or report a token that is not a valid header value', async () => {
+    const { remote, calls } = transport(() => json({}), { credentials: { githubToken: 'token-part-one\ntoken-part-two' } });
+
+    const result = await remote.getJson(GITHUB);
+    await remote.getJson(FAR);
+
+    expect(result).toMatchObject({ ok: false, reason: 'invalid-credentials', record: { error: 'GITHUB_TOKEN is not a valid token, so the request was not sent.' } });
+    expect(calls.map(call => call.url)).toEqual([FAR]);
+    expect(JSON.stringify(remote.records)).not.toMatch(/token-part/);
+  });
+
+  it('keeps fetch error text, which can quote request headers, out of the record', async () => {
+    const { remote } = transport(() => {
+      throw Object.assign(new TypeError('Headers.append: "Bearer github-secret" is an invalid header value.'), { cause: { code: 'UND_ERR_INVALID_ARG' } });
+    }, { credentials: { githubToken: 'github-secret' } });
+
+    const result = await remote.getJson(GITHUB);
+
+    expect(result).toMatchObject({ ok: false, reason: 'network', record: { error: 'The request failed (UND_ERR_INVALID_ARG).' } });
     expect(JSON.stringify(remote.records)).not.toMatch(/secret/);
   });
 
@@ -181,24 +206,39 @@ describe('remote evidence transport', () => {
     ]);
   });
 
-  it('stops sending once 120 s have passed since the first remote read', async () => {
+  it('stops once 120 s have passed since the first remote read, including a response that completes after it', async () => {
     let now = 1_000_000;
     const { remote, calls } = transport(() => {
-      now += 50_000;
+      now += 11_000;
       return json({});
     }, { now: () => now });
 
-    const results = [await remote.getJson(FAR), await remote.getJson(FAR), await remote.getJson(FAR), await remote.getJson(FAR)];
-    expect(results.map(result => result.ok ? 'ok' : result.reason)).toEqual(['ok', 'ok', 'ok', 'budget-time']);
-    expect(calls).toHaveLength(3);
+    const results = [];
+    for (let index = 0; index < 12; index++) results.push(await remote.getJson(FAR));
+    // Ten reads end by 110 s; the eleventh starts with 10 s left and ends at 121 s, and the twelfth is not sent.
+    expect(results.map(result => result.ok ? 'ok' : result.reason)).toEqual([...Array(10).fill('ok'), 'budget-time', 'budget-time']);
+    expect(calls).toHaveLength(11);
+  });
+
+  it('rejects a response that completes after the 15 s request limit even if the timer has not fired', async () => {
+    let now = 0;
+    const { remote } = transport(() => new Response(new ReadableStream({
+      pull(controller) {
+        now += 16_000;
+        controller.enqueue(new TextEncoder().encode('{}'));
+        controller.close();
+      }
+    })), { now: () => now });
+
+    expect(await remote.getJson(FAR)).toMatchObject({ ok: false, reason: 'timeout' });
   });
 
   it('does not wait for a retry that would run past the evaluation deadline', async () => {
     let now = 0;
     const { remote, sleeps } = transport(() => {
-      now = 115_000;
+      now += 8_000;
       return new Response('', { status: 503, headers: { 'retry-after': '8' } });
-    }, { now: () => now });
+    }, { now: () => now, limits: { maxDurationMs: 15_000 } });
 
     expect(await remote.getJson(FAR)).toMatchObject({ ok: false, reason: 'budget-time' });
     expect(sleeps).toEqual([]);

@@ -219,6 +219,17 @@ describe('S014 application assignment', () => {
       expect(result.evidence).toContain('its own repository does not list the module either');
     });
 
+    it('stays manual, not fail, when the named application\'s template has an entry without a name', async () => {
+      const responses: RecordedResponses = {
+        ...syntheticPlatform([{ name: 'app-a', modules: ['mod-y'] }]),
+        'https://raw.githubusercontent.com/folio-org/app-new/HEAD/app-new.template.json': { status: 200, body: { modules: [{ name: 'mod-y' }, {}], uiModules: [] } }
+      };
+      const result = await evaluate(await backendRepo('mod-x'), { responses, application: 'app-new' });
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.criterionDetails.namedApplicationTemplate).toMatchObject({ problem: 'The template has module entries without a name.' });
+    });
+
     it('stays manual when the named application is off the platform and its template cannot be read', async () => {
       const responses: RecordedResponses = {
         ...syntheticPlatform([{ name: 'app-a', modules: ['mod-y'] }]),
@@ -263,6 +274,13 @@ describe('S014 application assignment', () => {
       }), { responses: syntheticPlatform([{ name: 'app-a', modules: ['mod-x'] }]), application: 'app-a' });
       expect(named.criterionDetails.moduleName).toEqual({ name: 'mod-x', source: 'descriptor', path: 'descriptors/ModuleDescriptor-template.json' });
       expect(named.status).toBe(EvaluationStatus.PASS);
+
+      // A name part that starts with a digit is still part of the name; only a whole version ends it.
+      const digits = await evaluate(await backendRepo('mod-foo-2fa', {
+        'descriptors/ModuleDescriptor-template.json': JSON.stringify({ id: 'mod-foo-2fa-1.0.0-SNAPSHOT' })
+      }), { responses: syntheticPlatform([{ name: 'app-a', modules: ['mod-foo'] }, { name: 'app-b', modules: ['mod-foo-2fa'] }]), application: 'app-b' });
+      expect(digits.criterionDetails.moduleName?.name).toBe('mod-foo-2fa');
+      expect(digits.status).toBe(EvaluationStatus.PASS);
 
       const unnamed = await evaluate(await backendRepo('Not A Module'), { responses: {}, application: 'app-a' });
       expect(unnamed.status).toBe(EvaluationStatus.MANUAL);

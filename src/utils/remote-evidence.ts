@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { RemoteEvidenceRecord, RemoteFailureReason, RemoteJsonResult, RemoteLookups } from '../types/remote-evidence';
+import { RemoteEvidenceAttempt, RemoteEvidenceRecord, RemoteFailureReason, RemoteJsonResult, RemoteLookups } from '../types/remote-evidence';
 
 // The only way evaluation code reads the network, and only with --allow-remote-lookups. Every request is
 // an HTTPS GET to an allowlisted host and path (checked again on every redirect), bounded per request and
@@ -51,6 +51,7 @@ const ALLOWED_PATHS: Readonly<Record<string, RegExp>> = {
   'api.github.com': new RegExp(`^/repos/folio-org/${REPOSITORY}(?:/|$)`)
 };
 const DEFAULT_RETRY_WAIT_MS = 1_000;
+const TOKEN_PATTERN = /^[\x21-\x7e]{1,1024}$/;
 const MAX_MESSAGE_URL_CHARS = 200;
 
 /** Whether a URL is one the transport may request: HTTPS, default port, no credentials, an allowlisted host and path. */
@@ -94,7 +95,7 @@ export class RemoteEvidenceTransport implements RemoteLookups {
     this.records.push(record);
     this.deadline ??= this.now() + this.limits.maxDurationMs;
     await this.acquireSlot();
-    const attempts = { count: 0 };
+    const attempts: RemoteEvidenceAttempt[] = [];
     try {
       const { json, status, bytes, finalUrl } = await this.fetchJson(url, attempts);
       record.fetchedAt = new Date(this.now()).toISOString();
@@ -104,18 +105,19 @@ export class RemoteEvidenceTransport implements RemoteLookups {
       if (finalUrl !== url) record.finalUrl = finalUrl;
       return { ok: true, json, record };
     } catch (error) {
-      const failure = error instanceof RemoteFailure ? error : new RemoteFailure('network', `The request failed: ${errorMessage(error)}`);
+      const failure = error instanceof RemoteFailure ? error : networkFailure(error);
       record.fetchedAt = new Date(this.now()).toISOString();
       if (failure.status !== undefined) record.status = failure.status;
       record.error = failure.message;
       return { ok: false, reason: failure.reason, status: failure.status, record };
     } finally {
-      if (attempts.count > 1) record.requests = attempts.count;
+      // Each redirect hop and retry is its own HTTP request; list them all when there was more than one.
+      if (attempts.length > 1) record.attempts = attempts;
       this.releaseSlot();
     }
   }
 
-  private async fetchJson(url: string, attempts: { count: number }): Promise<{ json: unknown; status: number; bytes: Buffer; finalUrl: string }> {
+  private async fetchJson(url: string, attempts: RemoteEvidenceAttempt[]): Promise<{ json: unknown; status: number; bytes: Buffer; finalUrl: string }> {
     let current: URL;
     try {
       current = new URL(url);
@@ -132,6 +134,7 @@ export class RemoteEvidenceTransport implements RemoteLookups {
       try {
         const { response } = attempt;
         const { status } = response;
+        attempts[attempts.length - 1].status = status;
         if (status >= 300 && status < 400 && response.headers.get('location') !== null) {
           await discard(response);
           if (++redirects > this.limits.maxRedirects) {
@@ -162,6 +165,8 @@ export class RemoteEvidenceTransport implements RemoteLookups {
           throw new RemoteFailure(status === 429 ? 'rate-limited' : 'http-status', `HTTP ${status}.`, status);
         }
         const bytes = await this.readBody(response);
+        // The abort timer may not have fired yet for a response that finished after its limit.
+        attempt.checkDeadline();
         try {
           return { json: JSON.parse(bytes.toString('utf8')), status, bytes, finalUrl: current.toString() };
         } catch {
@@ -179,31 +184,47 @@ export class RemoteEvidenceTransport implements RemoteLookups {
 
   // One HTTP request, after checking the evaluation's request, byte and time budgets. The returned timer also
   // covers reading the body; the caller clears it.
-  private async send(url: URL, attempts: { count: number }): Promise<{ response: Response; signal: AbortSignal; clear: () => void; abortFailure: () => RemoteFailure }> {
+  private async send(url: URL, attempts: RemoteEvidenceAttempt[]): Promise<{
+    response: Response;
+    signal: AbortSignal;
+    clear: () => void;
+    abortFailure: () => RemoteFailure;
+    checkDeadline: () => void;
+  }> {
     if (this.requestCount >= this.limits.maxRequests) {
       throw new RemoteFailure('budget-requests', `The evaluation's limit of ${this.limits.maxRequests} remote requests was reached.`);
     }
     if (this.byteCount >= this.limits.maxTotalBytes) throw this.byteBudgetFailure();
     const remaining = this.deadline! - this.now();
     if (remaining <= 0) throw this.timeBudgetFailure();
+    const authorization = this.authorizationFor(url.hostname);
     this.requestCount++;
-    attempts.count++;
+    attempts.push({ url: url.toString() });
 
     const headers: Record<string, string> = { accept: 'application/json', 'user-agent': 'folio-module-evaluator' };
-    const authorization = this.authorizationFor(url.hostname);
     if (authorization) headers.authorization = authorization;
     const byDeadline = remaining < this.limits.requestTimeoutMs;
+    const limit = byDeadline ? remaining : this.limits.requestTimeoutMs;
+    const expires = this.now() + limit;
     const abortFailure = () => byDeadline ? this.timeBudgetFailure() : this.timeoutFailure();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), byDeadline ? remaining : this.limits.requestTimeoutMs);
+    const timer = setTimeout(() => controller.abort(), limit);
     const clear = () => clearTimeout(timer);
+    const checkDeadline = () => {
+      if (this.now() > expires) throw abortFailure();
+    };
     try {
       const response = await this.fetchImpl(url, { method: 'GET', redirect: 'manual', signal: controller.signal, headers });
-      return { response, signal: controller.signal, clear, abortFailure };
+      if (this.now() > expires) {
+        await discard(response);
+        throw abortFailure();
+      }
+      return { response, signal: controller.signal, clear, abortFailure, checkDeadline };
     } catch (error) {
       clear();
+      if (error instanceof RemoteFailure) throw error;
       if (controller.signal.aborted) throw abortFailure();
-      throw new RemoteFailure('network', `The request failed: ${errorMessage(error)}`);
+      throw networkFailure(error);
     }
   }
 
@@ -238,9 +259,13 @@ export class RemoteEvidenceTransport implements RemoteLookups {
   }
 
   private authorizationFor(hostname: string): string | undefined {
-    if (hostname === 'sonarcloud.io' && this.credentials.sonarToken) return `Bearer ${this.credentials.sonarToken}`;
-    if (hostname === 'api.github.com' && this.credentials.githubToken) return `Bearer ${this.credentials.githubToken}`;
-    return undefined;
+    const [name, token] = hostname === 'sonarcloud.io' ? ['SONAR_TOKEN', this.credentials.sonarToken]
+      : hostname === 'api.github.com' ? ['GITHUB_TOKEN', this.credentials.githubToken]
+        : [undefined, undefined];
+    if (!token) return undefined;
+    // fetch quotes an invalid header value in its error, which would put the token in the report.
+    if (!TOKEN_PATTERN.test(token)) throw new RemoteFailure('invalid-credentials', `${name} is not a valid token, so the request was not sent.`);
+    return `Bearer ${token}`;
   }
 
   private async acquireSlot(): Promise<void> {
@@ -295,6 +320,8 @@ function shortUrl(url: string): string {
   return url.length > MAX_MESSAGE_URL_CHARS ? `${url.slice(0, MAX_MESSAGE_URL_CHARS - 1)}…` : url;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+// Only a system error code is kept: fetch error messages can quote request headers.
+function networkFailure(error: unknown): RemoteFailure {
+  const code = (error as { cause?: { code?: unknown } } | undefined)?.cause?.code;
+  return new RemoteFailure('network', `The request failed${typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,40}$/.test(code) ? ` (${code})` : ''}.`);
 }
