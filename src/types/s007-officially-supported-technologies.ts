@@ -267,3 +267,9 @@ export interface S007AnalysisResult {
   evidenceDiagnostics: S007EvidenceDiagnostic[];
   agentReviewUnavailableReason?: string;
 }
+
+/** The policy S007 applied and its analysis, produced once per run and shared by S007 and F005. */
+export interface S007RunAnalysis {
+  policyLoad: S007PolicyLoadResult;
+  analysis: S007AnalysisResult;
+}

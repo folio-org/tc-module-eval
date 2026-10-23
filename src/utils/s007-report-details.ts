@@ -69,6 +69,11 @@ export function renderS007HumanDetails(
   return lines.join('\n');
 }
 
+/** One technology's findings as S007's "Technology findings" rows show them, for criteria that reuse them (F005). */
+export function renderS007TechnologyRows(findings: S007TechnologyFinding[]): string[] {
+  return groupFindings(findings).flatMap(renderFindingGroup);
+}
+
 function appendAgentReviewLines(
   lines: string[],
   analysis: S007AnalysisResult,

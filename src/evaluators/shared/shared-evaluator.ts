@@ -10,7 +10,6 @@ import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { LicenseUtils } from '../../utils/license-utils';
 import { evaluateS003ThirdPartyLicenses } from '../../utils/license-compliance-evaluator';
 import { produceModuleDescriptorArtifact } from '../../utils/artifacts/module-descriptor-artifact';
-import { createEvaluationRun } from '../../utils/evaluation-run';
 import { validateModuleDescriptorJson } from '../../utils/module-descriptor-validator';
 import {
   s002ArtifactFailureResult,
@@ -35,9 +34,7 @@ import {
 } from '../../utils/s006-sensitive-information';
 import { reviewS006WithAgent } from '../../utils/s006-agent-review';
 import { loadS007Policy } from '../../utils/s007-policy';
-import { collectS007TechnologyEvidence } from '../../utils/s007-technology-evidence';
-import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effective-evidence';
-import { evaluateS007 } from '../../utils/s007-evaluator';
+import { getS007Analysis } from '../../utils/s007-evaluator';
 import { renderS007HumanDetails } from '../../utils/s007-report-details';
 import { reviewS007WithAgent } from '../../utils/s007-agent-review';
 import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
@@ -226,16 +223,10 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
   private async evaluateS007(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'S007', evaluationRun);
-    const [policyLoad, evidence] = await Promise.all([
-      loadS007Policy(),
-      run.getOrCreateArtifact('s007TechnologyEvidence', async () => {
-        const staticEvidence = await collectS007TechnologyEvidence(repoPath, this.language);
-        return this.language === 'java' && run.commandRunner
-          ? enrichS007WithMavenEffectivePom(repoPath, staticEvidence, run, run.commandRunner)
-          : staticEvidence;
-      })
-    ]);
-    const analysis = evaluateS007(policyLoad, evidence, this.language);
+    const shared = await getS007Analysis(run, repoPath);
+    const { policyLoad } = shared;
+    // A copy: the review note below belongs to this result, not to the analysis the run caches for S007 and F005.
+    const analysis = { ...shared.analysis };
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S007',
       status: analysis.status,
@@ -392,15 +383,6 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       details: renderS014HumanDetails(analysis),
       criterionDetails: analysis
     };
-  }
-
-  /** The caller's run, or a fresh one for a direct single-criterion call. */
-  private runFor(repoPath: string, criterionId: string, evaluationRun?: EvaluationRun): EvaluationRun {
-    return evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: [criterionId]
-    });
   }
 
   private formatModuleKindDetails(heading: string, moduleKind: ModuleKindResult): string {

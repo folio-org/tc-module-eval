@@ -2,12 +2,18 @@ import { CriterionAgentReviewResult } from '../types';
 import { S006_FINDING_SUMMARY_PATH } from './criterion-agent-review';
 import { reportPath, reportText } from './report-text';
 
-const ASSESSMENT_LABELS = {
+export const ASSESSMENT_LABELS = {
   aligned_fact: ['Supported by evidence', 'The reviewed source supports this finding; this is not a certification of the whole criterion.'],
   substantive_concern: ['Potential problem', 'The reviewed source indicates a possible problem. Confirm its impact before making a decision.'],
   analyzer_limitation: ['Automated check limitation', 'The automated check could not establish this behavior. That limitation is not itself a defect.'],
   evidence_gap: ['Needs verification', 'Available evidence does not establish the behavior. This is an unanswered question, not a demonstrated defect.'],
   policy_question: ['TC interpretation needed', 'A Technical Council interpretation is needed to decide how the criterion applies.']
+} as const;
+
+export const COVERAGE_LABELS = {
+  investigated: 'Investigated directly',
+  immaterial: 'Not material to this scoped decision',
+  unresolved: 'Needs further verification'
 } as const;
 
 const SUBJECT_NAMES: Record<string, string> = {
@@ -18,7 +24,7 @@ const SUBJECT_NAMES: Record<string, string> = {
 };
 
 // Details use indentation as structure. Model-authored newlines must stay prose.
-function prose(value: string | undefined): string {
+export function prose(value: string | undefined): string {
   return reportText((value ?? '').replace(/\s+/g, ' ').trim());
 }
 
@@ -60,8 +66,7 @@ export function renderAgentReviewLines(
           ? 'Automated scan coverage diagnostics' : reportPath(reference)}`)
       );
       if (assessment.coverageDisposition) {
-        const labels = { investigated: 'Investigated directly', immaterial: 'Not material to this scoped decision', unresolved: 'Needs further verification' };
-        lines.push(`      - Coverage judgment: ${labels[assessment.coverageDisposition]}`);
+        lines.push(`      - Coverage judgment: ${COVERAGE_LABELS[assessment.coverageDisposition]}`);
       }
       for (const bound of assessment.failureBounds ?? []) {
         const phases = { startup: 'Process startup', tenant_initialization: 'Tenant initialization', runtime: 'Runtime operations' };

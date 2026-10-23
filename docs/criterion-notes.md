@@ -327,6 +327,17 @@ An application whose FAR descriptor is missing, not exactly one record, for anot
 
 Tests never touch the network: they replay responses recorded by `yarn capture:remote-fixtures` into `src/__tests__/fixtures/remote/`, and an unrecorded URL fails the test.
 
+## F005 Stripes Version
+
+F005 checks that the module uses the Stripes version on the officially supported technologies page ("Stripes 10.1 or greater" in the committed policy). It does not compare versions itself: it takes S007's own finding for `@folio/stripes`, which S007 and F005 read from one analysis per run, so the two always agree and `--criteria F005` works without S007.
+
+- `pass`, `fail` or `manual`: as S007's Stripes finding. For example, `^10.0.0` without a `yarn.lock` is manual (the range also allows 10.0.x), and the same range with a `yarn.lock` resolving 10.1.5 passes.
+- `manual`: a library without an `@folio/stripes` dependency, i.e. a Stripes constituent library such as stripes-components (checklist item F005-C2: this release is part of, or compatible with, the supported Stripes version); a module without an `@folio/stripes` dependency; or the policy could not be loaded.
+
+F005 has no agent review: nothing in the repository can settle what it leaves to the reviewer.
+
+Like every F criterion, the report has up to three layers: what the tool found and the status it decided; a checklist for the reviewer, whose items have stable IDs such as `F005-C1`, are phrased as the desired state and list where to start (`criterionDetails.checklist`; empty for pass and not applicable); and, for criteria with agent review, the agent's results attached to the checklist items they address.
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

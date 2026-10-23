@@ -5,6 +5,7 @@ import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
 import { s011AgentReviewNames } from './s011-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
+import { CHECKLIST_HEADING, frontendChecklistOf, renderFrontendChecklistLines, unattachedAssessments } from './frontend-checklist';
 
 const CRITERION_TITLES: Record<string, string> = {
   A001: 'Product Council approval',
@@ -21,7 +22,8 @@ const CRITERION_TITLES: Record<string, string> = {
   S011: 'SonarQube findings',
   S012: 'Officially supported build tools',
   S013: 'Unit test coverage and technologies',
-  S014: 'Application assignment'
+  S014: 'Application assignment',
+  F005: 'Stripes version'
 };
 
 function escapeHtml(text: string): string {
@@ -112,13 +114,27 @@ function pinnedSourceBase(result: EvaluationResult): string | undefined {
 }
 
 // Criteria that write an "Agent review:" section even when no structured review is attached.
-const AGENT_REVIEW_CRITERIA = new Set(['S004', 'S005', 'S006', 'S007', 'S010', 'S011']);
+const AGENT_REVIEW_CRITERIA = new Set([
+  'S004', 'S005', 'S006', 'S007', 'S010', 'S011', 'F001', 'F002', 'F003', 'F004', 'F005', 'F006', 'F007'
+]);
+
+// The rows from a "Heading:" row through its indented rows removed.
+function withoutSection(lines: string[], heading: string): string[] {
+  let inSection = false;
+  return lines.filter(line => {
+    if (line.trim() === heading) inSection = true;
+    else if (inSection && line.trim() && !/^\s/.test(line)) inSection = false;
+    return !inSection;
+  });
+}
 
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
 function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
   const original = criterion.details?.split('\n') ?? [];
   // Elsewhere an "Agent review:" line can only come from repository text, so it stays an ordinary row.
   if (!criterion.agentReview && !AGENT_REVIEW_CRITERIA.has(criterion.criterionId)) return original;
+  // F criteria show what the tool found, then the checklist, then the agent review; S criteria put the review first.
+  const checklist = frontendChecklistOf(criterion.criterionId, criterion.criterionDetails);
   let inReview = false;
   let hadReview = false;
   const legacyReview: string[] = [];
@@ -138,7 +154,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
     const diagnostics = diagnosticLines([...(review?.errors ?? []), ...(review?.warnings ?? []), ...legacyReview]);
     const reason = diagnostics.join(' ');
     const skippedForEvidence = /no candidate evidence was available for agent review/i.test(reason);
-    const skippedForCriterion = /agent review is not enabled for S\d+/i.test(reason);
+    const skippedForCriterion = /agent review is not enabled for [SF]\d+/i.test(reason);
     const skippedForConfiguration = /agent review is disabled|disabled or unconfigured/i.test(reason);
     const skipped = skippedForEvidence || skippedForCriterion || skippedForConfiguration;
     const failed = review || /failed|failure|error|incomplete|unavailable|timed out|exceeded (?:its )?time limit/i.test(reason);
@@ -159,7 +175,17 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
         : []),
       ...(diagnostics.length > 6 ? [`    - ... ${diagnostics.length - 6} more in the downloaded JSON report`] : [])
     ];
-    return ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails, ...details];
+    const block = ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails];
+    return checklist ? [...details, ...block] : [...block, ...details];
+  }
+  if (checklist) {
+    // Each checklist item carries the agent's results for its obligations; the review section keeps the rest.
+    return [
+      ...withoutSection(details, CHECKLIST_HEADING),
+      ...renderFrontendChecklistLines(checklist, review),
+      ...renderAgentReviewLines({ ...review, assessments: unattachedAssessments(checklist, review) }),
+      '  - Advisory only; the criterion status is unchanged.'
+    ];
   }
   // The subject names each criterion's own report uses, so the rows match the rest of its details.
   const names = criterion.criterionId === 'S007'
@@ -340,7 +366,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       path.setAttribute('stroke','#77746B'); path.setAttribute('stroke-width','1.6');
       svg.appendChild(path); return svg;
     }
-    function category(id) { return {A:'Administrative',S:'Shared',B:'Backend'}[id.charAt(0)] || ''; }
+    function category(id) { return {A:'Administrative',S:'Shared',B:'Backend',F:'Frontend'}[id.charAt(0)] || ''; }
 
     function buildTree(lines, referenceLists) {
       var rootNode = {children:[]};
@@ -396,10 +422,11 @@ export function createHtmlReport(result: EvaluationResult): string {
     function prepare(item) {
       // Criteria without an automated check have exactly this details text; a prefix or evidence suffix could be repository text.
       var human = item.status === 'manual' && item.details.length === 1 && item.details[0] === 'This criterion requires manual evaluation by a human reviewer';
-      var evidence = item.evidence.replace(/^S\d+ manual:\s*/,'');
+      var evidence = item.evidence.replace(/^[SF]\d+ manual:\s*/,'');
       var tree = human ? [] : buildTree(item.details, item.referenceLists || []);
-      if (item.id === 'S007') {
-        var technologyFindings = tree.find(function (node) { return /^Technology findings:?$/.test(node.text); });
+      if (item.id === 'S007' || item.id === 'F005') {
+        // F005 shows S007's Stripes rows under its own heading.
+        var technologyFindings = tree.find(function (node) { return /^(?:Technology findings|S007's Stripes finding):?$/.test(node.text); });
         if (technologyFindings) technologyFindings.children.forEach(function (node) {
           node.unit = /^Repository evidence coverage:/.test(node.text)
             ? (node.children.length === 1 ? 'limitation' : 'limitations')
@@ -415,8 +442,17 @@ export function createHtmlReport(result: EvaluationResult): string {
           });
         });
       }
-      // reportDetailLines puts the only real agent-review section first; a later heading is repository text.
-      var agentIndex = tree.length && tree[0].text === 'Agent review (advisory):' ? 0 : -1;
+      // An F criterion's checklist items, and where to start on each, are what the reviewer works through.
+      var checklist = /^F\d+$/.test(item.id) && tree.find(function (node) { return node.text === 'Checklist for the reviewer:'; });
+      if (checklist) checklist.children.forEach(function (checkItem) {
+        checkItem.openByDefault = true; checkItem.hideCount = true;
+        checkItem.children.forEach(function (node) { if (node.text === 'Start with:') { node.openByDefault = true; node.hideCount = true; } });
+      });
+      // reportDetailLines puts the only real agent-review section first, or last for F criteria; a heading
+      // anywhere else is repository text.
+      var agentIndex = !tree.length ? -1
+        : tree[0].text === 'Agent review (advisory):' ? 0
+          : /^F\d+$/.test(item.id) && tree[tree.length - 1].text === 'Agent review (advisory):' ? tree.length - 1 : -1;
       if (agentIndex >= 0) {
         tree[agentIndex].hideCount = true;
         tree[agentIndex].children.forEach(function (node) {

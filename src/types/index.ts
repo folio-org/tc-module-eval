@@ -61,7 +61,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -132,6 +132,8 @@ export interface EvaluationRunArtifacts {
   moduleDescriptor?: ModuleDescriptorArtifact;
   moduleKind?: ModuleKindResult;
   s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
+  /** S007's policy and analysis, shared with F005 so both report the same Stripes finding. Read-only once produced. */
+  s007Analysis?: import('./s007-officially-supported-technologies').S007RunAnalysis;
   s009DependencyEvidence?: import('./s009-library-acceptance').S009DependencyEvidence;
   s010ThirdPartyEvidence?: import('./s010-third-party-resilience').S010Evidence;
   buildTestEvidence?: import('./s012-build-tools').BuildTestEvidence;
@@ -211,6 +213,8 @@ export * from './s012-build-tools';
 export * from './s013-test-coverage';
 export * from './s014-application-assignment';
 export * from './remote-evidence';
+export * from './frontend-checklist';
+export * from './f005-stripes-version';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 

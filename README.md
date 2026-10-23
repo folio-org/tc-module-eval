@@ -96,6 +96,14 @@ against the testing sections of the same policy. It never runs tests, even with
 S013 is `manual` and lists the test runners it found. See
 [Criterion Notes](docs/criterion-notes.md#s013-unit-test-coverage).
 
+### F005 Stripes Version
+
+F005 checks that a UI module uses the Stripes version on the officially supported technologies
+page. It takes S007's own finding for `@folio/stripes` from the same policy, so the two always agree,
+and `--criteria F005` works on its own. A Stripes library that does not depend on `@folio/stripes`,
+such as stripes-components, is left to the reviewer with a checklist item. See
+[Criterion Notes](docs/criterion-notes.md#f005-stripes-version).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
