@@ -16,10 +16,10 @@ import {
   SharedWorkflowUse,
   VersionDeclaration
 } from '../types';
-import { policySections } from './s007-policy';
+import { findPolicyEntry, policySections } from './s007-policy';
 import { compareObservationToConstraint } from './s007-evaluator';
 import { displayPolicyPath } from './acceptance-ledger';
-import { reportPath, reportText } from './report-text';
+import { listText, reportPath, reportText, unique } from './report-text';
 
 const TOOL_NAMES: Record<string, string> = {
   maven: 'Maven',
@@ -261,7 +261,7 @@ function toolFinding(
   const via = shown.length ? listText(unique(shown.map(signal => signal.via))) : undefined;
   const source = toolSignals.length ? listText(unique(toolSignals.map(signal => signal.via))) : listText(files.map(reportPath));
   const base = { toolId: tool, displayName: name, role: 'primary' as const, files, via, versions: [] as S012VersionCheck[], statusDetermining: false };
-  const match = findEntry(sections, tool);
+  const match = findPolicyEntry(sections, tool);
 
   if (!match) {
     const supported = tool === 'go' ? 'Make' : sections.some(section => section.area === 'frontend') ? 'Yarn 1' : 'Maven';
@@ -511,7 +511,7 @@ function ciFindings(
 ): S012Finding[] {
   const findings: S012Finding[] = [];
   const jenkinsfile = filesFor(evidence, ['jenkinsfile']);
-  const listed = (id: string) => findEntry(sections, id);
+  const listed = (id: string) => findPolicyEntry(sections, id);
   if (evidence.workflowFiles.length) {
     const uses = evidence.sharedWorkflows.map(use => `${reportPath(use.path)} uses folio-org/.github ${use.name}@${use.ref}`);
     const match = listed('github-actions');
@@ -543,7 +543,7 @@ function ciFindings(
 function dockerFindings(evidence: BuildEvidence, sections: S007PolicySection[]): S012Finding[] {
   const files = filesFor(evidence, ['dockerfile']);
   if (!files.length) return [];
-  const match = findEntry(sections, 'docker');
+  const match = findPolicyEntry(sections, 'docker');
   return [{
     ...noteFinding('docker', 'secondary', files, match
       ? `${listText(files.map(reportPath))} (supported, advisory). Docker never changes the result.`
@@ -618,14 +618,6 @@ function coverageFinding(rationale: string): S012Finding {
 
 // ---- Helpers ----
 
-function findEntry(sections: S007PolicySection[], id: string): { entry: S007TechnologyPolicyEntry; section: S007PolicySection } | undefined {
-  for (const section of sections) {
-    const entry = section.entries.find(candidate => candidate.id === id || candidate.aliases.includes(id));
-    if (entry) return { entry, section };
-  }
-  return undefined;
-}
-
 function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySection): S012MatchedPolicy {
   return {
     sectionId: section.id,
@@ -643,16 +635,6 @@ function hasFile(evidence: BuildEvidence, kind: BuildFileKind): boolean {
 
 function filesFor(evidence: BuildEvidence, kinds: BuildFileKind[]): string[] {
   return evidence.files.filter(file => kinds.includes(file.kind)).map(file => file.path);
-}
-
-function unique<T>(values: T[]): T[] {
-  return [...new Set(values)];
-}
-
-function listText(items: string[]): string {
-  const shown = items.length > 4 ? [...items.slice(0, 3), `${items.length - 3} more`] : items;
-  if (shown.length <= 2) return shown.join(' and ');
-  return `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`;
 }
 
 const REVIEW_REASONS: Partial<Record<S012Finding['classification'], string>> = {

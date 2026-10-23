@@ -15,6 +15,7 @@ import {
 } from './criterion-agent-review';
 import { redactSensitiveText } from './redaction';
 import { decodeOpenCodeOutput, openCodeEventTrace, OpenCodeOutput, parseJsonObject } from './opencode-output';
+import { errorMessage } from './type-guards';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 // Tool events dominate the review run's output and the answer comes last. Keep
@@ -99,7 +100,7 @@ export async function runOpenCodeAgentReview(
   try {
     invocation = materializeOpenCodeInvocation(workspace, config);
   } catch (error) {
-    return baseUnavailable(`Unable to materialize OpenCode invocation: ${error instanceof Error ? error.message : String(error)}`);
+    return baseUnavailable(`Unable to materialize OpenCode invocation: ${errorMessage(error)}`);
   }
   const configDebug = await runStage('debug-config', {
     command: 'opencode',

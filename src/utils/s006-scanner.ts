@@ -6,7 +6,7 @@ import {
   S006ScanWarning,
   S006SkippedFile
 } from '../types';
-import { GENERATED_REPORT_DIRECTORY_PATTERN, decodeBoundedUtf8, isBinaryBuffer, isWithinRepo, realPath, relativePosixPath } from './repo-files';
+import { GENERATED_REPORT_DIRECTORY_PATTERN, decodeBoundedUtf8, isBinaryBuffer, isPathInside, isWithinRepo, realPath, relativePosixPath } from './repo-files';
 import { MAX_S006_EXCERPT_BYTES } from './s006-detectors';
 
 export const MAX_S006_SCAN_TRAVERSAL_ENTRIES = 5000;
@@ -487,8 +487,7 @@ function isOpenFileInsideS006Repo(descriptor: number, repoRoot: string): boolean
   } catch {
     return true; // No /proc (not Linux): the walk's lstat checks are the only guard.
   }
-  const relative = path.relative(repoRoot, openedPath);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+  return isPathInside(repoRoot, openedPath);
 }
 
 function readBoundedS006CandidateText(

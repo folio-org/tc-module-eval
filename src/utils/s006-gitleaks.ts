@@ -8,8 +8,9 @@ import {
   S006ScanWarning
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { relativePosixPath } from './repo-files';
+import { isPathInside, relativePosixPath } from './repo-files';
 import { buildS006Warning } from './s006-scanner';
+import { errorMessage } from './type-guards';
 
 const DEFAULT_GITLEAKS_TIMEOUT_MS = 120000;
 const MAX_GITLEAKS_OUTPUT_BYTES = 64 * 1024;
@@ -93,7 +94,7 @@ export async function runS006GitleaksScan(
       findings: [],
       warnings: [buildS006Warning(
         'scanner-unavailable',
-        `Gitleaks could not be used: ${oneLine(error instanceof Error ? error.message : String(error))}. Check that Gitleaks is installed or set GITLEAKS_PATH, then run the evaluation again.`,
+        `Gitleaks could not be used: ${oneLine(errorMessage(error))}. Check that Gitleaks is installed or set GITLEAKS_PATH, then run the evaluation again.`,
         true
       )]
     };
@@ -115,7 +116,7 @@ function readGitleaksReport(reportPath: string, repoPath: string): S006GitleaksF
   try {
     parsed = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
   } catch (error) {
-    throw new Error(`the report could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`the report could not be read: ${errorMessage(error)}`);
   }
 
   if (!Array.isArray(parsed)) {
@@ -157,12 +158,17 @@ function normalizeGitleaksFindingPath(finding: S006GitleaksFinding, repoPath: st
   };
 }
 
+export function normalizeS006GitleaksPath(filePath: string | undefined): string | undefined {
+  const normalized = filePath?.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
+  return normalized || undefined;
+}
+
 function normalizeGitleaksReportPath(filePath: string | undefined, repoPath: string): string | undefined {
   if (!filePath) {
     return undefined;
   }
 
-  const normalized = filePath.replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
+  const normalized = normalizeS006GitleaksPath(filePath);
   if (!normalized) {
     return undefined;
   }
@@ -173,8 +179,7 @@ function normalizeGitleaksReportPath(filePath: string | undefined, repoPath: str
 
   const repoRoot = path.resolve(repoPath);
   const absolutePath = path.resolve(filePath);
-  const relativePath = path.relative(repoRoot, absolutePath);
-  if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
+  if (isPathInside(repoRoot, absolutePath)) {
     return relativePosixPath(repoRoot, absolutePath);
   }
 

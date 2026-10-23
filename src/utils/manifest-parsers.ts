@@ -1,6 +1,7 @@
 import { parseStringPromise } from 'xml2js';
 import { parse as parseYarnLock } from '@yarnpkg/lockfile';
 import semver from 'semver';
+import { errorMessage } from './type-guards';
 
 // Pure parsers for build and package files: text in, declarations out. They read no files and run no commands,
 // so the S007, S009 and S012 collectors decide what to read, how much, and what a parse failure means for them.
@@ -17,7 +18,7 @@ export async function parsePom(content: string): Promise<PomParseResult> {
   try {
     project = (await parseStringPromise(content, { explicitArray: false, trim: true }))?.project;
   } catch (error) {
-    return { ok: false, reason: 'invalid-xml', message: error instanceof Error ? error.message : String(error) };
+    return { ok: false, reason: 'invalid-xml', message: errorMessage(error) };
   }
   return project && typeof project === 'object'
     ? { ok: true, project: project as Record<string, any> }
@@ -159,7 +160,7 @@ export function parsePackageJson(content: string): PackageJsonParseResult {
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('root value must be an object');
     return { ok: true, manifest };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    return { ok: false, message: errorMessage(error) };
   }
 }
 
@@ -205,7 +206,7 @@ export function parseYarnLockfile(content: string): YarnLockfile {
       ? { format: 'v1', entries: parsed.object }
       : { format: 'malformed' };
   } catch (error) {
-    return { format: 'malformed', message: error instanceof Error ? error.message : String(error) };
+    return { format: 'malformed', message: errorMessage(error) };
   }
 }
 

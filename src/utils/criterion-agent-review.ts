@@ -12,9 +12,10 @@ import {
 import { LocalCommandRunner } from './command-runner';
 import type { CommittedSourceSnapshot } from './committed-source';
 import { prepareRepositoryBrowsing, readRepositorySnapshot } from './agent-review-repository';
-import { isWithinRepo } from './repo-files';
+import { isWithinRepo, relativePosixPath } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
 import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { errorMessage, isRecord } from './type-guards';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
 
@@ -101,7 +102,7 @@ export async function reviewCriterionWithAgent(
   try {
     agentReview = await run.runAgentReview(() => request.review(config, run.commandRunner));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     return {
       agentReview: {
         available: false,
@@ -145,14 +146,14 @@ export async function runCriterionAgentReview(
   try {
     prepared = await prepareCriterionAgentReviewEvidence(request, config.readRepositorySnapshot);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${error instanceof Error ? error.message : String(error)}`)] };
+    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${errorMessage(error)}`)] };
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
   try {
     workspace = prepareCriterionReviewWorkspace(prepared.request);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`)] };
+    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review workspace: ${errorMessage(error)}`)] };
   }
   try {
     if (config.adapter === 'fake') {
@@ -266,7 +267,7 @@ export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentR
     const entries = request.files.map(file => {
       const safeRelativePath = safeWorkspaceRelativePath(file.repoRelativePath);
       const workspacePath = path.join(docsRoot, safeRelativePath);
-      const workspaceKey = path.relative(docsRoot, workspacePath).split(path.sep).join('/');
+      const workspaceKey = relativePosixPath(docsRoot, workspacePath);
       if (usedWorkspacePaths.has(workspaceKey)) {
         throw new Error(`Duplicate agent review workspace path: ${workspaceKey}`);
       }
@@ -281,7 +282,7 @@ export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentR
       return {
         id: safeRelativePath,
         repoRelativePath: file.repoRelativePath,
-        workspacePath: path.relative(rootPath, workspacePath).split(path.sep).join('/')
+        workspacePath: relativePosixPath(rootPath, workspacePath)
       };
     });
 
@@ -631,7 +632,7 @@ function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestE
       if (typeof reference === 'string') {
         return reference;
       }
-      if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+      if (isRecord(reference)) {
         const candidate = reference as Record<string, unknown>;
         if (typeof candidate.repoRelativePath === 'string') {
           return candidate.repoRelativePath;

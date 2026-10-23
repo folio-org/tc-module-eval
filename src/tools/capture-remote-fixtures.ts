@@ -16,6 +16,7 @@ import { createEvaluationRun } from '../utils/evaluation-run';
 import { analyzeS011 } from '../utils/s011-evaluator';
 import { trimSonarCloudResponses } from './sonarcloud-fixture-trim';
 import { checkApplicationTemplate, collectPlatformSnapshot, DEFAULT_PLATFORM_REF } from '../utils/s014-application-assignment';
+import { errorMessage } from '../utils/type-guards';
 
 export const REMOTE_FIXTURE_DIR = path.join(__dirname, '..', '__tests__', 'fixtures', 'remote');
 
@@ -100,7 +101,7 @@ if (require.main === module) {
       : options.sonar ? captureSonar(options.sonar, REMOTE_FIXTURE_DIR, options.trim)
         : capture(options.platformRef, options.template, options.output));
   program.parseAsync().catch(error => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(errorMessage(error));
     process.exitCode = 1;
   });
 }

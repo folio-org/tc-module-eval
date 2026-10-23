@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import semver from 'semver';
 import { S009DependencyEvidence, S009DependencyObservation, S009EvidenceDiagnostic } from '../types';
-import { findCandidateFiles, relativePosixPath } from './repo-files';
+import { findCandidateFiles, relativePosixPath, sha256Digest } from './repo-files';
 import { escapeRegExp } from './regexp';
 import { errorMessage } from './type-guards';
 import {
@@ -852,7 +851,7 @@ function readManifest(context: Context, filePath: string): string | undefined {
       return undefined;
     }
     const content = fs.readFileSync(filePath, 'utf8');
-    context.fileHashes[sourcePath] = `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`;
+    context.fileHashes[sourcePath] = sha256Digest(content);
     return content;
   } catch (error) {
     diagnostic(context, 'manifest_read_error', `Could not be read (${errorMessage(error)}).`, sourcePath);

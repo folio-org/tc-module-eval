@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import Ajv from 'ajv';
 import schema from '../schemas/folio-shared-workflows.schema.json';
 import { FolioSharedWorkflowTable, FolioSharedWorkflowTableLoadResult } from '../types';
+import { errorMessage } from './type-guards';
 
 export const DEFAULT_FOLIO_SHARED_WORKFLOWS_PATH = path.resolve(__dirname, '../../config/folio-shared-workflows.json');
 
@@ -16,7 +17,7 @@ export async function loadFolioSharedWorkflows(
   try {
     parsed = JSON.parse(await fs.readFile(sourcePath, 'utf8'));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     return {
       ok: false,
       sourcePath,

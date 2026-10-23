@@ -47,7 +47,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
-import { isNonEmptyString, isValidDependency } from '../type-guards';
+import { errorMessage, isNonEmptyString, isRecord, isValidDependency } from '../type-guards';
 import { commandError, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
@@ -150,10 +150,6 @@ function splitSpdxLicenses(license: string): Array<string | string[]> {
   return alternatives.map(set => set.length === 1 ? set[0] : set);
 }
 
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /**
  * Parse license-checker-rseidelsohn JSON output
  * @param jsonOutput - JSON string from license-checker-rseidelsohn
@@ -169,9 +165,9 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
   try {
     licenseData = JSON.parse(jsonOutput);
   } catch (error) {
-    throw new Error(`license-checker output could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`license-checker output could not be read as JSON: ${errorMessage(error)}`);
   }
-  if (!isPlainObject(licenseData)) {
+  if (!isRecord(licenseData)) {
     const found = licenseData === null ? 'null' : Array.isArray(licenseData) ? 'an array' : `a ${typeof licenseData}`;
     throw new Error(`license-checker output is ${found}, not the expected object that lists each package`);
   }
@@ -186,7 +182,7 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
     if (!isNonEmptyString(name) || !isNonEmptyString(version)) {
       throw new Error(`license-checker output lists "${packageKey}", which is not a package name followed by @ and a version`);
     }
-    if (!isPlainObject(packageInfo)) {
+    if (!isRecord(packageInfo)) {
       throw new Error(`license-checker output has an entry for ${packageKey} that is not a set of package details`);
     }
 
@@ -311,15 +307,15 @@ export async function getNpmDependencies(
     return { dependencies, errors, warnings };
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    getLogger().error('Failed to extract npm dependencies via license-checker:', errorMessage);
+    const message = errorMessage(error);
+    getLogger().error('Failed to extract npm dependencies via license-checker:', message);
     if (error instanceof Error && error.stack) {
       getLogger().error('Stack trace:', error.stack);
     }
 
     errors.push({
       source: 'npm-parser',
-      message: `npm could not list the dependencies: ${errorMessage}`,
+      message: `npm could not list the dependencies: ${message}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

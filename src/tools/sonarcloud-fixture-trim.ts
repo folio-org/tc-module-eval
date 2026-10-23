@@ -3,6 +3,8 @@
 // facets are kept exactly. src/__tests__/s011-sonarqube.test.ts fails if the evaluator reads a field outside
 // these lists, so a new read must be added here before the fixtures are re-recorded.
 
+import { isRecord } from '../utils/type-guards';
+
 /**
  * Per endpoint (the path after /api/), the fields kept. A path keeps its whole subtree; `[]` stands for every
  * array element. Endpoints not listed are small and kept whole.
@@ -40,10 +42,10 @@ export function trimSonarCloudResponses(responses: Readonly<Record<string, Recor
   return Object.fromEntries(Object.entries(responses).map(([url, response]) => {
     const endpoint = sonarCloudEndpoint(url);
     const kept = endpoint ? SONARCLOUD_KEPT_FIELDS[endpoint] : undefined;
-    if (!kept || response.status !== 200 || !isObject(response.body)) return [url, response];
+    if (!kept || response.status !== 200 || !isRecord(response.body)) return [url, response];
     let body = keep(response.body, tree(kept)) as Record<string, unknown>;
     if (endpoint === 'qualityprofiles/search' && Array.isArray(body.profiles) && languages) {
-      body = { ...body, profiles: body.profiles.filter(item => isObject(item) && (item.isDefault !== true || languages.has(item.language as string))) };
+      body = { ...body, profiles: body.profiles.filter(item => isRecord(item) && (item.isDefault !== true || languages.has(item.language as string))) };
     }
     return [url, { ...response, body }];
   }));
@@ -51,8 +53,8 @@ export function trimSonarCloudResponses(responses: Readonly<Record<string, Recor
 
 function projectLanguages(responses: Readonly<Record<string, RecordedResponse>>): Set<string> | undefined {
   const navigation = Object.entries(responses).find(([url]) => sonarCloudEndpoint(url) === 'navigation/component')?.[1];
-  const profiles = isObject(navigation?.body) ? navigation!.body.qualityProfiles : undefined;
-  if (!Array.isArray(profiles) || !profiles.every(item => isObject(item) && typeof item.language === 'string')) return undefined;
+  const profiles = isRecord(navigation?.body) ? navigation!.body.qualityProfiles : undefined;
+  if (!Array.isArray(profiles) || !profiles.every(item => isRecord(item) && typeof item.language === 'string')) return undefined;
   return new Set(profiles.map(item => (item as { language: string }).language));
 }
 
@@ -75,12 +77,8 @@ function tree(paths: readonly string[]): Tree {
 function keep(value: unknown, shape: Tree | true): unknown {
   if (shape === true) return value;
   if (Array.isArray(value)) return shape['[]'] ? value.map(item => keep(item, shape['[]'])) : value;
-  if (!isObject(value)) return value;
+  if (!isRecord(value)) return value;
   return Object.fromEntries(Object.entries(value)
     .filter(([key]) => Object.prototype.hasOwnProperty.call(shape, key))
     .map(([key, item]) => [key, keep(item, shape[key])]));
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

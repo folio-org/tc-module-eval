@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import fs from 'fs-extra';
 import path from 'path';
-import crypto from 'crypto';
 import { S008Catalog, S008CatalogChannel, S008Provider } from '../types';
+import { errorMessage } from '../utils/type-guards';
+import { sha256Digest } from '../utils/repo-files';
 
 interface ImportManifest {
   channel: S008CatalogChannel;
@@ -48,7 +49,7 @@ export async function importS008Catalog(manifestPath: string): Promise<S008Catal
   const read = async (relativePath: string): Promise<{ content: string; parsed: any; hash: string }> => {
     const absolutePath = path.resolve(base, relativePath);
     const content = await fs.readFile(absolutePath, 'utf8');
-    return { content, parsed: JSON.parse(content), hash: hash(content) };
+    return { content, parsed: JSON.parse(content), hash: sha256Digest(content) };
   };
   const platformDescriptor = await read(manifest.platform.descriptorPath);
   const applications = await Promise.all(manifest.applications.map(async app => ({
@@ -115,13 +116,11 @@ function validateComponentSource(source: ImportManifest['componentSources'][numb
   if (!valid) throw new Error(`componentSources[${index}] acquired provenance is incomplete or invalid for kind ${String(source.kind)}`);
 }
 
-function hash(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
-
 if (require.main === module) {
   const [manifestPath, outputPath] = process.argv.slice(2);
   if (!manifestPath || !outputPath) throw new Error('Usage: import-s008-catalog <snapshot-manifest.json> <catalog-output.json>');
   importS008Catalog(manifestPath).then(catalog => fs.writeJson(outputPath, catalog, { spaces: 2 })).catch(error => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(errorMessage(error));
     process.exitCode = 1;
   });
 }

@@ -14,7 +14,7 @@ import {
   VersionDeclaration,
   VersionDeclarationSource
 } from '../types';
-import { decodeBoundedUtf8, readBoundedFileBytes } from './repo-files';
+import { decodeBoundedUtf8, isPathInside, readBoundedFileBytes } from './repo-files';
 import {
   asArray,
   packageDependencyEntries,
@@ -32,6 +32,7 @@ import {
   yarnLockfileFormat,
   yarnLockVersionsByName
 } from './manifest-parsers';
+import { errorMessage, isRecord } from './type-guards';
 
 // Reads the build files of the checkout without running anything: build tools for S012, test technologies for S013. The repository is
 // untrusted: at most MAX_FILES files of MAX_FILE_BYTES each are read, symbolic links are never followed, and a file
@@ -408,16 +409,16 @@ function readWorkflows(context: Context): void {
       malformed(context, workflowPath, `Not valid YAML (${error instanceof Error ? error.message.split('\n')[0] : String(error)}).`);
       continue;
     }
-    if (!isObject(workflow) || !isObject(workflow.jobs)) continue;
+    if (!isRecord(workflow) || !isRecord(workflow.jobs)) continue;
     const workflowEnv = scalarMap(workflow.env);
     const workflowDirectory = workingDirectory(workflow.defaults);
     try {
       for (const [job, definition] of Object.entries(workflow.jobs)) {
-        if (!isObject(definition)) continue;
+        if (!isRecord(definition)) continue;
         if (!readJob(context, workflowPath, job, definition, workflowEnv, workflowDirectory)) return;
       }
     } catch (error) {
-      malformed(context, workflowPath, `Could not be read as a workflow (${error instanceof Error ? error.message : String(error)}).`);
+      malformed(context, workflowPath, `Could not be read as a workflow (${errorMessage(error)}).`);
     }
   }
 }
@@ -431,7 +432,7 @@ function readJob(
   workflowDirectory: string | undefined
 ): boolean {
   const jobEnv = { ...workflowEnv, ...scalarMap(definition.env) };
-  const matrix = isObject(definition.strategy) && isObject(definition.strategy.matrix) ? definition.strategy.matrix : {};
+  const matrix = isRecord(definition.strategy) && isRecord(definition.strategy.matrix) ? definition.strategy.matrix : {};
   const declare = (tool: BuildToolId, source: VersionDeclarationSource, detail: string, value: unknown, env = jobEnv) => {
     for (const text of expandValue(value, env, matrix)) {
       context.declarations.push({ tool, source, path: workflowPath, detail: `job ${job}, ${detail}`, text, job });
@@ -442,7 +443,7 @@ function readJob(
     const shared = SHARED_WORKFLOW.exec(definition.uses.trim());
     if (shared) {
       context.sharedWorkflows.push({ path: workflowPath, job, name: shared[1], ref: shared[2], inputs: scalarMap(definition.with) });
-      if (isObject(definition.with) && definition.with['node-version'] !== undefined) {
+      if (isRecord(definition.with) && definition.with['node-version'] !== undefined) {
         declare('node', 'workflow-input', `${shared[1]} node-version`, definition.with['node-version']);
       }
     }
@@ -451,9 +452,9 @@ function readJob(
 
   const jobDirectory = workingDirectory(definition.defaults) ?? workflowDirectory;
   for (const step of Array.isArray(definition.steps) ? definition.steps : []) {
-    if (!isObject(step)) continue;
+    if (!isRecord(step)) continue;
     const action = typeof step.uses === 'string' ? step.uses.trim().split('@')[0] : undefined;
-    const inputs = isObject(step.with) ? step.with : {};
+    const inputs = isRecord(step.with) ? step.with : {};
     // A step's env overrides the job's and the workflow's when its inputs are evaluated.
     const stepEnv = { ...jobEnv, ...scalarMap(step.env) };
     if (action === 'actions/setup-node' && inputs['node-version'] !== undefined) {
@@ -679,13 +680,13 @@ function expandValue(value: unknown, env: Record<string, string>, matrix: Record
 }
 
 function workingDirectory(defaults: unknown): string | undefined {
-  if (!isObject(defaults) || !isObject(defaults.run)) return undefined;
+  if (!isRecord(defaults) || !isRecord(defaults.run)) return undefined;
   const directory = defaults.run['working-directory'];
   return typeof directory === 'string' ? directory : undefined;
 }
 
 function scalarMap(value: unknown): Record<string, string> {
-  if (!isObject(value)) return {};
+  if (!isRecord(value)) return {};
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 }
 
@@ -694,10 +695,6 @@ function resolvePomProperties(value: string, project: Record<string, any>): stri
     const property = xmlText(project.properties?.[name]);
     return property && !property.includes('${') ? property : reference;
   });
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 // ---- Bounded, symlink-safe reads ----
@@ -734,8 +731,7 @@ function lstat(context: Context, relativePath: string): fs.Stats | undefined {
 function insideRepository(context: Context, relativePath: string): boolean {
   try {
     const real = fs.realpathSync(path.join(context.repoPath, relativePath));
-    const relative = path.relative(context.repoPath, real);
-    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) return true;
+    if (isPathInside(context.repoPath, real)) return true;
   } catch {
     // Reported below.
   }
@@ -773,7 +769,7 @@ function readText(context: Context, relativePath: string, prefixBytes?: number):
     context.filesRead.add(relativePath);
     return text;
   } catch (error) {
-    addDiagnostic(context, 'read_error', `Could not be read (${error instanceof Error ? error.message : String(error)}).`, relativePath);
+    addDiagnostic(context, 'read_error', `Could not be read (${errorMessage(error)}).`, relativePath);
     return undefined;
   }
 }

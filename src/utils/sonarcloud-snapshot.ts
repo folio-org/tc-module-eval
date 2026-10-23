@@ -15,6 +15,7 @@ import {
   SonarRule
 } from '../types';
 import { isValidRemoteName } from './s014-application-assignment';
+import { isRecord } from './type-guards';
 
 // Reads one SonarCloud project's latest analysis through the remote-evidence transport. Every count comes
 // from SonarCloud's own totals (paging.total or a facet), so the 10,000-result cap on listings only shortens
@@ -353,7 +354,7 @@ function settingValue(setting: Record<string, unknown>): string | undefined {
   if (typeof setting.value === 'string') return setting.value.trim();
   if (Array.isArray(setting.values)) return setting.values.every(item => typeof item === 'string') ? setting.values.join(',') : undefined;
   if (Array.isArray(setting.fieldValues)) {
-    const rows = setting.fieldValues.map(row => row && typeof row === 'object' && !Array.isArray(row)
+    const rows = setting.fieldValues.map(row => isRecord(row)
       && Object.values(row).every(item => typeof item === 'string')
       ? Object.entries(row as Record<string, string>).map(([field, value]) => `${field}=${value}`).join(', ') : undefined);
     return rows.every(row => row !== undefined) ? rows.join('; ') : undefined;
@@ -416,13 +417,13 @@ function facetCounts(result: RemoteJsonResult, property: string): Record<string,
 }
 
 function objectAt(value: unknown, key: string): Record<string, unknown> | undefined {
-  const item = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>)[key] : undefined;
-  return item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : undefined;
+  const item = isRecord(value) ? value[key] : undefined;
+  return isRecord(item) ? item : undefined;
 }
 
 function arrayAt(value: unknown, key: string): Array<Record<string, unknown> | undefined> | undefined {
-  const item = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>)[key] : undefined;
+  const item = isRecord(value) ? value[key] : undefined;
   return Array.isArray(item)
-    ? item.map(entry => entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : undefined)
+    ? item.map(entry => isRecord(entry) ? entry : undefined)
     : undefined;
 }

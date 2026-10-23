@@ -1,18 +1,17 @@
 import path from 'path';
 import fs from 'fs-extra';
-import crypto from 'crypto';
 import Ajv, { ErrorObject } from 'ajv';
 import schema from '../schemas/acceptance-ledger.schema.json';
 import { AcceptanceLedger, S008PolicyDiagnostic, S008PolicyLoadResult } from '../types';
 import { errorMessage } from './type-guards';
+import { isMissingFileError, isPathInside, relativePosixPath, sha256Digest } from './repo-files';
 
 export const DEFAULT_ACCEPTANCE_LEDGER_PATH = path.resolve(__dirname, '../../config/acceptance-ledger.json');
 const EVALUATOR_ROOT = path.resolve(__dirname, '../..');
 
 /** Reports policy files bundled with the evaluator by their project-relative path, not the local checkout location. */
 export function displayPolicyPath(sourcePath: string): string {
-  const relative = path.relative(EVALUATOR_ROOT, sourcePath);
-  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative.split(path.sep).join('/') : sourcePath;
+  return isPathInside(EVALUATOR_ROOT, sourcePath) ? relativePosixPath(EVALUATOR_ROOT, sourcePath) : sourcePath;
 }
 const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
 
@@ -71,7 +70,7 @@ export async function readJson(sourcePath: string): Promise<
   try {
     content = await fs.readFile(sourcePath, 'utf8');
   } catch (error) {
-    const missing = Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+    const missing = isMissingFileError(error);
     return { ok: false, sourcePath, diagnostics: [{
       code: missing ? 'policy_missing' : 'policy_read_error',
       message: missing ? `Trusted policy file not found: ${sourcePath}` : `Unable to read trusted policy file: ${errorMessage(error)}`,
@@ -87,7 +86,7 @@ export async function readJson(sourcePath: string): Promise<
 
 export function success<T>(sourcePath: string, content: string, value: T): S008PolicyLoadResult<T> {
   deepFreeze(value);
-  return { ok: true, value, sourcePath, digest: `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`, diagnostics: [] };
+  return { ok: true, value, sourcePath, digest: sha256Digest(content), diagnostics: [] };
 }
 
 export function failure<T>(sourcePath: string, diagnostics: S008PolicyDiagnostic[]): S008PolicyLoadResult<T> {

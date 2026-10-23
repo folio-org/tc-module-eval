@@ -34,7 +34,7 @@ import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
-import { isNonEmptyString, isValidDependency } from '../type-guards';
+import { errorMessage, isNonEmptyString, isValidDependency } from '../type-guards';
 import { commandError, readRepoTextFile, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
@@ -325,13 +325,13 @@ export async function getMavenDependencies(
     return { dependencies: [], errors, warnings };
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     getLogger().error('Maven dependency extraction failed:');
-    getLogger().error('  Message:', errorMessage);
+    getLogger().error('  Message:', message);
 
     errors.push({
       source: 'maven-parser',
-      message: `Maven could not list the dependencies: ${errorMessage}`,
+      message: `Maven could not list the dependencies: ${message}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

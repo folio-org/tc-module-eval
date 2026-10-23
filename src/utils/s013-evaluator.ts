@@ -5,8 +5,6 @@ import {
   FolioSharedWorkflowTableLoadResult,
   S011SuppressionScan,
   S007PolicyLoadResult,
-  S007PolicySection,
-  S007TechnologyPolicyEntry,
   S013Analysis,
   S013Coverage,
   S013CoverageScope,
@@ -19,9 +17,9 @@ import { collectBuildTestEvidence } from './build-test-evidence';
 import { loadFolioSharedWorkflows } from './folio-shared-workflows';
 import { displayPolicyPath } from './acceptance-ledger';
 import { compareObservationToConstraint } from './s007-evaluator';
-import { loadS007Policy, policySections } from './s007-policy';
+import { findPolicyEntry, loadS007Policy, policySections } from './s007-policy';
 import { sourceLine } from './remote-evidence';
-import { reportPath, reportText } from './report-text';
+import { reportPath, reportText, unique } from './report-text';
 import { warningLines } from './s012-report-details';
 import { getSonarCloudSnapshot, sonarSnapshotFreshness } from './sonarcloud-snapshot';
 import { scanS011Suppressions } from './s011-suppressions';
@@ -235,7 +233,7 @@ function technologyHalf(inputs: S013Inputs, area: 'frontend' | 'backend'): S013T
   for (const declaration of inputs.evidence.testTechnologies.filter(item => item.ecosystem === ecosystem)) {
     let finding = findings.find(item => item.id === declaration.id);
     if (!finding) {
-      const entry = findEntry(sections, declaration.id);
+      const entry = findPolicyEntry(sections, declaration.id)?.entry;
       finding = {
         id: declaration.id,
         displayName: declaration.displayName,
@@ -280,14 +278,6 @@ function technologyHalf(inputs: S013Inputs, area: 'frontend' | 'backend'): S013T
     rationale: `The tests use ${listText(names)}, which ${runners.length === 1 ? 'is an officially supported technology' : 'are officially supported technologies'}.`,
     findings
   };
-}
-
-function findEntry(sections: S007PolicySection[], id: string): S007TechnologyPolicyEntry | undefined {
-  for (const section of sections) {
-    const entry = section.entries.find(candidate => candidate.id === id || candidate.aliases.includes(id));
-    if (entry) return entry;
-  }
-  return undefined;
 }
 
 // ---- Report ----
@@ -433,10 +423,6 @@ function percent(value: number): string {
 
 function count(value: number): string {
   return value.toLocaleString('en-US');
-}
-
-function unique<T>(values: T[]): T[] {
-  return [...new Set(values)];
 }
 
 function listText(items: string[]): string {
