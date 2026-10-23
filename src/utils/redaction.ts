@@ -1,12 +1,21 @@
-const SECRET_KEY = '[A-Za-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|access[_-]?key|refresh[_-]?token)[A-Za-z0-9_-]*';
-const SECRET_KEY_PATTERN = new RegExp(`^(?:${SECRET_KEY}|authorization)$`, 'i');
+const SECRET_KEYWORD = '(?:token|password|passwd|secret|api[_-]?key|access[_-]?key|refresh[_-]?token)';
+const SECRET_KEY_PATTERN = new RegExp(`^(?:[A-Za-z0-9_-]*${SECRET_KEYWORD}[A-Za-z0-9_-]*|authorization)$`, 'i');
 
 export function isSensitiveKey(key: string): boolean {
   return SECRET_KEY_PATTERN.test(key);
 }
 
+// An assigned key is a whole run of [A-Za-z0-9_-] from its first letter, digit, or underscore to its end, and contains a
+// keyword: whitespace, a separator, or a quote follows it, so it always ends where the run ends. The lookbehind starts it
+// once per run and the lookahead finds a keyword in one scan, because a key that could start at every word boundary and
+// split around every keyword backtracks quadratically on long runs (cubically when keywords repeat). Giving back the run
+// char by char afterwards is cheap: what follows a key fails at once on a run char.
+const SECRET_KEY = `(?<![A-Za-z0-9_]-*)(?=[A-Za-z0-9_-]*?${SECRET_KEYWORD})[A-Za-z0-9_-]*`;
 const QUOTED_SECRET_ASSIGNMENT_PATTERN = new RegExp(`(["']?)\\b(${SECRET_KEY})\\b\\1\\s*([:=])\\s*(["'])((?:\\\\.|(?!\\4)[^\\\\])+)\\4`, 'gi');
-const SECRET_ASSIGNMENT_PATTERN = new RegExp(`\\b(${SECRET_KEY})\\b\\s*([:=])\\s*([^\\r\\n"'\\\`,;]+?)(?=\\s+\\b(?:${SECRET_KEY}|Authorization)\\b\\s*[:=]|[\\r\\n"'\\\`,;]|$)`, 'gi');
+// `(?<!\s)` tries the next-assignment lookahead only where whitespace starts: it holds at every position of a whitespace
+// run or none, and trying it at each one costs quadratic time on long runs. The value never starts inside a whitespace run,
+// except when `\s*` gives one back before a delimiter or the end, where this alternative fails anyway.
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(`\\b(${SECRET_KEY})\\b\\s*([:=])\\s*([^\\r\\n"'\\\`,;]+?)(?=(?<!\\s)\\s+\\b(?:${SECRET_KEY}|Authorization)\\b\\s*[:=]|[\\r\\n"'\\\`,;]|$)`, 'gi');
 const PROVIDER_TOKEN_PATTERN = /\b(?:sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9._-]{2,}|sk-or-v1-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]{8,}|AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{8,})\b/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/g;
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;

@@ -1,5 +1,6 @@
 import { sanitizeCommandOutput } from '../utils/command-runner';
 import { redactSensitiveText } from '../utils/redaction';
+import { expectLinearTime } from './helpers/linear-time';
 
 describe('redaction', () => {
   it('redacts token-like assignments and bearer tokens', () => {
@@ -108,6 +109,24 @@ describe('redaction', () => {
     expect(redacted).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
     expect(redacted).not.toContain(oauthToken);
   });
+
+  it('redacts long runs of key characters and whitespace in linear time', async () => {
+    const longRuns = (size: number) => [
+      `${'a-'.repeat(size)}x`,
+      `${'token_'.repeat(size)}x y`,
+      `token=a${' '.repeat(size)}b`,
+      `${'my-'.repeat(size)}password: "abc123"`
+    ].join('\n');
+
+    const redacted = await expectLinearTime(4000, longRuns, async text => redactSensitiveText(text));
+
+    expect(redacted).toBe([
+      `${'a-'.repeat(16000)}x`,
+      `${'token_'.repeat(16000)}x y`,
+      'token=[REDACTED]',
+      `${'my-'.repeat(16000)}password:"[REDACTED]"`
+    ].join('\n'));
+  }, 60_000);
 
   it('is used by command output sanitization', () => {
     const redacted = sanitizeCommandOutput('api_key=secret\n' + 'x'.repeat(50), 24);
