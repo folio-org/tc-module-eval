@@ -74,7 +74,7 @@ export async function buildS006AgentReviewRequest(
     instructions: [
       'Evaluate whether committed sensitive or environment-specific information needs reviewer attention. Investigate surrounding source, configuration, CI, documentation, fixtures, and usage paths, including files absent from the scanner findings. Distinguish production usage from examples, synthetic fixtures, and local defaults using cited context.',
       'Scan coverage uncertainty is not itself proof of a leaked secret. Report exclusions and unresolved usage honestly; do not claim the repository is secret-free.',
-      'Return exactly one assessment for each reviewObligations ID using it as technologyId. Each assessment needs type (aligned_fact, substantive_concern, analyzer_limitation, evidence_gap, policy_question), summary, repository evidenceReferences, and coverageDisposition (investigated, immaterial, unresolved). For investigated path obligations, cite the original path as well as relevant usage. For immaterial, explain from cited context why the omission does not affect this scoped decision; do not imply direct inspection. Excluded source is not inspected source.',
+      'Return assessments as an array with exactly one object for each reviewObligations ID, using the ID as technologyId. Each assessment object has technologyId, type (aligned_fact, substantive_concern, analyzer_limitation, evidence_gap, policy_question), summary, evidenceReferences (an array of repository paths), and coverageDisposition (investigated, immaterial, unresolved). Use exactly these field names; see response-shape.json. For investigated path obligations, cite the original path as well as relevant usage. For immaterial, explain from cited context why the omission does not affect this scoped decision; do not imply direct inspection. Excluded source is not inspected source.',
       'For additional findings discovered outside the scanner inventory, add assessments using discovered:<normalized-id> with the same fields. Do not omit new concerns merely because there is no supplied obligation ID.',
       'sourceAvailable=false means the source cannot be inspected in this snapshot, NOT that it is uncommitted or absent from the repository. A scanner finding with unavailable source must remain unresolved (evidence_gap); documentation can supply context, but cannot establish the actual excluded contents. Cite related available usage and request inspection of the excluded file, without reproducing credential values or assignments.',
       'Narrow citation exception: an unresolved evidence_gap assessment for a supplied gap: ID may cite .criterion-agent/S006/finding-summary.json, because scanner diagnostics establish scanner limitations. This does not support claims about repository contents, resolved gaps, finding: IDs, or reviewer actions; those still need source citations.',
@@ -82,7 +82,7 @@ export async function buildS006AgentReviewRequest(
       'Use likely_sufficient only when every material obligation is resolved and no finding needs further evidence or policy judgment. Unresolved obligations require needs_reviewer_judgment and cited reviewerActions naming the missing fact. Coverage gaps alone never justify likely_insufficient. Keep summary and rationale consistent with these dispositions.',
       'Do not claim that any credential, token, key, password, private URL, credential URL, endpoint, or secret is live, valid, exploitable, revoked, or safe. Never test credentials or contact endpoints. Do not reproduce secret values in your response; cite paths and describe their role instead.',
       'This review is advisory only for Technical Council reviewer judgment. Agent advice must not decide the final S006 status.',
-      'Return exactly one JSON object, without prose or Markdown fences, with recommendation, confidence, summary, rationale, evidenceReferences, assessments, and reviewerActions. Each reviewerActions entry contains action and repository evidenceReferences.',
+      'Return exactly one JSON object, without prose or Markdown fences, with recommendation, confidence, summary, rationale, evidenceReferences, assessments, and reviewerActions. reviewerActions is an array of objects, each with action and evidenceReferences (an array of repository paths).',
       'recommendation must be likely_sufficient, likely_insufficient, or needs_reviewer_judgment; confidence must be low, medium, or high. Cite actual inspected repository files.'
     ].join('\n'),
     files: [{
@@ -93,6 +93,25 @@ export async function buildS006AgentReviewRequest(
         findings: analysis.findings.map(({ valueFingerprint: _fingerprint, ...finding }) => finding),
         coverage: analysis.coverage
       }, null, 2)
+    }, {
+      // Without an example, models return assessments keyed by ID or rename evidenceReferences, and the review is rejected.
+      repoRelativePath: '.criterion-agent/S006/response-shape.json',
+      content: JSON.stringify({
+        note: 'Shape example only, not findings. Replace IDs, prose, and citations with investigated evidence, and return one assessment for every reviewObligations ID.',
+        response: {
+          recommendation: 'needs_reviewer_judgment',
+          confidence: 'medium',
+          summary: 'State the overall judgment and the remaining decision.',
+          rationale: 'State the decisive evidence and the scope actually investigated.',
+          evidenceReferences: ['actual/source/path'],
+          assessments: [
+            { technologyId: 'scope', type: 'analyzer_limitation', summary: 'Describe what was investigated beyond the findings and what remains unchecked.', evidenceReferences: ['actual/source/path'], coverageDisposition: 'investigated' },
+            { technologyId: 'finding:0', type: 'aligned_fact', summary: 'State the role of the flagged value without repeating it.', evidenceReferences: ['flagged/source/path', 'related/usage/path'], coverageDisposition: 'investigated' },
+            { technologyId: 'gap:example/path', type: 'analyzer_limitation', summary: 'Explain from cited context why this gap does not affect the decision. Immaterial is a coverageDisposition, never a type.', evidenceReferences: ['related/usage/path'], coverageDisposition: 'immaterial' }
+          ],
+          reviewerActions: [{ action: 'Name the fact to verify and the decision it resolves.', evidenceReferences: ['actual/source/path'] }]
+        }
+      }, null, 2)
     }],
     prepareAdditionalFiles: availableSourcePaths => [{
       repoRelativePath: '.criterion-agent/S006/review-obligations.json',
@@ -101,6 +120,6 @@ export async function buildS006AgentReviewRequest(
       })) }, null, 2)
     }],
     validateReview: (review, availableSourcePaths) => validateS006Review(obligations, review, availableSourcePaths),
-    schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty repository evidenceReferences string[], assessments for every reviewObligations ID including coverageDisposition (investigated|immaterial|unresolved), and cited reviewerActions[]'
+    schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty evidenceReferences string[] of repository paths, assessments[] (an array with one object per reviewObligations ID: technologyId, type, summary, evidenceReferences string[], coverageDisposition investigated|immaterial|unresolved), and reviewerActions[] of { action, evidenceReferences string[] }. See response-shape.json for a complete example.'
   };
 }

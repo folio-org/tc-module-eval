@@ -13,6 +13,10 @@ import { buildS006Warning } from './s006-scanner';
 
 const DEFAULT_GITLEAKS_TIMEOUT_MS = 120000;
 const MAX_GITLEAKS_OUTPUT_BYTES = 64 * 1024;
+export const MAX_GITLEAKS_REPORT_BYTES = 32 * 1024 * 1024;
+// The repository must not configure its own scan: a committed .gitleaks.toml would replace the
+// default rules (or allowlist every path), and gitleaks:allow comments would hide findings.
+const GITLEAKS_DEFAULT_CONFIG = '[extend]\nuseDefault = true\n';
 
 export interface S006GitleaksFinding {
   RuleID?: string;
@@ -43,10 +47,12 @@ export async function runS006GitleaksScan(
 ): Promise<S006GitleaksScanResult> {
   const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 's006-gitleaks-'));
   const reportPath = path.join(reportDir, 'report.json');
+  const configPath = path.join(reportDir, 'gitleaks.toml');
   const command = process.env.GITLEAKS_PATH || 'gitleaks';
   const commandRunner = options.commandRunner ?? new LocalCommandRunner(false);
 
   try {
+    fs.writeFileSync(configPath, GITLEAKS_DEFAULT_CONFIG, { flag: 'wx' });
     const result = await commandRunner.run({
       command,
       cwd: repoPath,
@@ -59,6 +65,9 @@ export async function runS006GitleaksScan(
         'json',
         '--report-path',
         reportPath,
+        '--config',
+        configPath,
+        '--ignore-gitleaks-allow',
         '--no-banner',
         '--no-color',
         '--exit-code',
@@ -84,7 +93,7 @@ export async function runS006GitleaksScan(
       findings: [],
       warnings: [buildS006Warning(
         'scanner-unavailable',
-        `Gitleaks scanner could not run: ${error instanceof Error ? error.message : String(error)}`,
+        `Gitleaks could not be used: ${oneLine(error instanceof Error ? error.message : String(error))}. Check that Gitleaks is installed or set GITLEAKS_PATH, then run the evaluation again.`,
         true
       )]
     };
@@ -98,20 +107,33 @@ function readGitleaksReport(reportPath: string, repoPath: string): S006GitleaksF
     return [];
   }
 
+  if (fs.statSync(reportPath).size > MAX_GITLEAKS_REPORT_BYTES) {
+    throw new Error(`the report is larger than ${MAX_GITLEAKS_REPORT_BYTES / (1024 * 1024)} MB`);
+  }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
   } catch (error) {
-    throw new Error(`Gitleaks JSON report could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`the report could not be read: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error('Gitleaks JSON report did not contain an array of findings');
+    throw new Error('the report did not contain a list of findings');
   }
 
+  // Gitleaks scans files concurrently, so its report order varies between runs; sort it so the same
+  // findings are kept when the finding limit is reached.
   return parsed
     .filter(isGitleaksFinding)
-    .map(finding => normalizeGitleaksFindingPath(finding, repoPath));
+    .map(finding => normalizeGitleaksFindingPath(finding, repoPath))
+    .sort((left, right) =>
+      compareText(left.File, right.File) ||
+      (left.StartLine ?? 0) - (right.StartLine ?? 0) ||
+      compareText(left.RuleID, right.RuleID) ||
+      compareText(left.Fingerprint, right.Fingerprint) ||
+      compareText(left.Secret, right.Secret)
+    );
 }
 
 function isGitleaksFinding(value: unknown): value is S006GitleaksFinding {
@@ -172,10 +194,20 @@ function normalizeGitleaksFingerprint(
 }
 
 function buildUnavailableWarning(result: CommandExecutionResult): S006ScanWarning {
-  const detail = result.errorMessage || result.stderr || result.stdout || `command status ${result.status}`;
+  const detail = oneLine(result.errorMessage || result.stderr || result.stdout || `command status ${result.status}`);
   return buildS006Warning(
     'scanner-unavailable',
-    `Gitleaks scanner was unavailable or failed (${result.status}${result.exitCode === undefined ? '' : `, exit ${result.exitCode}`}): ${detail}`,
+    `Gitleaks did not run (${result.status}${result.exitCode === undefined ? '' : `, exit ${result.exitCode}`}): ${detail}. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.`,
     true
   );
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+}
+
+function compareText(left: string | undefined, right: string | undefined): number {
+  const a = left ?? '';
+  const b = right ?? '';
+  return a < b ? -1 : a > b ? 1 : 0;
 }

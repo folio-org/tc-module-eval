@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import {
   CommandRunner,
   EvaluationStatus,
@@ -13,6 +16,8 @@ import {
 } from '../types';
 import {
   boundS006ExcerptText,
+  hasS006SyntheticMarker,
+  s006AssignedValue,
   buildS006DetectorMatch,
   createS006FingerprintRun,
   getCompiledS006DetectorPattern,
@@ -30,6 +35,7 @@ import {
   scanS006RepositoryCandidates,
   S006ScannedCandidateTextFile
 } from './s006-scanner';
+import { reportPath } from './report-text';
 
 export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
   'production_source_or_configuration',
@@ -38,11 +44,32 @@ export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
   'test_fixture',
   'sample_or_example',
   'local_docker_defaults',
+  'helper_script',
   'generated_content',
   'unknown'
 ];
 
 export const MAX_S006_RETAINED_FINDINGS = 100;
+// Assigned values shorter than this, such as "1" or 'abc', are not secrets worth reviewing.
+const MIN_S006_SECRET_VALUE_LENGTH = 8;
+
+// A short default password such as "admin" in production, deployment, or Docker configuration is still
+// committed credential material, so password keys there are reported at any length.
+const S006_SHORT_PASSWORD_CONTEXTS: ReadonlySet<S006FindingContext> = new Set([
+  'production_source_or_configuration',
+  'ci_or_deployment_configuration',
+  'local_docker_defaults'
+]);
+
+function isS006ShortPasswordReported(context: S006FindingContext, assignment: string, value: string): boolean {
+  const key = assignment.replace(/\s*(?::=|[:=])[\s\S]*$/, '').replace(/^\W+|\W+$/g, '');
+  // An unquoted YAML flow value keeps its closing bracket ({password: null}); YAML nulls and booleans are not passwords.
+  const scalar = value.replace(/\s*[}\],]+$/, '');
+  return S006_SHORT_PASSWORD_CONTEXTS.has(context) &&
+    /(?:password|passwd|pwd)$/i.test(key) &&
+    scalar.length > 0 &&
+    !/^(?:~|null|true|false|yes|no|on|off)$/i.test(scalar);
+}
 
 interface S006LineWithOffset {
   text: string;
@@ -51,8 +78,8 @@ interface S006LineWithOffset {
 
 interface S006FindingDedupeState {
   exactKeys: Set<string>;
-  scannerBroadCounts: Map<string, number>;
-  localBroadSeenCounts: Map<string, number>;
+  // Gitleaks findings by path and line, with the value Gitleaks matched, so the built-in scan can merge into them.
+  gitleaksByLine: Map<string, Array<{ finding: S006SensitiveInformationFinding; secret: string }>>;
 }
 
 export interface S006AnalysisOptions {
@@ -83,8 +110,7 @@ export function extractS006SensitiveInformationFindings(
   const warnings: S006ScanWarning[] = [];
   const dedupeState: S006FindingDedupeState = {
     exactKeys: new Set<string>(),
-    scannerBroadCounts: new Map<string, number>(),
-    localBroadSeenCounts: new Map<string, number>()
+    gitleaksByLine: new Map()
   };
   const scannedTextByPath = new Map(files.map(file => [file.path, file.text]));
   let findingLimitReached = false;
@@ -94,7 +120,13 @@ export function extractS006SensitiveInformationFindings(
     if (!finding) {
       continue;
     }
-    retainS006Finding(findings, dedupeState, finding, 'scanner');
+    if (retainS006Finding(findings, dedupeState, finding)) {
+      const key = s006LineKey(finding);
+      dedupeState.gitleaksByLine.set(key, [
+        ...(dedupeState.gitleaksByLine.get(key) ?? []),
+        { finding, secret: (gitleaksFinding.Secret || gitleaksFinding.Match || '').trim() }
+      ]);
+    }
     if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
       findingLimitReached = true;
       break;
@@ -108,7 +140,10 @@ export function extractS006SensitiveInformationFindings(
     const context = classifyS006SourceContext(file.path, file.text);
 
     const lines = splitS006Lines(file.text);
+    let insideMultilineString = false;
     for (const line of lines) {
+      const startsInsideString = insideMultilineString;
+      insideMultilineString = togglesS006MultilineString(line.text) !== insideMultilineString;
       const occupiedLineRanges: Array<{ start: number; end: number }> = [];
       for (const { detector, pattern } of S006_LINE_DETECTORS) {
         pattern.lastIndex = 0;
@@ -125,12 +160,12 @@ export function extractS006SensitiveInformationFindings(
             continue;
           }
 
-          if (shouldSuppressS006LineFinding(context, detector, rawMatch, line.text)) {
+          if (shouldSuppressS006LineFinding(file.path, context, detector, rawMatch, line.text, matchStart, startsInsideString)) {
             continue;
           }
 
           const finding = buildS006Finding(file.path, context, detector, rawMatch, fingerprintRun, line.lineNumber);
-          if (retainS006Finding(findings, dedupeState, finding, 'local')) {
+          if (mergeIntoS006GitleaksFinding(dedupeState, finding, detector, rawMatch) || retainS006Finding(findings, dedupeState, finding)) {
             occupiedLineRanges.push({ start: matchStart, end: matchEnd });
           }
           if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
@@ -157,7 +192,7 @@ export function extractS006SensitiveInformationFindings(
   if (findingLimitReached) {
     warnings.push(buildS006Warning(
       'finding-limit',
-      `S006 detector extraction retained first ${MAX_S006_RETAINED_FINDINGS} findings; additional findings were omitted.`,
+      `Stopped after ${MAX_S006_RETAINED_FINDINGS} findings; later matches are not listed.`,
       true
     ));
   }
@@ -185,7 +220,7 @@ export async function analyzeS006SensitiveInformation(
     materiallyWeakened: scan.coverage.materiallyWeakened || newWarningsAreMaterial,
     complete: scan.coverage.complete && !newWarningsAreMaterial
   };
-  const classification = classifyS006DeterministicResult(extraction.findings, coverage);
+  const classification = classifyS006DeterministicResult(extraction.findings, coverage, !scannerWarning);
 
   return {
     criterionId: 'S006',
@@ -194,12 +229,22 @@ export async function analyzeS006SensitiveInformation(
       name: 'Gitleaks',
       status: scannerWarning ? 'unavailable' : 'completed',
       findingCount: gitleaks.findings.length,
-      warning: scannerWarning
+      warning: scannerWarning,
+      ...(hasS006GitleaksIgnoreFile(repoPath) ? { ignoreFilePresent: true } : {})
     },
     coverage,
     classification,
     warnings
   };
+}
+
+function hasS006GitleaksIgnoreFile(repoPath: string): boolean {
+  try {
+    fs.lstatSync(path.join(repoPath, '.gitleaksignore'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function classifyS006SourceContext(relativePath: string, boundedContent: string = ''): S006FindingContext {
@@ -227,7 +272,16 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
   if (/\b(?:example only|sample only|sample configuration|example configuration|template value|replace with your)\b/.test(contentCue)) {
     return 'sample_or_example';
   }
-  if (/(^|\/)(\.github|\.gitlab|\.circleci|ci|buildkite|jenkins|deploy|deployment|helm|k8s|kubernetes|terraform)(\/|$)|(?:^|\/)(jenkinsfile|gitlab-ci\.ya?ml|docker-compose\.ci\.ya?ml)$/.test(normalized)) {
+  // Helper scripts (scripts/ folders and shell scripts) are run by hand, not deployed, so a secret there
+  // needs review but does not fail. Scripts packaged from src/ (such as Liquibase migrations), container
+  // entrypoints, and scripts in CI pipeline folders still run in production or CI.
+  if (
+    !/(^|\/)(src|\.github|\.gitlab|\.circleci|ci|\.?buildkite|jenkins)\/|entrypoint[^/]*$|(?:^|\/)(?:jenkinsfile|\.?gitlab-ci\.ya?ml)$/.test(normalized) &&
+    (/(^|\/)scripts?\//.test(normalized) || /\.(?:sh|bash|zsh)$/.test(normalized))
+  ) {
+    return 'helper_script';
+  }
+  if (/(^|\/)(\.github|\.gitlab|\.circleci|ci|\.?buildkite|jenkins|deploy|deployment|helm|k8s|kubernetes|terraform)(\/|$)|(?:^|\/)(jenkinsfile|gitlab-ci\.ya?ml|docker-compose\.ci\.ya?ml)$/.test(normalized)) {
     return 'ci_or_deployment_configuration';
   }
   if (/(^|\/)(docker-compose(?:\.[\w-]+)?\.ya?ml|compose(?:\.[\w-]+)?\.ya?ml|dockerfile(?:\.[\w-]+)?|docker\/|dev\/docker\/)|(?:^|\/)\.env(?:\.local|\.docker)?$/.test(normalized)) {
@@ -245,37 +299,105 @@ export function classifyS006SourceContext(relativePath: string, boundedContent: 
 }
 
 function shouldSuppressS006LineFinding(
+  filePath: string,
   context: S006FindingContext,
   detector: S006DetectorRegistryEntry,
   rawMatch: string,
-  lineText: string
+  lineText: string,
+  matchStart: number,
+  startsInsideString: boolean
 ): boolean {
   if (detector.id === 'password-secret-assignment') {
-    return shouldSuppressS006SecretAssignment(detector, rawMatch);
+    return shouldSuppressS006SecretAssignment(filePath, context, detector, rawMatch, lineText.slice(0, matchStart), startsInsideString);
   }
   if (detector.id === 'private-url') {
     return shouldSuppressS006PrivateUrl(context, rawMatch);
   }
   if (detector.id === 'tenant-host-endpoint') {
-    return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText);
+    return shouldSuppressS006TenantHostEndpoint(rawMatch, lineText, matchStart);
   }
   return false;
 }
 
-function shouldSuppressS006SecretAssignment(detector: S006DetectorRegistryEntry, rawMatch: string): boolean {
+// Program source can only hard-code a secret as a string literal; an unquoted value there is code
+// (a variable, call, number, or function), not a committed secret. Inside a string literal, such as
+// "jdbc:...?password=abc", the unquoted value is still literal text.
+const S006_PROGRAM_SOURCE_PATTERN = /\.(?:java|kt|kts|groovy|gradle|js|jsx|mjs|cjs|ts|tsx|py|rb)$|(?:^|\/)Jenkinsfile$/i;
+
+function shouldSuppressS006SecretAssignment(
+  filePath: string,
+  context: S006FindingContext,
+  detector: S006DetectorRegistryEntry,
+  rawMatch: string,
+  linePrefix: string,
+  startsInsideString: boolean
+): boolean {
   if (detector.classifyValue(rawMatch) === 'placeholder') {
     return true;
   }
 
-  const value = rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
-  if (isS006GitleaksOwnedSecretShape(value)) {
+  const rawValue = rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '');
+  if (
+    S006_PROGRAM_SOURCE_PATTERN.test(filePath) &&
+    !/^["']/.test(rawValue) &&
+    !startsInsideString &&
+    !isInsideS006StringLiteral(linePrefix)
+  ) {
+    return true;
+  }
+
+  const value = s006AssignedValue(rawMatch);
+  if (
+    (value.length < MIN_S006_SECRET_VALUE_LENGTH && !isS006ShortPasswordReported(context, rawMatch, value)) ||
+    isS006GitleaksOwnedSecretShape(value) ||
+    isS006HeaderNameConstant(rawMatch, value)
+  ) {
+    return true;
+  }
+
+  // In a shell script an unquoted value ends at whitespace: PGPASSWORD=${DB_PASSWORD} psql ... assigns
+  // only the reference. Quoted values and other file types keep the text after the reference.
+  if (S006_SHELL_SCRIPT_PATTERN.test(filePath) && /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}\s/.test(rawValue)) {
     return true;
   }
 
   return /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?}$/.test(value) ||
+    /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(value) ||
     /^\$\{\{\s*(?:secrets|env|vars|github|inputs)\.[^}]+\}\}$/i.test(value) ||
     /^inherit$/i.test(value) ||
     /^(?:test|fake|mock|dummy)(?:[-_](?:password|secret|token|jwt|bearer))?$/i.test(value);
+}
+
+// A constant that holds an HTTP header name, such as OKAPI_TOKEN_HEADER = 'X-Okapi-Token', names where a
+// token goes rather than holding one.
+// Standard and Okapi header names, which are never secret values whatever the constant is called.
+const S006_KNOWN_HEADER_NAMES = new Set([
+  'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key',
+  'x-okapi-token', 'x-okapi-tenant', 'x-okapi-url', 'x-okapi-user-id', 'x-okapi-request-id', 'x-okapi-permissions'
+]);
+
+function isS006HeaderNameConstant(rawMatch: string, value: string): boolean {
+  const name = rawMatch.replace(/\s*(?::=|[:=])[\s\S]*$/, '').replace(/^.*\b(?:const|let|var|final|static|String)\s+/, '');
+  if (S006_KNOWN_HEADER_NAMES.has(value.toLowerCase())) {
+    return true;
+  }
+  return /header(?:[_-]?name)?$/i.test(name) &&
+    /^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*$/.test(value) &&
+    value.length <= 40;
+}
+
+const S006_SHELL_SCRIPT_PATTERN = /\.(?:sh|bash|zsh)$|(?:^|\/)Dockerfile(?:\.[\w-]+)?$/i;
+
+// Whether the line opens or closes a multiline string ("""…""", '''…''', or a JS template literal).
+function togglesS006MultilineString(lineText: string): boolean {
+  const unescaped = lineText.replace(/\\./g, '');
+  const delimiters = (unescaped.match(/"""|'''/g)?.length ?? 0) + (unescaped.replace(/"""|'''/g, '').match(/`/g)?.length ?? 0);
+  return delimiters % 2 === 1;
+}
+
+function isInsideS006StringLiteral(linePrefix: string): boolean {
+  const unescaped = linePrefix.replace(/\\./g, '');
+  return ['"', "'", '`'].some(quote => unescaped.split(quote).length % 2 === 0);
 }
 
 const S006_GITLEAKS_OWNED_SHAPE_PATTERNS = (['provider-api-key', 'bearer-or-jwt-token'] as const)
@@ -289,7 +411,7 @@ function isS006GitleaksOwnedSecretShape(value: string): boolean {
 }
 
 function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: string): boolean {
-  if (!['documentation', 'test_fixture', 'sample_or_example', 'local_docker_defaults'].includes(context)) {
+  if (!['documentation', 'test_fixture', 'sample_or_example', 'local_docker_defaults', 'helper_script'].includes(context)) {
     return false;
   }
 
@@ -298,11 +420,17 @@ function shouldSuppressS006PrivateUrl(context: S006FindingContext, rawMatch: str
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '[::1]';
 }
 
-function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string): boolean {
+function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string, matchStart: number): boolean {
   const normalizedMatch = rawMatch.toLowerCase();
   const trimmedLine = lineText.trim();
 
-  if (/^(?:import\s+|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,};?$/i.test(trimmedLine)) {
+  // A host name cannot continue with `_`: Constants.LOCAL_ERROR is an identifier. Checked here rather
+  // than in the pattern, where rejecting `_` makes long dotted lines backtrack polynomially.
+  if (lineText.charAt(matchStart + rawMatch.length) === '_') {
+    return true;
+  }
+
+  if (/^(?:import\s+(?:static\s+)?|package\s+)[a-z_][\w]*(?:\.[a-z_][\w]*){2,}(?:\.\*)?;?$/i.test(trimmedLine)) {
     return true;
   }
   if (isS006KnownJavaConfigReference(trimmedLine)) {
@@ -311,7 +439,8 @@ function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string
   if (isS006PublicReferenceUrl(rawMatch)) {
     return true;
   }
-  if (/^https?:\/\/(?:dev|docs)\.folio\.org(?:\/|$)/i.test(normalizedMatch)) {
+  // folio.org and its subdomains (okapi.ci.folio.org, folio-snapshot.dev.folio.org) are public project hosts.
+  if (/(?:^|\.)folio\.org$/.test(parseS006UrlLike(rawMatch)?.hostname.toLowerCase() ?? '')) {
     return true;
   }
   if (/^https?:\/\/github\.com\/folio-org\//i.test(normalizedMatch)) {
@@ -387,12 +516,19 @@ function buildS006GitleaksFinding(
   scannedTextByPath: ReadonlyMap<string, string>
 ): S006SensitiveInformationFinding | undefined {
   const filePath = normalizeS006GitleaksPath(source.File);
-  if (!filePath) {
+  if (!filePath || isS006UuidGenericApiKey(source)) {
     return undefined;
   }
 
   const detector = getS006GitleaksDetector(source);
   const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
+  // Generic secret rules only; a specific secret type such as an AWS key or private key keeps any length.
+  if (
+    (source.RuleID === 'generic-api-key' || source.RuleID === 'password-secret-assignment') &&
+    s006GitleaksGenericValue(source).length < MIN_S006_SECRET_VALUE_LENGTH
+  ) {
+    return undefined;
+  }
   const excerptText = boundS006ExcerptText(source.Match || source.Secret || '');
   const valueClassification = classifyS006GitleaksValue(source, excerptText);
   const confidence = adjustS006FindingConfidenceForContext(
@@ -406,6 +542,7 @@ function buildS006GitleaksFinding(
   const endLine = normalizeS006PositiveInteger(source.EndLine);
   const baseFinding: Omit<S006SensitiveInformationFinding, 'rationale' | 'statusImpact'> = {
     path: filePath,
+    detectedBy: ['gitleaks'],
     line,
     endLine: endLine && line && endLine !== line ? endLine : undefined,
     detectorId: detector.id,
@@ -440,6 +577,19 @@ function buildS006GitleaksFinding(
     ...finding,
     rationale: buildS006GitleaksFindingRationale(finding, source, detector)
   };
+}
+
+// Gitleaks reports the bare value as its secret; it is split from the match only when the secret is blank
+// (the test fake's password-secret-assignment rule reports the whole assignment).
+function s006GitleaksGenericValue(source: S006GitleaksFinding): string {
+  const secret = (source.Secret ?? '').trim();
+  return secret && source.RuleID !== 'password-secret-assignment' ? secret : s006AssignedValue(secret || source.Match || '');
+}
+
+// Gitleaks' generic-api-key rule flags record IDs such as relationshipId; a plain UUID is an identifier, not a key.
+function isS006UuidGenericApiKey(source: S006GitleaksFinding): boolean {
+  return source.RuleID === 'generic-api-key' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((source.Secret ?? '').trim());
 }
 
 function getS006GitleaksDetector(source: S006GitleaksFinding): S006DetectorRegistryEntry {
@@ -502,6 +652,9 @@ function classifyS006GitleaksValue(source: S006GitleaksFinding, excerptText: str
   if (/\b(?:example|sample|dummy|fake|test|fixture|mock|changeme|change[_-]?me|replace[_-]?me)\b/.test(valueText)) {
     return 'synthetic';
   }
+  if (source.Secret && hasS006SyntheticMarker(source.Secret)) {
+    return 'synthetic';
+  }
   return 'live-looking';
 }
 
@@ -526,6 +679,7 @@ function buildS006Finding(
   const confidence = adjustS006FindingConfidenceForContext(detector, match.valueClassification, match.confidence, context);
   const baseFinding: Omit<S006SensitiveInformationFinding, 'rationale' | 'statusImpact'> = {
     path: filePath,
+    detectedBy: ['built-in'],
     line,
     endLine: match.excerpt.endLine,
     detectorId: match.detectorId,
@@ -583,42 +737,55 @@ function buildS006RationaleCore(
 function retainS006Finding(
   findings: S006SensitiveInformationFinding[],
   dedupeState: S006FindingDedupeState,
-  finding: S006SensitiveInformationFinding,
-  source: 'scanner' | 'local'
+  finding: S006SensitiveInformationFinding
 ): boolean {
-  const broadKey = [
-    finding.detectorId,
-    finding.path,
-    finding.line ?? '',
-    finding.endLine ?? finding.line ?? ''
-  ].join('\0');
   const exactKey = [
-    broadKey,
+    finding.detectorId,
+    s006LineKey(finding),
+    finding.endLine ?? finding.line ?? '',
     finding.valueFingerprint.value
   ].join('\0');
-  if (dedupeState.exactKeys.has(exactKey)) {
-    return false;
-  }
-
-  if (source === 'local') {
-    const scannerCount = dedupeState.scannerBroadCounts.get(broadKey) ?? 0;
-    const localSeenCount = dedupeState.localBroadSeenCounts.get(broadKey) ?? 0;
-    dedupeState.localBroadSeenCounts.set(broadKey, localSeenCount + 1);
-    if (localSeenCount < scannerCount) {
-      dedupeState.exactKeys.add(exactKey);
-      return false;
-    }
-  }
-
-  if (findings.length >= MAX_S006_RETAINED_FINDINGS) {
+  if (dedupeState.exactKeys.has(exactKey) || findings.length >= MAX_S006_RETAINED_FINDINGS) {
     return false;
   }
 
   dedupeState.exactKeys.add(exactKey);
-  if (source === 'scanner') {
-    dedupeState.scannerBroadCounts.set(broadKey, (dedupeState.scannerBroadCounts.get(broadKey) ?? 0) + 1);
-  }
   findings.push(finding);
+  return true;
+}
+
+function s006LineKey(finding: Pick<S006SensitiveInformationFinding, 'path' | 'line'>): string {
+  return `${finding.path}\0${finding.line ?? ''}`;
+}
+
+// When Gitleaks already reported the same secret on the same line, the built-in finding is merged into
+// it: one finding that names both detectors. Host names, private URLs, and paths stay separate findings.
+function mergeIntoS006GitleaksFinding(
+  dedupeState: S006FindingDedupeState,
+  finding: S006SensitiveInformationFinding,
+  detector: S006DetectorRegistryEntry,
+  rawMatch: string
+): boolean {
+  if (detector.id !== 'password-secret-assignment' && detector.id !== 'credential-url') {
+    return false;
+  }
+  // Only exactly the same value merges, so a second, different value on the line stays its own finding.
+  // Gitleaks reports either the bare value or the whole match as its secret.
+  const localValue = detector.id === 'password-secret-assignment' ? s006AssignedValue(rawMatch) : rawMatch.trim();
+  const match = (dedupeState.gitleaksByLine.get(s006LineKey(finding)) ?? []).find(({ secret }) =>
+    secret === localValue || secret === rawMatch.trim() || s006AssignedValue(secret) === localValue
+  );
+  // A built-in finding that fails S006 when the Gitleaks one does not (a credential URL that repeats an
+  // assigned key, for example) is kept, so merging never weakens the result.
+  if (match && finding.statusImpact === 'deterministic_fail' && match.finding.statusImpact !== 'deterministic_fail') {
+    return false;
+  }
+  if (!match) {
+    return false;
+  }
+  if (!match.finding.detectedBy.includes('built-in')) {
+    match.finding.detectedBy.push('built-in');
+  }
   return true;
 }
 
@@ -653,15 +820,18 @@ function formatS006FindingReference(finding: S006SensitiveInformationFinding): s
 
 function classifyS006DeterministicResult(
   findings: S006SensitiveInformationFinding[],
-  coverage: S006ScanCoverage
+  coverage: S006ScanCoverage,
+  scannerCompleted: boolean
 ): S006SensitiveInformationAnalysisResult['classification'] {
   const findingReferences = findings.map(finding => formatS006FindingReference(finding));
   const failFindings = findings.filter(isS006DeterministicFailFinding);
+  const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
   if (failFindings.length > 0) {
+    const first = failFindings[0];
     return {
       status: EvaluationStatus.FAIL,
-      reason: `S006 found ${failFindings.length} high-confidence live-looking secret finding${failFindings.length === 1 ? '' : 's'} in production or CI/deployment context.`,
+      reason: `Found ${plural(failFindings.length, 'value that looks like a real secret', 'values that look like real secrets')} in production code or CI/deployment files, for example ${reportPath(first.path)}${first.line === undefined ? '' : `:${first.line}`}. Remove ${failFindings.length === 1 ? 'it' : 'them'} from the repository, load ${failFindings.length === 1 ? 'it' : 'them'} from environment variables or a secret store, and replace each exposed secret, because the old value stays in the Git history.`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };
@@ -670,17 +840,18 @@ function classifyS006DeterministicResult(
   if (findings.length > 0) {
     return {
       status: EvaluationStatus.MANUAL,
-      reason: `S006 retained ${findings.length} sensitive or environment-specific finding${findings.length === 1 ? '' : 's'} that require reviewer judgment based on context, confidence, severity, and matched evidence.`,
+      reason: `Found ${plural(findings.length, 'possible secret or environment-specific value', 'possible secrets or environment-specific values')}. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real.${coverage.materiallyWeakened ? ' Part of the repository was not fully scanned; see Coverage gaps.' : ''}`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };
   }
 
   if (coverage.materiallyWeakened) {
-    const materialWarnings = coverage.warnings.filter(warning => warning.materialToCoverage);
     return {
       status: EvaluationStatus.MANUAL,
-      reason: `S006 found no retained findings, but scan coverage was materially weakened by ${materialWarnings.length || 'one or more'} bounded traversal, reading, or truncation warning${materialWarnings.length === 1 ? '' : 's'}.`,
+      reason: scannerCompleted
+        ? 'No secrets or environment-specific values were found, but part of the repository was not fully scanned. A reviewer must check the files listed under Coverage gaps.'
+        : 'No secrets or environment-specific values were found, but Gitleaks did not run, so secrets it detects could be missed. Install Gitleaks or set GITLEAKS_PATH and run the evaluation again.',
       findingReferences,
       materiallyWeakenedCoverage: true
     };
@@ -688,7 +859,7 @@ function classifyS006DeterministicResult(
 
   return {
     status: EvaluationStatus.PASS,
-    reason: `S006 found no retained sensitive or environment-specific findings after scanning ${coverage.scannedFiles} of ${coverage.candidateFiles} candidate file${coverage.candidateFiles === 1 ? '' : 's'} (${coverage.scannedBytes} bytes) with no material coverage warnings.`,
+    reason: `No secrets or environment-specific values were found. Gitleaks scanned the repository, and the built-in scan read ${plural(coverage.scannedFiles, 'file', 'files')}; nothing it skipped affects the result.`,
     findingReferences,
     materiallyWeakenedCoverage: false
   };
@@ -740,6 +911,7 @@ function isS006ContextualManualContext(context: S006FindingContext): boolean {
     context === 'test_fixture' ||
     context === 'sample_or_example' ||
     context === 'local_docker_defaults' ||
+    context === 'helper_script' ||
     context === 'generated_content'
   );
 }

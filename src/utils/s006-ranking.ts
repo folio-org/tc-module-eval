@@ -25,6 +25,7 @@ const S006_CONTEXT_RANKS: Record<S006FindingContext, number> = {
   production_source_or_configuration: 0,
   ci_or_deployment_configuration: 1,
   local_docker_defaults: 2,
+  helper_script: 2,
   documentation: 3,
   test_fixture: 4,
   sample_or_example: 5,

@@ -46,7 +46,7 @@ describe('S006 shared evaluator', () => {
 
     for (const result of [javaResult, javascriptResult]) {
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.evidence).toContain('S006 pass: no retained sensitive/environment-specific findings');
+      expect(result.evidence).toContain('S006 pass: No secrets or environment-specific values were found.');
       expect(result.evidence).not.toContain('evaluation logic not yet implemented');
       expect(result.evidence).not.toContain('Sensitive information repository scan');
       expect(result.agentReview).toBeUndefined();
@@ -68,8 +68,8 @@ describe('S006 shared evaluator', () => {
         criteriaFilter: ['S006']
       });
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.details).toContain('Secret scanner: Gitleaks unavailable');
-      expect(result.details).toContain('scanner-unavailable');
+      expect(result.details).toContain('Gitleaks: did not run, see Coverage gaps');
+      expect(result.details).toContain('Coverage gaps:\n  - Gitleaks could not be used: Gitleaks unavailable in this fixture. Check that Gitleaks is installed or set GITLEAKS_PATH, then run the evaluation again.\n');
       expect(result.criterionDetails).toMatchObject({
         scanner: {
           name: 'Gitleaks',
@@ -108,9 +108,9 @@ describe('S006 shared evaluator', () => {
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.evidence).toContain('S006 fail: 1 deterministic failure finding');
+    expect(result.evidence).toContain('S006 fail: Found 1 value that looks like a real secret');
     expect(result.details).toContain('src/main/resources/application.yml:1');
-    expect(result.details).toContain('[REDACTED_PROVIDER_API_KEY]');
+    expect(result.details).toContain('[api-key] Fails S006: API key that looks real');
     expect(result.details).not.toContain(rawKey);
   });
 
@@ -120,7 +120,7 @@ describe('S006 shared evaluator', () => {
       files: {
         'README.md': 'Example: curl -H "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"\n'
       },
-      expectedDetail: 'Confirm documentation, sample, and test findings are examples'
+      expectedDetail: 'Open each possible secret and decide whether it is real.'
     },
     {
       name: 'local Docker default password',
@@ -132,7 +132,7 @@ describe('S006 shared evaluator', () => {
           '      POSTGRES_PASSWORD: postgres'
         ].join('\n')
       },
-      expectedDetail: 'Confirm local Docker defaults are not reused outside local development'
+      expectedDetail: 'Check that local Docker defaults are used only for local development.'
     }
   ])('returns manual through SharedEvaluator for $name', async ({ files, expectedDetail }) => {
     for (const [relativePath, content] of Object.entries(files)) {
@@ -142,7 +142,7 @@ describe('S006 shared evaluator', () => {
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRun());
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toContain('S006 manual: 1 retained finding');
+    expect(result.evidence).toContain('S006 manual: Found 1 possible secret or environment-specific value.');
     expect(result.details).toContain(expectedDetail);
   });
 
@@ -189,8 +189,10 @@ describe('S006 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.evidenceReferences).toEqual([expectedReference]);
-    expect(result.details).toContain('Agent review:');
-    expect(result.details).toContain('Advisory recommendation: needs_reviewer_judgment');
+    expect(result.details).toContain('Agent review (advisory):');
+    expect(result.details).toContain('  - Recommendation: Reviewer judgment needed');
+    expect(result.details).toMatch(/ {4}- \S+:\d+ — Needs verification:/);
+    expect(result.details).toContain('  - Advisory only; the S006 result stays Manual review.');
     expect(result.details).not.toContain('Evidence references:');
     expect(result.details).not.toContain('.criterion-agent/S006/excerpts/');
   });
@@ -215,7 +217,7 @@ describe('S006 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview).toBeUndefined();
     expect(result.evidence).toContain('S006 manual');
-    expect(result.details).toContain('Top examples:');
+    expect(result.details).toContain('Strongest examples (values hidden):');
     expect(details.agentReviewUnavailableReason).toContain(expected);
     expect(result.details).toContain(expected);
   });
@@ -313,7 +315,6 @@ describe('S006 shared evaluator', () => {
     expect(result.agentReview?.available).toBe(true);
     expect(result.agentReview?.evidenceReferences).toEqual(['docs/secrets.md']);
     expect(result.agentReview?.warnings.join('\n')).toContain('Dropped');
-    expect(result.details).toContain('Dropped');
   });
 
   it('preserves manual S006 status when OpenCode review command fails', async () => {

@@ -187,6 +187,27 @@ describe('S006 agent review adapter', () => {
     }
   });
 
+  it('gives the agent a response example that passes S006 validation', async () => {
+    writeFile('docs/token.md', 'Example: Bearer abcdefghijklmnopqrstuvwxyz123456');
+    commit();
+    const analysis = await analyzeRepo();
+    const request = await prepared(await buildS006AgentReviewRequest(repoPath, analysis));
+    const example = JSON.parse(request.files.find(file => file.repoRelativePath === '.criterion-agent/S006/response-shape.json')!.content).response;
+    expect(Array.isArray(example.assessments)).toBe(true);
+
+    // The example's shape, filled with this repository's obligations, must be accepted as is.
+    const obligations = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('review-obligations.json'))!.content).reviewObligations;
+    const [scopeShape, findingShape] = example.assessments;
+    const cite = (shape: any) => ({ ...shape, evidenceReferences: ['docs/token.md'] });
+    const review = await reviewS006WithAgent(repoPath, analysis, fakeConfig({
+      ...baseResult(), ...example, evidenceReferences: ['docs/token.md'],
+      assessments: obligations.map((item: any) => cite({ ...(item.id === 'scope' ? scopeShape : findingShape), technologyId: item.id })),
+      reviewerActions: example.reviewerActions.map(cite)
+    }));
+    expect(review.errors).toEqual([]);
+    expect(review.available).toBe(true);
+  });
+
   it('retains additional discoveries beyond scanner obligations', async () => {
     writeFile('README.md', 'Configuration usage');
     commit();
