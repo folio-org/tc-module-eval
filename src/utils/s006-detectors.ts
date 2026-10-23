@@ -21,7 +21,11 @@ const PLACEHOLDER_VALUE_PATTERN =
   /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|%[sd]|\{\}|\[\]|\{[A-Za-z_][A-Za-z0-9_.-]*\}|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
-const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';
+// The key is a whole run of [A-Za-z0-9_.-] from its first letter, digit, or underscore to its end, contains a keyword, and ends
+// in a letter, digit, or underscore. The lookbehind starts it only once per run and the captured lookahead takes the run once,
+// because a key that could start at every word boundary and end anywhere in the run backtracks quadratically on long dotted lines
+// (cubically when keywords repeat). When an unquoted value stops at 200 characters inside a run, the rest of that run is not a key.
+const SECRET_ASSIGNMENT_KEY = '\\b(?<![A-Za-z0-9_][.-]*)(?=[A-Za-z0-9_.-]*?(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey))(?=([A-Za-z0-9_.-]*))\\1\\b';
 const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
 // `==`, `===`, and `=>` compare or declare functions; they never assign a value.
 const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*(?::=|[:=](?![=>]))\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');

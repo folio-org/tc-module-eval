@@ -2044,18 +2044,22 @@ describe('S006 analysis corrections', () => {
     expect(result.findings.map(finding => finding.path).sort()).toEqual(['.env.production', 'config/app.properties', 'scripts/db.sh']);
   });
 
-  it('scans long dotted lines for host names without slow backtracking', async () => {
-    const dottedLines = (size: number) => `key: ${'folio.'.repeat(size)}LOCAL_ERROR\nother: ${'db.'.repeat(size * 2)}x`;
-    writeRepoFile(repoPath, 'src/main/resources/application.yml', `${dottedLines(1500)}\nurl: https://{environment}-okapi.ci.library.org`);
+  it('scans long dotted lines in linear time', async () => {
+    const dottedLines = (size: number) => [
+      `key: ${'folio.'.repeat(size)}LOCAL_ERROR`,
+      `other: ${'db.'.repeat(size * 2)}x`,
+      `keys: ${'token_'.repeat(size)}x`,
+      'url: https://{environment}-okapi.ci.library.org'
+    ].join('\n');
 
-    const result = await analyzeWithoutGitleaksFindings();
+    const result = await expectLinearTime(1000, dottedLines, text => {
+      writeRepoFile(repoPath, 'src/main/resources/application.yml', text);
+      return analyzeWithoutGitleaksFindings();
+    });
 
-    expect(result.findings.filter(finding => finding.detectorId === 'tenant-host-endpoint').map(finding => finding.excerpt.text)).toEqual([
-      'okapi.ci.library.org'
+    expect(result.findings.map(finding => `${finding.detectorId} ${finding.excerpt.text}`)).toEqual([
+      'tenant-host-endpoint okapi.ci.library.org'
     ]);
-    // Times the host name pattern alone: the secret assignment pattern still takes quadratic time on such lines.
-    const { pattern } = getS006DetectorById('tenant-host-endpoint');
-    await expectLinearTime(60_000, dottedLines, async text => [...text.matchAll(pattern)]);
   }, 60_000);
 
   it('orders Gitleaks findings by file and line regardless of report order', async () => {
