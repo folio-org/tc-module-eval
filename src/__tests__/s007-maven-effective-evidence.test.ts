@@ -163,6 +163,20 @@ describe('S007 Maven effective-POM evidence', () => {
     expect(enriched.complete).toBe(false);
   });
 
+  it('does not report an undeclared test-scoped effective-model dependency, which could not decide the status', async () => {
+    const runner = new EffectivePomRunner(effectivePom([
+      dependency('org.projectlombok', 'lombok', '1.18.48'),
+      dependency('io.vertx', 'vertx-junit5', '4.5.0').replace('</dependency>', '<scope>test</scope></dependency>')
+    ]));
+
+    const enriched = await enrichS007WithMavenEffectivePom(
+      repoPath, unresolvedEvidence(['org.projectlombok:lombok']), run(runner), runner
+    );
+
+    expect(enriched.diagnostics).toEqual([]);
+    expect(enriched.complete).toBe(true);
+  });
+
   it('clears a parent POM BOM warning once the module effective POM resolves every missing version', async () => {
     await fs.writeFile(path.join(repoPath, 'pom.xml'), `
       <project>

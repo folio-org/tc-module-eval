@@ -15,7 +15,7 @@ describe('S007 static technology evidence', () => {
     await fs.remove(repoPath);
   });
 
-  it('resolves bounded local Maven evidence and reports remote resolution gaps', async () => {
+  it('resolves bounded local Maven evidence, so an imported BOM cannot change any checked version', async () => {
     await write('pom.xml', `
       <project>
         <parent>
@@ -52,6 +52,27 @@ describe('S007 static technology evidence', () => {
     expect(find(result, 'vertx')).toMatchObject({ declaredVersion: '5.0.2', sourcePath: 'pom.xml' });
     expect(find(result, 'spring-framework')).toMatchObject({ declaredVersion: '7.0.1', sourcePath: 'parent/pom.xml' });
     expect(find(result, 'keycloak-admin-client')).toMatchObject({ declaredVersion: '26.1.0', sourcePath: 'child/pom.xml' });
+    // Every dependency has a version in the repository, and those take precedence over an imported BOM.
+    expect(result.diagnostics).toEqual([]);
+    expect(result.complete).toBe(true);
+  });
+
+  it('keeps an imported BOM as a coverage gap while a production dependency has no version', async () => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencyManagement><dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-stack-depchain</artifactId><version>5.0.4</version><type>pom</type><scope>import</scope></dependency>
+        </dependencies></dependencyManagement>
+        <dependencies>
+          <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId></dependency>
+          <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.32</version></dependency>
+        </dependencies>
+      </project>
+    `);
+
+    const result = await collectS007TechnologyEvidence(repoPath, 'java');
+
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'maven_imported_bom', material: true, path: 'pom.xml' })
     ]));
@@ -1179,10 +1200,11 @@ describe('S007 static technology evidence', () => {
   });
 
   it.each([
-    ['missing', undefined, 'yarn_lock_missing'],
-    ['berry', '__metadata:\n  version: 8\n', 'yarn_lock_unsupported'],
-    ['malformed', 'not: [valid', 'yarn_lock_malformed']
-  ])('retains declarations when the Yarn lockfile is %s', async (_name, lockfile, code) => {
+    // Without a lockfile each declared range is checked as a whole, so the missing file alone does not block a pass.
+    ['missing', undefined, 'yarn_lock_missing', false],
+    ['berry', '__metadata:\n  version: 8\n', 'yarn_lock_unsupported', true],
+    ['malformed', 'not: [valid', 'yarn_lock_malformed', true]
+  ])('retains declarations when the Yarn lockfile is %s', async (_name, lockfile, code, material) => {
     await writeJson('package.json', { dependencies: { react: '^18.0.0' } });
     if (lockfile !== undefined) {
       await write('yarn.lock', lockfile);
@@ -1192,7 +1214,7 @@ describe('S007 static technology evidence', () => {
 
     expect(find(result, 'react')).toMatchObject({ declaredVersion: '^18.0.0', resolvedVersion: undefined });
     expect(result.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code, material: true })
+      expect.objectContaining({ code, material })
     ]));
   });
 

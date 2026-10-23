@@ -37,15 +37,19 @@ export function evaluateS007(
   const findings = evidence.observations.map(observation =>
     evaluateObservation(observation, applicableSections, evidence)
   );
+  // Only production dependencies decide the status; test dependencies are listed as notes.
+  const production = evidence.observations.filter(observation => !observation.testScope);
 
-  if (evidence.observations.length === 0) {
+  if (production.length === 0) {
     findings.push(coverageFinding('No language or framework the tool recognizes was found in the build or package files.'));
   } else {
     const reasons = [
-      evidence.observations.some(observation => observation.technologyType === 'language')
+      production.some(observation => language === 'java'
+        ? observation.identityCandidates[0] === 'java'
+        : observation.technologyType === 'language')
         ? undefined
         : language === 'java' ? 'No Java version was found.' : 'No JavaScript or TypeScript indicator was found.',
-      evidence.observations.some(observation => observation.technologyType === 'framework')
+      production.some(observation => observation.technologyType === 'framework')
         ? undefined
         : 'No framework was found.',
       evidence.complete ? undefined : 'Some versions or build settings could not be read from the repository.'
@@ -90,12 +94,27 @@ function evaluateObservation(
       resolvedVersion: observation.resolvedVersion,
       versionSourcePath: observation.versionSourcePath,
       resolutionSource: observation.resolutionSource,
+      versionProperty: observation.versionProperty,
       ownVersionLine: observation.versionResolutionEligible === false ? true as const : undefined
     }],
     advisories: [] as string[],
     statusDetermining: false
   };
 
+  if (observation.testScope) {
+    return {
+      ...base,
+      matchedPolicy: match ? toMatchedPolicy(match.entry, match.section, {
+        constraint: match.entry.constraint,
+        strength: match.entry.strength,
+        sourceStatement: match.entry.sourceStatement,
+        unresolved: false
+      }) : undefined,
+      classification: 'test-dependency',
+      contribution: 'note',
+      rationale: 'Used only in tests, so it does not decide the result.'
+    };
+  }
   if (!match) {
     return {
       ...base,
@@ -165,7 +184,9 @@ function evaluateObservation(
   }
   if (comparison === 'compliant') {
     return finding(base, matchedPolicy, advisories, 'compliant', 'pass',
-      `${versionSubject(observation)} meets the policy rule.`);
+      !observation.resolvedVersion && observation.declaredVersion && isRangeText(observation.declaredVersion)
+        ? `Every version the declared range ${observation.declaredVersion} allows meets the policy rule.`
+        : `${versionSubject(observation)} meets the policy rule.`);
   }
   if (comparison === 'noncompliant') {
     return finding(base, matchedPolicy, advisories, 'normative-violation', 'fail',
@@ -198,19 +219,28 @@ function compareObservationToConstraint(
   }
 
   const declared = observation.declaredVersion?.trim();
+  // npm ranges use npm semantics: a prerelease only matches a range that names one. includePrerelease would let
+  // ^18.2 allow 18.2.0-0, below a ^18.2.0 policy. Then "<19.0.0-0" (how semver writes ^18) and "<19.0.0" are the
+  // same set, so compare release bounds.
+  const npm = observation.ecosystem === 'javascript';
+  const releaseBounds = (range: string): string => npm ? range.replace(/<(\d+\.\d+\.\d+)-0(?![\w.-])/g, '<$1') : range;
   let declaredComparison: VersionComparison = 'unresolved';
-  if (declared && observation.ecosystem === 'java') {
-    const exact = normalizeExactVersion(declared);
+  if (declared) {
+    // In npm, "18" or "18.2" is a range, so only a full version is exact there.
+    const exact = npm ? semver.valid(declared) ?? undefined : normalizeExactVersion(declared);
     if (exact) {
       declaredComparison = semver.satisfies(exact, allowed, { includePrerelease: true }) ? 'compliant' : 'noncompliant';
     }
   }
   if (declaredComparison === 'unresolved' && declared) {
-    const translated = translateMavenRange(declared) ?? semver.validRange(declared, { includePrerelease: true });
+    const options = { includePrerelease: !npm };
+    const validRange = npm ? semver.validRange(declared, options) : translateMavenRange(declared) ?? semver.validRange(declared, options);
+    const translated = validRange ? releaseBounds(validRange) : undefined;
+    const policyRange = releaseBounds(allowed);
     if (translated) {
-      if (semver.subset(translated, allowed, { includePrerelease: true })) {
+      if (semver.subset(translated, policyRange, options)) {
         declaredComparison = 'compliant';
-      } else if (!semver.intersects(translated, allowed, { includePrerelease: true })) {
+      } else if (!semver.intersects(translated, policyRange, options)) {
         declaredComparison = 'noncompliant';
       } else {
         declaredComparison = 'overlap';
@@ -317,7 +347,8 @@ function resolveApplicableRule(
 
     const observationOwner = sourceOwner(observation.sourcePath);
     const grailsOwners = evidence.observations.filter(candidate =>
-      (candidate.provenance === 'repository-static' || candidate.repositoryDeclared === true)
+      !candidate.testScope
+      && (candidate.provenance === 'repository-static' || candidate.repositoryDeclared === true)
       && findPolicyEntry(candidate, sections)?.entry.id === 'grails'
     ).map(candidate => sourceOwner(candidate.sourcePath));
     if (grailsOwners.includes(observationOwner)) {
@@ -387,7 +418,7 @@ function coverageFinding(rationale: string): S007TechnologyFinding {
 function classifyStatus(findings: S007TechnologyFinding[]): EvaluationStatus {
   if (findings.some(finding => finding.contribution === 'fail')) return EvaluationStatus.FAIL;
   if (findings.some(finding => finding.contribution === 'manual')) return EvaluationStatus.MANUAL;
-  return findings.length > 0 ? EvaluationStatus.PASS : EvaluationStatus.MANUAL;
+  return findings.some(finding => finding.contribution === 'pass') ? EvaluationStatus.PASS : EvaluationStatus.MANUAL;
 }
 
 const REVIEW_REASONS: Partial<Record<S007TechnologyFinding['classification'], string>> = {
@@ -415,7 +446,9 @@ function summaryFor(status: EvaluationStatus, findings: S007TechnologyFinding[])
       : `S007 fail: ${listText(items)} are not officially supported versions. Upgrade them to versions the policy allows.`;
   }
   if (status === EvaluationStatus.PASS) {
-    return `S007 pass: Every technology found is officially supported: ${listText([...new Set(findings.map(finding => finding.displayName))])}.`;
+    return `S007 pass: Every technology found is officially supported: ${listText([...new Set(findings
+      .filter(finding => finding.contribution === 'pass')
+      .map(finding => finding.displayName))])}.`;
   }
   const reviewItems = new Map<string, string>();
   for (const finding of findings.filter(candidate => candidate.contribution === 'manual')) {
@@ -437,6 +470,9 @@ function listText(items: string[]): string {
 function versionSubject(observation: S007TechnologyObservation): string {
   if (observation.resolvedVersion) return `Version ${observation.resolvedVersion}`;
   if (!observation.declaredVersion) return 'The version';
+  if (observation.versionProperty) {
+    return `Version ${observation.declaredVersion} (inferred from the ${observation.versionProperty} property)`;
+  }
   return isRangeText(observation.declaredVersion)
     ? `The declared range ${observation.declaredVersion}`
     : `Version ${observation.declaredVersion}`;

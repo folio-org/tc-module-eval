@@ -1721,27 +1721,27 @@
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }
           },
           {
             "technologyId": "spring-boot",
-            "classification": "contested",
-            "contribution": "manual",
-            "statusDetermining": true,
+            "classification": "test-dependency",
+            "contribution": "note",
+            "statusDetermining": false,
             "matchedPolicy": {
               "entryId": "spring-boot"
             }

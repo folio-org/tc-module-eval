@@ -144,6 +144,10 @@ export interface S007TechnologyObservation {
   resolvedVersion?: string;
   versionSourcePath?: string;
   resolutionSource?: 'maven-effective-pom';
+  /** The declared version was inferred from this Maven property by the Spring Boot `<artifactId>.version` convention. */
+  versionProperty?: string;
+  /** Declared only for tests (Maven test scope or a Gradle test configuration), so it does not decide the status. */
+  testScope?: true;
   mavenDependency?: {
     groupId: string;
     artifactId: string;
@@ -209,9 +213,11 @@ export type S007FindingClassification =
   | 'unlisted-framework'
   | 'unresolved'
   | 'conflicting'
-  | 'coverage-incomplete';
+  | 'coverage-incomplete'
+  | 'test-dependency';
 
-export type S007FindingContribution = 'pass' | 'manual' | 'fail';
+/** A note is shown in the report but does not affect the status. */
+export type S007FindingContribution = 'pass' | 'manual' | 'fail' | 'note';
 
 export interface S007MatchedPolicyEntry {
   sectionId: S007PolicySectionId;
@@ -229,6 +235,7 @@ export interface S007FindingEvidence {
   resolvedVersion?: string;
   versionSourcePath?: string;
   resolutionSource?: 'maven-effective-pom';
+  versionProperty?: string;
   /** The artifact shows the technology is used, but its own version is not the technology's version. */
   ownVersionLine?: true;
 }

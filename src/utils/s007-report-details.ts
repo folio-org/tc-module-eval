@@ -31,7 +31,8 @@ const CLASSIFICATION_SUMMARIES: Record<S007FindingClassification, string> = {
   'unlisted-framework': 'Needs review: not in the supported technologies list',
   unresolved: 'Needs review: the version could not be checked',
   conflicting: 'Needs review: different versions are declared',
-  'coverage-incomplete': 'Needs review: the tool could not read everything it needs'
+  'coverage-incomplete': 'Needs review: the tool could not read everything it needs',
+  'test-dependency': 'Used only in tests, so it does not decide the result'
 };
 
 const RULE_STRENGTHS: Record<S007RuleStrength, string> = {
@@ -110,7 +111,7 @@ function groupFindings(findings: S007TechnologyFinding[]): S007FindingGroup[] {
 function groupPriority(group: S007FindingGroup): number {
   if (group.findings.some(finding => finding.statusDetermining)) return 0;
   if (group.findings.some(finding => finding.contribution === 'manual')) return 1;
-  return 2;
+  return group.findings.every(finding => finding.contribution === 'note') ? 3 : 2;
 }
 
 function renderCoverageGroup(group: S007FindingGroup, diagnostics: S007EvidenceDiagnostic[]): string[] {
@@ -162,7 +163,8 @@ function renderFindingGroup(group: S007FindingGroup): string[] {
     }
     if (finding.evidence.length > 0) {
       // A rule without a version requirement needs no version, so "no version" would only add noise.
-      const versionNeeded = Boolean(finding.matchedPolicy?.constraint) || finding.contribution !== 'pass';
+      const versionNeeded = finding.contribution !== 'note'
+        && (Boolean(finding.matchedPolicy?.constraint) || finding.contribution !== 'pass');
       lines.push('    - Found in:', ...finding.evidence.map(evidence =>
         `      - ${evidenceLine(evidence, versionNeeded, finding.displayName)}`));
     }
@@ -180,7 +182,10 @@ function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean, tec
     ? `${isRangeText(evidence.declaredVersion) ? 'range' : 'version'} ${evidence.declaredVersion}`
     : undefined;
   let version: string | undefined;
-  if (declared && evidence.resolvedVersion && evidence.declaredVersion !== evidence.resolvedVersion) {
+  if (evidence.versionProperty && evidence.declaredVersion) {
+    const where = evidence.versionSourcePath && evidence.versionSourcePath !== evidence.path ? ` in ${evidence.versionSourcePath}` : '';
+    version = `version ${evidence.declaredVersion} inferred from the ${evidence.versionProperty} property${where} (Spring Boot convention)`;
+  } else if (declared && evidence.resolvedVersion && evidence.declaredVersion !== evidence.resolvedVersion) {
     version = `${declared}, resolved to ${evidence.resolvedVersion}${source}`;
   } else if (declared) {
     version = `${declared}${source}`;
@@ -196,6 +201,7 @@ function evidenceLine(evidence: S007FindingEvidence, versionNeeded: boolean, tec
 
 function shortStatus(finding: S007TechnologyFinding): string {
   if (finding.contribution === 'fail') return 'fails';
+  if (finding.contribution === 'note') return 'test only';
   return finding.contribution === 'pass' ? 'meets the policy' : 'needs review';
 }
 
@@ -232,12 +238,14 @@ function groupSummary(group: S007FindingGroup): string {
   const counts = {
     fail: group.findings.filter(finding => finding.contribution === 'fail').length,
     manual: group.findings.filter(finding => finding.contribution === 'manual').length,
-    pass: group.findings.filter(finding => finding.contribution === 'pass').length
+    pass: group.findings.filter(finding => finding.contribution === 'pass').length,
+    note: group.findings.filter(finding => finding.contribution === 'note').length
   };
   const parts = [
     counts.fail ? `${counts.fail} ${counts.fail === 1 ? 'fails' : 'fail'}` : undefined,
     counts.manual ? `${counts.manual} ${counts.manual === 1 ? 'needs' : 'need'} review` : undefined,
-    counts.pass ? `${counts.pass} ${counts.pass === 1 ? 'meets' : 'meet'} the policy` : undefined
+    counts.pass ? `${counts.pass} ${counts.pass === 1 ? 'meets' : 'meet'} the policy` : undefined,
+    counts.note ? `${counts.note} used only in tests` : undefined
   ].filter((part): part is string => Boolean(part));
   return `Mixed results: ${parts.join(', ')}`;
 }

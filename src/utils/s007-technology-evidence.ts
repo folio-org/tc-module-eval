@@ -51,6 +51,12 @@ type Identity = S007JavaIdentity;
 interface MavenContext {
   properties: Map<string, { value: string; sourcePath: string }>;
   dependencyManagement: Map<string, { rawValue: string; value: string; sourcePath: string }>;
+  /** The POM or one of its parents in the repository has a parent outside the repository. */
+  remoteParent: boolean;
+  /** The POM or one of its parents in the repository has a Spring Boot parent or declares a Spring Boot dependency. */
+  springBoot?: 'parent' | 'dependency';
+  /** The POM or one of its parents in the repository imports a BOM. */
+  importsBom: boolean;
 }
 
 interface JavaScriptDeclaration {
@@ -109,8 +115,7 @@ export async function collectS007TechnologyEvidence(
     collectGradleEvidence(context);
   }
 
-  finalizePresenceOnlyObservations(context);
-  markConflicts(context);
+  finalizeObservations(context);
   if (context.observations.length === 0) {
     diagnostic(context, 'insufficient_evidence', 'No language or framework the tool recognizes was found in the build or package files.', true);
   }
@@ -139,8 +144,7 @@ export function finalizeS007TechnologyEvidence(
   context.presenceOnlyObservations = new Set(
     context.observations.filter(observation => observation.versionResolutionEligible === false)
   );
-  finalizePresenceOnlyObservations(context);
-  markConflicts(context);
+  finalizeObservations(context);
   return {
     ...evidence,
     observations: context.observations,
@@ -248,7 +252,9 @@ function collectYarnClassicVersions(
 
   const lockPath = path.join(context.repoPath, 'yarn.lock');
   if (!fs.existsSync(lockPath)) {
-    diagnostic(context, 'yarn_lock_missing', 'Not found at the repository root, so the installed versions are not known.', true, 'yarn.lock');
+    // Not material: each declared range is then checked as a whole, and a range that allows any version outside
+    // the policy already needs review on its own.
+    diagnostic(context, 'yarn_lock_missing', 'Not found at the repository root, so the installed versions are not known; each declared range was checked instead.', false, 'yarn.lock');
     return versions;
   }
 
@@ -372,13 +378,25 @@ async function visitMavenPom(
       effective = await visitMavenPom(context, parentPath, effective);
     } else {
       diagnostic(context, 'maven_remote_parent', 'The parent POM is not in the repository, so the versions and settings it provides could not be read.', true, sourcePath);
+      effective.remoteParent = true;
+      if (xmlText(project.parent.groupId) === 'org.springframework.boot') effective.springBoot = 'parent';
     }
+  }
+  if (!effective.springBoot && asArray(project.dependencies?.dependency)
+    .some(dependency => xmlText(dependency?.groupId) === 'org.springframework.boot')) {
+    effective.springBoot = 'dependency';
   }
 
   for (const [name, rawValue] of Object.entries(project.properties ?? {})) {
     const value = xmlText(rawValue);
     if (value) {
       effective.properties.set(name, { value, sourcePath });
+    }
+  }
+
+  for (const plugin of asArray(project.build?.plugins?.plugin)) {
+    if (xmlText(plugin?.groupId) === 'org.codehaus.gmavenplus' && xmlText(plugin?.artifactId) === 'gmavenplus-plugin') {
+      addGroovyObservation(context, sourcePath, 'plugin org.codehaus.gmavenplus:gmavenplus-plugin');
     }
   }
 
@@ -412,10 +430,17 @@ async function visitMavenPom(
     const resolvedVersion = resolveMavenValue(rawVersion, effective.properties, sourcePath);
     const [groupId, artifactId] = coordinates.split(':');
     const managedKey = resolveMavenDependencyKey(dependency, groupId, artifactId, effective, sourcePath);
-    if (resolvedVersion && managedKey) {
-      effective.dependencyManagement.set(mavenManagementKey(managedKey), { rawValue: rawVersion, ...resolvedVersion });
+    // Keep a managed version whose property is not defined here too: a child POM may define it, and Maven then
+    // uses the managed version rather than any other.
+    if (rawVersion && managedKey) {
+      effective.dependencyManagement.set(mavenManagementKey(managedKey), {
+        rawValue: rawVersion,
+        value: resolvedVersion?.value ?? '',
+        sourcePath: resolvedVersion?.sourcePath ?? sourcePath
+      });
     }
     if (xmlText(dependency.type) === 'pom' && xmlText(dependency.scope) === 'import') {
+      effective.importsBom = true;
       diagnostic(
         context,
         'maven_imported_bom',
@@ -461,9 +486,11 @@ function collectMavenDependencies(
     if (!rawGroupId || !rawArtifactId) {
       continue;
     }
+    const testScope = xmlText(dependency.scope) === 'test' ? true as const : undefined;
     const resolvedGroupId = resolveMavenValue(rawGroupId, effective.properties, sourcePath);
     const resolvedArtifactId = resolveMavenValue(rawArtifactId, effective.properties, sourcePath);
     if (!resolvedGroupId || !resolvedArtifactId) {
+      if (testScope) continue;
       diagnostic(
         context,
         'version_unresolved',
@@ -494,7 +521,8 @@ function collectMavenDependencies(
         provenance: 'repository-static',
         mavenDependency,
         repositoryDeclared: true,
-        versionResolutionEligible: false
+        versionResolutionEligible: false,
+        testScope
       });
       continue;
     }
@@ -507,7 +535,10 @@ function collectMavenDependencies(
     const managedResolved = managed
       ? resolveMavenValue(managed.rawValue, effective.properties, managed.sourcePath)
       : undefined;
-    const resolved = direct ?? managedResolved;
+    // Only for a dependency with no version anywhere in the repository: an explicit or managed version that the
+    // tool cannot resolve still wins over the Spring Boot property in Maven.
+    const property = rawVersion || managed ? undefined : springBootVersionProperty(artifactId, effective);
+    const resolved = direct ?? managedResolved ?? property;
     addObservation(context, {
       identityCandidates: [matched.id, coordinates, groupId],
       displayName: matched.displayName,
@@ -518,13 +549,15 @@ function collectMavenDependencies(
       sourceDetail: coordinates,
       declaredVersion: resolved?.value,
       versionSourcePath: resolved?.sourcePath,
-      confidence: resolved ? 'confident' : 'partial',
+      versionProperty: property?.name,
+      confidence: resolved && !property ? 'confident' : 'partial',
       provenance: 'repository-static',
       mavenDependency,
       repositoryDeclared: true,
-      unlistedFrameworkCandidate: matched.unlisted
+      unlistedFrameworkCandidate: matched.unlisted,
+      testScope
     });
-    if (!resolved) {
+    if (!resolved && !testScope) {
       diagnostic(
         context,
         'version_unresolved',
@@ -535,6 +568,26 @@ function collectMavenDependencies(
       );
     }
   }
+}
+
+/**
+ * Spring Boot's dependency management reads each managed version from a property such as lombok.version, so a
+ * module that inherits it from a parent POM overrides that version by setting the property. An imported BOM is
+ * built on its own, so the property does not change it. Without the parent POM this is an inference, used when a
+ * Spring Boot parent is outside the repository, or when a module that uses Spring Boot has a parent outside the
+ * repository and imports no BOM (which could be where the Spring Boot versions come from instead).
+ */
+function springBootVersionProperty(
+  artifactId: string,
+  effective: MavenContext
+): { name: string; value: string; sourcePath: string } | undefined {
+  const inherited = effective.springBoot === 'parent'
+    || (effective.remoteParent && effective.springBoot === 'dependency' && !effective.importsBom);
+  if (!inherited) return undefined;
+  const name = `${artifactId}.version`;
+  const defined = effective.properties.get(name);
+  const value = defined ? resolveMavenValue(`\${${name}}`, effective.properties, defined.sourcePath) : undefined;
+  return value ? { name, ...value } : undefined;
 }
 
 function mavenManagementKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
@@ -670,6 +723,14 @@ function collectGradleBuildFile(
     properties.set(match[1], match[3]);
   }
 
+  // Grails applies the Groovy plugin. Avoid adjacent optional whitespace runs (see the dependency patterns below).
+  const appliedPluginPattern = /(?:\bid\s*(?:\(\s*)?|\bapply\s*(?:\(\s*)?plugin\s*[:=]\s*)["']([^"']+)["']/g;
+  for (const match of gradleCodeMatches(staticContent, appliedPluginPattern, codePositions)) {
+    if (/^(?:groovy|org\.grails\.grails-[\w-]+|org\.apache\.grails\.gradle\.grails-[\w-]+)$/.test(match[1])) {
+      addGroovyObservation(context, sourcePath, `plugin ${match[1]}`);
+    }
+  }
+
   const javaVersion = findGradleJavaVersion(staticContent, properties, codePositions);
   if (javaVersion?.value) {
     addObservation(context, {
@@ -696,32 +757,37 @@ function collectGradleBuildFile(
 
   // Never put two optional whitespace runs next to each other ("\\s*(?:\\(\\s*)?"): on a long run of spaces the
   // engine tries every split between them, which is quadratic in the build file size.
-  const configurationName = '(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor|classpath)';
+  const configurationName =
+    '(?:implementation|api|compileOnly|runtimeOnly|annotationProcessor|classpath'
+    + '|(?:test|testFixtures|integrationTest)(?:Implementation|Api|CompileOnly|RuntimeOnly|AnnotationProcessor))';
   const configuration = `${configurationName}(?:\\s*\\()?\\s*`;
+  // Every pattern below starts with the configuration name.
+  const testScope = (match: RegExpMatchArray): true | undefined =>
+    /^(?:test|integrationTest)/.test(match[0]) ? true : undefined;
   const mapDependencyPattern = new RegExp(
     `${configuration}((?:(?:group|name|version)\\s*[:=]\\s*(?:["'][^"']+["']|[A-Za-z][\\w.]*)(?:\\s*,)?\\s*){2,3})\\)?`,
     'g'
   );
   for (const match of gradleCodeMatches(staticContent, mapDependencyPattern, codePositions)) {
-    collectGradleMapDependency(context, sourcePath, match[1], properties);
+    collectGradleMapDependency(context, sourcePath, match[1], properties, testScope(match));
   }
 
   const dependencyPattern = new RegExp(`${configuration}(["'])([^"']+)\\1(?!\\s*\\+)`, 'g');
   for (const match of gradleCodeMatches(staticContent, dependencyPattern, codePositions)) {
-    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
+    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"', testScope(match));
   }
   const wrappedDependencyPattern = new RegExp(
     `${configuration}(?:platform|enforcedPlatform)\\s*\\(\\s*(["'])([^"']+)\\1`,
     'g'
   );
   for (const match of gradleCodeMatches(staticContent, wrappedDependencyPattern, codePositions)) {
-    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"');
+    collectGradleCoordinate(context, sourcePath, match[2], properties, match[1] === '"', testScope(match));
   }
   const concatenatedPattern = new RegExp(`${configurationName}\\s+["']([^"']+:)["']\\s*\\+\\s*([A-Za-z][\\w.]*)`, 'g');
   for (const match of gradleCodeMatches(staticContent, concatenatedPattern, codePositions)) {
     const value = properties.get(match[2]);
-    collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties);
-    if (!value) {
+    collectGradleCoordinate(context, sourcePath, value ? `${match[1]}${value}` : match[1], properties, false, testScope(match));
+    if (!value && !testScope(match)) {
       diagnostic(context, 'gradle_dynamic_expression', `The Gradle property ${match[2]} is not defined in the repository.`, true, sourcePath);
     }
   }
@@ -733,8 +799,8 @@ function collectGradleBuildFile(
   for (const match of gradleCodeMatches(staticContent, variableDependencyPattern, codePositions)) {
     const coordinate = properties.get(match[1]);
     if (coordinate) {
-      collectGradleCoordinate(context, sourcePath, coordinate, properties);
-    } else {
+      collectGradleCoordinate(context, sourcePath, coordinate, properties, false, testScope(match));
+    } else if (!testScope(match)) {
       diagnostic(
         context,
         'gradle_dynamic_expression',
@@ -846,12 +912,14 @@ function collectGradleCoordinate(
   sourcePath: string,
   coordinate: string,
   properties: Map<string, string>,
-  allowInterpolation = false
+  allowInterpolation = false,
+  testScope?: true
 ): void {
   const resolvedCoordinate = coordinate.includes('$')
     ? (allowInterpolation ? resolveGradleInterpolatedText(coordinate, properties) : undefined)
     : coordinate;
   if (!resolvedCoordinate) {
+    if (testScope) return;
     diagnostic(
       context,
       'gradle_dynamic_expression',
@@ -882,7 +950,8 @@ function collectGradleCoordinate(
       sourceDetail: `${groupId}:${artifactId}`,
       confidence: 'partial',
       provenance: 'repository-static',
-      versionResolutionEligible: false
+      versionResolutionEligible: false,
+      testScope
     });
     return;
   }
@@ -899,9 +968,10 @@ function collectGradleCoordinate(
     declaredVersion: version,
     confidence: version ? 'confident' : 'partial',
     provenance: 'repository-static',
-    unlistedFrameworkCandidate: matched.unlisted
+    unlistedFrameworkCandidate: matched.unlisted,
+    testScope
   });
-  if (!version) {
+  if (!version && !testScope) {
     diagnostic(
       context,
       'version_unresolved',
@@ -917,13 +987,15 @@ function collectGradleMapDependency(
   context: EvidenceContext,
   sourcePath: string,
   argumentsText: string,
-  properties: Map<string, string>
+  properties: Map<string, string>,
+  testScope?: true
 ): void {
   const groupToken = gradleNamedArgument(argumentsText, 'group');
   const nameToken = gradleNamedArgument(argumentsText, 'name');
   const groupId = groupToken ? quotedGradleLiteral(groupToken) : undefined;
   const artifactId = nameToken ? quotedGradleLiteral(nameToken) : undefined;
   if (!groupId || !artifactId) {
+    if (testScope) return;
     diagnostic(
       context,
       'gradle_dynamic_expression',
@@ -940,7 +1012,9 @@ function collectGradleMapDependency(
     context,
     sourcePath,
     `${groupId}:${artifactId}${version ? `:${version}` : ''}`,
-    properties
+    properties,
+    false,
+    testScope
   );
 }
 
@@ -1076,6 +1150,21 @@ function isPresenceOnlyArtifact(groupId: string, artifactId: string): boolean {
   return groupId.startsWith('org.springframework.') && groupId !== 'org.springframework.boot';
 }
 
+/** The build compiles Groovy code. The policy supports Groovy without a version requirement. */
+function addGroovyObservation(context: EvidenceContext, sourcePath: string, sourceDetail: string): void {
+  addObservation(context, {
+    identityCandidates: ['groovy'],
+    displayName: 'Groovy',
+    ecosystem: 'java',
+    technologyType: 'language',
+    evidenceKind: 'plugin-declaration',
+    sourcePath,
+    sourceDetail,
+    confidence: 'confident',
+    provenance: 'repository-static'
+  });
+}
+
 function addPresenceOnlyObservation(context: EvidenceContext, observation: S007TechnologyObservation): void {
   addObservation(context, observation);
   if (context.observations.includes(observation)) {
@@ -1083,10 +1172,28 @@ function addPresenceOnlyObservation(context: EvidenceContext, observation: S007T
   }
 }
 
+function finalizeObservations(context: EvidenceFinalizationContext): void {
+  finalizePresenceOnlyObservations(context);
+  markConflicts(context);
+  // An imported BOM only supplies versions for dependencies declared without one, and versions set in the
+  // repository take precedence over it. Once every production Maven dependency has a version, the BOM cannot
+  // change what S007 checks.
+  if (!context.observations.some(observation =>
+    observation.mavenDependency
+    && !observation.testScope
+    && observation.versionResolutionEligible !== false
+    && !observation.declaredVersion
+    && !observation.resolvedVersion
+  )) {
+    context.diagnostics = context.diagnostics.filter(diagnostic => diagnostic.code !== 'maven_imported_bom');
+  }
+}
+
 function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext): void {
   for (const observation of context.presenceOnlyObservations) {
     const authoritative = context.observations.some(candidate =>
       candidate !== observation
+      && !candidate.testScope
       && candidate.identityCandidates[0] === observation.identityCandidates[0]
       && Boolean(candidate.resolvedVersion ?? candidate.declaredVersion)
     );
@@ -1114,6 +1221,7 @@ function finalizePresenceOnlyObservations(context: EvidenceFinalizationContext):
       );
       continue;
     }
+    if (observation.testScope) continue;
     diagnostic(
       context,
       'version_unresolved',
@@ -1134,7 +1242,8 @@ function presenceOnlyMessage(observation: S007TechnologyObservation): string {
 
 function markConflicts(context: EvidenceFinalizationContext): void {
   const groups = new Map<string, S007TechnologyObservation[]>();
-  for (const observation of context.observations) {
+  // Test dependencies do not decide the status, so a different version used only in tests is not a conflict.
+  for (const observation of context.observations.filter(candidate => !candidate.testScope)) {
     const id = observation.identityCandidates[0];
     groups.set(id, [...(groups.get(id) ?? []), observation]);
   }
@@ -1218,7 +1327,9 @@ function addObservation(context: EvidenceContext, observation: S007TechnologyObs
     observation.sourcePath,
     observation.sourceDetail,
     observation.declaredVersion ?? '',
-    observation.resolvedVersion ?? ''
+    observation.resolvedVersion ?? '',
+    // A test declaration must not hide a production declaration of the same dependency.
+    observation.testScope ? 'test' : ''
   ].join('\u0000');
   if (context.observationKeys.has(key)) {
     return;
@@ -1256,22 +1367,28 @@ function identity(
 }
 
 function emptyMavenContext(): MavenContext {
-  return { properties: new Map(), dependencyManagement: new Map() };
+  return { properties: new Map(), dependencyManagement: new Map(), remoteParent: false, importsBom: false };
 }
 
 function cloneMavenContext(value: MavenContext): MavenContext {
-  return { properties: new Map(value.properties), dependencyManagement: new Map(value.dependencyManagement) };
+  return { ...value, properties: new Map(value.properties), dependencyManagement: new Map(value.dependencyManagement) };
 }
 
 function mergeMavenContexts(inherited: MavenContext, cached: MavenContext): MavenContext {
   return {
     properties: new Map([...inherited.properties, ...cached.properties]),
-    dependencyManagement: new Map([...inherited.dependencyManagement, ...cached.dependencyManagement])
+    dependencyManagement: new Map([...inherited.dependencyManagement, ...cached.dependencyManagement]),
+    remoteParent: inherited.remoteParent || cached.remoteParent,
+    springBoot: inherited.springBoot === 'parent' ? 'parent' : cached.springBoot ?? inherited.springBoot,
+    importsBom: inherited.importsBom || cached.importsBom
   };
 }
 
 function subtractMavenContext(effective: MavenContext, inherited: MavenContext): MavenContext {
   return {
+    remoteParent: effective.remoteParent,
+    springBoot: effective.springBoot,
+    importsBom: effective.importsBom,
     properties: new Map([...effective.properties].filter(([name, value]) => {
       const previous = inherited.properties.get(name);
       return !previous || previous.value !== value.value || previous.sourcePath !== value.sourcePath;

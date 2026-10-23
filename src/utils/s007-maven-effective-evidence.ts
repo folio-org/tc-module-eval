@@ -26,6 +26,7 @@ interface EffectiveMavenDependency {
   key: string;
   coordinates: string;
   version: string;
+  test: boolean;
 }
 
 export async function enrichS007WithMavenEffectivePom(
@@ -56,6 +57,9 @@ export async function enrichS007WithMavenEffectivePom(
       changed = true;
       return {
         ...observation,
+        // A version inferred from a property is replaced by the one Maven actually resolved.
+        declaredVersion: observation.versionProperty ? undefined : observation.declaredVersion,
+        versionProperty: undefined,
         resolvedVersion,
         versionSourcePath: sourcePath,
         resolutionSource: 'maven-effective-pom',
@@ -76,7 +80,7 @@ export async function enrichS007WithMavenEffectivePom(
     for (const dependency of effective.dependencies) {
       const [groupId, artifactId] = dependency.coordinates.split(':');
       if (!matchJavaIdentity(groupId, artifactId)) continue;
-      if (representedKeys.has(dependency.key)) continue;
+      if (representedKeys.has(dependency.key) || dependency.test) continue;
       const subject = `${dependency.coordinates}${dependency.key === `${dependency.coordinates}:jar:` ? '' : ` (${dependency.key})`} ${dependency.version}`;
       const message = `Maven's effective POM includes ${subject}, which is not declared in the repository's own build files, so the tool did not check it.`;
       if (!diagnostics.some(diagnostic =>
@@ -112,17 +116,8 @@ export async function enrichS007WithMavenEffectivePom(
   }
 
   if (!changed) return evidence;
-  // An imported BOM only supplies versions for dependencies declared without one. Once the effective POMs have
-  // resolved every such dependency, a BOM imported by a parent POM in the repository (which was not itself
-  // resolved because it declares none) can no longer change what S007 checks.
-  if (!observations.some(observation =>
-    observation.mavenDependency
-    && observation.versionResolutionEligible !== false
-    && !observation.declaredVersion
-    && !observation.resolvedVersion
-  )) {
-    diagnostics = diagnostics.filter(diagnostic => diagnostic.code !== 'maven_imported_bom');
-  }
+  // Finalizing also drops BOM warnings once every dependency has a version, including those of a parent POM in the
+  // repository that was not itself resolved because it declares no dependency without a version.
   return finalizeS007TechnologyEvidence({
     ...evidence,
     observations,
@@ -139,8 +134,9 @@ function unresolvedMavenObservations(
     if (
       observation.ecosystem !== 'java' ||
       observation.evidenceKind !== 'dependency-declaration' ||
-      observation.declaredVersion ||
+      (observation.declaredVersion && !observation.versionProperty) ||
       observation.resolvedVersion ||
+      observation.testScope ||
       observation.versionResolutionEligible === false ||
       !observation.mavenDependency
     ) continue;
@@ -245,7 +241,7 @@ async function parseMavenProject(
       classifier: xmlText(dependency?.classifier)
     });
     versions.set(key, new Set([...(versions.get(key) ?? []), version]));
-    dependencies.push({ key, coordinates, version });
+    dependencies.push({ key, coordinates, version, test: xmlText(dependency?.scope) === 'test' });
   }
   return { identity, versions, dependencies };
 }
