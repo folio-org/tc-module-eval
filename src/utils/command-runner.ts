@@ -38,6 +38,7 @@ export function normalizeCommandRequest(
     cwd: path.resolve(request.cwd),
     timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxOutputBytes: request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+    ...(request.keepStdoutTail ? { keepStdoutTail: true } : {}),
     stdoutFormat: request.stdoutFormat ?? 'text',
     captureDebugTrace: request.captureDebugTrace === true,
     envHash,
@@ -131,6 +132,8 @@ export class LocalCommandRunner implements CommandRunner {
       const stderrChunks: Buffer[] = [];
       let stdoutBytes = 0;
       let stderrBytes = 0;
+      let stdoutRetainedBytes = 0;
+      const keepStdoutTail = request.keepStdoutTail === true;
       let timedOut = false;
       let completed = false;
       let forceKillTimeout: NodeJS.Timeout | undefined;
@@ -145,8 +148,28 @@ export class LocalCommandRunner implements CommandRunner {
         return currentBytes + chunk.length;
       };
 
+      // Retains at most maxOutputBytes of the newest output, however much the process writes.
+      let stdoutLastDroppedByte: number | undefined;
+      const appendTail = (chunk: Buffer): void => {
+        stdoutBytes += chunk.length;
+        stdoutChunks.push(chunk);
+        stdoutRetainedBytes += chunk.length;
+        while (stdoutRetainedBytes > maxOutputBytes) {
+          const first = stdoutChunks[0];
+          const drop = Math.min(first.length, stdoutRetainedBytes - maxOutputBytes);
+          stdoutLastDroppedByte = first[drop - 1];
+          if (drop === first.length) stdoutChunks.shift();
+          else stdoutChunks[0] = first.subarray(drop);
+          stdoutRetainedBytes -= drop;
+        }
+      };
+
       child.stdout?.on('data', chunk => {
-        stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, Buffer.from(chunk));
+        if (keepStdoutTail) {
+          appendTail(Buffer.from(chunk));
+        } else {
+          stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, Buffer.from(chunk));
+        }
       });
       child.stderr?.on('data', chunk => {
         stderrBytes = appendBounded(stderrChunks, stderrBytes, Buffer.from(chunk));
@@ -182,10 +205,19 @@ export class LocalCommandRunner implements CommandRunner {
 
       child.on('close', (code, signal) => {
         clearTimeout(timeout);
+        let captured = Buffer.concat(stdoutChunks);
+        const cutStart = keepStdoutTail && stdoutBytes > maxOutputBytes;
+        if (cutStart && stdoutLastDroppedByte !== 10) {
+          // The retained tail starts inside a line; never publish that fragment.
+          const newline = captured.indexOf(10);
+          captured = newline < 0 ? Buffer.alloc(0) : captured.subarray(newline + 1);
+        }
         const structured = request.stdoutFormat && request.stdoutFormat !== 'text'
-          ? sanitizeStructuredOutput(Buffer.concat(stdoutChunks).toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace)
+          ? sanitizeStructuredOutput(captured.toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace, keepStdoutTail, cutStart)
           : undefined;
-        const stdout = structured?.text ?? this.formatCapturedOutput(stdoutChunks, stdoutBytes, maxOutputBytes);
+        const stdout = structured?.text ?? (cutStart
+          ? `[output truncated: kept the last ${captured.length} of ${stdoutBytes} bytes]\n${redactSensitiveText(captured.toString('utf-8'))}`
+          : this.formatCapturedOutput([captured], stdoutBytes, maxOutputBytes));
         const stderr = this.formatCapturedOutput(stderrChunks, stderrBytes, maxOutputBytes);
         const status = timedOut ? 'timed_out' : code === 0 ? 'success' : 'failed';
         const resolvedSignal = signal ?? forcedSignal;

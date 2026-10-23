@@ -192,6 +192,34 @@ describe('CommandRunner', () => {
     expect(result.stdout).toContain('output truncated');
   });
 
+  it('keeps the last whole lines of oversized stdout only when asked', async () => {
+    const request = {
+      command: process.execPath,
+      args: ['-e', 'for (let i = 0; i < 2000; i++) process.stdout.write(`line ${String(i).padStart(4, "0")} token=SECRET${i}\\n`)'],
+      cwd: process.cwd(),
+      maxOutputBytes: 1000
+    };
+    const runner = new LocalCommandRunner();
+    const tail = await runner.run({ ...request, keepStdoutTail: true });
+    const head = await runner.run(request);
+
+    const [marker, ...lines] = tail.stdout.trimEnd().split('\n');
+    expect(tail.stdoutTruncated).toBe(true);
+    expect(tail.stdoutBytes).toBe(head.stdoutBytes);
+    expect(tail.stdoutBytes).toBeGreaterThan(40000);
+    expect(marker).toMatch(/^\[output truncated: kept the last \d+ of \d+ bytes\]$/);
+    expect(lines[lines.length - 1]).toBe('line 1999 token=[REDACTED]');
+    expect(lines.length).toBeGreaterThan(20);
+    expect(Buffer.byteLength(lines.join('\n'))).toBeLessThanOrEqual(1000);
+    expect(lines.every(line => /^line \d{4} token=\[REDACTED\]$/.test(line))).toBe(true);
+    expect(tail.stdout).not.toContain('SECRET');
+    expect(head.stdout).toContain('line 0000');
+    expect(head.stdout).not.toContain('line 1999');
+    expect(runner.normalize({ ...request, keepStdoutTail: true })).not.toBe(runner.normalize(request));
+    const none = await runner.run({ ...request, keepStdoutTail: true, maxOutputBytes: 0 });
+    expect(none).toMatchObject({ status: 'success', stdoutBytes: tail.stdoutBytes, stdoutTruncated: true });
+  });
+
   it('should sanitize and bound command output', () => {
     const output = sanitizeCommandOutput('token=abc123\n' + 'x'.repeat(40), 30);
 

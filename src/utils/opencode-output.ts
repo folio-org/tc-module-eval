@@ -30,7 +30,9 @@ export function sanitizeStructuredOutput(
   output: string,
   format: 'json' | 'opencode-json',
   maxBytes: number,
-  captureDebugTrace = false
+  captureDebugTrace = false,
+  keepTail = false,
+  startCut = false
 ): { text: string; truncated: boolean; diagnostics: string[] } {
   const records: string[] = [];
   const diagnostics: string[] = [];
@@ -40,7 +42,13 @@ export function sanitizeStructuredOutput(
   };
   let bytes = 0;
   const whole = parseJsonObject(output);
-  const inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  let inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  if (startCut && format === 'opencode-json') {
+    // The message in progress at the cut lost its start, and with it the context
+    // (such as an enclosing secret assignment) that sanitization relies on.
+    const firstStart = inputs.findIndex(line => parseJsonObject(line)?.type === 'step_start');
+    inputs = firstStart < 0 ? [] : inputs.slice(firstStart);
+  }
   const parsedInputs = inputs.map(parseJsonObject);
   if (format === 'opencode-json') combineNativeTextParts(parsedInputs);
   for (const [index, parsed] of parsedInputs.entries()) {
@@ -84,11 +92,17 @@ export function sanitizeStructuredOutput(
       record = JSON.stringify({ ...JSON.parse(record), debugTrace: openCodeEventTrace(parsed) });
     }
     const size = Buffer.byteLength(record) + (records.length ? 1 : 0);
-    if (bytes + size > maxBytes) return { text: records.join('\n'), truncated: true, diagnostics };
+    if (bytes + size > maxBytes && !keepTail) return { text: records.join('\n'), truncated: true, diagnostics };
     records.push(record);
     bytes += size;
   }
-  return { text: records.join('\n'), truncated: false, diagnostics };
+  // Tail mode drops whole records from the start; the newest records carry the final answer.
+  let truncated = false;
+  while (bytes > maxBytes) {
+    bytes -= Buffer.byteLength(records.shift()!) + (records.length ? 1 : 0);
+    truncated = true;
+  }
+  return { text: records.join('\n'), truncated, diagnostics };
 }
 
 // Capture is already byte-bounded by the runner. Assemble decoded text before
@@ -209,15 +223,19 @@ export interface OpenCodeOutput {
   failure?: 'provider_error' | 'incomplete_response' | 'no_assistant_text' | 'malformed_json';
   finishReason?: string;
   providerError?: { name?: string; message?: string; statusCode?: number };
-  diagnostic?: 'invalid transport record' | 'sanitization rejected a record' | 'final assistant JSON invalid';
+  diagnostic?: 'invalid transport record' | 'sanitization rejected a record' | 'final assistant JSON invalid' |
+    'final assistant message start not captured';
 }
 
-export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
+// requireMessageStart: the output's start was cut, so accept only a final message
+// whose step_start was captured; otherwise its first text parts may be missing.
+export function decodeOpenCodeOutput(output: string, requireMessageStart = false): OpenCodeOutput {
   const parsed = parseJsonObject(output);
-  if (parsed && !parsed.type) return { payload: parsed };
+  if (parsed && !parsed.type && !requireMessageStart) return { payload: parsed };
   let textParts: string[] = [];
   let messageID: unknown;
   let lifecycle = false;
+  let messageStarted = false;
   let finishReason: string | undefined;
   const lines = output.split(/\r?\n/).filter(line => line.trim());
   for (const line of lines) {
@@ -241,6 +259,7 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
       finishReason = undefined;
       messageID = currentID;
       lifecycle = true;
+      messageStarted = event.type === 'step_start';
     }
     if (event.type === 'step_finish') {
       lifecycle = true;
@@ -256,6 +275,9 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
     }
   }
   if (lifecycle && finishReason !== 'stop') return { failure: 'incomplete_response', finishReason };
+  if (requireMessageStart && !messageStarted) {
+    return { failure: 'incomplete_response', finishReason, diagnostic: 'final assistant message start not captured' };
+  }
   if (!textParts.join('').trim()) return { failure: 'no_assistant_text', finishReason };
   const payload = parseJsonObjectFromText(textParts.join('').trim());
   return payload ? { payload, finishReason } : { failure: 'malformed_json', finishReason, diagnostic: 'final assistant JSON invalid' };

@@ -21,6 +21,7 @@ import {
 import * as committedSource from '../utils/committed-source';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
 import { sanitizeStructuredOutput } from '../utils/opencode-output';
+import { LocalCommandRunner } from '../utils/command-runner';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -486,7 +487,8 @@ describe('criterion agent review', () => {
     expect(runRequest?.env?.HOME).toBeDefined();
     expect(runRequest?.env?.XDG_CONFIG_HOME).toBeDefined();
     expect(runRequest?.env?.OPENCODE_CONFIG_DIR).toBeDefined();
-    expect(runRequest?.maxOutputBytes).toBe(1024 * 1024);
+    expect(runRequest?.maxOutputBytes).toBe(16 * 1024 * 1024);
+    expect(runRequest?.keepStdoutTail).toBe(true);
   });
 
   it('removes external OpenCode runtime data after normal runs', async () => {
@@ -732,6 +734,43 @@ describe('criterion agent review', () => {
     expect(result.available).toBe(false);
     expect(runner.requests).toHaveLength(stage);
     expect(result.errors.join('\n')).toContain('capture truncated');
+  });
+
+  it.each([
+    ['above the former 1 MiB limit', 2, false],
+    ['above the capture limit', 17, true]
+  ])('reads the review from OpenCode output %s', async (_label, mebibytes, cut) => {
+    // A fake opencode on PATH: tool events dominate the output and the answer comes last.
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-opencode-'));
+    const advisory = { recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+      summary: 'Large output summary.', rationale: 'Large output rationale.', evidenceReferences: ['README.md'] };
+    fs.writeFileSync(path.join(bin, 'opencode'), `#!${process.execPath}
+const args = process.argv.slice(2).join(' ');
+const out = value => process.stdout.write(JSON.stringify(value) + '\\n');
+if (args.startsWith('debug config')) out({ plugin: [], mcp: {}, provenance: process.env.OPENCODE_CONFIG_DIR });
+else if (args.startsWith('debug agent')) out({ provenance: process.env.OPENCODE_CONFIG_DIR, tools: { read: true, glob: true, grep: true } });
+else {
+  const filler = 'x'.repeat(64 * 1024);
+  out({ type: 'step_start', part: { type: 'step-start', messageID: 'msg_a' } });
+  for (let i = 0; i < ${mebibytes} * 16; i++) out({ type: 'tool_use', part: { type: 'tool', messageID: 'msg_a', tool: 'read', state: { status: 'completed', output: filler } } });
+  out({ type: 'step_finish', part: { type: 'step-finish', messageID: 'msg_a', reason: 'tool-calls' } });
+  out({ type: 'step_start', part: { type: 'step-start', messageID: 'msg_b' } });
+  out({ type: 'text', part: { type: 'text', messageID: 'msg_b', text: ${JSON.stringify(JSON.stringify(advisory))} } });
+  out({ type: 'step_finish', part: { type: 'step-finish', messageID: 'msg_b', reason: 'stop' } });
+}
+`, { mode: 0o755 });
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    try {
+      const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+        instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+      }, opencodeConfig(), new LocalCommandRunner());
+
+      expect(result.errors).toEqual([]);
+      expect(result).toMatchObject({ available: true, summary: 'Large output summary.', evidenceReferences: ['README.md'] });
+      expect(result.warnings.some(warning => /capture limit.*read from the end of the output/.test(warning))).toBe(cut);
+    } finally {
+      fs.rmSync(bin, { recursive: true, force: true });
+    }
   });
 
   it.each([1, 2, 3])('retains content-free debug records after timeout at stage %i', async stage => {

@@ -70,6 +70,8 @@ export interface CommandExecutionRequest {
   cwd: string;
   timeoutMs?: number;
   maxOutputBytes?: number;
+  /** When stdout exceeds maxOutputBytes, keep its last complete lines instead of its first bytes. */
+  keepStdoutTail?: boolean;
   stdoutFormat?: 'text' | 'json' | 'opencode-json';
   captureDebugTrace?: boolean;
   env?: Record<string, string | undefined>;
