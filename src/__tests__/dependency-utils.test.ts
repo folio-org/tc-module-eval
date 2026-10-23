@@ -22,23 +22,6 @@ jest.mock('../utils/license-policy', () => {
   return {
     ...actual,
     // Provide test configuration data
-    getLicenseCategory: jest.fn((licenseName: string) => {
-      const testCategories: Record<string, string> = {
-        'Apache-2.0': 'A',
-        'MIT': 'A',
-        'BSD-2-Clause': 'A',
-        'LGPL-2.1': 'B',
-        'MPL-2.0': 'B',
-        'Mozilla Public License 2.0': 'B',
-        'EPL-2.0': 'B',
-        'Eclipse Public License 1.0': 'B',
-        'Eclipse Public License 2.0': 'B',
-        'CDDL-1.0': 'B',
-        'Common Development and Distribution License 1.0': 'B',
-        'GPL-3.0': 'X'
-      };
-      return testCategories[licenseName];
-    }),
     getLicenseCategoryNormalized: jest.fn((licenseName: string) => {
       const testCategories: Record<string, string> = {
         'Apache-2.0': 'A',
@@ -55,23 +38,6 @@ jest.mock('../utils/license-policy', () => {
         'GPL-3.0': 'X'
       };
       return testCategories[licenseName];
-    }),
-    getLicensesInCategory: jest.fn((category: string) => {
-      const categoryBLicenses = [
-        'LGPL-2.1',
-        'MPL-2.0',
-        'Mozilla Public License 2.0',
-        'EPL-2.0',
-        'Eclipse Public License 1.0',
-        'Eclipse Public License 2.0',
-        'CDDL-1.0',
-        'Common Development and Distribution License 1.0'
-      ];
-
-      if (category === 'B') {
-        return categoryBLicenses;
-      }
-      return [];
     }),
     isSpecialException: jest.fn((dependencyName: string) => {
       return dependencyName === 'org.hibernate:hibernate-core' ||

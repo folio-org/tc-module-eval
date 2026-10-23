@@ -3,7 +3,6 @@
  *
  * Handles extraction of third-party dependencies from Maven projects including:
  * - Maven license plugin output (THIRD-PARTY.txt)
- * - Maven dependency:list command output
  * - Maven coordinate parsing
  * - Maven-specific dual license format (pipe-separated: "Apache-2.0|MIT")
  *
@@ -45,9 +44,7 @@ const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
 const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
 const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
-const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
-const MAVEN_DEPENDENCY_PATTERN = /\[INFO\]\s+(.+?):(.+?):(.+?):(.+?):(.+)/;
 const MAVEN_COORDINATE_PATTERN = /^(.+?):(.+?):(.+?)$/;
 
 const MAVEN_BUILD_FILES = ['pom.xml'];
@@ -227,47 +224,6 @@ function parseMavenThirdPartyFile(content: string): Dependency[] {
     const dependency = parseMavenThirdPartyLine(line);
     if (dependency && isValidDependency(dependency)) {
       dependencies.push(dependency);
-    }
-  }
-
-  return dependencies;
-}
-
-/**
- * Check if an error is caused by command timeout
- * @param error - Error object to check
- * @returns True if error was caused by timeout
- */
-/**
- * Parse Maven dependency:list output
- * @param output - Output from mvn dependency:list command
- * @returns Array of parsed dependencies (without license information)
- */
-function parseMavenDependencyList(output: string): Dependency[] {
-  if (!isNonEmptyString(output)) {
-    return [];
-  }
-
-  const dependencies: Dependency[] = [];
-  const lines = output.split('\n');
-
-  for (const line of lines) {
-    // Look for dependency lines like: "[INFO]    org.apache.commons:commons-lang3:jar:3.12.0:compile"
-    const match = line.match(MAVEN_DEPENDENCY_PATTERN);
-    if (match && match.length >= 5) {
-      const [, groupId, artifactId, , version] = match;
-
-      if (isNonEmptyString(groupId) && isNonEmptyString(artifactId) && isNonEmptyString(version)) {
-        const dependency: Dependency = {
-          name: `${groupId.trim()}:${artifactId.trim()}`,
-          version: version.trim(),
-          licenses: undefined // License info not available from dependency:list
-        };
-
-        if (isValidDependency(dependency)) {
-          dependencies.push(dependency);
-        }
-      }
     }
   }
 

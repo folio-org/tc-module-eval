@@ -374,12 +374,3 @@ export function suppressionFlags(item: S011Suppression, rules: Record<string, So
   if (!item.comment) flags.push('no comment');
   return flags;
 }
-
-/** Whether a path names a file in the checkout; used before citing it. */
-export function isRepositoryFile(repoPath: string, relative: string): boolean {
-  try {
-    return fs.lstatSync(path.join(repoPath, relative)).isFile();
-  } catch {
-    return false;
-  }
-}

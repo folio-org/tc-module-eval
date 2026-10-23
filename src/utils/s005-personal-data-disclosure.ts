@@ -829,10 +829,6 @@ function dedupeMismatches(mismatches: S005PersonalDataPossibleMismatch[]): S005P
   return deduped;
 }
 
-export function normalizeS005ChecklistCategory(label: string): S005PersonalDataCategory {
-  return normalizeS005ChecklistCategories(label)[0];
-}
-
 export function normalizeS005ChecklistCategories(label: string): S005PersonalDataCategory[] {
   const normalized = label.toLowerCase();
 

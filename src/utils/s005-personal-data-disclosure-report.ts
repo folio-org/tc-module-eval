@@ -16,7 +16,6 @@ import {
   S005PersonalDataEvidenceScanResult,
   S005PersonalDataEvidenceSignal,
   S005PersonalDataEvidenceSourceClass,
-  S005PersonalDataEvidenceStrength,
   S005PersonalDataPossibleMismatch
 } from '../types';
 import {

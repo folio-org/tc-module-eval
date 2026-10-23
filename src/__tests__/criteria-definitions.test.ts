@@ -1,13 +1,9 @@
 import {
   getCriteriaForLanguage,
-  JAVA_CRITERIA,
   ADMINISTRATIVE_CRITERIA,
   SHARED_CRITERIA,
+  BACKEND_CRITERIA,
   FRONTEND_CRITERIA,
-  isValidCriterionId,
-  getSectionForCriterion,
-  getDescriptionForCriterion,
-  getCriterionDefinition,
   getAcceptanceCriterionDefinition,
   getCriteriaForSection,
   createDefaultCriterionResult
@@ -18,7 +14,7 @@ describe('criteria-definitions', () => {
   describe('getCriteriaForLanguage', () => {
     it.each(['java', 'JAVA'])('should return Java criteria for %s', language => {
       const result = getCriteriaForLanguage(language);
-      expect(result).toEqual(JAVA_CRITERIA);
+      expect(result).toEqual([...ADMINISTRATIVE_CRITERIA, ...SHARED_CRITERIA, ...BACKEND_CRITERIA]);
       expect(result).toContain('A001');
       expect(result).toContain('S001');
       expect(result).toContain('B001');
@@ -42,55 +38,6 @@ describe('criteria-definitions', () => {
     });
   });
 
-  describe('isValidCriterionId', () => {
-    it.each(['A001', 'S001', 'S014', 'B001', 'B016', 'F001', 'F007'])('should return true for valid criterion %s', id => {
-      expect(isValidCriterionId(id)).toBe(true);
-    });
-
-    it.each(['X001', 'S999', 'invalid', ''])('should return false for invalid criterion %p', id => {
-      expect(isValidCriterionId(id)).toBe(false);
-    });
-  });
-
-  describe('getSectionForCriterion', () => {
-    it.each([
-      ['A001', 'Administrative'],
-      ['S001', 'Shared/Common'],
-      ['B001', 'Backend'],
-      ['F001', 'Frontend'],
-      ['X001', 'Unknown']
-    ])('should return the section for %s (%s)', (id, section) => {
-      expect(getSectionForCriterion(id)).toBe(section);
-    });
-  });
-
-  describe('getDescriptionForCriterion', () => {
-    it.each([
-      ['A001', 'Listed by Product Council with positive evaluation result'],
-      ['S001', 'Uses Apache 2.0 license'],
-      ['B001', 'Compliant Module Descriptor'],
-      ['F001', 'API interface requirements in package.json'],
-      ['X001', 'Unknown criterion']
-    ])('should return the description for %s (%p)', (id, description) => {
-      expect(getDescriptionForCriterion(id)).toBe(description);
-    });
-  });
-
-  describe('getCriterionDefinition', () => {
-    it('should return complete definition for valid criterion', () => {
-      const definition = getCriterionDefinition('S001');
-      expect(definition).toEqual({
-        id: 'S001',
-        description: 'Uses Apache 2.0 license',
-        section: 'Shared/Common'
-      });
-    });
-
-    it('should return undefined for invalid criterion', () => {
-      expect(getCriterionDefinition('X001')).toBeUndefined();
-    });
-  });
-
   describe('acceptance criterion catalog', () => {
     it('should expose canonical criteria by section and language', () => {
       expect(getCriteriaForSection('Shared/Common', 'java')).toEqual(SHARED_CRITERIA);
@@ -103,14 +50,14 @@ describe('criteria-definitions', () => {
       expect(getCriteriaForSection('Frontend', 'java')).toEqual([]);
     });
 
-    it('should expose extended catalog metadata without changing basic definitions', () => {
+    it('should expose extended catalog metadata alongside the basic definition fields', () => {
       const catalogEntry = getAcceptanceCriterionDefinition('S002');
       expect(catalogEntry?.languages).toEqual(['java', 'javascript']);
       expect(catalogEntry?.defaultEvaluation?.reason).toBe('Module descriptor validation');
       expect(getAcceptanceCriterionDefinition('S005')?.defaultEvaluation?.reason).toBe('Personal data disclosure form evaluation');
       expect(getAcceptanceCriterionDefinition('S006')?.defaultEvaluation?.reason).toBe('Sensitive information repository scan');
 
-      expect(getCriterionDefinition('S002')).toEqual({
+      expect(catalogEntry).toMatchObject({
         id: 'S002',
         description: 'Module build produces valid module descriptor',
         section: 'Shared/Common'

@@ -156,43 +156,6 @@ export function isListedLicenseName(licenseName: string): boolean {
 }
 
 /**
- * Get the license category for a given license name
- * @param licenseName The license name to categorize
- * @returns LicenseCategory or undefined if not found
- */
-export function getLicenseCategory(licenseName: string): LicenseCategory | undefined {
-  const policy = loadLicenseCategories();
-  return policy.get(licenseName);
-}
-
-/**
- * Check if a license is in a specific category
- * @param licenseName The license name to check
- * @param category The category to check against
- * @returns true if the license is in the specified category
- */
-export function isLicenseInCategory(licenseName: string, category: LicenseCategory): boolean {
-  const policy = loadLicenseCategories();
-  return policy.get(licenseName) === category;
-}
-
-/**
- * Get all licenses in a specific category
- * @param category The category to filter by
- * @returns Array of license names in the specified category
- */
-export function getLicensesInCategory(category: LicenseCategory): string[] {
-  const licenses: string[] = [];
-  const policy = loadLicenseCategories();
-  for (const [license, cat] of policy.entries()) {
-    if (cat === category) {
-      licenses.push(license);
-    }
-  }
-  return licenses;
-}
-
-/**
  * Load license variations configuration from JSON file
  */
 function loadLicenseVariations(): Map<string, string> {
