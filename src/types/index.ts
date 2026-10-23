@@ -167,6 +167,13 @@ export interface EvaluationRun {
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
   ): Promise<NonNullable<EvaluationRunArtifacts[K]>>;
+  /**
+   * Run one criterion's agent review once a review slot is free, after handing the section loop on to the next
+   * criterion. Call it at most once per criterion: a second call would start the next criterion early.
+   */
+  runAgentReview<T>(review: () => Promise<T>): Promise<T>;
+  /** Resolves when the next runAgentReview call starts, so the section loop can start the next criterion. */
+  nextAgentReviewHandoff(): Promise<void>;
 }
 
 /**

@@ -219,6 +219,59 @@ describe('BaseSectionEvaluator', () => {
     // Evaluation continues after the error
     expect(results[2].status).toBe(EvaluationStatus.PASS);
   });
+
+  it('should overlap agent reviews but keep deterministic work sequential and results in order', async () => {
+    const run = createEvaluationRun({ repositoryPath: '/repo', language: 'java' });
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    let deterministic = 0;
+    let maxDeterministic = 0;
+    let reviews = 0;
+    let maxReviews = 0;
+    const finished: string[] = [];
+    // Earlier criteria review longest, so reviews finish in reverse order.
+    const criterion = (id: string, reviewMs?: number, failure?: 'analysis' | 'review'): CriterionFunction => async (_repoPath, evaluationRun) => {
+      deterministic++;
+      maxDeterministic = Math.max(maxDeterministic, deterministic);
+      await delay(5);
+      deterministic--;
+      if (failure === 'analysis') throw new Error(`${id} analysis failed`);
+      if (reviewMs === undefined) return { criterionId: id, status: EvaluationStatus.PASS, evidence: `${id} done` };
+      const review = await evaluationRun!.runAgentReview(async () => {
+        reviews++;
+        maxReviews = Math.max(maxReviews, reviews);
+        await delay(reviewMs);
+        reviews--;
+        if (failure === 'review') throw new Error(`${id} review failed`);
+        return `${id} reviewed`;
+      });
+      finished.push(id);
+      return { criterionId: id, status: EvaluationStatus.MANUAL, evidence: review };
+    };
+    const evaluator = new StubSectionEvaluator('Test', {
+      X001: criterion('X001', 120),
+      X002: criterion('X002', undefined, 'analysis'),
+      X003: criterion('X003', 100),
+      X004: criterion('X004', 80, 'review'),
+      X005: criterion('X005', 60),
+      X006: criterion('X006'),
+      X007: criterion('X007', 20)
+    });
+
+    const results = await evaluator.evaluate('/repo', undefined, run);
+
+    expect(results.map(result => [result.criterionId, result.evidence])).toEqual([
+      ['X001', 'X001 reviewed'],
+      ['X002', 'Evaluation failed: X002 analysis failed'],
+      ['X003', 'X003 reviewed'],
+      ['X004', 'Evaluation failed: X004 review failed'],
+      ['X005', 'X005 reviewed'],
+      ['X006', 'X006 done'],
+      ['X007', 'X007 reviewed']
+    ]);
+    expect(maxDeterministic).toBe(1);
+    expect(maxReviews).toBe(3);
+    expect(finished[0]).not.toBe('X001');
+  });
 });
 
 describe('CatalogSectionEvaluator', () => {

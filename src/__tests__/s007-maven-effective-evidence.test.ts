@@ -9,6 +9,7 @@ import {
   EvaluationRun,
   S007TechnologyEvidenceResult
 } from '../types';
+import { createEvaluationRun } from '../utils/evaluation-run';
 import { evaluateS007 } from '../utils/s007-evaluator';
 import { enrichS007WithMavenEffectivePom } from '../utils/s007-maven-effective-evidence';
 import { loadS007Policy } from '../utils/s007-policy';
@@ -580,16 +581,5 @@ function dependency(groupId: string, artifactId: string, version: string, type?:
 }
 
 function run(commandRunner: CommandRunner): EvaluationRun {
-  return {
-    repositoryPath: '',
-    language: 'java',
-    selectedCriteria: ['S007'],
-    s008CatalogChannel: 'official',
-    commandRunner,
-    artifacts: {},
-    commandObservations: new Map(),
-    getOrCreateArtifact: async () => {
-      throw new Error('not used');
-    }
-  };
+  return createEvaluationRun({ repositoryPath: '', language: 'java', criteriaFilter: ['S007'], commandRunner });
 }

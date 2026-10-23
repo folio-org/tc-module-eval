@@ -7,7 +7,6 @@ import {
   CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
-  EvaluationRun,
   EvaluationStatus
 } from '../types';
 import {
@@ -309,13 +308,15 @@ describe('criterion agent review', () => {
       criterionId: 'S005',
       status: EvaluationStatus.MANUAL,
       hasReviewMaterial: true,
-      evaluationRun: {
+      evaluationRun: createEvaluationRun({
+        repositoryPath: repoPath,
+        language: 'java',
         agentReview: {
           enabled: true,
           enabledCriteria: ['S005'],
           adapter: 'fake'
         }
-      } as EvaluationRun,
+      }),
       review: async () => {
         throw new Error('agent crashed with token=abc123');
       }

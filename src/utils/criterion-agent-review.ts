@@ -99,7 +99,7 @@ export async function reviewCriterionWithAgent(
   };
   let agentReview: CriterionAgentReviewResult;
   try {
-    agentReview = await request.review(config, run.commandRunner);
+    agentReview = await run.runAgentReview(() => request.review(config, run.commandRunner));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
