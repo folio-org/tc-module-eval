@@ -216,6 +216,8 @@ describe('CommandRunner', () => {
     expect(head.stdout).toContain('line 0000');
     expect(head.stdout).not.toContain('line 1999');
     expect(runner.normalize({ ...request, keepStdoutTail: true })).not.toBe(runner.normalize(request));
+    const none = await runner.run({ ...request, keepStdoutTail: true, maxOutputBytes: 0 });
+    expect(none).toMatchObject({ status: 'success', stdoutBytes: tail.stdoutBytes, stdoutTruncated: true });
   });
 
   it('should sanitize and bound command output', () => {

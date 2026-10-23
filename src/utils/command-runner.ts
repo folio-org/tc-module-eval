@@ -149,16 +149,18 @@ export class LocalCommandRunner implements CommandRunner {
       };
 
       // Retains at most maxOutputBytes of the newest output, however much the process writes.
+      let stdoutLastDroppedByte: number | undefined;
       const appendTail = (chunk: Buffer): void => {
         stdoutBytes += chunk.length;
-        stdoutChunks.push(chunk.subarray(Math.max(0, chunk.length - maxOutputBytes)));
-        stdoutRetainedBytes += stdoutChunks[stdoutChunks.length - 1].length;
-        while (stdoutRetainedBytes - stdoutChunks[0].length >= maxOutputBytes) {
-          stdoutRetainedBytes -= stdoutChunks.shift()!.length;
-        }
-        if (stdoutRetainedBytes > maxOutputBytes) {
-          stdoutChunks[0] = stdoutChunks[0].subarray(stdoutRetainedBytes - maxOutputBytes);
-          stdoutRetainedBytes = maxOutputBytes;
+        stdoutChunks.push(chunk);
+        stdoutRetainedBytes += chunk.length;
+        while (stdoutRetainedBytes > maxOutputBytes) {
+          const first = stdoutChunks[0];
+          const drop = Math.min(first.length, stdoutRetainedBytes - maxOutputBytes);
+          stdoutLastDroppedByte = first[drop - 1];
+          if (drop === first.length) stdoutChunks.shift();
+          else stdoutChunks[0] = first.subarray(drop);
+          stdoutRetainedBytes -= drop;
         }
       };
 
@@ -205,13 +207,13 @@ export class LocalCommandRunner implements CommandRunner {
         clearTimeout(timeout);
         let captured = Buffer.concat(stdoutChunks);
         const cutStart = keepStdoutTail && stdoutBytes > maxOutputBytes;
-        if (cutStart) {
-          // The retained tail usually starts inside a line; never publish that fragment.
+        if (cutStart && stdoutLastDroppedByte !== 10) {
+          // The retained tail starts inside a line; never publish that fragment.
           const newline = captured.indexOf(10);
           captured = newline < 0 ? Buffer.alloc(0) : captured.subarray(newline + 1);
         }
         const structured = request.stdoutFormat && request.stdoutFormat !== 'text'
-          ? sanitizeStructuredOutput(captured.toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace, keepStdoutTail)
+          ? sanitizeStructuredOutput(captured.toString('utf-8'), request.stdoutFormat, maxOutputBytes, request.captureDebugTrace, keepStdoutTail, cutStart)
           : undefined;
         const stdout = structured?.text ?? (cutStart
           ? `[output truncated: kept the last ${captured.length} of ${stdoutBytes} bytes]\n${redactSensitiveText(captured.toString('utf-8'))}`

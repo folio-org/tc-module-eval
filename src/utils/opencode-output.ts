@@ -31,7 +31,8 @@ export function sanitizeStructuredOutput(
   format: 'json' | 'opencode-json',
   maxBytes: number,
   captureDebugTrace = false,
-  keepTail = false
+  keepTail = false,
+  startCut = false
 ): { text: string; truncated: boolean; diagnostics: string[] } {
   const records: string[] = [];
   const diagnostics: string[] = [];
@@ -41,7 +42,13 @@ export function sanitizeStructuredOutput(
   };
   let bytes = 0;
   const whole = parseJsonObject(output);
-  const inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  let inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  if (startCut && format === 'opencode-json') {
+    // The message in progress at the cut lost its start, and with it the context
+    // (such as an enclosing secret assignment) that sanitization relies on.
+    const firstStart = inputs.findIndex(line => parseJsonObject(line)?.type === 'step_start');
+    inputs = firstStart < 0 ? [] : inputs.slice(firstStart);
+  }
   const parsedInputs = inputs.map(parseJsonObject);
   if (format === 'opencode-json') combineNativeTextParts(parsedInputs);
   for (const [index, parsed] of parsedInputs.entries()) {

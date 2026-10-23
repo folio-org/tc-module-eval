@@ -273,6 +273,27 @@ describe('final OpenCode answer selection', () => {
     expect(decodeOpenCodeOutput(tail.stdout, true).payload).toEqual(advisory);
   });
 
+  it('keeps a whole first line when the cut falls on a line boundary', async () => {
+    const final = wire(start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
+    const output = wire({ type: 'tool_use', part: { messageID: 'msg_a', output: 'x'.repeat(1000) } }) + '\n' + final;
+    const exact = await capture(output, Buffer.byteLength(final), false, true);
+    const inside = await capture(output, Buffer.byteLength(final) - 1, false, true);
+
+    expect(exact.stdoutTruncated).toBe(true);
+    expect(decodeOpenCodeOutput(exact.stdout, true).payload).toEqual(advisory);
+    expect(decodeOpenCodeOutput(inside.stdout, true).payload).toBeUndefined();
+  });
+
+  it('does not publish text from a message whose start, and secret context, was cut', async () => {
+    const output = wire(start(), text("password='" + 'p'.repeat(70 * 1024)), text('{"value":"SYNTHETIC_SECRET"}'), text("'"),
+      finish('tool-calls'), start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
+    const tail = await capture(output, 64 * 1024, false, true);
+
+    expect(tail.stdoutTruncated).toBe(true);
+    expect(JSON.stringify(tail)).not.toContain('SYNTHETIC_SECRET');
+    expect(decodeOpenCodeOutput(tail.stdout, true).payload).toEqual(advisory);
+  });
+
   it('drops the oldest sanitized records when tail capture still exceeds the limit', () => {
     const output = wire(start(), text('Reading files.'), finish('tool-calls'), start('msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
     const records = sanitizeStructuredOutput(output, 'opencode-json', 1024 * 1024).text.split('\n');
@@ -284,17 +305,15 @@ describe('final OpenCode answer selection', () => {
     expect(decodeOpenCodeOutput(tail.text, true).payload).toEqual(advisory);
   });
 
-  it('rejects a cut output whose final assistant message start was dropped', async () => {
-    // Only the end of the final message survives; its first text part was dropped.
-    const draft = 'Draft, superseded below: ' + 'y'.repeat(70 * 1024);
-    const output = wire(start('msg_b'), text(draft, 'msg_b'), text(undefined, 'msg_b'), finish('stop', 'msg_b'));
-    const tail = await capture(output, 64 * 1024, false, true);
+  it('accepts a cut output only when its final assistant message start was captured', () => {
+    // Earlier text parts of the final message may precede the kept records.
+    const rest = [text(undefined, 'msg_b'), finish('stop', 'msg_b')];
 
-    expect(tail.stdoutTruncated).toBe(true);
-    expect(decodeOpenCodeOutput(tail.stdout).payload).toEqual(advisory);
-    expect(decodeOpenCodeOutput(tail.stdout, true)).toMatchObject({
+    expect(decodeOpenCodeOutput(wire(...rest)).payload).toEqual(advisory);
+    expect(decodeOpenCodeOutput(wire(...rest), true)).toMatchObject({
       failure: 'incomplete_response', diagnostic: 'final assistant message start not captured'
     });
+    expect(decodeOpenCodeOutput(wire(start('msg_b'), ...rest), true).payload).toEqual(advisory);
   });
 
   it.each(["{'recommendation': 'likely_insufficient'", '{recommendation: "likely_insufficient"', 'not JSON'])('rejects malformed final JSON fences: %s', async replacement => {
