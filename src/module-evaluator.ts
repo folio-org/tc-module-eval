@@ -39,10 +39,10 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
 /**
  * Main orchestrator for module evaluation
  *
- * S001-S014 and F005 have automated evaluation logic and return MANUAL only when
- * the evidence is inconclusive. The other 23 of the 38 criteria always return
+ * S001-S014, F003 and F005 have automated evaluation logic and return MANUAL only
+ * when the evidence is inconclusive. The other 22 of the 38 criteria always return
  * MANUAL: A001 is a manual review by design, and B001-B016 (Java) and
- * F001-F004 and F006-F007 (JavaScript) have no evaluation logic yet.
+ * F001-F002, F004 and F006-F007 (JavaScript) have no evaluation logic yet.
  */
 export class ModuleEvaluator {
   private gitUtils: GitUtils;

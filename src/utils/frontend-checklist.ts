@@ -5,13 +5,16 @@ import {
   FrontendChecklist,
   FrontendChecklistItem
 } from '../types';
-import { ASSESSMENT_LABELS, COVERAGE_LABELS, prose } from './agent-review-report';
-import { reportPath, reportText } from './report-text';
+import { ASSESSMENT_LABELS, COVERAGE_LABELS, prose, renderAgentReviewLines } from './agent-review-report';
+import { overflowLine, reportPath, reportText } from './report-text';
 
 /** The most obligations one F00x agent review is given; the rest are listed as not given to the agent. */
 export const FRONTEND_AGENT_OBLIGATION_LIMIT = 25;
 
 export const CHECKLIST_HEADING = 'Checklist for the reviewer:';
+
+/** The most starting points shown per checklist item; the rest are counted. */
+export const SHOWN_STARTING_POINTS = 20;
 
 /** An F criterion's checklist: the items for a fail or manual result, none for pass or not applicable. */
 export function frontendChecklist(status: EvaluationStatus, items: FrontendChecklistItem[]): FrontendChecklist {
@@ -36,8 +39,9 @@ export function renderFrontendChecklistLines(checklist: FrontendChecklist, revie
   for (const item of checklist.items) {
     lines.push(`  - ${item.id} ${reportText(item.title)}`);
     if (item.startingPoints.length) {
-      lines.push('    - Start with:', ...item.startingPoints.map(point =>
-        `      - ${reportPath(point.path)}${point.line ? `:${point.line}` : ''} — ${reportText(point.note)}`));
+      lines.push('    - Start with:', ...item.startingPoints.slice(0, SHOWN_STARTING_POINTS).map(point =>
+        `      - ${reportPath(point.path)}${point.line ? `:${point.line}` : ''} — ${reportText(point.note)}`),
+      ...overflowLine(item.startingPoints.length, SHOWN_STARTING_POINTS, '      '));
     }
     if (!assessments) continue;
     if (item.reviewerOnly) {
@@ -64,6 +68,42 @@ export function unattachedAssessments(checklist: FrontendChecklist, review: Crit
   const obligationIds = new Set(checklist.items.filter(item => !item.reviewerOnly)
     .flatMap(item => item.obligations.map(obligation => obligation.id)));
   return (review.assessments ?? []).filter(assessment => !obligationIds.has(assessment.technologyId));
+}
+
+// What an agent may report beyond the checklist, as discovered:<kind>:<n> (F001 and F003).
+const DISCOVERED_KIND_NAMES: Record<string, string> = {
+  text: 'Hard-coded text found by the agent',
+  id: 'Missing message id found by the agent',
+  interface: 'Request found by the agent'
+};
+
+/**
+ * An accepted review's own section: the findings that answer no checklist obligation, such as `discovered:` ones,
+ * then the recommendation, summary and reviewer actions.
+ */
+export function renderFrontendAgentReviewLines(checklist: FrontendChecklist, review: CriterionAgentReviewResult): string[] {
+  const unattached = unattachedAssessments(checklist, review);
+  const names = Object.fromEntries(unattached.flatMap(assessment => {
+    const match = /^discovered:([a-z]+):(\d+)$/.exec(assessment.technologyId);
+    return match && DISCOVERED_KIND_NAMES[match[1]] ? [[`${match[1]}:${match[2]}`, `${DISCOVERED_KIND_NAMES[match[1]]} (${match[2]})`]] : [];
+  }));
+  return [...renderAgentReviewLines({ ...review, assessments: unattached }, names), '  - Advisory only; the criterion status is unchanged.'];
+}
+
+/**
+ * Layers 2 and 3 of an F criterion's details: the checklist with the agent's results, and the review's own section,
+ * or the reason it was not applied.
+ */
+export function frontendReviewLines(
+  checklist: FrontendChecklist,
+  review: CriterionAgentReviewResult | undefined,
+  unavailableReason: string | undefined
+): string[] {
+  return [
+    ...renderFrontendChecklistLines(checklist, review),
+    ...(review?.available ? renderFrontendAgentReviewLines(checklist, review)
+      : unavailableReason ? ['Agent review:', `  - Not applied: ${reportText(unavailableReason)}`] : [])
+  ];
 }
 
 // The label comes before the subject, which can be repository text such as a message id.

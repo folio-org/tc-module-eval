@@ -356,11 +356,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F003',
     description: 'i18n support via react-intl',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Internationalization support via react-intl'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F004',

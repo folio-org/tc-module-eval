@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -131,6 +131,8 @@ export interface EvaluationRunArtifacts {
   s011SuppressionScan?: import('./s011-sonarqube').S011SuppressionScan;
   /** The committed source every agent review browses; read once and frozen, since the reviews share it. */
   agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
+  /** The committed production source, package.json and English translations the F criteria read. */
+  frontendSource?: import('../utils/frontend-source').FrontendSource;
 }
 
 export interface EvaluationRun {
@@ -200,6 +202,7 @@ export * from './s013-test-coverage';
 export * from './s014-application-assignment';
 export * from './remote-evidence';
 export * from './frontend-checklist';
+export * from './f003-internationalization';
 export * from './f005-stripes-version';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';

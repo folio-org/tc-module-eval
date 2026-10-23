@@ -327,7 +327,23 @@ An application whose FAR descriptor is missing, not exactly one record, for anot
 
 Tests never touch the network: they replay responses recorded by `yarn capture:remote-fixtures` into `src/__tests__/fixtures/remote/`, and an unrecorded URL fails the test.
 
+## F003 Internationalization
+
+F003 checks "i18n support via react-intl": the package renders its user-visible text through react-intl from `translations/<namespace>/en.json`, a JSON object of English texts. Everything comes from the committed tree: production source (`src/`, `lib/` and root-level `.js`/`.jsx`/`.ts`/`.tsx` files, without tests, stories, examples, fixtures and mocks), `package.json` and the `en.json` files. Source is at most 2,000 files with the default size limits; `package.json` and `en.json` are read separately, so a large source tree cannot crowd them out. JSX is parsed with the TypeScript parser, so comments never count as text.
+
+- `not_applicable`: the package renders no user interface (Q10): its production code renders no HTML element, no JSX text and no literal text prop (`label="Save"`), and it has no `translations/` directory. JSX that only renders components it is given, such as stripes-connect's `<Wrapped {...props} />`, does not count. F004, F006 and F007 will use the same check.
+- `fail`: react-intl is not in `dependencies` or `peerDependencies`, or no production file imports it; or there is no `en.json` for the namespace, or it is not valid JSON or not a JSON object.
+- `manual`: literal message ids of the namespace missing from `en.json` (Q4), each counted once however often it is used; hard-coded text; texts in `en.json` that are empty, not strings, or not valid ICU messages (`@formatjs/icu-messageformat-parser`, as react-intl parses them); an unclear namespace; or source that could not be read or parsed.
+- `pass`: none of the above.
+
+The namespace is the only directory under `translations/` (ui-checkin's package is `@folio/checkin`, its namespace `ui-checkin`). With several directories, the Stripes naming rule picks `ui-` plus the package name, or the bare name for `stripes-*` packages; otherwise the namespace is unclear. Message ids are read from `<FormattedMessage id>`, `<FormattedHTMLMessage id>`, `formatMessage({ id })` and `translate(...)`; both ids of `cond ? 'a' : 'b'` count as literal. An id of the namespace, `ui-checkin.statusModal.cancel`, is the key `statusModal.cancel` in `en.json`. Ids of other namespaces (`stripes-core.…`) are counted, not checked. Computed ids (template literals, variables) are listed but not checked and never block a pass. Hard-coded text candidates are JSX text and string values of `aria-label`, `label`, `placeholder` and `title` with two or more words; HTML entities such as `&nbsp;` are not words.
+
+Checklist items, shown for fail and manual: **F003-C1** each listed id exists in `en.json`, or the code supplies English fallback text; **F003-C2** no user-visible text is hard-coded; **F003-C3** computed message ids resolve to keys in `en.json`; **F003-C4** every `en.json` value has valid ICU syntax. An item appears when it has something to check: C1 and C2 also when source could not be read, C1 also for an unclear namespace.
+
+F003 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+
 ## F005 Stripes Version
+
 
 F005 checks that the module uses the Stripes version on the officially supported technologies page ("Stripes 10.1 or greater" in the committed policy). It does not compare versions itself: it takes S007's own finding for `@folio/stripes`, which S007 and F005 read from one analysis per run, so the two always agree and `--criteria F005` works without S007.
 

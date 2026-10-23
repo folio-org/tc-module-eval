@@ -33,7 +33,11 @@ export async function prepareRepositoryBrowsing(
   request: CriterionAgentReviewRequest,
   readSnapshot: () => Promise<CommittedSourceSnapshot> = () => readRepositorySnapshot(request.repositoryPath)
 ): Promise<PreparedRepositoryBrowsing> {
-  const snapshot = await readSnapshot();
+  const fullSnapshot = await readSnapshot();
+  const snapshot = request.browseInclude
+    ? { ...fullSnapshot, files: fullSnapshot.files.filter(file => request.browseInclude!(file.path)),
+      diagnostics: fullSnapshot.diagnostics.filter(diagnostic => !diagnostic.path || request.browseInclude!(diagnostic.path)) }
+    : fullSnapshot;
   const blocking = snapshot.diagnostics.find(diagnostic => !['binary', 'unsafe-entry', 'file-size'].includes(diagnostic.code));
   if (blocking) throw new Error(`Repository browsing workspace is incomplete: ${blocking.message}`);
   if (!snapshot.files.length) throw new Error('No committed repository source was available for agent review.');
