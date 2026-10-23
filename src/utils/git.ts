@@ -27,7 +27,6 @@ export class GitUtils {
     const repoName = this.extractRepoName(repositoryUrl);
     const clonePath = path.join(this.tempDir, repoName, Date.now().toString());
 
-    // Ensure temp directory exists
     await fs.ensureDir(clonePath);
 
     const git = simpleGit({
@@ -37,7 +36,6 @@ export class GitUtils {
     });
 
     try {
-      // Clone with branch if specified
       if (branch) {
         await git.clone(repositoryUrl, clonePath, ['--branch', branch]);
         getLogger().info(`Repository cloned to: ${clonePath} (branch: ${branch})`);
@@ -46,17 +44,14 @@ export class GitUtils {
         getLogger().info(`Repository cloned to: ${clonePath}`);
       }
 
-      // Store repo name for later use
       this.repoName = repoName;
 
       return clonePath;
     } catch (error: any) {
-      // Clean up the partially created directory
       await fs.remove(clonePath).catch(() => {
         // Ignore cleanup errors
       });
 
-      // Provide more helpful error messages
       const errorMessage = error.message || String(error);
 
       if (branch && (errorMessage.includes('Remote branch') || errorMessage.includes('not found'))) {
@@ -85,7 +80,6 @@ export class GitUtils {
         );
       }
 
-      // Generic git error with original message
       throw new Error(
         `Failed to clone repository: ${repositoryUrl}\n` +
         (branch ? `Branch: ${branch}\n` : '') +
@@ -129,8 +123,8 @@ export class GitUtils {
     hasPomXml: boolean;
     hasBuildGradle: boolean;
   }> {
-    // Use stored repo name if available, otherwise fall back to path extraction
-    // (fallback maintained for backward compatibility)
+    // Fallback when this instance did not clone repoPath: cloneRepository clones to
+    // <tempDir>/<repo>/<timestamp>, so the parent directory names the repository.
     const name = this.repoName || path.basename(path.dirname(repoPath));
     const hasPackageJson = await fs.pathExists(path.join(repoPath, 'package.json'));
     const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));

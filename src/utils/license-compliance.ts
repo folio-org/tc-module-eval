@@ -109,7 +109,6 @@ function evaluateLicense(license: string, dependency: Dependency, readmeContent:
     };
   }
   if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
-    // Category B - requires documentation
     if (isDocumentedInReadme(dependency, readmeContent)) {
       return {
         license,
@@ -192,14 +191,11 @@ function evaluateMultipleLicenses(
 
   // Apply OR logic: find the best outcome
   // Priority: PASS > MANUAL > FAIL
-
-  // If ANY license passes, the dependency passes
   const passed = evaluations.find(e => e.status === EvaluationStatus.PASS);
   if (passed) {
     return passed;
   }
 
-  // If we have manual review needed and no failures, return manual
   const hasUnknown = evaluations.some(e => e.status === EvaluationStatus.MANUAL);
   if (hasUnknown) {
     return {
@@ -210,7 +206,6 @@ function evaluateMultipleLicenses(
     };
   }
 
-  // Return the first failure
   const failed = evaluations.find(e => e.status === EvaluationStatus.FAIL);
   if (failed) {
     return failed;
@@ -251,12 +246,10 @@ export function checkLicenseCompliance(
   const issues: ComplianceIssue[] = [];
 
   for (const dependency of dependencies) {
-    // Validate dependency object
     if (!isValidDependency(dependency)) {
       continue;
     }
 
-    // Skip dependencies without license information
     if (!dependency.licenses || !Array.isArray(dependency.licenses) || dependency.licenses.length === 0) {
       issues.push({
         dependency,
@@ -268,7 +261,6 @@ export function checkLicenseCompliance(
 
     const allLicenses = dependency.licenses.filter(isNonEmptyString);
 
-    // Check if we have any valid licenses
     if (allLicenses.length === 0) {
       issues.push({
         dependency,
@@ -311,7 +303,6 @@ export function checkLicenseCompliance(
       ? evaluateMultipleLicenses(allLicenses, dependency, readmeContent)
       : evaluateLicense(allLicenses[0], dependency, readmeContent);
 
-    // Add an issue if the evaluation failed or requires manual review
     if (evaluation.status === EvaluationStatus.FAIL ||
         evaluation.status === EvaluationStatus.MANUAL) {
       issues.push({

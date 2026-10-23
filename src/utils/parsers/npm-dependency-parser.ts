@@ -51,7 +51,6 @@ import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { NPM_NETWORK_POLICY } from '../build-tool-policies';
 
-// npm-specific constants
 const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
 const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const LICENSE_CHECK_MAX_OUTPUT = 10 * 1024 * 1024; // license-checker JSON can be large
@@ -95,7 +94,6 @@ function splitSpdxLicenses(license: string): string[] {
     return [];
   }
 
-  // Remove surrounding parentheses if present
   let cleaned = license.trim();
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = cleaned.substring(1, cleaned.length - 1).trim();
@@ -129,7 +127,6 @@ function splitSpdxLicenses(license: string): string[] {
       });
   }
 
-  // Single license - normalize and return
   const normalized = normalizeLicenseName(cleaned);
   return [normalized || cleaned];
 }
@@ -151,13 +148,10 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
 
     for (const [packageKey, packageInfo] of Object.entries(licenseData)) {
       // packageKey format: "package-name@version" or "@scope/package-name@version"
-      // For scoped packages, we need to find the last @ which separates name from version
       let name: string;
       let version: string;
 
       if (packageKey.startsWith('@')) {
-        // Scoped package: @scope/package-name@version
-        // Find the second @ which is the version separator
         const secondAtIndex = packageKey.indexOf('@', 1);
         if (secondAtIndex === -1) {
           continue;
@@ -165,7 +159,6 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
         name = packageKey.substring(0, secondAtIndex);
         version = packageKey.substring(secondAtIndex + 1);
       } else {
-        // Regular package: package-name@version
         const atIndex = packageKey.indexOf('@');
         if (atIndex === -1) {
           continue;
@@ -178,7 +171,6 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
         continue;
       }
 
-      // Extract licenses from license-checker output
       const info = packageInfo as any;
       let licenses: string[] = [];
 
@@ -186,10 +178,8 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
         const licenseField = info.licenses;
 
         if (typeof licenseField === 'string') {
-          // Split SPDX expressions and normalize
           licenses = splitSpdxLicenses(licenseField);
         } else if (Array.isArray(licenseField)) {
-          // Already an array, but still need to split SPDX expressions
           licenses = licenseField.flatMap(l => splitSpdxLicenses(String(l)));
         }
       }
@@ -263,7 +253,6 @@ export async function getNpmDependencies(
       }
     }
 
-    // Step 1: Run yarn install to get all dependencies including transitives
     // SECURITY: --ignore-scripts prevents execution of preinstall/postinstall/etc scripts
     // --ignore-engines bypasses Node.js engine compatibility checks that can cause
     // failures when transitive dependencies require newer Node versions (e.g., @formatjs/cli
@@ -282,7 +271,6 @@ export async function getNpmDependencies(
       return { dependencies: [], errors: [commandError('npm-parser', 'npm', installResult)], warnings };
     }
 
-    // Step 2: Run license-checker-rseidelsohn to extract license information
     // Use npx with pinned version to ensure consistency across environments
     getLogger().info('Running license-checker-rseidelsohn...');
     const checkerResult = await commandRunner.run({
@@ -300,7 +288,6 @@ export async function getNpmDependencies(
       return { dependencies: [], errors: [commandError('npm-parser', 'npm', checkerResult)], warnings };
     }
 
-    // Step 3: Parse the JSON output
     const dependencies = parseLicenseCheckerOutput(checkerResult.stdout);
 
     return { dependencies, errors, warnings };
