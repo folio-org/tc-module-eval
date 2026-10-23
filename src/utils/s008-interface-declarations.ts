@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { ModuleDescriptorArtifact, ModuleKind, S008Declaration, S008DeclarationDiagnostic, S008DeclarationResult } from '../types';
 import { isSupportedEurekaVersionExpression } from './eureka-interface-compatibility';
 import { isWithinRepo, readBoundedFileBytes, realPath, relativePosixPath } from './repo-files';
+import { errorMessage } from './type-guards';
 
 const BACKEND_CANDIDATES = [
   'descriptors/ModuleDescriptor.json',
@@ -171,4 +172,3 @@ function result(declarations: S008Declaration[], diagnostics: S008DeclarationDia
 
 function hash(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
 function hasPlaceholder(value: string): boolean { return /\$\{|\{\{|@[^@]+@/.test(value); }
-function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }

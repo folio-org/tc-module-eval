@@ -1,5 +1,5 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S006SensitiveInformationAnalysisResult } from '../types';
-import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview } from './criterion-agent-review';
 
 export async function reviewS006WithAgent(
   repoPath: string,
@@ -21,7 +21,7 @@ function validateS006Review(
   if (obligations.some(item => assessments.filter(a => a.technologyId === item.id).length !== 1)
     || new Set(assessments.map(a => a.technologyId)).size !== assessments.length
     || assessments.some(a => (!obligations.some(item => item.id === a.technologyId)
-      && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(a.technologyId)) || !a.coverageDisposition)) {
+      && !DISCOVERED_TECHNOLOGY_ID.test(a.technologyId)) || !a.coverageDisposition)) {
     invalid = 'S006 requires exactly one coverage disposition for every supplied review obligation.';
   } else if (obligations.some(item => item.path && assessments.some(a => a.technologyId === item.id
     && a.coverageDisposition === 'investigated' && (!availableSourcePaths.has(item.path!) || !a.evidenceReferences.includes(item.path!))))) {

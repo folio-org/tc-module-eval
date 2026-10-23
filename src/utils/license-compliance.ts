@@ -27,6 +27,7 @@ import {
   isSpecialException
 } from './license-policy';
 import { isNonEmptyString, isValidDependency } from './type-guards';
+import { escapeRegExp } from './regexp';
 import { getLogger } from './logger';
 
 /**
@@ -62,10 +63,6 @@ function isLGPLLicense(license: string): boolean {
   return lower.includes('lgpl') || lower.includes('lesser general public');
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Check if the README names a dependency. Per the ASF policy, a README label must identify the
  * product, so the README has to name the dependency itself: its full name or, for Maven and
@@ -83,6 +80,77 @@ function isDocumentedInReadme(dependency: Dependency, readmeContent: string): bo
   return [...names].some(name =>
     new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-]|\\.\\w)`, 'i').test(readmeContent)
   );
+}
+
+/**
+ * Evaluate one license against the ASF policy categories.
+ * @param license - License name to evaluate
+ * @param dependency - The dependency being evaluated
+ * @param readmeContent - README content for Category B documentation check
+ * @returns Evaluation for this license alone
+ */
+function evaluateLicense(license: string, dependency: Dependency, readmeContent: string): LicenseEvaluation {
+  const category = getLicenseCategoryNormalized(license);
+
+  if (!category) {
+    return {
+      license,
+      status: EvaluationStatus.MANUAL,
+      reason: `'${license}' is not in the evaluator's list of known licenses.`,
+      issueType: LicenseIssueType.UNKNOWN_LICENSE
+    };
+  }
+  if (category === LicenseCategory.A) {
+    return {
+      license,
+      category,
+      status: EvaluationStatus.PASS,
+      reason: `'${license}' is allowed (Category A).`
+    };
+  }
+  if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
+    // Category B - requires documentation
+    if (isDocumentedInReadme(dependency, readmeContent)) {
+      return {
+        license,
+        category,
+        status: EvaluationStatus.PASS,
+        reason: `'${license}' (Category B) and the README names this dependency.`
+      };
+    }
+    return {
+      license,
+      category,
+      status: EvaluationStatus.FAIL,
+      reason: `'${license}' is a Category B license, and the README does not name this dependency.`,
+      issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
+    };
+  }
+  // Category X - prohibited, but LGPL special exceptions pass when the README names them
+  if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
+    if (isDocumentedInReadme(dependency, readmeContent)) {
+      return {
+        license,
+        category,
+        status: EvaluationStatus.PASS,
+        reason: `'${license}' is allowed for this library because the README names it.`
+      };
+    }
+    return {
+      license,
+      category,
+      status: EvaluationStatus.FAIL,
+      reason: `'${license}' is allowed for this library only if the README names it, and it does not.`,
+      issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
+    };
+  }
+  return {
+    license,
+    category,
+    status: EvaluationStatus.FAIL,
+    reason: `'${license}' is prohibited (Category X).`,
+    issueType: LicenseIssueType.CATEGORY_X_VIOLATION
+  };
 }
 
 /**
@@ -113,73 +181,13 @@ function evaluateMultipleLicenses(
 
   const evaluations: LicenseEvaluation[] = [];
 
-  // Evaluate each license
   for (const license of licenses) {
-    const category = getLicenseCategoryNormalized(license);
-
-    if (!category) {
-      // Unknown license
-      evaluations.push({
-        license,
-        status: EvaluationStatus.MANUAL,
-        reason: `'${license}' is not in the evaluator's list of known licenses.`,
-        issueType: LicenseIssueType.UNKNOWN_LICENSE
-      });
-    } else if (category === LicenseCategory.A) {
-      // Category A - automatically passes and wins in OR logic, so return immediately
-      return {
-        license,
-        category,
-        status: EvaluationStatus.PASS,
-        reason: `'${license}' is allowed (Category A).`
-      };
-    } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
-      // Category B - check documentation
-      if (isDocumentedInReadme(dependency, readmeContent)) {
-        evaluations.push({
-          license,
-          category,
-          status: EvaluationStatus.PASS,
-          reason: `'${license}' (Category B) and the README names this dependency.`
-        });
-      } else {
-        evaluations.push({
-          license,
-          category,
-          status: EvaluationStatus.FAIL,
-          reason: `'${license}' is a Category B license, and the README does not name this dependency.`,
-          issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-        });
-      }
-    } else if (category === LicenseCategory.X) {
-      // Category X - check for LGPL special exceptions
-      if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
-        if (isDocumentedInReadme(dependency, readmeContent)) {
-          evaluations.push({
-            license,
-            category,
-            status: EvaluationStatus.PASS,
-            reason: `'${license}' is allowed for this library because the README names it.`
-          });
-        } else {
-          evaluations.push({
-            license,
-            category,
-            status: EvaluationStatus.FAIL,
-            reason: `'${license}' is allowed for this library only if the README names it, and it does not.`,
-            issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-          });
-        }
-      } else {
-        evaluations.push({
-          license,
-          category,
-          status: EvaluationStatus.FAIL,
-          reason: `'${license}' is prohibited (Category X).`,
-          issueType: LicenseIssueType.CATEGORY_X_VIOLATION
-        });
-      }
+    const evaluation = evaluateLicense(license, dependency, readmeContent);
+    // Category A passes and wins in OR logic, so return immediately
+    if (evaluation.category === LicenseCategory.A) {
+      return evaluation;
     }
+    evaluations.push(evaluation);
   }
 
   // Apply OR logic: find the best outcome
@@ -298,65 +306,19 @@ export function checkLicenseCompliance(
       continue;
     }
 
-    // If we have multiple licenses (dual-licensed), use OR logic evaluation
-    if (allLicenses.length > 1) {
-      const evaluation = evaluateMultipleLicenses(allLicenses, dependency, readmeContent);
+    // Dual-licensed dependencies use OR logic; a single license is evaluated on its own
+    const evaluation = allLicenses.length > 1
+      ? evaluateMultipleLicenses(allLicenses, dependency, readmeContent)
+      : evaluateLicense(allLicenses[0], dependency, readmeContent);
 
-      // Add an issue if the evaluation failed or requires manual review
-      if (evaluation.status === EvaluationStatus.FAIL ||
-          evaluation.status === EvaluationStatus.MANUAL) {
-        issues.push({
-          dependency,
-          reason: evaluation.reason,
-          issueType: evaluation.issueType!
-        });
-      }
-      // If PASS, no issue added
-    } else {
-      // Single license
-      const license = allLicenses[0];
-
-      // Try normalized license lookup first for better matching
-      const category = getLicenseCategoryNormalized(license);
-
-      if (!category) {
-        // Unknown license even after normalization
-        issues.push({
-          dependency,
-          reason: `'${license}' is not in the evaluator's list of known licenses.`,
-          issueType: LicenseIssueType.UNKNOWN_LICENSE
-        });
-      } else if (category === LicenseCategory.X) {
-        // Category X - prohibited, but check for LGPL special exceptions
-        if (isLGPLLicense(license) && isSpecialException(dependency.name)) {
-          // LGPL with special exception - must be documented in README
-          if (!isDocumentedInReadme(dependency, readmeContent)) {
-            issues.push({
-              dependency,
-              reason: `'${license}' is allowed for this library only if the README names it, and it does not.`,
-              issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-            });
-          }
-          // If documented, it passes - no issue added
-        } else {
-          // All other Category X licenses are prohibited
-          issues.push({
-            dependency,
-            reason: `'${license}' is prohibited (Category X).`,
-            issueType: LicenseIssueType.CATEGORY_X_VIOLATION
-          });
-        }
-      } else if (category === LicenseCategory.B || category === LicenseCategory.B_WCL) {
-        // Category B - requires documentation
-        if (!isDocumentedInReadme(dependency, readmeContent)) {
-          issues.push({
-            dependency,
-            reason: `'${license}' is a Category B license, and the README does not name this dependency.`,
-            issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B
-          });
-        }
-      }
-      // Category A licenses are automatically compliant
+    // Add an issue if the evaluation failed or requires manual review
+    if (evaluation.status === EvaluationStatus.FAIL ||
+        evaluation.status === EvaluationStatus.MANUAL) {
+      issues.push({
+        dependency,
+        reason: evaluation.reason,
+        issueType: evaluation.issueType!
+      });
     }
   }
 

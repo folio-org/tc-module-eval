@@ -957,7 +957,7 @@ function isJavaScriptProductionSource(file: CommittedSourceFile): boolean {
 }
 
 // Line numbers for many offsets in one file, without rescanning the file for each offset.
-function lineLookup(content: string): (offset: number) => number {
+export function lineLookup(content: string): (offset: number) => number {
   const starts = [0];
   for (let index = content.indexOf('\n'); index !== -1; index = content.indexOf('\n', index + 1)) starts.push(index + 1);
   return offset => {

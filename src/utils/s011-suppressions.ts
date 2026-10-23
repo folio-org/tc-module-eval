@@ -13,6 +13,7 @@ import {
   SonarRule
 } from '../types';
 import { findCandidateFiles, isBinaryBuffer, readBoundedFileBytes, relativePosixPath } from './repo-files';
+import { lineLookup } from './s010-evidence';
 import { isSonarTestPath } from './sonarcloud-snapshot';
 
 // Finds where the repository and its CI tell Sonar to ignore something: @SuppressWarnings naming a Sonar
@@ -136,12 +137,6 @@ function isScanned(relative: string): boolean {
     || SCOPE_FILES.has(name) || relative === '.mvn/maven.config';
 }
 
-function lineAt(text: string, offset: number): number {
-  let line = 1;
-  for (let index = text.indexOf('\n'); index !== -1 && index < offset; index = text.indexOf('\n', index + 1)) line++;
-  return line;
-}
-
 // The comment that explains a suppression: on its own line, or ending on one of the two lines above. Javadoc
 // describes the method, not the suppression, so it does not count.
 function adjacentComment(lines: string[], index: number, sameLineFrom: number): string | undefined {
@@ -166,8 +161,9 @@ function scanAnnotations(relative: string, text: string, lines: string[], out: S
   // Java's @SuppressWarnings and Kotlin's @Suppress, with Kotlin use-site targets such as @file: or @get:.
   const pattern = /@((?:file|get|set|field|param|property|receiver|setparam|delegate):)?(?:java\.lang\.|kotlin\.)?Suppress(?:Warnings)?\s*\(/g;
   const java = relative.endsWith('.java');
+  const lineAt = lineLookup(text);
   for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
-    const line = lineAt(text, match.index);
+    const line = lineAt(match.index);
     const lineStart = text.lastIndexOf('\n', match.index) + 1;
     const before = text.slice(lineStart, match.index);
     // Commented-out code is not a suppression.
@@ -260,17 +256,19 @@ function blankComments(text: string, pattern: RegExp): string {
 
 function scanPom(relative: string, text: string, out: S011ScopeSetting[]): void {
   const code = blankComments(text, /<!--[\s\S]*?-->/g);
+  const lineAt = lineLookup(code);
   for (const match of code.matchAll(/<(sonar\.[A-Za-z0-9_.-]+)>([\s\S]{0,5000}?)<\/\1>/g)) {
     if (!SCOPE_KEY.test(match[1]) || !match[2].trim()) continue;
-    out.push(scopeSetting(match[1], match[2], relative, lineAt(code, match.index!), 'pom'));
+    out.push(scopeSetting(match[1], match[2], relative, lineAt(match.index!), 'pom'));
   }
 }
 
 function scanGradle(relative: string, text: string, out: S011ScopeSetting[]): void {
   const code = blankComments(text, /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g);
+  const lineAt = lineLookup(code);
   for (const match of code.matchAll(/property\s*\(?\s*["'](sonar\.[A-Za-z0-9_.-]+)["']\s*,\s*([^\n]{1,1000})/g)) {
     if (!SCOPE_KEY.test(match[1])) continue;
-    out.push(scopeSetting(match[1], match[2].replace(/\)\s*$/, ''), relative, lineAt(code, match.index!), 'gradle'));
+    out.push(scopeSetting(match[1], match[2].replace(/\)\s*$/, ''), relative, lineAt(match.index!), 'gradle'));
   }
 }
 
