@@ -1,8 +1,9 @@
-import { EvaluationResult, S006ReportDetails, S007AnalysisResult, S010Analysis } from '../types';
+import { EvaluationResult, S006ReportDetails, S007AnalysisResult, S010Analysis, S011Analysis } from '../types';
 import { renderAgentReviewLines } from './agent-review-report';
 import { redactSensitiveText } from './redaction';
 import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
+import { s011AgentReviewNames } from './s011-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
 
 const CRITERION_TITLES: Record<string, string> = {
@@ -17,6 +18,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S008: 'FOLIO interface usage',
   S009: 'FOLIO library dependencies',
   S010: 'Third-party system resilience',
+  S011: 'SonarQube findings',
   S012: 'Officially supported build tools',
   S014: 'Application assignment'
 };
@@ -109,7 +111,7 @@ function pinnedSourceBase(result: EvaluationResult): string | undefined {
 }
 
 // Criteria that write an "Agent review:" section even when no structured review is attached.
-const AGENT_REVIEW_CRITERIA = new Set(['S004', 'S005', 'S006', 'S007', 'S010']);
+const AGENT_REVIEW_CRITERIA = new Set(['S004', 'S005', 'S006', 'S007', 'S010', 'S011']);
 
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
 function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
@@ -166,7 +168,9 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
       ? (criterion.criterionDetails as S006ReportDetails | undefined)?.agentReviewSubjectNames ?? {}
       : criterion.criterionId === 'S010' && criterion.criterionDetails
         ? s010AgentReviewNames(criterion.criterionDetails as S010Analysis)
-        : {};
+        : criterion.criterionId === 'S011' && criterion.criterionDetails
+          ? s011AgentReviewNames(criterion.criterionDetails as S011Analysis)
+          : {};
   return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
 }
 

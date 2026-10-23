@@ -1,0 +1,4415 @@
+{
+  "capturedAt": "2026-10-23T11:54:58.092Z",
+  "description": "SonarCloud org.folio:mod-search as S011 reads it, evaluated at mod-search commit 187df603d24a8e01115dc80085da6760ed3d2853",
+  "responses": {
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Amod-search": {
+      "status": 200,
+      "body": {
+        "component": {
+          "organization": "folio-org",
+          "key": "org.folio:mod-search",
+          "name": "mod-search",
+          "description": "FOLIO search service",
+          "qualifier": "TRK",
+          "analysisDate": "2026-10-15T11:00:42+0000",
+          "tags": [],
+          "visibility": "public",
+          "leakPeriodDate": "2026-09-21T08:32:51+0000",
+          "version": "6.1.0-SNAPSHOT"
+        },
+        "ancestors": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-search&status=REVIEWED&resolution=SAFE&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": [],
+        "components": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-search&status=TO_REVIEW&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 18
+        },
+        "hotspots": [
+          {
+            "key": "AZhWdhwiuH5MZwaB1Cwl",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 20,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2022-04-28T11:45:59+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 20,
+              "endLine": 20,
+              "startOffset": 25,
+              "endOffset": 114
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhwiuH5MZwaB1Cwm",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 24,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2022-04-28T11:45:59+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 24,
+              "endLine": 24,
+              "startOffset": 25,
+              "endOffset": 70
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhwiuH5MZwaB1Cwn",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 28,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2022-04-28T11:45:59+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 28,
+              "endLine": 28,
+              "startOffset": 29,
+              "endOffset": 109
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhwiuH5MZwaB1Cwo",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 33,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2022-04-28T11:45:59+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 33,
+              "endLine": 33,
+              "startOffset": 23,
+              "endOffset": 60
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhqfuH5MZwaB1CwG",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexJdbcRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 52,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "assignee": "AW-zZftQ7eIqk-JUXsr6",
+            "creationDate": "2024-07-29T18:14:03+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 52,
+              "endLine": 52,
+              "startOffset": 39,
+              "endOffset": 42
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhqfuH5MZwaB1CwH",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexJdbcRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 97,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-12-23T11:00:07+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 97,
+              "endLine": 97,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwP",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 104,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-15T13:09:36+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 104,
+              "endLine": 104,
+              "startOffset": 30,
+              "endOffset": 33
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwQ",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 112,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-21T11:26:08+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 112,
+              "endLine": 112,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 120,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-15T13:09:36+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 120,
+              "endLine": 120,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwS",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 126,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-21T11:26:08+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 126,
+              "endLine": 126,
+              "startOffset": 25,
+              "endOffset": 28
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwT",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 132,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-23T14:56:25+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 132,
+              "endLine": 132,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwU",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 156,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-21T11:26:08+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 156,
+              "endLine": 156,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwV",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 164,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-23T14:56:25+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 164,
+              "endLine": 164,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwW",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 175,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-21T11:26:08+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 175,
+              "endLine": 175,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwX",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 185,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2025-01-07T14:03:45+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 185,
+              "endLine": 185,
+              "startOffset": 24,
+              "endOffset": 27
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhrTuH5MZwaB1CwY",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 226,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "creationDate": "2024-08-21T11:26:08+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 226,
+              "endLine": 226,
+              "startOffset": 29,
+              "endOffset": 79
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdhsHuH5MZwaB1Cwj",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/UploadInstanceRepository.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 143,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "assignee": "AW-zZftQ7eIqk-JUXsr6",
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 143,
+              "endLine": 143,
+              "startOffset": 30,
+              "endOffset": 33
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          },
+          {
+            "key": "AZhWdh0vuH5MZwaB1Cwp",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JdbcUtils.java",
+            "project": "org.folio:mod-search",
+            "securityCategory": "sql-injection",
+            "vulnerabilityProbability": "HIGH",
+            "status": "TO_REVIEW",
+            "line": 55,
+            "message": "Make sure using a dynamically formatted SQL query is safe here.",
+            "assignee": "AW-zZftQ7eIqk-JUXsr6",
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2025-07-29T13:53:00+0000",
+            "textRange": {
+              "startLine": 55,
+              "endLine": 55,
+              "startOffset": 25,
+              "endOffset": 28
+            },
+            "flows": [],
+            "ruleKey": "java:S2077"
+          }
+        ],
+        "components": [
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexJdbcRepository.java",
+            "qualifier": "FIL",
+            "name": "ReindexJdbcRepository.java",
+            "longName": "src/main/java/org/folio/search/service/reindex/jdbc/ReindexJdbcRepository.java",
+            "path": "src/main/java/org/folio/search/service/reindex/jdbc/ReindexJdbcRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search",
+            "qualifier": "TRK",
+            "name": "mod-search",
+            "longName": "mod-search"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/UploadInstanceRepository.java",
+            "qualifier": "FIL",
+            "name": "UploadInstanceRepository.java",
+            "longName": "src/main/java/org/folio/search/service/reindex/jdbc/UploadInstanceRepository.java",
+            "path": "src/main/java/org/folio/search/service/reindex/jdbc/UploadInstanceRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "qualifier": "FIL",
+            "name": "ResourceIdsTemporaryRepository.java",
+            "longName": "src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java",
+            "path": "src/main/java/org/folio/search/repository/ResourceIdsTemporaryRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "qualifier": "FIL",
+            "name": "ReindexStatusRepository.java",
+            "longName": "src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java",
+            "path": "src/main/java/org/folio/search/service/reindex/jdbc/ReindexStatusRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/utils/JdbcUtils.java",
+            "qualifier": "FIL",
+            "name": "JdbcUtils.java",
+            "longName": "src/main/java/org/folio/search/utils/JdbcUtils.java",
+            "path": "src/main/java/org/folio/search/utils/JdbcUtils.java"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-search&issueStatuses=ACCEPTED%2CFALSE_POSITIVE&facets=issueStatuses&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": [
+          {
+            "property": "issueStatuses",
+            "values": [
+              {
+                "val": "OPEN",
+                "count": 76
+              },
+              {
+                "val": "CONFIRMED",
+                "count": 0
+              },
+              {
+                "val": "FALSE_POSITIVE",
+                "count": 0
+              },
+              {
+                "val": "ACCEPTED",
+                "count": 0
+              },
+              {
+                "val": "FIXED",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-search&issueStatuses=OPEN%2CCONFIRMED&impactSeverities=HIGH%2CBLOCKER&facets=rules&ps=500&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 28,
+        "p": 1,
+        "ps": 500,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 500,
+          "total": 28
+        },
+        "effortTotal": 305,
+        "debtTotal": 305,
+        "issues": [
+          {
+            "key": "AZ5ERU1KJsChzWYVbNsg",
+            "rule": "java:S2699",
+            "severity": "BLOCKER",
+            "component": "org.folio:mod-search:src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "project": "org.folio:mod-search",
+            "line": 82,
+            "hash": "046d7daa92770ed007de17c8c3d6ab77",
+            "textRange": {
+              "startLine": 82,
+              "endLine": 82,
+              "startOffset": 7,
+              "endOffset": 35
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Add at least one assertion to this test case.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "junit",
+              "tests"
+            ],
+            "creationDate": "2026-05-15T14:21:58+0000",
+            "updateDate": "2026-05-15T14:21:58+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "TESTED",
+            "cleanCodeAttributeCategory": "ADAPTABLE",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "94bda0d4-c485-48fb-b417-526b2c02c473",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ5ERU1KJsChzWYVbNsh",
+            "rule": "java:S2699",
+            "severity": "BLOCKER",
+            "component": "org.folio:mod-search:src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "project": "org.folio:mod-search",
+            "line": 95,
+            "hash": "da487442bba055c4564e1d1d3d3cd7d7",
+            "textRange": {
+              "startLine": 95,
+              "endLine": 95,
+              "startOffset": 7,
+              "endOffset": 64
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Add at least one assertion to this test case.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "junit",
+              "tests"
+            ],
+            "creationDate": "2026-05-15T14:21:58+0000",
+            "updateDate": "2026-05-15T14:21:58+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "TESTED",
+            "cleanCodeAttributeCategory": "ADAPTABLE",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "94bda0d4-c485-48fb-b417-526b2c02c473",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ5ERU1KJsChzWYVbNsi",
+            "rule": "java:S2699",
+            "severity": "BLOCKER",
+            "component": "org.folio:mod-search:src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "project": "org.folio:mod-search",
+            "line": 106,
+            "hash": "797b24a2b42a8ded1036e14ad106ab33",
+            "textRange": {
+              "startLine": 106,
+              "endLine": 106,
+              "startOffset": 7,
+              "endOffset": 57
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Add at least one assertion to this test case.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "junit",
+              "tests"
+            ],
+            "creationDate": "2026-05-15T14:21:58+0000",
+            "updateDate": "2026-05-15T14:21:58+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "TESTED",
+            "cleanCodeAttributeCategory": "ADAPTABLE",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "94bda0d4-c485-48fb-b417-526b2c02c473",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ5ERU1KJsChzWYVbNsj",
+            "rule": "java:S2699",
+            "severity": "BLOCKER",
+            "component": "org.folio:mod-search:src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "project": "org.folio:mod-search",
+            "line": 144,
+            "hash": "a5fedd7b4712353f0fdfcb933f059861",
+            "textRange": {
+              "startLine": 144,
+              "endLine": 144,
+              "startOffset": 7,
+              "endOffset": 35
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Add at least one assertion to this test case.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "junit",
+              "tests"
+            ],
+            "creationDate": "2026-05-15T14:21:58+0000",
+            "updateDate": "2026-05-15T14:21:58+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "TESTED",
+            "cleanCodeAttributeCategory": "ADAPTABLE",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "94bda0d4-c485-48fb-b417-526b2c02c473",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ2L6Lnhz0KdHxT7YIJv",
+            "rule": "java:S6809",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/HoldingRepository.java",
+            "project": "org.folio:mod-search",
+            "line": 109,
+            "hash": "c87481d225646e3af4ddae91473e448e",
+            "textRange": {
+              "startLine": 109,
+              "endLine": 109,
+              "startOffset": 4,
+              "endOffset": 48
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Call transactional methods via an injected dependency instead of directly via 'this'.",
+            "effort": "5min",
+            "debt": "5min",
+            "tags": [],
+            "creationDate": "2025-09-08T11:26:42+0000",
+            "updateDate": "2026-02-13T16:17:35+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CONVENTIONAL",
+            "cleanCodeAttributeCategory": "CONSISTENT",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "8deb8993-fb69-41c9-a0ba-a6c6d69bbbc7",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ2L6Lnhz0KdHxT7YIJw",
+            "rule": "java:S6809",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/HoldingRepository.java",
+            "project": "org.folio:mod-search",
+            "line": 114,
+            "hash": "08104c6f98fe523abea3c06fa283639a",
+            "textRange": {
+              "startLine": 114,
+              "endLine": 114,
+              "startOffset": 4,
+              "endOffset": 29
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Call transactional methods via an injected dependency instead of directly via 'this'.",
+            "effort": "5min",
+            "debt": "5min",
+            "tags": [],
+            "creationDate": "2025-09-08T11:26:42+0000",
+            "updateDate": "2026-02-13T16:17:35+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CONVENTIONAL",
+            "cleanCodeAttributeCategory": "CONSISTENT",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "8deb8993-fb69-41c9-a0ba-a6c6d69bbbc7",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ2L6Lltz0KdHxT7YIJt",
+            "rule": "java:S6809",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/MergeRangeRepository.java",
+            "project": "org.folio:mod-search",
+            "line": 129,
+            "hash": "f64e1793db9b5ec48a6f77f3cb47666d",
+            "textRange": {
+              "startLine": 129,
+              "endLine": 129,
+              "startOffset": 4,
+              "endOffset": 48
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Call transactional methods via an injected dependency instead of directly via 'this'.",
+            "effort": "5min",
+            "debt": "5min",
+            "tags": [],
+            "creationDate": "2025-09-08T11:26:42+0000",
+            "updateDate": "2026-02-13T16:17:35+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CONVENTIONAL",
+            "cleanCodeAttributeCategory": "CONSISTENT",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "b580c9f1-5f4f-4bdc-bdef-5e71807e4465",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ2L6Lltz0KdHxT7YIJu",
+            "rule": "java:S6809",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/MergeRangeRepository.java",
+            "project": "org.folio:mod-search",
+            "line": 148,
+            "hash": "5b227f45625ef8801781d969ddebc756",
+            "textRange": {
+              "startLine": 148,
+              "endLine": 148,
+              "startOffset": 4,
+              "endOffset": 29
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Call transactional methods via an injected dependency instead of directly via 'this'.",
+            "effort": "5min",
+            "debt": "5min",
+            "tags": [],
+            "creationDate": "2025-09-08T11:26:42+0000",
+            "updateDate": "2026-02-13T16:17:35+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CONVENTIONAL",
+            "cleanCodeAttributeCategory": "CONSISTENT",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "b580c9f1-5f4f-4bdc-bdef-5e71807e4465",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ0GrvChybKzi6YKLyvH",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 64,
+            "hash": "d586737c61ef215eeb9424bec35ce212",
+            "textRange": {
+              "startLine": 64,
+              "endLine": 64,
+              "startOffset": 38,
+              "endOffset": 57
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2025-09-03T12:30:36+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0GrvChybKzi6YKLyvK",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 67,
+            "hash": "0eab6e68881dfa93143f6451c7b87d68",
+            "textRange": {
+              "startLine": 67,
+              "endLine": 67,
+              "startOffset": 49,
+              "endOffset": 75
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2025-09-03T12:30:36+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AaEQ_obc1KXi02Z0iHKk",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+            "project": "org.folio:mod-search",
+            "line": 86,
+            "hash": "f1b5db72dc12cc5525b7c6dba0606f23",
+            "textRange": {
+              "startLine": 86,
+              "endLine": 86,
+              "startOffset": 49,
+              "endOffset": 57
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 82,
+                      "endLine": 83,
+                      "startOffset": 4,
+                      "endOffset": 92
+                    },
+                    "msg": "'validateResourceName' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 294,
+                      "endLine": 294,
+                      "startOffset": 30,
+                      "endOffset": 75
+                    },
+                    "msg": "'find' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java",
+                    "textRange": {
+                      "startLine": 82,
+                      "endLine": 82,
+                      "startOffset": 11,
+                      "endOffset": 70
+                    },
+                    "msg": "'ofNullable' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 294,
+                      "endLine": 295,
+                      "startOffset": 30,
+                      "endOffset": 114
+                    },
+                    "msg": "'orElseThrow' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 85,
+                      "endLine": 85,
+                      "startOffset": 19,
+                      "endOffset": 68
+                    },
+                    "msg": "'prepareIndexSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 250,
+                      "endLine": 250,
+                      "startOffset": 19,
+                      "endOffset": 63
+                    },
+                    "msg": "'getSettingsJson' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 11,
+                      "endOffset": 43
+                    },
+                    "msg": "'loadSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 13,
+                      "endOffset": 55
+                    },
+                    "msg": "'asJsonTree' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 146,
+                      "endLine": 146,
+                      "startOffset": 8,
+                      "endOffset": 21
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 147,
+                      "endLine": 147,
+                      "startOffset": 6,
+                      "endOffset": 18
+                    },
+                    "msg": "'asJsonTree' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 6,
+                      "endOffset": 56
+                    },
+                    "msg": "'loadSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 4,
+                      "endOffset": 44
+                    },
+                    "msg": "'getSettingsJson' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 250,
+                      "endLine": 250,
+                      "startOffset": 4,
+                      "endOffset": 64
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 252,
+                      "endLine": 252,
+                      "startOffset": 8,
+                      "endOffset": 29
+                    },
+                    "msg": "Assuming this condition to be false"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 262,
+                      "endLine": 262,
+                      "startOffset": 4,
+                      "endOffset": 20
+                    },
+                    "msg": "'prepareIndexSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 85,
+                      "endLine": 85,
+                      "startOffset": 4,
+                      "endOffset": 69
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 86,
+                      "endLine": 86,
+                      "startOffset": 49,
+                      "endOffset": 57
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AaEQ_obc1KXi02Z0iHKl",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+            "project": "org.folio:mod-search",
+            "line": 107,
+            "hash": "3b98f618f70d79915d3c52b6105561d2",
+            "textRange": {
+              "startLine": 107,
+              "endLine": 107,
+              "startOffset": 54,
+              "endOffset": 62
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 101,
+                      "endLine": 101,
+                      "startOffset": 4,
+                      "endOffset": 101
+                    },
+                    "msg": "'validateResourceName' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 294,
+                      "endLine": 294,
+                      "startOffset": 30,
+                      "endOffset": 75
+                    },
+                    "msg": "'find' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java",
+                    "textRange": {
+                      "startLine": 82,
+                      "endLine": 82,
+                      "startOffset": 11,
+                      "endOffset": 70
+                    },
+                    "msg": "'ofNullable' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 294,
+                      "endLine": 295,
+                      "startOffset": 30,
+                      "endOffset": 114
+                    },
+                    "msg": "'orElseThrow' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 103,
+                      "endLine": 103,
+                      "startOffset": 16,
+                      "endOffset": 70
+                    },
+                    "msg": "'getIndexName' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/IndexNameProvider.java",
+                    "textRange": {
+                      "startLine": 25,
+                      "endLine": 25,
+                      "startOffset": 11,
+                      "endOffset": 53
+                    },
+                    "msg": "'getIndexName' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/IndexNameProvider.java",
+                    "textRange": {
+                      "startLine": 41,
+                      "endLine": 41,
+                      "startOffset": 24,
+                      "endOffset": 58
+                    },
+                    "msg": "Assuming 'getTenant' resolves to 'ConsortiumTenantProvider.getTenant'"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/repository/IndexNameProvider.java",
+                    "textRange": {
+                      "startLine": 41,
+                      "endLine": 41,
+                      "startOffset": 24,
+                      "endOffset": 58
+                    },
+                    "msg": "'getTenant' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+                    "textRange": {
+                      "startLine": 16,
+                      "endLine": 16,
+                      "startOffset": 11,
+                      "endOffset": 61
+                    },
+                    "msg": "'getCentralTenant' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+                    "textRange": {
+                      "startLine": 32,
+                      "endLine": 32,
+                      "startOffset": 8,
+                      "endOffset": 37
+                    },
+                    "msg": "'isBlank' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+                    "textRange": {
+                      "startLine": 32,
+                      "endLine": 32,
+                      "startOffset": 8,
+                      "endOffset": 37
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+                    "textRange": {
+                      "startLine": 16,
+                      "endLine": 17,
+                      "startOffset": 11,
+                      "endOffset": 23
+                    },
+                    "msg": "'orElse' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 104,
+                      "endLine": 104,
+                      "startOffset": 19,
+                      "endOffset": 61
+                    },
+                    "msg": "'prepareIndexDynamicSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 266,
+                      "endLine": 266,
+                      "startOffset": 19,
+                      "endOffset": 54
+                    },
+                    "msg": "'getDynamicSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 47,
+                      "endLine": 47,
+                      "startOffset": 11,
+                      "endOffset": 37
+                    },
+                    "msg": "'loadSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 13,
+                      "endOffset": 55
+                    },
+                    "msg": "'asJsonTree' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 146,
+                      "endLine": 146,
+                      "startOffset": 8,
+                      "endOffset": 21
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 147,
+                      "endLine": 147,
+                      "startOffset": 6,
+                      "endOffset": 18
+                    },
+                    "msg": "'asJsonTree' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 6,
+                      "endOffset": 56
+                    },
+                    "msg": "'loadSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 47,
+                      "endLine": 47,
+                      "startOffset": 4,
+                      "endOffset": 38
+                    },
+                    "msg": "'getDynamicSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 266,
+                      "endLine": 266,
+                      "startOffset": 4,
+                      "endOffset": 55
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 268,
+                      "endLine": 268,
+                      "startOffset": 8,
+                      "endOffset": 29
+                    },
+                    "msg": "Assuming this condition to be false"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 275,
+                      "endLine": 275,
+                      "startOffset": 4,
+                      "endOffset": 20
+                    },
+                    "msg": "'prepareIndexDynamicSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 104,
+                      "endLine": 104,
+                      "startOffset": 4,
+                      "endOffset": 62
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 107,
+                      "endLine": 107,
+                      "startOffset": 54,
+                      "endOffset": 62
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AaEQ_obc1KXi02Z0iHKi",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+            "project": "org.folio:mod-search",
+            "line": 269,
+            "hash": "d49659cb4efdce92f6cc45c3ca0a215f",
+            "textRange": {
+              "startLine": 269,
+              "endLine": 269,
+              "startOffset": 43,
+              "endOffset": 51
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 266,
+                      "endLine": 266,
+                      "startOffset": 19,
+                      "endOffset": 54
+                    },
+                    "msg": "'getDynamicSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 47,
+                      "endLine": 47,
+                      "startOffset": 11,
+                      "endOffset": 37
+                    },
+                    "msg": "'loadSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 13,
+                      "endOffset": 55
+                    },
+                    "msg": "'asJsonTree' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 146,
+                      "endLine": 146,
+                      "startOffset": 8,
+                      "endOffset": 21
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 147,
+                      "endLine": 147,
+                      "startOffset": 6,
+                      "endOffset": 18
+                    },
+                    "msg": "'asJsonTree' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 6,
+                      "endOffset": 56
+                    },
+                    "msg": "'loadSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 47,
+                      "endLine": 47,
+                      "startOffset": 4,
+                      "endOffset": 38
+                    },
+                    "msg": "'getDynamicSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 266,
+                      "endLine": 266,
+                      "startOffset": 4,
+                      "endOffset": 55
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 268,
+                      "endLine": 268,
+                      "startOffset": 8,
+                      "endOffset": 29
+                    },
+                    "msg": "Assuming this condition to be true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 269,
+                      "endLine": 269,
+                      "startOffset": 43,
+                      "endOffset": 51
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AaEQ_oQN1KXi02Z0iHKg",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+            "project": "org.folio:mod-search",
+            "line": 28,
+            "hash": "81cf90aada6614830b061e6007b2f6dd",
+            "textRange": {
+              "startLine": 28,
+              "endLine": 28,
+              "startOffset": 11,
+              "endOffset": 36
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 28,
+                      "endLine": 28,
+                      "startOffset": 11,
+                      "endOffset": 36
+                    },
+                    "msg": "'getSettingsJson' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 11,
+                      "endOffset": 43
+                    },
+                    "msg": "'loadSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 13,
+                      "endOffset": 55
+                    },
+                    "msg": "'asJsonTree' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 146,
+                      "endLine": 146,
+                      "startOffset": 8,
+                      "endOffset": 21
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 147,
+                      "endLine": 147,
+                      "startOffset": 6,
+                      "endOffset": 18
+                    },
+                    "msg": "'asJsonTree' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 6,
+                      "endOffset": 56
+                    },
+                    "msg": "'loadSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 4,
+                      "endOffset": 44
+                    },
+                    "msg": "'getSettingsJson' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 28,
+                      "endLine": 28,
+                      "startOffset": 11,
+                      "endOffset": 36
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ0GrvChybKzi6YKLyvJ",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 66,
+            "hash": "f8ae3e1e3aa0163e89a626bc3c4306f0",
+            "textRange": {
+              "startLine": 66,
+              "endLine": 66,
+              "startOffset": 55,
+              "endOffset": 74
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0Gru7RybKzi6YKLyvE",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java",
+            "project": "org.folio:mod-search",
+            "line": 40,
+            "hash": "a4fe71d36ef4f930a6dda710d0cb07b9",
+            "textRange": {
+              "startLine": 40,
+              "endLine": 40,
+              "startOffset": 49,
+              "endOffset": 69
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2024-09-11T14:11:05+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ9Bxbuj_qP4NW85iBz7",
+            "rule": "java:S8947",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/model/config/BrowseConfigEntity.java",
+            "project": "org.folio:mod-search",
+            "line": 34,
+            "hash": "f6ed2201c59132548b392b5bf211303d",
+            "textRange": {
+              "startLine": 34,
+              "endLine": 34,
+              "startOffset": 9,
+              "endOffset": 14
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Remove this \"final\" modifier from this JPA entity method.",
+            "effort": "5min",
+            "debt": "5min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "hibernate",
+              "jpa",
+              "pitfall"
+            ],
+            "creationDate": "2024-02-23T09:54:53+0000",
+            "updateDate": "2026-07-08T12:47:15+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "c27ad032-43cb-44fc-8bd1-7ddf7d27506a",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ9Bxbuj_qP4NW85iBz8",
+            "rule": "java:S8947",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/model/config/BrowseConfigEntity.java",
+            "project": "org.folio:mod-search",
+            "line": 39,
+            "hash": "a779b6ad54740048729f8f0bfab4ceea",
+            "textRange": {
+              "startLine": 39,
+              "endLine": 39,
+              "startOffset": 9,
+              "endOffset": 14
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Remove this \"final\" modifier from this JPA entity method.",
+            "effort": "5min",
+            "debt": "5min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "hibernate",
+              "jpa",
+              "pitfall"
+            ],
+            "creationDate": "2024-02-23T09:54:53+0000",
+            "updateDate": "2026-07-08T12:47:15+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "c27ad032-43cb-44fc-8bd1-7ddf7d27506a",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ0GrvR2ybKzi6YKLyvM",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/browse/SubjectBrowseService.java",
+            "project": "org.folio:mod-search",
+            "line": 37,
+            "hash": "1962e030156af07a3d0cb9b8a77848c1",
+            "textRange": {
+              "startLine": 37,
+              "endLine": 37,
+              "startOffset": 33,
+              "endOffset": 55
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2023-09-06T08:19:38+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AaEQ_oSL1KXi02Z0iHKh",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+            "project": "org.folio:mod-search",
+            "line": 26,
+            "hash": "b2607165a38cb6410f68c5c99d1dafb5",
+            "textRange": {
+              "startLine": 26,
+              "endLine": 26,
+              "startOffset": 8,
+              "endOffset": 24
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+                    "textRange": {
+                      "startLine": 24,
+                      "endLine": 24,
+                      "startOffset": 30,
+                      "endOffset": 46
+                    },
+                    "msg": "'originalTenantId' is passed as parameter"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+                    "textRange": {
+                      "startLine": 25,
+                      "endLine": 25,
+                      "startOffset": 19,
+                      "endOffset": 61
+                    },
+                    "msg": "Assuming 'getTenant' resolves to 'ConsortiumTenantProvider.getTenant'"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+                    "textRange": {
+                      "startLine": 25,
+                      "endLine": 25,
+                      "startOffset": 19,
+                      "endOffset": 61
+                    },
+                    "msg": "'getTenant' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+                    "textRange": {
+                      "startLine": 15,
+                      "endLine": 15,
+                      "startOffset": 33,
+                      "endOffset": 41
+                    },
+                    "msg": "Argument 'originalTenantId' is passed as parameter 'tenantId'"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+                    "textRange": {
+                      "startLine": 16,
+                      "endLine": 16,
+                      "startOffset": 11,
+                      "endOffset": 61
+                    },
+                    "msg": "'getCentralTenant' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+                    "textRange": {
+                      "startLine": 31,
+                      "endLine": 31,
+                      "startOffset": 50,
+                      "endOffset": 58
+                    },
+                    "msg": "Argument 'originalTenantId' is passed as parameter 'tenantId'"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+                    "textRange": {
+                      "startLine": 32,
+                      "endLine": 32,
+                      "startOffset": 8,
+                      "endOffset": 37
+                    },
+                    "msg": "'isBlank' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+                    "textRange": {
+                      "startLine": 32,
+                      "endLine": 32,
+                      "startOffset": 8,
+                      "endOffset": 37
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+                    "textRange": {
+                      "startLine": 16,
+                      "endLine": 17,
+                      "startOffset": 11,
+                      "endOffset": 23
+                    },
+                    "msg": "'orElse' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+                    "textRange": {
+                      "startLine": 26,
+                      "endLine": 26,
+                      "startOffset": 8,
+                      "endOffset": 24
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2023-07-20T15:08:30+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AaEQ_obc1KXi02Z0iHKj",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+            "project": "org.folio:mod-search",
+            "line": 253,
+            "hash": "d49659cb4efdce92f6cc45c3ca0a215f",
+            "textRange": {
+              "startLine": 253,
+              "endLine": 253,
+              "startOffset": 43,
+              "endOffset": 51
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 250,
+                      "endLine": 250,
+                      "startOffset": 19,
+                      "endOffset": 63
+                    },
+                    "msg": "'getSettingsJson' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 11,
+                      "endOffset": 43
+                    },
+                    "msg": "'loadSettings' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 13,
+                      "endOffset": 55
+                    },
+                    "msg": "'asJsonTree' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 146,
+                      "endLine": 146,
+                      "startOffset": 8,
+                      "endOffset": 21
+                    },
+                    "msg": "This condition is true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+                    "textRange": {
+                      "startLine": 147,
+                      "endLine": 147,
+                      "startOffset": 6,
+                      "endOffset": 18
+                    },
+                    "msg": "'asJsonTree' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 53,
+                      "endLine": 53,
+                      "startOffset": 6,
+                      "endOffset": 56
+                    },
+                    "msg": "'loadSettings' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+                    "textRange": {
+                      "startLine": 40,
+                      "endLine": 40,
+                      "startOffset": 4,
+                      "endOffset": 44
+                    },
+                    "msg": "'getSettingsJson' returns"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 250,
+                      "endLine": 250,
+                      "startOffset": 4,
+                      "endOffset": 64
+                    },
+                    "msg": "'settings' is defined here"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 252,
+                      "endLine": 252,
+                      "startOffset": 8,
+                      "endOffset": 29
+                    },
+                    "msg": "Assuming this condition to be true"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+                    "textRange": {
+                      "startLine": 253,
+                      "endLine": 253,
+                      "startOffset": 43,
+                      "endOffset": 51
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2023-05-31T10:56:24+0000",
+            "updateDate": "2026-10-06T11:33:45+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "2bc06382-61a7-4507-9334-4d3b2985a4af",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AaCGSwd4ogH6wxzvvoAh",
+            "rule": "javabugs:S2259",
+            "severity": "MAJOR",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+            "project": "org.folio:mod-search",
+            "line": 62,
+            "hash": "b674d6fa97be8228719b2543ac1a89ab",
+            "textRange": {
+              "startLine": 62,
+              "endLine": 62,
+              "startOffset": 8,
+              "endOffset": 13
+            },
+            "flows": [
+              {
+                "locations": [
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 50,
+                      "endLine": 50,
+                      "startOffset": 37,
+                      "endOffset": 42
+                    },
+                    "msg": "'value' is passed as parameter"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 51,
+                      "endLine": 51,
+                      "startOffset": 20,
+                      "endOffset": 45
+                    },
+                    "msg": "'normalizeOclcValue' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 74,
+                      "endLine": 74,
+                      "startOffset": 43,
+                      "endOffset": 48
+                    },
+                    "msg": "'value' is passed as parameter"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 75,
+                      "endLine": 75,
+                      "startOffset": 36,
+                      "endOffset": 47
+                    },
+                    "msg": "'trim' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 52,
+                      "endLine": 52,
+                      "startOffset": 8,
+                      "endOffset": 38
+                    },
+                    "msg": "'isBlank' is called"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 52,
+                      "endLine": 52,
+                      "startOffset": 8,
+                      "endOffset": 38
+                    },
+                    "msg": "Assuming this condition to be false"
+                  },
+                  {
+                    "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+                    "textRange": {
+                      "startLine": 62,
+                      "endLine": 62,
+                      "startOffset": 8,
+                      "endOffset": 13
+                    },
+                    "msg": "The access that will throw a NullPointerException"
+                  }
+                ],
+                "description": "Execution Flow",
+                "type": "DATA"
+              }
+            ],
+            "status": "OPEN",
+            "message": "Fix this access that will throw a NullPointerException when executed.",
+            "effort": "10min",
+            "debt": "10min",
+            "assignee": "psmagin@github",
+            "tags": [
+              "cert",
+              "cwe",
+              "symbolic-execution"
+            ],
+            "creationDate": "2022-03-22T14:55:24+0000",
+            "updateDate": "2026-09-09T13:09:43+0000",
+            "type": "BUG",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "LOGICAL",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": [],
+            "lastChangeAnalysisUuid": "fb79388b-4782-43d4-b49f-35a8e0e8ca5c",
+            "lastChangeSource": "ANALYSIS"
+          },
+          {
+            "key": "AZ0GrvU2ybKzi6YKLyvN",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/converter/preprocessor/AuthorityEventPreProcessor.java",
+            "project": "org.folio:mod-search",
+            "line": 36,
+            "hash": "aa5db6c8a1b45a1ff6809bc040a4848b",
+            "textRange": {
+              "startLine": 36,
+              "endLine": 36,
+              "startOffset": 36,
+              "endOffset": 46
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-11-24T11:35:31+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0GrvU2ybKzi6YKLyvO",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/converter/preprocessor/AuthorityEventPreProcessor.java",
+            "project": "org.folio:mod-search",
+            "line": 37,
+            "hash": "2f4a5d16eb7dc6ef90121ab77fe89fa0",
+            "textRange": {
+              "startLine": 37,
+              "endLine": 37,
+              "startOffset": 23,
+              "endOffset": 35
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-11-24T11:35:31+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0Gru_KybKzi6YKLyvF",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalResourceProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 30,
+            "hash": "95cd7b8073b9848464370268af18831b",
+            "textRange": {
+              "startLine": 30,
+              "endLine": 30,
+              "startOffset": 36,
+              "endOffset": 56
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-09-23T16:06:36+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0GrvChybKzi6YKLyvG",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 63,
+            "hash": "d3f143c8043f03b14b4b44c3f3cf34cf",
+            "textRange": {
+              "startLine": 63,
+              "endLine": 63,
+              "startOffset": 22,
+              "endOffset": 40
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-09-23T16:06:36+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0GrvFbybKzi6YKLyvL",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/UniformTitleProcessor.java",
+            "project": "org.folio:mod-search",
+            "line": 25,
+            "hash": "37b77ac960441e943064509cde90ec2f",
+            "textRange": {
+              "startLine": 25,
+              "endLine": 25,
+              "startOffset": 29,
+              "endOffset": 50
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-07-23T12:34:15+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          },
+          {
+            "key": "AZ0GrvChybKzi6YKLyvI",
+            "rule": "java:S3749",
+            "severity": "CRITICAL",
+            "component": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "project": "org.folio:mod-search",
+            "line": 65,
+            "hash": "a9dd9b5c1ef8722adee35f7a42912a45",
+            "textRange": {
+              "startLine": 65,
+              "endLine": 65,
+              "startOffset": 39,
+              "endOffset": 62
+            },
+            "flows": [],
+            "status": "OPEN",
+            "message": "Annotate this member with \"@Autowired\", \"@Resource\", \"@Inject\", or \"@Value\", or remove it.",
+            "effort": "15min",
+            "debt": "15min",
+            "tags": [
+              "spring"
+            ],
+            "creationDate": "2021-01-11T09:34:51+0000",
+            "updateDate": "2026-03-19T15:19:10+0000",
+            "type": "CODE_SMELL",
+            "organization": "folio-org",
+            "cleanCodeAttribute": "CLEAR",
+            "cleanCodeAttributeCategory": "INTENTIONAL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "issueStatus": "OPEN",
+            "projectName": "mod-search",
+            "internalTags": []
+          }
+        ],
+        "components": [
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/repository/IndexNameProvider.java",
+            "uuid": "AYoAF9mF1xmT02xAwiRx",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "IndexNameProvider.java",
+            "longName": "src/main/java/org/folio/search/repository/IndexNameProvider.java",
+            "path": "src/main/java/org/folio/search/repository/IndexNameProvider.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/UniformTitleProcessor.java",
+            "uuid": "AXrTYLCt6lEW4_fRhnLa",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "UniformTitleProcessor.java",
+            "longName": "src/main/java/org/folio/search/service/setter/instance/UniformTitleProcessor.java",
+            "path": "src/main/java/org/folio/search/service/setter/instance/UniformTitleProcessor.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+            "uuid": "AYm6jbaSDU5e9X7Wb5Ee",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "ConsortiumTenantService.java",
+            "longName": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java",
+            "path": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantService.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search",
+            "uuid": "AXZRKpsv9jdhW6JjgfcN",
+            "enabled": true,
+            "qualifier": "TRK",
+            "name": "mod-search",
+            "longName": "mod-search"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+            "uuid": "AYm6jbaSDU5e9X7Wb5EX",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "ConsortiumTenantProvider.java",
+            "longName": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java",
+            "path": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantProvider.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/MergeRangeRepository.java",
+            "uuid": "AZJrOsoHTKHOTmpuYRmp",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "MergeRangeRepository.java",
+            "longName": "src/main/java/org/folio/search/service/reindex/jdbc/MergeRangeRepository.java",
+            "path": "src/main/java/org/folio/search/service/reindex/jdbc/MergeRangeRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/utils/JsonConverter.java",
+            "uuid": "AXbwzq66JWPG7haGA5Pv",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "JsonConverter.java",
+            "longName": "src/main/java/org/folio/search/utils/JsonConverter.java",
+            "path": "src/main/java/org/folio/search/utils/JsonConverter.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "uuid": "AZXdcX9iZ9-X3JUAl9iW",
+            "enabled": true,
+            "qualifier": "UTS",
+            "name": "IndexingLocationsConsortiumIT.java",
+            "longName": "src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java",
+            "path": "src/test/java/org/folio/indexing/IndexingLocationsConsortiumIT.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java",
+            "uuid": "AXbwzq66JWPG7haGA5Pe",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "ResourceDescriptionService.java",
+            "longName": "src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java",
+            "path": "src/main/java/org/folio/search/service/metadata/ResourceDescriptionService.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "uuid": "AXbwzq66JWPG7haGA5Pc",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "LocalSearchFieldProvider.java",
+            "longName": "src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java",
+            "path": "src/main/java/org/folio/search/service/metadata/LocalSearchFieldProvider.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+            "uuid": "AX-yJIKJBFw19hi-6S5_",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "OclcProcessor.java",
+            "longName": "src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java",
+            "path": "src/main/java/org/folio/search/service/setter/instance/OclcProcessor.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/metadata/LocalResourceProvider.java",
+            "uuid": "AXbwzq66JWPG7haGA5Pb",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "LocalResourceProvider.java",
+            "longName": "src/main/java/org/folio/search/service/metadata/LocalResourceProvider.java",
+            "path": "src/main/java/org/folio/search/service/metadata/LocalResourceProvider.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/browse/SubjectBrowseService.java",
+            "uuid": "AX6bG039ERLL1vu_I3W2",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "SubjectBrowseService.java",
+            "longName": "src/main/java/org/folio/search/service/browse/SubjectBrowseService.java",
+            "path": "src/main/java/org/folio/search/service/browse/SubjectBrowseService.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+            "uuid": "AYm6jbaSDU5e9X7Wb5EU",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "ConsortiumTenantExecutor.java",
+            "longName": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java",
+            "path": "src/main/java/org/folio/search/service/consortium/ConsortiumTenantExecutor.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/model/config/BrowseConfigEntity.java",
+            "uuid": "AZv_dEglqrVczB8GCFQu",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "BrowseConfigEntity.java",
+            "longName": "src/main/java/org/folio/search/model/config/BrowseConfigEntity.java",
+            "path": "src/main/java/org/folio/search/model/config/BrowseConfigEntity.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/reindex/jdbc/HoldingRepository.java",
+            "uuid": "AZJrOsoHTKHOTmpuYRmz",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "HoldingRepository.java",
+            "longName": "src/main/java/org/folio/search/service/reindex/jdbc/HoldingRepository.java",
+            "path": "src/main/java/org/folio/search/service/reindex/jdbc/HoldingRepository.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+            "uuid": "AXbwzq66JWPG7haGA5Pj",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "SearchSettingsHelper.java",
+            "longName": "src/main/java/org/folio/search/service/es/SearchSettingsHelper.java",
+            "path": "src/main/java/org/folio/search/service/es/SearchSettingsHelper.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/IndexService.java",
+            "uuid": "AXbwzq66JWPG7haGA5Ph",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "IndexService.java",
+            "longName": "src/main/java/org/folio/search/service/IndexService.java",
+            "path": "src/main/java/org/folio/search/service/IndexService.java"
+          },
+          {
+            "organization": "folio-org",
+            "key": "org.folio:mod-search:src/main/java/org/folio/search/service/converter/preprocessor/AuthorityEventPreProcessor.java",
+            "uuid": "AX7kj0T283UeiDh4zxGa",
+            "enabled": true,
+            "qualifier": "FIL",
+            "name": "AuthorityEventPreProcessor.java",
+            "longName": "src/main/java/org/folio/search/service/converter/preprocessor/AuthorityEventPreProcessor.java",
+            "path": "src/main/java/org/folio/search/service/converter/preprocessor/AuthorityEventPreProcessor.java"
+          }
+        ],
+        "organizations": [
+          {
+            "key": "folio-org",
+            "name": "folio-org"
+          }
+        ],
+        "facets": [
+          {
+            "property": "rules",
+            "values": [
+              {
+                "val": "java:S3749",
+                "count": 11
+              },
+              {
+                "val": "javabugs:S2259",
+                "count": 7
+              },
+              {
+                "val": "java:S2699",
+                "count": 4
+              },
+              {
+                "val": "java:S6809",
+                "count": 4
+              },
+              {
+                "val": "java:S8947",
+                "count": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-search&issueStatuses=OPEN%2CCONFIRMED&impactSoftwareQualities=SECURITY&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-search&issueStatuses=OPEN%2CCONFIRMED&types=VULNERABILITY&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 1,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/measures/component?component=org.folio%3Amod-search&metricKeys=coverage%2Cline_coverage%2Cbranch_coverage%2Clines_to_cover%2Cuncovered_lines%2Cconditions_to_cover%2Cuncovered_conditions%2Cduplicated_lines_density&branch=master": {
+      "status": 200,
+      "body": {
+        "component": {
+          "id": "AXZRKpsv9jdhW6JjgfcN",
+          "key": "org.folio:mod-search",
+          "name": "mod-search",
+          "description": "FOLIO search service",
+          "qualifier": "TRK",
+          "measures": [
+            {
+              "metric": "coverage",
+              "value": "94.9",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_conditions",
+              "value": "188",
+              "bestValue": false
+            },
+            {
+              "metric": "duplicated_lines_density",
+              "value": "1.2",
+              "bestValue": false
+            },
+            {
+              "metric": "lines_to_cover",
+              "value": "7648"
+            },
+            {
+              "metric": "branch_coverage",
+              "value": "90.7",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_lines",
+              "value": "308",
+              "bestValue": false
+            },
+            {
+              "metric": "line_coverage",
+              "value": "96.0",
+              "bestValue": false
+            },
+            {
+              "metric": "conditions_to_cover",
+              "value": "2031"
+            }
+          ]
+        }
+      }
+    },
+    "https://sonarcloud.io/api/navigation/component?component=org.folio%3Amod-search": {
+      "status": 200,
+      "body": {
+        "key": "org.folio:mod-search",
+        "organization": "folio-org",
+        "organizationName": "folio-org",
+        "id": "AXZRKpsv9jdhW6JjgfcN",
+        "name": "mod-search",
+        "description": "FOLIO search service",
+        "isFavorite": false,
+        "badgeToken": "d190043fbce44a3ab2c4231fe19c1c7cf3a89735",
+        "createdAt": "2020-12-11T10:38:35+0000",
+        "visibility": "public",
+        "version": "6.1.0-SNAPSHOT",
+        "analysisDate": "2026-10-15T11:00:42+0000",
+        "ciName": "Github Actions",
+        "analysisDateAllBranches": "2026-10-15T11:00:42+0000",
+        "qualityProfiles": [
+          {
+            "key": "AV7D9NaMAFLlVksVgrkI",
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "deleted": false
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYH",
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "deleted": false
+          }
+        ],
+        "qualityGate": {
+          "key": 9,
+          "name": "Sonar way",
+          "isDefault": true
+        },
+        "breadcrumbs": [
+          {
+            "key": "org.folio:mod-search",
+            "name": "mod-search",
+            "qualifier": "TRK"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_analyses/search?project=org.folio%3Amod-search&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 38
+        },
+        "analyses": [
+          {
+            "key": "5140d085-9a4a-4082-95d9-0e9a943142db",
+            "date": "2026-10-15T11:00:42+0000",
+            "events": [
+              {
+                "key": "AaE_OYuEfZlrrZEnVefy",
+                "category": "VERSION",
+                "name": "6.1.0-SNAPSHOT"
+              }
+            ],
+            "projectVersion": "6.1.0-SNAPSHOT",
+            "manualNewCodePeriodBaseline": false,
+            "revision": "187df603d24a8e01115dc80085da6760ed3d2853"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_branches/list?project=org.folio%3Amod-search": {
+      "status": 200,
+      "body": {
+        "branches": [
+          {
+            "name": "master",
+            "isMain": true,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 12,
+              "vulnerabilities": 0,
+              "codeSmells": 64
+            },
+            "analysisDate": "2026-10-15T11:00:42+0000",
+            "commit": {
+              "sha": "187df603d24a8e01115dc80085da6760ed3d2853"
+            },
+            "branchId": "af630a47-5307-4ec4-802e-e8a38f3e7505",
+            "branchUuidV1": "AXZRKpsv9jdhW6JjgfcN"
+          },
+          {
+            "name": "v5.0.15",
+            "isMain": false,
+            "type": "SHORT",
+            "mergeBranch": "master",
+            "status": {
+              "qualityGateStatus": "ERROR",
+              "bugs": 1,
+              "vulnerabilities": 32,
+              "codeSmells": 5
+            },
+            "analysisDate": "2026-10-12T10:18:09+0000",
+            "commit": {
+              "sha": "70a90b2587710bf0d59c81daaf75a64ead44db91"
+            },
+            "branchId": "6d3dee93-03c6-478e-b4e3-8704a196edd7",
+            "branchUuidV1": "AaEvnrHA3iHLfDFbdDsN"
+          },
+          {
+            "name": "v5.0.14",
+            "isMain": false,
+            "type": "SHORT",
+            "mergeBranch": "master",
+            "status": {
+              "qualityGateStatus": "ERROR",
+              "bugs": 1,
+              "vulnerabilities": 32,
+              "codeSmells": 5
+            },
+            "analysisDate": "2026-10-07T14:06:00+0000",
+            "commit": {
+              "sha": "189be75f540d555ef0a2cbe5ebebaaa507bb651b"
+            },
+            "branchId": "6f166e82-0f19-43f0-8181-ec7ba7b8b9e5",
+            "branchUuidV1": "AaEWr4F6y7qNXyX2wa7I"
+          },
+          {
+            "name": "v6.0.10",
+            "isMain": false,
+            "type": "SHORT",
+            "mergeBranch": "master",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 17
+            },
+            "analysisDate": "2026-10-07T12:34:31+0000",
+            "commit": {
+              "sha": "72d37f36041c1d8dd52ba1f8e10f9aa2a8f4077d"
+            },
+            "branchId": "0c57c065-6a17-4a82-94a9-a7778df70f54",
+            "branchUuidV1": "AaEWW8Ovy7qNXyX2wZGM"
+          },
+          {
+            "name": "release-1.4.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-07-20T08:45:30+0000",
+            "commit": {
+              "sha": "95274ba006f1fd1a331f03bd1088dfd8b4a1d2e6"
+            },
+            "branchId": "d3a84fa4-f4f5-4ca2-8aaa-a918656a3c5d",
+            "branchUuidV1": "AXrDGELYYuYnrnpqHpMi"
+          },
+          {
+            "name": "release-1.3.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-07-12T08:15:51+0000",
+            "commit": {
+              "sha": "e69d4eedf1140910068b6de43078ca40e9bf7f86"
+            },
+            "branchId": "2f2a213b-0ac3-46b2-a660-45f91df7deae",
+            "branchUuidV1": "AXqZyjtnIMQ8WWJBB2hz"
+          },
+          {
+            "name": "release-1.4.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-06-18T09:20:52+0000",
+            "commit": {
+              "sha": "b4098ced85064ff0911c7a8ee8cba7b9da146a59"
+            },
+            "branchId": "6171137a-173a-4321-8439-da6766a89bbc",
+            "branchUuidV1": "AXoebRM0q5dArhEr7rcS"
+          },
+          {
+            "name": "release-1.3.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-04-22T16:24:23+0000",
+            "commit": {
+              "sha": "17be6b2c8e7e64e29c4f23531df893d0f42dbf7b"
+            },
+            "branchId": "805f49fd-fcab-427c-a800-0f5849c19caf",
+            "branchUuidV1": "AXj6ZlMi5rrad4YbyAni"
+          },
+          {
+            "name": "release-1.2.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-04-07T16:26:20+0000",
+            "commit": {
+              "sha": "70712a30b172b9bb69380c3f598a34decb1befd2"
+            },
+            "branchId": "b7afb37d-a6c1-4191-a8a3-2035a1c29f46",
+            "branchUuidV1": "AXitE7G8AbFK1rTs_ECO"
+          },
+          {
+            "name": "release-1.2.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-04-02T17:42:33+0000",
+            "commit": {
+              "sha": "201fcb3c8652ac4b4dbd46c877a013fcdbb7b7d7"
+            },
+            "branchId": "4789263a-b4f6-4d52-a872-40672db511c3",
+            "branchUuidV1": "AXiTrj2QrhQTfm2IPjoY"
+          },
+          {
+            "name": "release-1.1.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-03-26T17:10:20+0000",
+            "commit": {
+              "sha": "3b833388aa707e6df685e09118217d02b484baea"
+            },
+            "branchId": "afba52f4-7b34-4f86-95b5-be120760bdc4",
+            "branchUuidV1": "AXhvhDnSFiMQUvaH32X0"
+          },
+          {
+            "name": "release-module",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2021-03-18T11:19:51+0000",
+            "commit": {
+              "sha": "0cfb3768a0010fe06d946fd95d8e305a26b44b01"
+            },
+            "branchId": "3dc4605a-3160-44a3-8aba-53d677dae755",
+            "branchUuidV1": "AXhFEID3ONpwnAivWAmC"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/qualityprofiles/search?project=org.folio%3Amod-search&organization=folio-org": {
+      "status": 200,
+      "body": {
+        "profiles": [
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX_",
+            "name": "Sonar way comprehensive",
+            "language": "abap",
+            "languageName": "ABAP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 66,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-29T13:38:50+0000",
+            "lastUsed": "2021-01-05T08:12:07+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZL2jBBJLbd728s6vFPo",
+            "name": "Sonar way comprehensive",
+            "language": "ansible",
+            "languageName": "Ansible",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 16,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:58:04+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWeIT7vxejOaZOEeDyhO",
+            "name": "Sonar way comprehensive",
+            "language": "apex",
+            "languageName": "Apex",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 98,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-16T09:03:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZz3Xd2yjNeBwqrjsoii",
+            "name": "Sonar way comprehensive",
+            "language": "azurepipelines",
+            "languageName": "Azure Pipelines",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 25,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:27:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYk_-klXEjuu3U2UB9Ea",
+            "name": "Sonar way comprehensive",
+            "language": "azureresourcemanager",
+            "languageName": "Azure Resource Manager",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 37,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:43:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYB",
+            "name": "Sonar way comprehensive",
+            "language": "c",
+            "languageName": "C",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 212,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T12:44:55+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriBDInr7WCwZj2arHP",
+            "name": "Sonar way comprehensive",
+            "language": "cloudformation",
+            "languageName": "CloudFormation",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 26,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:28:36+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX8",
+            "name": "Sonar way comprehensive",
+            "language": "cobol",
+            "languageName": "COBOL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 74,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-21T13:58:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYK",
+            "name": "Sonar way comprehensive",
+            "language": "cpp",
+            "languageName": "C++",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 466,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T12:44:36+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX9",
+            "name": "Sonar way comprehensive",
+            "language": "cs",
+            "languageName": "C#",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 379,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T10:30:55+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXw",
+            "name": "Sonar way comprehensive",
+            "language": "css",
+            "languageName": "CSS",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 41,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:45:26+0000",
+            "lastUsed": "2026-02-19T15:12:47+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZHgMmFeZ_un-6v82-kl",
+            "name": "Sonar way comprehensive",
+            "language": "dart",
+            "languageName": "Dart",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 118,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T12:30:08+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ_SVte99vtgtJM139IF",
+            "name": "Sonar way comprehensive",
+            "language": "dataweave",
+            "languageName": "DataWeave",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 22,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-05T14:32:11+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYXoQrD89Ao2yLWbMSBP",
+            "name": "Sonar way comprehensive",
+            "language": "docker",
+            "languageName": "Docker",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 51,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:57:18+0000",
+            "lastUsed": "2024-09-25T01:37:23+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX2",
+            "name": "Sonar way comprehensive",
+            "language": "flex",
+            "languageName": "Flex",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 47,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-06T08:40:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZi8VfCSeH2qyaclVwhQ",
+            "name": "Sonar way comprehensive",
+            "language": "githubactions",
+            "languageName": "GitHub Actions",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 34,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-10T08:54:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZIkCGXy4Fw_crTmh7NB",
+            "name": "FOLIO Go way",
+            "language": "go",
+            "languageName": "Go",
+            "isInherited": true,
+            "parentKey": "AWK0UcmwX0BbYiea-rt-",
+            "isDefault": true,
+            "activeRuleCount": 82,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-05T15:30:38+0000",
+            "lastUsed": "2026-09-22T06:30:37+0000",
+            "userUpdatedAt": "2024-09-24T23:35:23+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ5pCqWtltFaynLGAaBE",
+            "name": "Sonar way comprehensive",
+            "language": "gosu",
+            "languageName": "Gosu",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 38,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-09T16:48:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZwoqGTd0qNMSH3o0DLp",
+            "name": "Sonar way comprehensive",
+            "language": "groovy",
+            "languageName": "Groovy",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 79,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T12:48:38+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZFvm8RLcUjvLIw7hyHo",
+            "name": "Sonar way comprehensive",
+            "language": "ipynb",
+            "languageName": "IPython Notebooks",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 436,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-29T13:45:57+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV7D9NaMAFLlVksVgrkI",
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "languageName": "Java",
+            "isInherited": true,
+            "parentKey": "AV5b6m-A-ycAxoR9jWYI",
+            "isDefault": true,
+            "activeRuleCount": 671,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-22T16:39:30+0000",
+            "lastUsed": "2026-10-23T11:15:15+0000",
+            "userUpdatedAt": "2026-03-09T09:15:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZFU5w0B4M0h26274ViL",
+            "name": "Sonar way comprehensive",
+            "language": "jcl",
+            "languageName": "JCL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2025-03-10T14:01:04+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWtMlysOeA8Wl0oXGh3y",
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "languageName": "JavaScript",
+            "isInherited": true,
+            "parentKey": "AV5b6m-A-ycAxoR9jWYE",
+            "isDefault": true,
+            "activeRuleCount": 482,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:46:14+0000",
+            "lastUsed": "2026-10-23T10:54:27+0000",
+            "userUpdatedAt": "2026-03-18T15:38:28+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXy",
+            "name": "SonarQube Way",
+            "language": "json",
+            "languageName": "JSON",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 1,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2025-07-28T12:07:36+0000",
+            "lastUsed": "2026-10-23T03:06:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWii9yF849IDsqfZBoWg",
+            "name": "Sonar way comprehensive",
+            "language": "jsp",
+            "languageName": "JSP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 0,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2019-01-31T08:12:02+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWSs8_0g6T22ChylW_ev",
+            "name": "Sonar way comprehensive",
+            "language": "kotlin",
+            "languageName": "Kotlin",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 157,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-25T10:23:39+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYI5iBviYiWOCbm_Y7WK",
+            "name": "Sonar way comprehensive",
+            "language": "kubernetes",
+            "languageName": "Kubernetes",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 23,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:49:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYL",
+            "name": "Sonar way comprehensive",
+            "language": "objc",
+            "languageName": "Objective-C",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 211,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-12T12:37:53+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX0",
+            "name": "Sonar way comprehensive",
+            "language": "php",
+            "languageName": "PHP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 195,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-03T18:24:01+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXv",
+            "name": "Sonar way comprehensive",
+            "language": "pli",
+            "languageName": "PL/I",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 17,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2024-12-18T15:13:01+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYG",
+            "name": "Sonar way comprehensive",
+            "language": "plsql",
+            "languageName": "PL/SQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 132,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-07T14:41:56+0000",
+            "lastUsed": "2026-03-26T20:23:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ89KQ10InNrSx-_dWYE",
+            "name": "Sonar way comprehensive",
+            "language": "postgres",
+            "languageName": "PostgreSQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-07T15:18:42+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ3ZRnb_FVODNh3tPKQ_",
+            "name": "Sonar way comprehensive",
+            "language": "powershell",
+            "languageName": "PowerShell",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 32,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-05-27T10:17:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX5",
+            "name": "Sonar way comprehensive",
+            "language": "py",
+            "languageName": "Python",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 490,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-29T13:44:28+0000",
+            "lastUsed": "2026-03-26T20:23:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AaBipWvAUmcwpIitsf0E",
+            "name": "Sonar way comprehensive",
+            "language": "r",
+            "languageName": "R",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 76,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T12:49:20+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX6",
+            "name": "Sonar way comprehensive",
+            "language": "rpg",
+            "languageName": "RPG",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 33,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-16T07:53:11+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWWpvHWHlxVbwxgk9J4m",
+            "name": "Sonar way comprehensive",
+            "language": "ruby",
+            "languageName": "Ruby",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 66,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-02T15:02:27+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZY_RRS6bdGWewDNPtly",
+            "name": "Sonar way comprehensive",
+            "language": "rust",
+            "languageName": "Rust",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 152,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T07:46:15+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWaqXOs0VaklI8IVJGDc",
+            "name": "Sonar way comprehensive",
+            "language": "scala",
+            "languageName": "Scala",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 33,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-30T14:30:46+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYXoTKkD9Ao2yLWbNGxi",
+            "name": "Sonar way comprehensive",
+            "language": "secrets",
+            "languageName": "Secrets",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 356,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-28T13:16:02+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZmpO5bOFlDN7smKnJpw",
+            "name": "Sonar way comprehensive",
+            "language": "shell",
+            "languageName": "Shell",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 24,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:41:31+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX7",
+            "name": "Sonar way comprehensive",
+            "language": "swift",
+            "languageName": "Swift",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 65,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-29T11:42:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriCm8-r7WCwZj2bihA",
+            "name": "Sonar way comprehensive",
+            "language": "terraform",
+            "languageName": "Terraform",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 51,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-01T09:09:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AX6LfYcCEtnFPnYRcSl8",
+            "name": "Sonar way comprehensive",
+            "language": "text",
+            "languageName": "Text",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-05-04T15:20:50+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYD",
+            "name": "Sonar way comprehensive",
+            "language": "ts",
+            "languageName": "TypeScript",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 496,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:47:23+0000",
+            "lastUsed": "2026-10-22T17:13:28+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX4",
+            "name": "Sonar way comprehensive",
+            "language": "tsql",
+            "languageName": "T-SQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 59,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-17T12:38:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXz",
+            "name": "Sonar way comprehensive",
+            "language": "vb",
+            "languageName": "Vb",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 28,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-06T10:44:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX-",
+            "name": "Sonar way comprehensive",
+            "language": "vbnet",
+            "languageName": "VB.NET",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 180,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-23T15:08:27+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYA",
+            "name": "Sonar way comprehensive",
+            "language": "web",
+            "languageName": "HTML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 61,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-20T07:01:38+0000",
+            "lastUsed": "2026-10-07T10:00:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYH",
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "languageName": "XML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 39,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-02T15:02:12+0000",
+            "lastUsed": "2026-10-23T11:15:15+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriBx6jr7WCwZj2bG0I",
+            "name": "Sonar way comprehensive",
+            "language": "yaml",
+            "languageName": "YAML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 2,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-03-16T16:16:03+0000",
+            "lastUsed": "2026-10-23T03:06:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          }
+        ],
+        "actions": {
+          "create": false
+        }
+      }
+    },
+    "https://sonarcloud.io/api/rules/search?organization=folio-org&rule_keys=java%3AS2077%2Cjava%3AS2699%2Cjava%3AS3749%2Cjava%3AS6809%2Cjava%3AS8947%2Cjavabugs%3AS2259&f=name&ps=100": {
+      "status": 200,
+      "body": {
+        "total": 6,
+        "p": 1,
+        "ps": 100,
+        "rules": [
+          {
+            "key": "java:S6809",
+            "name": "Methods with Spring proxy should not be called via \"this\"",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S2077",
+            "name": "SQL queries should not be dynamically formatted",
+            "type": "VULNERABILITY",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "MEDIUM"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "LOW"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S3749",
+            "name": "Members of Spring components should be injected",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S2699",
+            "name": "Tests should include assertions",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "javabugs:S2259",
+            "name": "A NULL object should not be accessed",
+            "type": "BUG",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S8947",
+            "name": "JPA entity classes and methods should not be final",
+            "type": "BUG",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
+              },
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          }
+        ]
+      }
+    }
+  }
+}

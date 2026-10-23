@@ -153,14 +153,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'S011',
     description: 'Passes Sonarqube security checks',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Accessibility requirements',
-      languageReasons: {
-        javascript: 'Sonarqube security configuration'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S012',

@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-10-23T11:55:01.369Z",
+  "description": "SonarCloud org.folio:mod-agreements as S011 reads it, evaluated at mod-agreements commit 2f6bd141ee5ff9254136693970c26746619669fe",
+  "responses": {
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Amod-agreements": {
+      "status": 404,
+      "body": {
+        "errors": [
+          {
+            "msg": "Component key 'org.folio:mod-agreements' not found"
+          }
+        ]
+      }
+    }
+  }
+}

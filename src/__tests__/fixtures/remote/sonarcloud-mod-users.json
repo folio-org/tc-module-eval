@@ -1,0 +1,1689 @@
+{
+  "capturedAt": "2026-10-23T11:55:00.959Z",
+  "description": "SonarCloud org.folio:mod-users as S011 reads it, evaluated at mod-users commit 81dc3f46cec3b8950585f9c71a7f7bbee5eceddf",
+  "responses": {
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "component": {
+          "organization": "folio-org",
+          "key": "org.folio:mod-users",
+          "name": "mod-users",
+          "qualifier": "TRK",
+          "analysisDate": "2026-10-13T13:53:19+0000",
+          "tags": [
+            "users",
+            "dev-core-functional"
+          ],
+          "visibility": "public",
+          "leakPeriodDate": "2026-09-24T17:12:58+0000",
+          "version": "19.7.0-SNAPSHOT"
+        },
+        "ancestors": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-users&status=REVIEWED&resolution=SAFE&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": [],
+        "components": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Amod-users&status=TO_REVIEW&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": [],
+        "components": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=ACCEPTED%2CFALSE_POSITIVE&facets=issueStatuses&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": [
+          {
+            "property": "issueStatuses",
+            "values": [
+              {
+                "val": "OPEN",
+                "count": 26
+              },
+              {
+                "val": "CONFIRMED",
+                "count": 0
+              },
+              {
+                "val": "FALSE_POSITIVE",
+                "count": 0
+              },
+              {
+                "val": "ACCEPTED",
+                "count": 0
+              },
+              {
+                "val": "FIXED",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&impactSeverities=HIGH%2CBLOCKER&facets=rules&ps=500&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 500,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 500,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": [
+          {
+            "property": "rules",
+            "values": []
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&impactSoftwareQualities=SECURITY&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Amod-users&issueStatuses=OPEN%2CCONFIRMED&types=VULNERABILITY&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 1,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 0
+        },
+        "effortTotal": 0,
+        "debtTotal": 0,
+        "issues": [],
+        "components": [],
+        "organizations": [],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/measures/component?component=org.folio%3Amod-users&metricKeys=coverage%2Cline_coverage%2Cbranch_coverage%2Clines_to_cover%2Cuncovered_lines%2Cconditions_to_cover%2Cuncovered_conditions%2Cduplicated_lines_density&branch=master": {
+      "status": 200,
+      "body": {
+        "component": {
+          "id": "AV53mbmILrM5sI_eZlFr",
+          "key": "org.folio:mod-users",
+          "name": "mod-users",
+          "qualifier": "TRK",
+          "measures": [
+            {
+              "metric": "coverage",
+              "value": "91.2",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_conditions",
+              "value": "119",
+              "bestValue": false
+            },
+            {
+              "metric": "duplicated_lines_density",
+              "value": "0.0",
+              "bestValue": true
+            },
+            {
+              "metric": "lines_to_cover",
+              "value": "2850"
+            },
+            {
+              "metric": "branch_coverage",
+              "value": "82.4",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_lines",
+              "value": "192",
+              "bestValue": false
+            },
+            {
+              "metric": "line_coverage",
+              "value": "93.3",
+              "bestValue": false
+            },
+            {
+              "metric": "conditions_to_cover",
+              "value": "677"
+            }
+          ]
+        }
+      }
+    },
+    "https://sonarcloud.io/api/navigation/component?component=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "key": "org.folio:mod-users",
+        "organization": "folio-org",
+        "organizationName": "folio-org",
+        "id": "AV53mbmILrM5sI_eZlFr",
+        "name": "mod-users",
+        "isFavorite": true,
+        "badgeToken": "18c20d96ebb9bddcb6426bac621f42d156b52127",
+        "createdAt": "2017-09-12T21:38:36+0000",
+        "visibility": "public",
+        "version": "19.7.0-SNAPSHOT",
+        "analysisDate": "2026-10-13T13:53:19+0000",
+        "ciName": "Github Actions",
+        "analysisDateAllBranches": "2026-10-13T13:53:19+0000",
+        "qualityProfiles": [
+          {
+            "key": "AV7D9NaMAFLlVksVgrkI",
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "deleted": false
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYH",
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "deleted": false
+          }
+        ],
+        "qualityGate": {
+          "key": 9,
+          "name": "Sonar way",
+          "isDefault": true
+        },
+        "breadcrumbs": [
+          {
+            "key": "org.folio:mod-users",
+            "name": "mod-users",
+            "qualifier": "TRK"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_analyses/search?project=org.folio%3Amod-users&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 34
+        },
+        "analyses": [
+          {
+            "key": "337786c9-0ffc-40fb-9238-af78c52e873c",
+            "date": "2026-10-13T13:53:19+0000",
+            "events": [
+              {
+                "key": "AaE1in0ynmZ6Sl3VWw96",
+                "category": "VERSION",
+                "name": "19.7.0-SNAPSHOT"
+              },
+              {
+                "key": "AaE1in0tnmZ6Sl3VWw95",
+                "category": "QUALITY_PROFILE",
+                "name": "Changes in 'FOLIO Java Way' (java)"
+              }
+            ],
+            "projectVersion": "19.7.0-SNAPSHOT",
+            "manualNewCodePeriodBaseline": false,
+            "revision": "81dc3f46cec3b8950585f9c71a7f7bbee5eceddf"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_branches/list?project=org.folio%3Amod-users": {
+      "status": 200,
+      "body": {
+        "branches": [
+          {
+            "name": "master",
+            "isMain": true,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 26
+            },
+            "analysisDate": "2026-10-13T13:53:19+0000",
+            "commit": {
+              "sha": "81dc3f46cec3b8950585f9c71a7f7bbee5eceddf"
+            },
+            "branchId": "b8a750de-6e3e-4786-891b-0c7180ce5ebd",
+            "branchUuidV1": "AV53mbmILrM5sI_eZlFr"
+          },
+          {
+            "name": "v19.6.2",
+            "isMain": false,
+            "type": "SHORT",
+            "mergeBranch": "master",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 0
+            },
+            "analysisDate": "2026-09-28T11:48:37+0000",
+            "commit": {
+              "sha": "361c1ff7092752c164696152b2dc3c08606d83f5"
+            },
+            "branchId": "2e8cadaf-09a0-4af1-81a7-415d2e7c7f17",
+            "branchUuidV1": "AaDn2H3hUAim-F_ika9W"
+          },
+          {
+            "name": "release-17.1.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 15
+            },
+            "analysisDate": "2020-10-15T14:53:23+0000",
+            "commit": {
+              "sha": "bbafe1bf103b9a90185c0eec050ddc6d05bb23be"
+            },
+            "branchId": "5d47244e-8513-456f-b664-f5a738d3bdd4",
+            "branchUuidV1": "AXUsn4iJkDS3ZKYJ68TA"
+          },
+          {
+            "name": "release-17.2.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 3
+            },
+            "analysisDate": "2020-10-14T10:03:29+0000",
+            "commit": {
+              "sha": "009c61e66558e36cff149440b00f10aa151d408d"
+            },
+            "branchId": "7abaf48a-d8dc-48d6-b5ce-6a43599646fd",
+            "branchUuidV1": "AXUmkKsP9YyLiN9YJGQT"
+          },
+          {
+            "name": "release-17-2-1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 3
+            },
+            "analysisDate": "2020-10-14T09:40:29+0000",
+            "commit": {
+              "sha": "043b131182b3eed69253d774608c5f69e0540491"
+            },
+            "branchId": "c85aa145-158b-493e-ab69-c673ae6368a8",
+            "branchUuidV1": "AXUme5y9-T531zpI-FFL"
+          },
+          {
+            "name": "release-16.1.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 6
+            },
+            "analysisDate": "2020-03-11T14:55:07+0000",
+            "commit": {
+              "sha": "afb73d8bba184ceb3ea39d51dec7f7f45a569ad1"
+            },
+            "branchId": "1886104a-7be5-40e3-81c0-7bdb23a22632",
+            "branchUuidV1": "AXDKF7wbSOcopm-9-gG8"
+          },
+          {
+            "name": "release-16.0.0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 9
+            },
+            "analysisDate": "2019-12-04T18:36:50+0000",
+            "commit": {
+              "sha": "29742a410059fb6efcdc1dd7f229000cd6c8068f"
+            },
+            "branchId": "217bbd66-9687-437c-93c3-3c50646e6f5e",
+            "branchUuidV1": "AW7SM3km6A1-kc3fciYo"
+          },
+          {
+            "name": "release-15.6.1",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 19
+            },
+            "analysisDate": "2019-07-23T19:14:22+0000",
+            "commit": {
+              "sha": "b571719581ed691bbb421309c259086a8dcec7d8"
+            },
+            "branchId": "30300b12-201c-4011-bdc2-05a3196f5cb8",
+            "branchUuidV1": "AWwgQaj0ASDtDdytV601"
+          },
+          {
+            "name": "release-15-6-0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 41
+            },
+            "analysisDate": "2019-06-12T08:51:26+0000",
+            "commit": {
+              "sha": "9292b902d41ab289b97f6f032dd7c685ce43c054"
+            },
+            "branchId": "650063b0-1206-410f-9fda-52763a20af6c",
+            "branchUuidV1": "AWtK4qCMAqYmNhQqSNOn"
+          },
+          {
+            "name": "release-15-5-0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 41
+            },
+            "analysisDate": "2019-05-10T12:03:03+0000",
+            "commit": {
+              "sha": "9a98d65c614beabcc559127781e91627291b3515"
+            },
+            "branchId": "73f542e0-f683-4ecf-a522-db07f2a9e631",
+            "branchUuidV1": "AWqhoDB_eCTcsUmsaot1"
+          },
+          {
+            "name": "release-15-4-0",
+            "isMain": false,
+            "type": "LONG",
+            "status": {
+              "qualityGateStatus": "OK",
+              "bugs": 0,
+              "vulnerabilities": 0,
+              "codeSmells": 36
+            },
+            "analysisDate": "2019-03-15T11:29:14+0000",
+            "commit": {
+              "sha": "1dd21f9d1821de5d0e724181fdb47f9898a3cf90"
+            },
+            "branchId": "adfccd36-1957-4b8f-9279-49d615840981",
+            "branchUuidV1": "AWmBHRoXcRWv0YINlu0H"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/qualityprofiles/search?project=org.folio%3Amod-users&organization=folio-org": {
+      "status": 200,
+      "body": {
+        "profiles": [
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX_",
+            "name": "Sonar way comprehensive",
+            "language": "abap",
+            "languageName": "ABAP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 66,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-29T13:38:50+0000",
+            "lastUsed": "2021-01-05T08:12:07+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZL2jBBJLbd728s6vFPo",
+            "name": "Sonar way comprehensive",
+            "language": "ansible",
+            "languageName": "Ansible",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 16,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:58:04+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWeIT7vxejOaZOEeDyhO",
+            "name": "Sonar way comprehensive",
+            "language": "apex",
+            "languageName": "Apex",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 98,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-16T09:03:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZz3Xd2yjNeBwqrjsoii",
+            "name": "Sonar way comprehensive",
+            "language": "azurepipelines",
+            "languageName": "Azure Pipelines",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 25,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:27:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYk_-klXEjuu3U2UB9Ea",
+            "name": "Sonar way comprehensive",
+            "language": "azureresourcemanager",
+            "languageName": "Azure Resource Manager",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 37,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:43:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYB",
+            "name": "Sonar way comprehensive",
+            "language": "c",
+            "languageName": "C",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 212,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T12:44:55+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriBDInr7WCwZj2arHP",
+            "name": "Sonar way comprehensive",
+            "language": "cloudformation",
+            "languageName": "CloudFormation",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 26,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:28:36+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX8",
+            "name": "Sonar way comprehensive",
+            "language": "cobol",
+            "languageName": "COBOL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 74,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-21T13:58:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYK",
+            "name": "Sonar way comprehensive",
+            "language": "cpp",
+            "languageName": "C++",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 466,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T12:44:36+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX9",
+            "name": "Sonar way comprehensive",
+            "language": "cs",
+            "languageName": "C#",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 379,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-09T10:30:55+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXw",
+            "name": "Sonar way comprehensive",
+            "language": "css",
+            "languageName": "CSS",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 41,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:45:26+0000",
+            "lastUsed": "2026-02-19T15:12:47+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZHgMmFeZ_un-6v82-kl",
+            "name": "Sonar way comprehensive",
+            "language": "dart",
+            "languageName": "Dart",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 118,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T12:30:08+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ_SVte99vtgtJM139IF",
+            "name": "Sonar way comprehensive",
+            "language": "dataweave",
+            "languageName": "DataWeave",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 22,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-05T14:32:11+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYXoQrD89Ao2yLWbMSBP",
+            "name": "Sonar way comprehensive",
+            "language": "docker",
+            "languageName": "Docker",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 51,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:57:18+0000",
+            "lastUsed": "2024-09-25T01:37:23+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX2",
+            "name": "Sonar way comprehensive",
+            "language": "flex",
+            "languageName": "Flex",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 47,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-06T08:40:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZi8VfCSeH2qyaclVwhQ",
+            "name": "Sonar way comprehensive",
+            "language": "githubactions",
+            "languageName": "GitHub Actions",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 34,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-10T08:54:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZIkCGXy4Fw_crTmh7NB",
+            "name": "FOLIO Go way",
+            "language": "go",
+            "languageName": "Go",
+            "isInherited": true,
+            "parentKey": "AWK0UcmwX0BbYiea-rt-",
+            "isDefault": true,
+            "activeRuleCount": 82,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-05T15:30:38+0000",
+            "lastUsed": "2026-09-22T06:30:37+0000",
+            "userUpdatedAt": "2024-09-24T23:35:23+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ5pCqWtltFaynLGAaBE",
+            "name": "Sonar way comprehensive",
+            "language": "gosu",
+            "languageName": "Gosu",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 38,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-09T16:48:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZwoqGTd0qNMSH3o0DLp",
+            "name": "Sonar way comprehensive",
+            "language": "groovy",
+            "languageName": "Groovy",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 79,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T12:48:38+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZFvm8RLcUjvLIw7hyHo",
+            "name": "Sonar way comprehensive",
+            "language": "ipynb",
+            "languageName": "IPython Notebooks",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 436,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-29T13:45:57+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV7D9NaMAFLlVksVgrkI",
+            "name": "FOLIO Java Way",
+            "language": "java",
+            "languageName": "Java",
+            "isInherited": true,
+            "parentKey": "AV5b6m-A-ycAxoR9jWYI",
+            "isDefault": true,
+            "activeRuleCount": 671,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-22T16:39:30+0000",
+            "lastUsed": "2026-10-23T11:15:15+0000",
+            "userUpdatedAt": "2026-03-09T09:15:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZFU5w0B4M0h26274ViL",
+            "name": "Sonar way comprehensive",
+            "language": "jcl",
+            "languageName": "JCL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2025-03-10T14:01:04+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWtMlysOeA8Wl0oXGh3y",
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "languageName": "JavaScript",
+            "isInherited": true,
+            "parentKey": "AV5b6m-A-ycAxoR9jWYE",
+            "isDefault": true,
+            "activeRuleCount": 482,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:46:14+0000",
+            "lastUsed": "2026-10-23T10:54:27+0000",
+            "userUpdatedAt": "2026-03-18T15:38:28+0000",
+            "organization": "folio-org",
+            "isBuiltIn": false,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXy",
+            "name": "SonarQube Way",
+            "language": "json",
+            "languageName": "JSON",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 1,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2025-07-28T12:07:36+0000",
+            "lastUsed": "2026-10-23T03:06:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWii9yF849IDsqfZBoWg",
+            "name": "Sonar way comprehensive",
+            "language": "jsp",
+            "languageName": "JSP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 0,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2019-01-31T08:12:02+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWSs8_0g6T22ChylW_ev",
+            "name": "Sonar way comprehensive",
+            "language": "kotlin",
+            "languageName": "Kotlin",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 157,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-25T10:23:39+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYI5iBviYiWOCbm_Y7WK",
+            "name": "Sonar way comprehensive",
+            "language": "kubernetes",
+            "languageName": "Kubernetes",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 23,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T16:49:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYL",
+            "name": "Sonar way comprehensive",
+            "language": "objc",
+            "languageName": "Objective-C",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 211,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-12T12:37:53+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX0",
+            "name": "Sonar way comprehensive",
+            "language": "php",
+            "languageName": "PHP",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 195,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-03T18:24:01+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXv",
+            "name": "Sonar way comprehensive",
+            "language": "pli",
+            "languageName": "PL/I",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 17,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2024-12-18T15:13:01+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYG",
+            "name": "Sonar way comprehensive",
+            "language": "plsql",
+            "languageName": "PL/SQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 132,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-07T14:41:56+0000",
+            "lastUsed": "2026-03-26T20:23:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ89KQ10InNrSx-_dWYE",
+            "name": "Sonar way comprehensive",
+            "language": "postgres",
+            "languageName": "PostgreSQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-07T15:18:42+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZ3ZRnb_FVODNh3tPKQ_",
+            "name": "Sonar way comprehensive",
+            "language": "powershell",
+            "languageName": "PowerShell",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 32,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-05-27T10:17:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX5",
+            "name": "Sonar way comprehensive",
+            "language": "py",
+            "languageName": "Python",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 490,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-29T13:44:28+0000",
+            "lastUsed": "2026-03-26T20:23:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AaBipWvAUmcwpIitsf0E",
+            "name": "Sonar way comprehensive",
+            "language": "r",
+            "languageName": "R",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 76,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T12:49:20+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX6",
+            "name": "Sonar way comprehensive",
+            "language": "rpg",
+            "languageName": "RPG",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 33,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-16T07:53:11+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWWpvHWHlxVbwxgk9J4m",
+            "name": "Sonar way comprehensive",
+            "language": "ruby",
+            "languageName": "Ruby",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 66,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-02T15:02:27+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZY_RRS6bdGWewDNPtly",
+            "name": "Sonar way comprehensive",
+            "language": "rust",
+            "languageName": "Rust",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 152,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-11T07:46:15+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AWaqXOs0VaklI8IVJGDc",
+            "name": "Sonar way comprehensive",
+            "language": "scala",
+            "languageName": "Scala",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 33,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-30T14:30:46+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AYXoTKkD9Ao2yLWbNGxi",
+            "name": "Sonar way comprehensive",
+            "language": "secrets",
+            "languageName": "Secrets",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 356,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-08-28T13:16:02+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AZmpO5bOFlDN7smKnJpw",
+            "name": "Sonar way comprehensive",
+            "language": "shell",
+            "languageName": "Shell",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 24,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-06-18T17:41:31+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX7",
+            "name": "Sonar way comprehensive",
+            "language": "swift",
+            "languageName": "Swift",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 65,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-29T11:42:24+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriCm8-r7WCwZj2bihA",
+            "name": "Sonar way comprehensive",
+            "language": "terraform",
+            "languageName": "Terraform",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 51,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-01T09:09:37+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AX6LfYcCEtnFPnYRcSl8",
+            "name": "Sonar way comprehensive",
+            "language": "text",
+            "languageName": "Text",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 11,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-05-04T15:20:50+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYD",
+            "name": "Sonar way comprehensive",
+            "language": "ts",
+            "languageName": "TypeScript",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 496,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-14T16:47:23+0000",
+            "lastUsed": "2026-10-22T17:13:28+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX4",
+            "name": "Sonar way comprehensive",
+            "language": "tsql",
+            "languageName": "T-SQL",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 59,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-17T12:38:43+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWXz",
+            "name": "Sonar way comprehensive",
+            "language": "vb",
+            "languageName": "Vb",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 28,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-06T10:44:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWX-",
+            "name": "Sonar way comprehensive",
+            "language": "vbnet",
+            "languageName": "VB.NET",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 180,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-07-23T15:08:27+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYA",
+            "name": "Sonar way comprehensive",
+            "language": "web",
+            "languageName": "HTML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 61,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-10-20T07:01:38+0000",
+            "lastUsed": "2026-10-07T10:00:49+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AV5b6m-A-ycAxoR9jWYH",
+            "name": "Sonar way comprehensive",
+            "language": "xml",
+            "languageName": "XML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 39,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-09-02T15:02:12+0000",
+            "lastUsed": "2026-10-23T11:15:15+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          },
+          {
+            "key": "AXriBx6jr7WCwZj2bG0I",
+            "name": "Sonar way comprehensive",
+            "language": "yaml",
+            "languageName": "YAML",
+            "isInherited": false,
+            "isDefault": true,
+            "activeRuleCount": 2,
+            "activeDeprecatedRuleCount": 0,
+            "rulesUpdatedAt": "2026-03-16T16:16:03+0000",
+            "lastUsed": "2026-10-23T03:06:22+0000",
+            "organization": "folio-org",
+            "isBuiltIn": true,
+            "actions": {
+              "edit": false,
+              "setAsDefault": false,
+              "copy": false,
+              "associateProjects": false,
+              "delete": false,
+              "grantPermissions": true
+            },
+            "requiredEntitlements": []
+          }
+        ],
+        "actions": {
+          "create": false
+        }
+      }
+    },
+    "https://sonarcloud.io/api/rules/search?organization=folio-org&rule_keys=java%3AS3011%2Cjava%3AS3776%2Cjava%3AS5542%2Cjava%3AS2699&f=name&ps=100": {
+      "status": 200,
+      "body": {
+        "total": 4,
+        "p": 1,
+        "ps": 100,
+        "rules": [
+          {
+            "key": "java:S5542",
+            "name": "Encryption algorithms should be used with secure mode and padding scheme",
+            "type": "VULNERABILITY",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "HIGH"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S2699",
+            "name": "Tests should include assertions",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "BLOCKER"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S3011",
+            "name": "Reflection should not be used to increase accessibility of classes, methods, or fields",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "MEDIUM"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          },
+          {
+            "key": "java:S3776",
+            "name": "Cognitive Complexity of methods should not be too high",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ],
+            "securityStandards": [],
+            "requiredEntitlements": []
+          }
+        ]
+      }
+    }
+  }
+}

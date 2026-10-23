@@ -28,7 +28,7 @@ program
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
-  .option('--allow-remote-lookups', 'Allow read-only lookups of folio-org/platform-lsp and FAR (S014)')
+  .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011), folio-org/platform-lsp and FAR (S014)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
@@ -57,7 +57,7 @@ program
         console.log(`🌿 Branch: ${options.branch}`);
       }
       if (options.allowRemoteLookups) {
-        console.log(`🌐 Remote lookups allowed (folio-org/platform-lsp ${options.platformRef}, FAR)`);
+        console.log(`🌐 Remote lookups allowed (SonarCloud, folio-org/platform-lsp ${options.platformRef}, FAR)`);
       }
       if (options.allowLocalCommands) {
         console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);

@@ -43,7 +43,7 @@ on:
         type: string
         default: "8.30.0"
       allow_remote_lookups:
-        description: "Allow read-only lookups of folio-org/platform-lsp and FAR (needed for S014)"
+        description: "Allow read-only lookups of SonarCloud, folio-org/platform-lsp and FAR (needed for S011 and S014)"
         required: false
         type: boolean
         default: false

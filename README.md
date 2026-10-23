@@ -78,6 +78,15 @@ When a repository pins no version, the versions FOLIO's shared workflows supply 
 from the maintainer-reviewed `config/folio-shared-workflows.json`. See
 [Criterion Notes](docs/criterion-notes.md#s012-officially-supported-build-tools).
 
+### S011 SonarQube Findings
+
+S011 reads the module's SonarCloud analysis (`org.folio:<repository>`) and fails on any open
+security issue, unreviewed security hotspot, open high or blocker issue (test code included), or
+duplication above 3%. It also scans the repository and its CI for Sonar rule suppressions
+(`@SuppressWarnings`, `NOSONAR`) and exclusions, which a reviewer must judge. It needs
+`--allow-remote-lookups` and cannot pass unless `SONAR_TOKEN` can administer the SonarCloud
+project. See [Criterion Notes](docs/criterion-notes.md#s011-sonarqube-findings).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
@@ -90,8 +99,9 @@ the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-thi
 
 ### Remote Lookups
 
-Evaluation is offline by default. S014 (assigned to exactly one application on the FOLIO LSP platform)
-needs to read `folio-org/platform-lsp` and FAR, so it is `manual` unless you opt in:
+Evaluation is offline by default. S011 (SonarQube findings) needs to read SonarCloud, and S014
+(assigned to exactly one application on the FOLIO LSP platform) needs to read `folio-org/platform-lsp`
+and FAR, so both are `manual` unless you opt in:
 
 ```bash
 folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
@@ -99,8 +109,9 @@ folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-looku
 
 `--application` is the application named in the evaluation's Jira task. `--platform-ref` picks the
 platform-lsp branch, tag or commit (default `snapshot`). Remote reads are read-only, allowlisted and
-bounded, and each one is recorded in the report. See
-[Criterion Notes](docs/criterion-notes.md#s014-application-assignment).
+bounded, and each one is recorded in the report. An optional `SONAR_TOKEN` is sent to SonarCloud only;
+S011 reads SonarCloud's own project settings only when that token can administer the project. See
+[Criterion Notes](docs/criterion-notes.md#remote-lookups).
 
 ### For Local Development: Use Devcontainer
 
@@ -177,7 +188,7 @@ All inputs are optional:
 | `java_version` | Java version for Maven/Gradle builds | `21` |
 | `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
-| `allow_remote_lookups` | Allow read-only lookups of platform-lsp and FAR, needed for S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
+| `allow_remote_lookups` | Allow read-only lookups of SonarCloud, platform-lsp and FAR, needed for S011 and S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
 | `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
 | `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
 
@@ -248,7 +259,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S014, also tick remote lookups and enter the application named in the evaluation's Jira task.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011 and S014, also tick remote lookups, and for S014 enter the application named in the evaluation's Jira task.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 

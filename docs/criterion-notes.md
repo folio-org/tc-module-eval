@@ -228,6 +228,36 @@ Kafka listeners and consumers, JMS, RabbitMQ, gRPC, and S3, MinIO or `FolioS3Cli
 storage. A JDBC `DataSource` type counts as a datastore client only as a type name such as
 `HikariDataSource`; `dataSource` variables and names like `DataSourceResolver` do not.
 
+## S011 SonarQube Findings
+
+S011 reads the module's SonarCloud project, `org.folio:<repository name>` (FOLIO's shared workflows name it that way; it is not the descriptor name S014 uses), so it runs only with `--allow-remote-lookups`. It also scans the checkout for what tells Sonar to ignore something; that scan runs without remote lookups too, and runs no commands.
+
+SonarCloud evidence, about 15 requests through the remote-evidence transport: the project, its branches, the latest analysis, `duplicated_lines_density` (with the coverage measures S013 uses), counts of open issues with a `SECURITY` impact or of type `VULNERABILITY`, of open issues with any `HIGH` or `BLOCKER` impact (with a per-rule facet), of issues `ACCEPTED` or `FALSE_POSITIVE`, of hotspots to review and reviewed as safe, the project's quality profiles, and the rule names the report mentions. Counts come from SonarCloud's totals, so the 10,000-result cap on listings only shortens the examples. A count SonarCloud did not return is unavailable, never zero. Severities are MQR impacts, not legacy severities: mod-search has 17 legacy BLOCKER and CRITICAL issues but 28 with a HIGH or BLOCKER impact.
+
+Branch and freshness: S011 reads the `--branch` analysis when SonarCloud has one, otherwise the main branch, and says so. The analysis must be of the evaluated commit. After every other request it reads the latest analysis again; a different one means SonarCloud re-analysed while it was being read. An analysis of another commit, an unknown evaluated commit, or a re-analysis is stale, and stale data can neither pass nor fail.
+
+The repository scan reads source, build and CI files (at most 20,000 files of 1 MiB each, skipping `node_modules`, `target`, `build` and `dist`):
+
+- `@SuppressWarnings` values naming a Sonar rule (`java:`, `squid:`, `javabugs:`, `javasecurity:`, `kotlin:`, `groovy:`) or `"all"`, with what they annotate (class, method or field). Other values (`unchecked`, `checkstyle:...`) are not Sonar rules.
+- `NOSONAR` in a comment, in any language.
+- Analysis scope: `sonar.sources`, `sonar.inclusions`, `sonar.exclusions`, `sonar.test.exclusions`, `sonar.cpd.exclusions` and `sonar.issue.ignore.*` in `pom.xml`, `build.gradle(.kts)`, `gradle.properties`, `sonar-project.properties`, `.mvn/maven.config` and `-D` options in workflows, and the `sonar-exclusions` and `sonar-sources` inputs to FOLIO's shared workflows, minus the defaults `config/folio-shared-workflows.json` records for that workflow. `sonar.coverage.exclusions` is listed but does not count for S011.
+- A comment on the same line or ending on one of the two lines above. Javadoc describes the method, not the suppression, so it does not count.
+
+`eslint-disable` is ESLint, not Sonar; the report counts it in one line and it never counts as an ignored rule.
+
+SonarCloud's own project settings (Administration > Analysis Scope) can also exclude code. SonarCloud answers `api/settings/values` anonymously with an empty list, which cannot be told apart from nothing set, so S011 reads them only when `SONAR_TOKEN` is supplied and `api/navigation/component` reports `configuration.showSettings: true`. SonarQube sets that flag only for project administrators (`ComponentAction.writeConfigPageAccess`). Without such a token S011 cannot pass, and every report says the settings were not read.
+
+Checked in order; the first that applies decides:
+
+- `manual`: remote lookups are off; SonarCloud has no project (the report explains FOLIO's `gradle.yml` does not run SonarCloud when the CI uses it, as for mod-agreements); SonarCloud, its branch list, the latest analysis or the measures could not be read; or the analysis is stale.
+- `fail`: an open security issue of any severity, a security hotspot to review of any probability, an open issue with a `HIGH` or `BLOCKER` impact in main or test code, or more than 3.0% duplication (3.0% passes). Each is judged from its own evidence, so a proven violation fails even when another count could not be read.
+- `manual`: a count could not be read; the repository or CI suppresses a Sonar rule or sets analysis scope; SonarCloud's project settings set scope; an issue is accepted or marked false positive; a hotspot was reviewed as safe; a quality profile is not the organization default; the scan was incomplete; or SonarCloud's project settings could not be read.
+- `pass`: a fresh analysis with every count available and clean, nothing ignored, and SonarCloud's project settings read and empty.
+
+Whether a suppression is reasonably justified is never decided by the tool. The report flags where suppressions depart from FOLIO's guidance (no comment, `NOSONAR`, `"all"`, class level, a security rule) and lists them for failing modules too. Optional agent review assesses each group of suppressions; see [Agent Review Configuration](agent-review.md#s011-sonarqube-suppression-review).
+
+Fixtures are recorded with `yarn capture:remote-fixtures --sonar <checkout...>`, which runs S011 on each local checkout and writes `sonarcloud-<repository>.json`.
+
 ## S012 Officially Supported Build Tools
 
 S012 checks the tools that build the module against the build-tool sections of the committed `config/officially-supported-technologies.json` (the frontend section for UI modules and libraries, the backend section for Java modules). It reads build and workflow files only, so it runs the same in safe mode and never makes a network request. `--allow-local-commands` adds nothing.
@@ -272,7 +302,7 @@ An application whose FAR descriptor is missing, not exactly one record, for anot
 - HTTPS `GET` only, to `far.ci.folio.org/applications`, `sonarcloud.io/api/`, and `raw.githubusercontent.com` or `api.github.com` paths of `folio-org/platform-lsp` and `folio-org/app-*`. Every redirect is checked against the same list, and at most 3 are followed.
 - Per request: 15 s and 4 MiB, and the response must be JSON. One retry on HTTP 429 or 5xx, waiting for `Retry-After` only up to 10 s.
 - Per evaluation: at most 150 requests, 32 MiB and 120 s, with at most 4 requests in flight. A read that hits a limit fails; it never returns partial or empty data.
-- Optional tokens: `SONAR_TOKEN` is sent only to `sonarcloud.io` and `GITHUB_TOKEN` only to `api.github.com`, so a redirect to another host drops it. A token that is not a valid header value is not sent. Tokens are never recorded, and network error text, which can quote request headers, is not either. Without a token, GitHub allows 60 anonymous API requests an hour; S014 uses one per evaluation.
+- Optional tokens: `SONAR_TOKEN` is sent only to `sonarcloud.io` and `GITHUB_TOKEN` only to `api.github.com`, so a redirect to another host drops it. A token that is not a valid header value is not sent. Tokens are never recorded, and network error text, which can quote request headers, is not either. Without a token, GitHub allows 60 anonymous API requests an hour; S014 uses one per evaluation. SonarCloud answers S011 anonymously; a `SONAR_TOKEN` matters only for reading the project's own settings (see S011).
 - Every read is recorded in `criterionDetails.remoteEvidence` with its URL, time, HTTP status and the SHA-256 of the response, plus each redirect hop and retry with its status, and the report lists them under "Sources". A response that completes after its time limit is rejected even if it arrived in full.
 
 Tests never touch the network: they replay responses recorded by `yarn capture:remote-fixtures` into `src/__tests__/fixtures/remote/`, and an unrecorded URL fails the test.
