@@ -12,8 +12,10 @@
  * 1. Split dual/multi-licenses into separate array entries
  *    - Example: "Apache-2.0|MIT" → ["Apache-2.0", "MIT"]
  *    - Each ecosystem may use different separators (Maven: "|", npm: " OR ", etc.)
+ *    - Licenses that all apply (SPDX " AND ") form one entry as a nested array, which passes
+ *      only when every license in it passes. Example: "MIT AND Zlib" → [["MIT", "Zlib"]]
  * 2. Normalize license names where possible
- * 3. Return licenses as a string array in the Dependency object
+ * 3. Return licenses as an array in the Dependency object
  *
  * This module validates the contract and will report parser violations as compliance errors.
  * Dependencies with unsplit licenses (containing '|', 'OR', 'AND') will fail compliance.
@@ -153,6 +155,29 @@ function evaluateLicense(license: string, dependency: Dependency, readmeContent:
 }
 
 /**
+ * Evaluate one alternative: a single license, or licenses that all apply (SPDX AND), which pass
+ * only when every one of them passes.
+ */
+function evaluateAlternative(alternative: string | string[], dependency: Dependency, readmeContent: string): LicenseEvaluation {
+  if (!Array.isArray(alternative)) {
+    return evaluateLicense(alternative, dependency, readmeContent);
+  }
+  const evaluations = alternative.map(license => evaluateLicense(license, dependency, readmeContent));
+  return evaluations.find(e => e.issueType === LicenseIssueType.CATEGORY_X_VIOLATION) ??
+    evaluations.find(e => e.status === EvaluationStatus.FAIL) ??
+    evaluations.find(e => e.status === EvaluationStatus.MANUAL) ?? {
+      license: licenseText(alternative),
+      status: EvaluationStatus.PASS,
+      reason: `Every license in '${licenseText(alternative)}' is allowed.`
+    };
+}
+
+/** The display text of an alternative, with licenses that all apply joined by AND. */
+export function licenseText(alternative: string | string[]): string {
+  return Array.isArray(alternative) ? alternative.join(' AND ') : alternative;
+}
+
+/**
  * Evaluate multiple licenses using OR logic:
  * - If ANY license is Category A -> PASS
  * - If ANY Category B is documented -> PASS
@@ -165,7 +190,7 @@ function evaluateLicense(license: string, dependency: Dependency, readmeContent:
  * @returns Best evaluation result based on OR logic
  */
 function evaluateMultipleLicenses(
-  licenses: string[],
+  licenses: Array<string | string[]>,
   dependency: Dependency,
   readmeContent: string
 ): LicenseEvaluation {
@@ -181,7 +206,7 @@ function evaluateMultipleLicenses(
   const evaluations: LicenseEvaluation[] = [];
 
   for (const license of licenses) {
-    const evaluation = evaluateLicense(license, dependency, readmeContent);
+    const evaluation = evaluateAlternative(license, dependency, readmeContent);
     // Category A passes and wins in OR logic, so return immediately
     if (evaluation.category === LicenseCategory.A) {
       return evaluation;
@@ -199,7 +224,7 @@ function evaluateMultipleLicenses(
   const hasUnknown = evaluations.some(e => e.status === EvaluationStatus.MANUAL);
   if (hasUnknown) {
     return {
-      license: licenses.join(' | '),
+      license: licenses.map(licenseText).join(' | '),
       status: EvaluationStatus.MANUAL,
       reason: `These licenses are not in the evaluator's list of known licenses: ${evaluations.filter(e => e.status === EvaluationStatus.MANUAL).map(e => `'${e.license}'`).join(', ')}.`,
       issueType: LicenseIssueType.UNKNOWN_LICENSE
@@ -213,7 +238,7 @@ function evaluateMultipleLicenses(
 
   // Fallback (shouldn't reach here)
   return evaluations[0] || {
-    license: licenses.join(' | '),
+    license: licenses.map(licenseText).join(' | '),
     ...DEFAULT_EVALUATION_FAILURE
   };
 }
@@ -259,7 +284,7 @@ export function checkLicenseCompliance(
       continue;
     }
 
-    const allLicenses = dependency.licenses.filter(isNonEmptyString);
+    const allLicenses = dependency.licenses.filter(license => Array.isArray(license) || isNonEmptyString(license));
 
     if (allLicenses.length === 0) {
       issues.push({
@@ -276,7 +301,7 @@ export function checkLicenseCompliance(
     // Note: Only check uppercase OR/AND to avoid false positives with license names like
     // "Common Development and Distribution License" that contain lowercase "and".
     // A name the policy lists exactly, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
-    const unsplitLicenses = allLicenses.filter(license => !isListedLicenseName(license) && (
+    const unsplitLicenses = allLicenses.flat().filter(license => !isListedLicenseName(license) && (
       license.includes('|') ||
       license.includes(' OR ') ||
       license.includes(' AND ') ||
@@ -298,10 +323,10 @@ export function checkLicenseCompliance(
       continue;
     }
 
-    // Dual-licensed dependencies use OR logic; a single license is evaluated on its own
+    // Dual-licensed dependencies use OR logic; a single alternative is evaluated on its own
     const evaluation = allLicenses.length > 1
       ? evaluateMultipleLicenses(allLicenses, dependency, readmeContent)
-      : evaluateLicense(allLicenses[0], dependency, readmeContent);
+      : evaluateAlternative(allLicenses[0], dependency, readmeContent);
 
     if (evaluation.status === EvaluationStatus.FAIL ||
         evaluation.status === EvaluationStatus.MANUAL) {

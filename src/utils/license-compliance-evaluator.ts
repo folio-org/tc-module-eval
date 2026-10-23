@@ -9,7 +9,7 @@ import {
   EvaluationRun
 } from '../types';
 import { getDependencies } from './dependency-orchestrator';
-import { checkLicenseCompliance } from './license-compliance';
+import { checkLicenseCompliance, licenseText } from './license-compliance';
 import { readRepoTextFile } from './parsers/common';
 import { getLogger } from './logger';
 import { reportText } from './report-text';
@@ -114,7 +114,7 @@ export function buildEvidenceSummary(dependencies: Dependency[]): string {
   // Every dependency is listed, so the HTML report's license groups add up to the count.
   // The report parses this exact "Found N dependencies. Licenses: name:version (license); ..." form.
   const licenseInfo = dependencies
-    .map(d => `${d.name}:${d.version} (${d.licenses?.length ? d.licenses.join(', ') : 'No license reported'})`)
+    .map(d => `${d.name}:${d.version} (${d.licenses?.length ? d.licenses.map(licenseText).join(', ') : 'No license reported'})`)
     .join('; ');
   const count = dependencies.length === 1 ? '1 dependency' : `${dependencies.length} dependencies`;
   return `Found ${count}. Licenses: ${licenseInfo}`;
@@ -209,7 +209,7 @@ export class ThirdPartyLicenseEvaluator {
         ...determineComplianceStatus(criterionId, complianceResult, evidence, warnings),
         // The HTML report groups dependencies by license from this list rather than from the evidence text.
         criterionDetails: {
-          dependencies: dependencies.map(({ name, version, licenses }) => ({ name, version, licenses: licenses ?? [] }))
+          dependencies: dependencies.map(({ name, version, licenses }) => ({ name, version, licenses: (licenses ?? []).map(licenseText) }))
         }
       }, commandObservations);
     } catch (error) {

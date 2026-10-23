@@ -10,11 +10,13 @@
  *
  * PARSER CONTRACT IMPLEMENTATION:
  * This parser fulfills the license-compliance.ts contract by:
- * 1. Splitting SPDX expressions ("MIT OR Apache-2.0") into ["MIT", "Apache-2.0"]
+ * 1. Splitting SPDX expressions ("MIT OR Apache-2.0") into ["MIT", "Apache-2.0"], with licenses
+ *    joined by AND kept together as one alternative ("MIT AND Zlib" → [["MIT", "Zlib"]])
  * 2. Normalizing license names via license-policy.normalizeLicenseName()
- * 3. Returning licenses as string arrays in Dependency objects
+ * 3. Returning licenses as arrays in Dependency objects
  *
- * npm uses SPDX license expressions where ' OR ' separates alternatives in dual licensing.
+ * npm uses SPDX license expressions where ' OR ' separates alternatives in dual licensing
+ * and ' AND ' joins licenses that all apply.
  * The splitSpdxLicenses() function handles this npm-specific format.
  *
  * FOLIO REGISTRY SUPPORT:
@@ -56,6 +58,7 @@ const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
 const LICENSE_CHECK_MAX_OUTPUT = 10 * 1024 * 1024; // license-checker JSON can be large
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
+const MAX_SPDX_ALTERNATIVES = 64;
 
 function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
   const npmToolDir = path.join(repoPath, '.folio-eval-npm');
@@ -76,59 +79,75 @@ function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
 }
 
 /**
- * Split an SPDX license expression that may contain multiple licenses
- * SPDX uses ' OR ' for alternatives and ' AND ' for conjunctive licenses
+ * Split an SPDX license expression into its alternatives. SPDX ' OR ' separates alternatives and
+ * ' AND ' joins licenses that all apply; AND binds tighter than OR, and parentheses group. Each
+ * alternative is one license, or an array of licenses that all apply.
  * Examples:
  *   - "MIT OR Apache-2.0" → ["MIT", "Apache-2.0"]
- *   - "(MIT OR GPL-2.0)" → ["MIT", "GPL-2.0"]
- *   - "MIT" → ["MIT"]
- *
- * Note: Only handles simple OR/AND expressions. Complex SPDX expressions with
- * parentheses and WITH clauses may not be fully parsed.
+ *   - "MIT AND Zlib" → [["MIT", "Zlib"]]
+ *   - "MIT OR Apache-2.0 AND GPL-3.0" → ["MIT", ["Apache-2.0", "GPL-3.0"]]
+ *   - "(MIT OR Apache-2.0) AND BSD-3-Clause" → [["MIT", "BSD-3-Clause"], ["Apache-2.0", "BSD-3-Clause"]]
+ * A license with a WITH exception stays one license. An expression that does not parse, such as one
+ * with unbalanced parentheses, or that multiplies out to more than MAX_SPDX_ALTERNATIVES alternatives,
+ * is returned as written, so the compliance check reports it.
  *
  * @param license - SPDX license expression
- * @returns Array of normalized individual licenses
+ * @returns Alternatives with normalized license names
  */
-function splitSpdxLicenses(license: string): string[] {
+function splitSpdxLicenses(license: string): Array<string | string[]> {
   if (!isNonEmptyString(license)) {
     return [];
   }
 
-  let cleaned = license.trim();
-  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
-    cleaned = cleaned.substring(1, cleaned.length - 1).trim();
-  }
+  const tokens = license.replace(/[()]/g, ' $& ').split(/\s+/).filter(Boolean);
+  let position = 0;
 
-  // Split on ' OR ' first; recursive calls handle nested ' AND ' within operands
-  if (cleaned.includes(' OR ')) {
-    return cleaned
-      .split(' OR ')
-      .map(l => l.trim())
-      .filter(isNonEmptyString)
-      .flatMap(l => splitSpdxLicenses(l)) // Recursively handle complex expressions
-      .map(l => {
-        const normalized = normalizeLicenseName(l);
-        return normalized || l;
-      });
-  }
+  // Each parse step returns the alternatives (OR) of license sets that all apply (AND).
+  const parseOr = (): string[][] | undefined => {
+    let alternatives = parseAnd();
+    while (alternatives && tokens[position] === 'OR') {
+      position++;
+      const right = parseAnd();
+      alternatives = right && [...alternatives, ...right];
+    }
+    return alternatives;
+  };
+  const parseAnd = (): string[][] | undefined => {
+    let alternatives = parseOperand();
+    while (alternatives && tokens[position] === 'AND') {
+      position++;
+      const right = parseOperand();
+      // Multiplying out ANDs of OR groups grows exponentially, so a larger expression is reported unparsed.
+      alternatives = right && alternatives.length * right.length <= MAX_SPDX_ALTERNATIVES
+        ? alternatives.flatMap(left => right.map(set => [...new Set([...left, ...set])]))
+        : undefined;
+    }
+    return alternatives;
+  };
+  const parseOperand = (): string[][] | undefined => {
+    if (tokens[position] === '(') {
+      position++;
+      const alternatives = parseOr();
+      return tokens[position++] === ')' ? alternatives : undefined;
+    }
+    const words: string[] = [];
+    while (position < tokens.length && !['(', ')', 'AND', 'OR'].includes(tokens[position])) {
+      words.push(tokens[position++]);
+    }
+    if (words.length === 0) {
+      return undefined;
+    }
+    const name = words.join(' ');
+    return [[normalizeLicenseName(name) || name]];
+  };
 
-  // SPDX ' AND ' means all licenses apply simultaneously.
-  // We split and evaluate individually — this is a permissive simplification
-  // that may miss conjunctive compliance requirements.
-  if (cleaned.includes(' AND ')) {
-    return cleaned
-      .split(' AND ')
-      .map(l => l.trim())
-      .filter(isNonEmptyString)
-      .flatMap(l => splitSpdxLicenses(l))
-      .map(l => {
-        const normalized = normalizeLicenseName(l);
-        return normalized || l;
-      });
+  const alternatives = parseOr();
+  if (!alternatives || position < tokens.length) {
+    // A single license name with parentheses, such as "Apache License (2.0)", is normalized as before.
+    const trimmed = license.trim();
+    return [tokens.includes('AND') || tokens.includes('OR') ? trimmed : normalizeLicenseName(trimmed) || trimmed];
   }
-
-  const normalized = normalizeLicenseName(cleaned);
-  return [normalized || cleaned];
+  return alternatives.map(set => set.length === 1 ? set[0] : set);
 }
 
 
@@ -172,7 +191,7 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
       }
 
       const info = packageInfo as any;
-      let licenses: string[] = [];
+      let licenses: Array<string | string[]> = [];
 
       if (info.licenses) {
         const licenseField = info.licenses;
