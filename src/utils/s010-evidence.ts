@@ -178,10 +178,10 @@ export async function collectS010Evidence(
     if (!hasJavaClientOperation(file.content)) continue;
     const dependencyId = dependencyFromFile(file.path);
     const conditional = /@ConditionalOnProperty\b|@Profile\b/.test(file.content);
-    const { complete, calls } = javaClientCalls(file.content);
+    const { allClientUsesAnalysed, calls } = javaClientCalls(file.content);
     // Every call through the client needs its own time limit and error handling; signals elsewhere in the file do not count.
-    const bounded = complete && calls.length > 0 && calls.every(call => call.bounded);
-    const handled = complete && calls.length > 0 && calls.every(call => call.handled);
+    const bounded = allClientUsesAnalysed && calls.length > 0 && calls.every(call => call.bounded);
+    const handled = allClientUsesAnalysed && calls.length > 0 && calls.every(call => call.handled);
     const startupCoupled = /@PostConstruct\b|ApplicationReadyEvent|HealthIndicator|ReadinessState/.test(file.content);
     const controlled = conditional && bounded && handled && !startupCoupled;
     scenarios.push({
@@ -594,8 +594,7 @@ const MAX_STATEMENT_CHARS = 4_000;
 const MAX_BLOCK_CHARS = 20_000;
 
 interface JavaClientCalls {
-  // False when some use of a client could not be analysed; the file then proves nothing.
-  complete: boolean;
+  allClientUsesAnalysed: boolean;
   calls: Array<{ bounded: boolean; handled: boolean }>;
 }
 
@@ -606,7 +605,7 @@ interface JavaClientCalls {
 // strings are ignored.
 function javaClientCalls(source: string): JavaClientCalls {
   const content = maskJavaSource(source);
-  const incomplete = { complete: false, calls: [] };
+  const incomplete = { allClientUsesAnalysed: false, calls: [] };
   const types = new Map<string, string>();
   const accounted = new Set<number>();
   for (const match of content.matchAll(new RegExp(String.raw`\b(${JAVA_CLIENT_TYPES})(?:<[^<>;{}]{0,200}>)?\s+(\w+)\s*[;=,)]`, 'g'))) {
@@ -667,7 +666,7 @@ function javaClientCalls(source: string): JavaClientCalls {
       return incomplete;
     }
   }
-  return { complete: true, calls };
+  return { allClientUsesAnalysed: true, calls };
 }
 
 // The method calls chained directly on the identifier at `start` (`client.a(..).<T>b(..)`), with
@@ -886,8 +885,7 @@ function packageStripesInterfaces(
     .filter(Boolean);
 }
 
-// Merges scenarios with the same id, keeping each distinct source reference once. References are
-// tracked in a set so that many repeated declarations cost linear, not quadratic, time.
+// Merges scenarios with the same id, keeping each distinct source reference once.
 function deduplicateScenarios(scenarios: S010ScenarioEvidence[]): S010ScenarioEvidence[] {
   const unique = new Map<string, { scenario: S010ScenarioEvidence; referenceKeys: Set<string> }>();
   for (const scenario of scenarios) {

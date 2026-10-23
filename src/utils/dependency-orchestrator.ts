@@ -16,11 +16,6 @@ import { getGradleDependencies, hasGradleProject } from './parsers/gradle-depend
 import { getNpmDependencies, hasNpmProject } from './parsers/npm-dependency-parser';
 import { isNonEmptyString, isValidDependency } from './type-guards';
 
-/**
- * Remove duplicate dependencies based on name and version
- * @param dependencies - Array of dependencies to deduplicate
- * @returns Array of unique dependencies
- */
 function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
   const uniqueMap = new Map<string, Dependency>();
 
@@ -37,17 +32,6 @@ function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
   return Array.from(uniqueMap.values());
 }
 
-/**
- * Extract dependencies from a repository using available build tools
- *
- * Automatically detects project type and dispatches to appropriate parsers:
- * - Maven projects (pom.xml)
- * - Gradle projects (build.gradle, build.gradle.kts)
- * - npm/Node.js projects (package.json)
- *
- * @param repoPath - Path to the cloned repository
- * @returns Promise resolving to extraction result with dependencies and errors
- */
 export async function getDependencies(repoPath: string, evaluationRun?: EvaluationRun): Promise<DependencyExtractionResult> {
   const dependencies: Dependency[] = [];
   const errors: DependencyExtractionError[] = [];

@@ -40,7 +40,7 @@ import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 
-const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
+const COMMAND_TIMEOUT = 300000;
 const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
 const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
@@ -51,11 +51,6 @@ const MAVEN_BUILD_FILES = ['pom.xml'];
 
 const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb', 'rar', 'bundle'];
 
-/**
- * Determine the Maven packaging type from pom.xml using proper XML parsing
- * @param repoPath - Path to Maven project
- * @returns Promise resolving to packaging type ('pom', 'jar', 'war', etc.) or 'jar' as default
- */
 async function getMavenPackaging(repoPath: string): Promise<string> {
   try {
     const pomContent = readRepoTextFile(repoPath, 'pom.xml', MAX_POM_BYTES);
@@ -115,7 +110,7 @@ function splitDualLicenses(license: string): string[] {
         if (!normalized) {
           getLogger().warn(`License normalization failed for "${l}", using original value.`);
         }
-        return normalized || l; // Use original if normalization returns empty
+        return normalized || l;
       });
   }
 
@@ -126,11 +121,6 @@ function splitDualLicenses(license: string): string[] {
   return [normalized || license];
 }
 
-/**
- * Parse Maven coordinates (groupId:artifactId:version)
- * @param coordinates - Coordinate string to parse
- * @returns Parsed coordinate parts or null if invalid
- */
 function parseMavenCoordinates(coordinates: string): { groupId: string; artifactId: string; version: string } | null {
   if (!isNonEmptyString(coordinates)) {
     return null;
@@ -149,11 +139,6 @@ function parseMavenCoordinates(coordinates: string): { groupId: string; artifact
   return { groupId: groupId.trim(), artifactId: artifactId.trim(), version: version.trim() };
 }
 
-/**
- * Parse a single line from Maven THIRD-PARTY.txt file
- * @param line - Line to parse
- * @returns Parsed dependency or null if invalid
- */
 function parseMavenThirdPartyLine(line: string): Dependency | null {
   const trimmedLine = line.trim();
 
@@ -206,12 +191,6 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
   };
 }
 
-/**
- * Parse Maven THIRD-PARTY.txt file format
- * Expected format: (License Name) Artifact Name (groupId:artifactId:version - URL)
- * @param content - Content of the THIRD-PARTY.txt file
- * @returns Array of parsed dependencies
- */
 function parseMavenThirdPartyFile(content: string): Dependency[] {
   if (!isNonEmptyString(content)) {
     return [];
@@ -230,11 +209,6 @@ function parseMavenThirdPartyFile(content: string): Dependency[] {
   return dependencies;
 }
 
-/**
- * Check if a Maven project exists in the repository
- * @param repoPath - Path to repository
- * @returns Promise resolving to true if Maven project exists
- */
 export async function hasMavenProject(repoPath: string): Promise<boolean> {
   if (!isNonEmptyString(repoPath)) {
     return false;
@@ -242,11 +216,6 @@ export async function hasMavenProject(repoPath: string): Promise<boolean> {
   return MAVEN_BUILD_FILES.some(file => fs.existsSync(path.join(repoPath, file)));
 }
 
-/**
- * Extract dependencies from Maven project using license plugin
- * @param repoPath - Path to Maven project
- * @returns Promise resolving to extraction result with dependencies and errors
- */
 export async function getMavenDependencies(
   repoPath: string,
   evaluationRun?: EvaluationRun,

@@ -1,8 +1,6 @@
 import type { EvaluationStatus } from './index';
 import type { S007MatchedPolicyEntry, S007PolicyDiagnostic, S007VersionComparison } from './s007-officially-supported-technologies';
 
-// ---- FOLIO shared-workflow table (config/folio-shared-workflows.json) ----
-
 export interface FolioRecordedToolVersion {
   version: string;
   /** Where a maintainer read the version, such as a runner image release. */
@@ -11,7 +9,6 @@ export interface FolioRecordedToolVersion {
 }
 
 export interface FolioSharedWorkflow {
-  /** The build tool the workflow runs. */
   buildTool: 'maven' | 'gradle' | 'yarn';
   runner?: string;
   maven?: FolioRecordedToolVersion;
@@ -41,8 +38,6 @@ export interface FolioSharedWorkflowTable {
 export type FolioSharedWorkflowTableLoadResult =
   | { ok: true; table: FolioSharedWorkflowTable; sourcePath: string; diagnostics: [] }
   | { ok: false; sourcePath: string; diagnostics: S007PolicyDiagnostic[] };
-
-// ---- Build evidence (src/utils/build-test-evidence.ts) ----
 
 export type BuildFileKind =
   | 'maven-pom'
@@ -139,7 +134,6 @@ export interface BuildEvidenceDiagnostic {
  */
 export type TestTechnologyKind = 'runner' | 'library' | 'helper' | 'integration';
 
-/** One dependency declaration that shows a test technology. */
 export interface TestTechnologyDeclaration {
   /** The technology, such as junit, jest, spock or react-testing-library. */
   id: string;
@@ -177,8 +171,6 @@ export interface BuildTestEvidence {
 
 /** The build half of the evidence, which S012 reads and reports. */
 export type BuildEvidence = Omit<BuildTestEvidence, 'testTechnologies' | 'testDiagnostics' | 'testComplete'>;
-
-// ---- S012 analysis ----
 
 export type S012ToolRole = 'primary' | 'secondary' | 'incidental' | 'coverage';
 

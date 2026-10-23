@@ -7,10 +7,6 @@ import { JavaSharedEvaluator } from './java/java-shared-evaluator';
 import { BackendEvaluator } from './java/backend-evaluator';
 import { hasGradleProject } from '../utils/parsers/gradle-dependency-parser';
 
-/**
- * Java-specific module evaluator
- * Uses composition of section-specific evaluators for comprehensive evaluation
- */
 export class JavaEvaluator extends CompositeLanguageEvaluator {
   private readonly administrativeEvaluator: AdministrativeEvaluator;
   private readonly sharedEvaluator: JavaSharedEvaluator;

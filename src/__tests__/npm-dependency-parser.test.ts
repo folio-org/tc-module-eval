@@ -1,14 +1,8 @@
-/**
- * Tests for npm-dependency-parser
- */
-
 import * as fs from 'fs';
 import { Stats } from 'fs';
 
-// Mock fs
 jest.mock('fs');
 
-// Now import the module under test
 import { getNpmDependencies, hasNpmProject } from '../utils/parsers/npm-dependency-parser';
 import { checkLicenseCompliance } from '../utils/license-compliance';
 import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun, LicenseIssueType } from '../types';
@@ -16,11 +10,9 @@ import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
-// Constants for mock Stats defaults
 const DEFAULT_MOCK_SIZE = 0;
 const DEFAULT_MOCK_DATE = new Date();
 
-// Helper to create a proper Stats mock
 function createMockStats(isDirectory: boolean = true): Partial<Stats> {
   return {
     isDirectory: jest.fn().mockReturnValue(isDirectory),
@@ -76,7 +68,6 @@ describe('npm-dependency-parser', () => {
     setLogger(new NoopLogger());
     jest.clearAllMocks();
 
-    // Reset fs mocks to clean state
     (mockFs.existsSync as jest.Mock).mockReset();
     (mockFs.statSync as jest.Mock).mockReset();
     (mockFs.writeFileSync as jest.Mock).mockReset();
@@ -132,7 +123,6 @@ describe('npm-dependency-parser', () => {
         }
       });
 
-      // Mock validateRepoPath with implementation-based logic
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         // Repo path exists, but .npmrc doesn't (so it will be created)
         if (filePath === '/test/repo') return true;
@@ -171,7 +161,6 @@ describe('npm-dependency-parser', () => {
       const lodash = result.dependencies.find(d => d.name === 'lodash');
       expect(lodash).toBeDefined();
       expect(lodash?.version).toBe('4.17.21');
-      // SPDX expression should be split
       expect(lodash?.licenses).toEqual(['MIT', 'Apache-2.0']);
 
       expect(result.errors).toHaveLength(0);
@@ -381,10 +370,9 @@ describe('npm-dependency-parser', () => {
         }
       });
 
-      // Mock .npmrc already exists
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         if (filePath === '/test/repo') return true;
-        if (filePath.includes('.npmrc')) return true; // .npmrc exists
+        if (filePath.includes('.npmrc')) return true;
         return true;
       });
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
@@ -397,7 +385,6 @@ describe('npm-dependency-parser', () => {
 
       const result = await getNpmDependencies('/test/repo', undefined, runner);
 
-      // Verify writeFileSync was NOT called (existing .npmrc was respected)
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
       expect(result.dependencies).toHaveLength(1);
       expect(result.errors).toHaveLength(0);

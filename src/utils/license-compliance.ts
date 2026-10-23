@@ -2,10 +2,7 @@
  * Language-agnostic license compliance checking utilities
  *
  * Provides compliance checking logic that can be used by any language evaluator.
- * Checks dependencies against Apache Software Foundation (ASF) license policy categories:
- * - Category A: Approved licenses (Apache, MIT, BSD, etc.)
- * - Category B: Licenses requiring documentation (LGPL, MPL, EPL, CDDL)
- * - Category X: Prohibited licenses (GPL, etc.)
+ * Checks dependencies against Apache Software Foundation (ASF) license policy categories.
  *
  * PARSER CONTRACT:
  * Build tool-specific parsers (Maven, Gradle, npm, Go, etc.) MUST:
@@ -32,9 +29,6 @@ import { isNonEmptyString, isValidDependency } from './type-guards';
 import { escapeRegExp } from './regexp';
 import { getLogger } from './logger';
 
-/**
- * Evaluation result for a single license
- */
 interface LicenseEvaluation {
   license: string;
   category?: LicenseCategory;
@@ -43,20 +37,6 @@ interface LicenseEvaluation {
   issueType?: LicenseIssueType;
 }
 
-/**
- * Default evaluation when no specific result can be determined
- */
-const DEFAULT_EVALUATION_FAILURE = {
-  status: EvaluationStatus.MANUAL,
-  reason: 'The licenses could not be checked.',
-  issueType: LicenseIssueType.UNKNOWN_LICENSE
-} as const;
-
-/**
- * Check if a license string represents an LGPL license
- * @param license - License name to check
- * @returns True if license is LGPL variant
- */
 function isLGPLLicense(license: string): boolean {
   if (!isNonEmptyString(license)) {
     return false;
@@ -84,13 +64,6 @@ function isDocumentedInReadme(dependency: Dependency, readmeContent: string): bo
   );
 }
 
-/**
- * Evaluate one license against the ASF policy categories.
- * @param license - License name to evaluate
- * @param dependency - The dependency being evaluated
- * @param readmeContent - README content for Category B documentation check
- * @returns Evaluation for this license alone
- */
 function evaluateLicense(license: string, dependency: Dependency, readmeContent: string): LicenseEvaluation {
   const category = getLicenseCategoryNormalized(license);
 
@@ -207,15 +180,12 @@ function evaluateMultipleLicenses(
 
   for (const license of licenses) {
     const evaluation = evaluateAlternative(license, dependency, readmeContent);
-    // Category A passes and wins in OR logic, so return immediately
     if (evaluation.category === LicenseCategory.A) {
       return evaluation;
     }
     evaluations.push(evaluation);
   }
 
-  // Apply OR logic: find the best outcome
-  // Priority: PASS > MANUAL > FAIL
   const passed = evaluations.find(e => e.status === EvaluationStatus.PASS);
   if (passed) {
     return passed;
@@ -231,16 +201,7 @@ function evaluateMultipleLicenses(
     };
   }
 
-  const failed = evaluations.find(e => e.status === EvaluationStatus.FAIL);
-  if (failed) {
-    return failed;
-  }
-
-  // Fallback (shouldn't reach here)
-  return evaluations[0] || {
-    license: licenses.map(licenseText).join(' | '),
-    ...DEFAULT_EVALUATION_FAILURE
-  };
+  return evaluations.find(e => e.status === EvaluationStatus.FAIL)!;
 }
 
 /**
@@ -295,10 +256,7 @@ export function checkLicenseCompliance(
       continue;
     }
 
-    // VALIDATION: Detect if parser failed to split dual licenses
-    // Parsers MUST split licenses like "Apache-2.0|MIT" into ["Apache-2.0", "MIT"]
-    // Check for common separators: | (Maven), OR (npm/SPDX), AND (SPDX)
-    // Note: Only check uppercase OR/AND to avoid false positives with license names like
+    // Only uppercase OR/AND count as separators, to avoid false positives with license names like
     // "Common Development and Distribution License" that contain lowercase "and".
     // A name the policy lists exactly, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
     const unsplitLicenses = allLicenses.flat().filter(license => !isListedLicenseName(license) && (
@@ -323,7 +281,6 @@ export function checkLicenseCompliance(
       continue;
     }
 
-    // Dual-licensed dependencies use OR logic; a single alternative is evaluated on its own
     const evaluation = allLicenses.length > 1
       ? evaluateMultipleLicenses(allLicenses, dependency, readmeContent)
       : evaluateAlternative(allLicenses[0], dependency, readmeContent);

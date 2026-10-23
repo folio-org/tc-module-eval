@@ -152,8 +152,6 @@ export function evaluateS012(
   };
 }
 
-// ---- Which tools build the module ----
-
 /** CI evidence: FOLIO shared workflows the table knows, and build commands of inline jobs whose build file exists. */
 function ciSignals(evidence: BuildEvidence, table: FolioSharedWorkflowTable): ToolSignal[] {
   const signals: ToolSignal[] = [];
@@ -240,8 +238,6 @@ function frontendFindings(evidence: BuildEvidence, sections: S007PolicySection[]
   findings.push(...dockerFindings(evidence, sections), ...notUsedFindings(evidence, BACKEND_TOOLS.flatMap(tool => TOOL_FILES[tool])));
   return findings;
 }
-
-// ---- One build tool ----
 
 function toolFinding(
   tool: BuildToolId,
@@ -501,8 +497,6 @@ function inheritedText(name: string, check: S012VersionCheck): string {
   return `FOLIO's ${inherited.workflow}@${inherited.ref} workflow installs ${name} ${check.text}`;
 }
 
-// ---- CI, Docker and other files ----
-
 function ciFindings(
   evidence: BuildEvidence,
   sections: S007PolicySection[],
@@ -615,8 +609,6 @@ function manualFinding(
 function coverageFinding(rationale: string): S012Finding {
   return manualFinding('evidence-coverage', 'Repository evidence', 'coverage', 'coverage-incomplete', [], rationale);
 }
-
-// ---- Helpers ----
 
 function toMatchedPolicy(entry: S007TechnologyPolicyEntry, section: S007PolicySection): S007MatchedPolicyEntry {
   return {

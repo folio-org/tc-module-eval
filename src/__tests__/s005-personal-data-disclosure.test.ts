@@ -12,7 +12,8 @@ import {
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
   normalizeS005ChecklistCategories,
-  parseS005PersonalDataDisclosureMarkdown
+  parseS005PersonalDataDisclosureMarkdown,
+  S005_SOURCE_CLASS_TAGS
 } from '../utils/s005-personal-data-disclosure';
 
 function createTempRepo(): string {
@@ -1215,6 +1216,12 @@ Last Reviewed: 2026-09-24
     expect(lines).toContain('  - warning 8');
     expect(lines).toContain('  - ... 2 more');
     expect(lines).not.toContain('    - ... 2 more');
+  });
+
+  it('tags evidence rows with single words, which the HTML report shows as tag chips', () => {
+    for (const tag of Object.values(S005_SOURCE_CLASS_TAGS)) {
+      expect(tag).toMatch(/^[\w/-]+$/);
+    }
   });
 });
 

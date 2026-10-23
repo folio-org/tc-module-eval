@@ -53,8 +53,8 @@ import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { NPM_NETWORK_POLICY } from '../build-tool-policies';
 
-const INSTALL_TIMEOUT = 120000; // 120 seconds for yarn install
-const LICENSE_CHECK_TIMEOUT = 60000; // 60 seconds for license-checker
+const INSTALL_TIMEOUT = 120000;
+const LICENSE_CHECK_TIMEOUT = 60000;
 const LICENSE_CHECK_MAX_OUTPUT = 10 * 1024 * 1024; // license-checker JSON can be large
 const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
@@ -143,7 +143,7 @@ function splitSpdxLicenses(license: string): Array<string | string[]> {
 
   const alternatives = parseOr();
   if (!alternatives || position < tokens.length) {
-    // A single license name with parentheses, such as "Apache License (2.0)", is normalized as before.
+    // A single license name with parentheses, such as "Apache License (2.0)", is normalized as one name.
     const trimmed = license.trim();
     return [tokens.includes('AND') || tokens.includes('OR') ? trimmed : normalizeLicenseName(trimmed) || trimmed];
   }
@@ -212,11 +212,6 @@ function parseLicenseCheckerOutput(jsonOutput: string): Dependency[] {
   return dependencies;
 }
 
-/**
- * Check if an npm/Node.js project exists in the repository
- * @param repoPath - Path to repository
- * @returns Promise resolving to true if npm project exists
- */
 export async function hasNpmProject(repoPath: string): Promise<boolean> {
   if (!isNonEmptyString(repoPath)) {
     return false;
@@ -224,12 +219,6 @@ export async function hasNpmProject(repoPath: string): Promise<boolean> {
   return NPM_BUILD_FILES.some(file => fs.existsSync(path.join(repoPath, file)));
 }
 
-/**
- * Extract dependencies from npm/Node.js project using license-checker-rseidelsohn
- * Runs yarn install and license-checker to get all dependencies including transitives
- * @param repoPath - Path to npm project
- * @returns Promise resolving to extraction result with dependencies and errors
- */
 export async function getNpmDependencies(
   repoPath: string,
   evaluationRun?: EvaluationRun,
@@ -250,7 +239,6 @@ export async function getNpmDependencies(
   }
 
   try {
-    // Configure FOLIO registry for @folio scoped packages if .npmrc doesn't exist
     const npmrcPath = path.join(validatedPath, '.npmrc');
     if (!fs.existsSync(npmrcPath)) {
       getLogger().info('Creating .npmrc with FOLIO registry configuration...');

@@ -902,7 +902,6 @@ describe('S010 evidence collection', () => {
     ...files
   });
   const databaseYaml = (line: string) => ({ 'src/main/resources/application.yml': `spring:\n  datasource:\n${line}` });
-  // Before its fix, each input took seconds at four times the size, because the work grew faster than linearly.
   it.each<[string, (size: number) => Record<string, string>, 'java' | 'javascript', number]>([
     ['a Spring @Value default that never closes', size => javaModule({
       'descriptors/ModuleDescriptor-template.json': JSON.stringify({ launchDescriptor: { env: Array(3).fill({ name: 'DB_URL', required: true }) } }),

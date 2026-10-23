@@ -12,9 +12,6 @@
  * 3. Returning licenses as string arrays in Dependency objects
  * 4. No splitting needed - the report lists each license of a module separately
  *
- * NOTE: If Gradle license reports contain SPDX expressions with " OR " or " AND ",
- * this parser would need to split them. Currently assumes licenses are already split.
- *
  * SECURITY WARNING: This module executes Gradle build commands on untrusted repositories.
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
@@ -143,11 +140,6 @@ function parseGradleLicenseReportDependency(dep: any): Dependency | null {
   };
 }
 
-/**
- * Parse Gradle license report JSON format
- * @param content - JSON content from Gradle license report
- * @returns Array of parsed dependencies with license information
- */
 function parseGradleLicenseReport(content: string): Dependency[] {
   if (!isNonEmptyString(content)) {
     return [];
@@ -200,11 +192,6 @@ export function getGradleCommand(repoPath: string): { command: string; argsPrefi
   return { command: 'gradle', argsPrefix: [] };
 }
 
-/**
- * Extract dependencies from Gradle project using license plugin
- * @param repoPath - Path to Gradle project
- * @returns Promise resolving to extraction result with dependencies and errors
- */
 export async function getGradleDependencies(
   repoPath: string,
   evaluationRun?: EvaluationRun,

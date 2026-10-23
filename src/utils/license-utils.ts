@@ -27,8 +27,7 @@ export interface LicenseFileFinding {
   name: string;
   isApache2: boolean;
   firstLine: string;
-  // Why the file was not read; set for links that resolve outside the repository or nowhere.
-  notRead?: string;
+  notReadReason?: string;
 }
 
 export interface DeclaredLicense {
@@ -76,7 +75,7 @@ export class LicenseUtils {
       const file = await readRepoFile(repoPath, name, MAX_LICENSE_FILE_BYTES);
       if (file.status === 'missing') continue;
       if (file.status === 'not_read') {
-        findings.push({ name: display(name), isApache2: false, firstLine: '', notRead: file.reason });
+        findings.push({ name: display(name), isApache2: false, firstLine: '', notReadReason: file.reason });
         continue;
       }
       const content = file.content;
@@ -88,7 +87,7 @@ export class LicenseUtils {
         name: `${names.length - MAX_LICENSE_FILES} more`,
         isApache2: false,
         firstLine: '',
-        notRead: `only the first ${MAX_LICENSE_FILES} license files are read`
+        notReadReason: `only the first ${MAX_LICENSE_FILES} license files are read`
       });
     }
     return findings;
@@ -205,19 +204,19 @@ export class LicenseUtils {
   }
 
   private static licenseFileResult(criterionId: string, files: LicenseFileFinding[]): CriterionResult {
-    const details = files.map(file => file.notRead
-      ? `License file: ${file.name} (not read: ${file.notRead})`
+    const details = files.map(file => file.notReadReason
+      ? `License file: ${file.name} (not read: ${file.notReadReason})`
       : file.isApache2
         ? `License file: ${file.name} (Apache License 2.0)`
         : `License file: ${file.name} (not Apache 2.0; starts with "${file.firstLine || '(empty file)'}")`
     ).join('\n');
     const apache = files.filter(file => file.isApache2).map(file => file.name);
-    const other = files.filter(file => !file.isApache2 && !file.notRead).map(file => file.name);
-    const unread = files.filter(file => file.notRead);
+    const other = files.filter(file => !file.isApache2 && !file.notReadReason).map(file => file.name);
+    const unread = files.filter(file => file.notReadReason);
 
     // An unread file could hold any license, so the result cannot be decided automatically.
     if (unread.length) {
-      const reasons = [...new Set(unread.map(file => file.notRead))].join('; ');
+      const reasons = [...new Set(unread.map(file => file.notReadReason))].join('; ');
       return {
         criterionId,
         status: EvaluationStatus.MANUAL,

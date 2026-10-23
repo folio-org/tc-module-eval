@@ -1,14 +1,9 @@
-/**
- * Tests for license name normalization functionality
- */
-
 import { normalizeLicenseName, getLicenseCategoryNormalized, LicenseCategory } from '../utils/license-policy';
 import { checkLicenseCompliance } from '../utils/license-compliance';
 import { LicenseIssueType } from '../types';
 
 describe('License Name Normalization', () => {
   describe('normalizeLicenseName', () => {
-    // Test parenthetical extraction (Maven format)
     test.each([
       ['(The Apache Software License, Version 2.0) jackson-databind', 'The Apache Software License, Version 2.0'],
       ['(Apache-2.0) Apache Commons IO', 'Apache-2.0'],
@@ -18,7 +13,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test artifact information removal
     test.each([
       ['(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core', 'The Apache Software License, Version 2.0'],
       ['(Apache License, Version 2.0) folio-spring-base (org.folio', 'Apache License 2.0'],
@@ -27,7 +21,7 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test Apache variations from real FOLIO data
+    // This table and the next five use license names seen in real FOLIO modules.
     test.each([
       ['Apache 2', 'Apache-2.0'],
       ['Apache License, Version 2.0', 'Apache License 2.0'],
@@ -39,7 +33,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test MIT variations from real FOLIO data
     test.each([
       ['MIT', 'MIT'],
       ['MIT License', 'MIT License'],
@@ -49,7 +42,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test BSD variations from real FOLIO data
     test.each([
       ['3-Clause BSD License', 'BSD-3-Clause'],
       ['BSD', 'BSD-3-Clause'],
@@ -62,7 +54,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test LGPL variations from real FOLIO data
     test.each([
       ['GNU Lesser General Public License, Version 2.1', 'GNU Lesser General Public License v2.1'],
       ['GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1', 'GNU Lesser General Public License v2.1'],
@@ -72,7 +63,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test Eclipse Public License variations from real FOLIO data
     test.each([
       ['Eclipse Public License v2.0', 'EPL-2.0'],
       ['Eclipse Public License - v 2.0', 'EPL-2.0'],
@@ -84,7 +74,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test other real FOLIO license variations
     test.each([
       ['Universal Permissive License, Version 1.0', 'Universal Permissive License, Version 1.0'],
       ['CC0', 'CC0-1.0'],
@@ -97,7 +86,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test preservation of exact matches
     test.each([
       ['Apache-2.0', 'Apache-2.0'],
       ['MIT', 'MIT'],
@@ -107,7 +95,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test unknown licenses
     test.each([
       ['Some Unknown License', 'Some Unknown License'],
       ['(Custom License) some-artifact', 'Custom License']
@@ -115,7 +102,6 @@ describe('License Name Normalization', () => {
       expect(normalizeLicenseName(license)).toBe(expected);
     });
 
-    // Test edge cases
     test.each([
       ['', ''],
       ['   ', ''],
@@ -127,24 +113,18 @@ describe('License Name Normalization', () => {
   });
 
   describe('getLicenseCategoryNormalized', () => {
-    // Test mod-search license strings from the actual report
     test.each([
-      // Apache 2.0 variations from mod-search
       ['(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core', LicenseCategory.A],
       ['(Apache-2.0) Apache Commons IO (commons-io', LicenseCategory.A],
       ['(Apache License, Version 2.0) folio-spring-base (org.folio', LicenseCategory.A],
       ['(Apache License 2.0) folio-service-tools-spring-dev (org.folio', LicenseCategory.A],
-      // MIT License from mod-search
       ['(The MIT License) Project Lombok (org.projectlombok', LicenseCategory.A],
-      // BSD License from mod-search
       ['(BSD-2-Clause) PostgreSQL JDBC Driver (org.postgresql', LicenseCategory.A],
-      // LGPL License from mod-search (should be Category X)
       ['(GNU Lesser General Public License, Version 2.1) MARC4J (org.marc4j', LicenseCategory.X]
     ])('should categorize mod-search license strings correctly (%p)', (license, expected) => {
       expect(getLicenseCategoryNormalized(license)).toBe(expected);
     });
 
-    // Test exact matches still work
     test.each([
       ['Apache-2.0', LicenseCategory.A],
       ['MIT', LicenseCategory.A],
@@ -155,7 +135,6 @@ describe('License Name Normalization', () => {
       expect(getLicenseCategoryNormalized(license)).toBe(expected);
     });
 
-    // Test unknown licenses
     test.each([
       'Some Unknown License',
       '(Proprietary License) some-artifact'
@@ -205,7 +184,6 @@ describe('License Name Normalization', () => {
       expect(result.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.PARSER_ERROR })]);
     });
 
-    // Test normalization fallback
     test.each([
       ['Apache License Version 2.0', LicenseCategory.A],
       ['MIT License', LicenseCategory.A],
@@ -217,7 +195,6 @@ describe('License Name Normalization', () => {
 
   describe('Integration with real Maven output', () => {
     test('should handle complex Maven license strings', () => {
-      // Simulate the problematic license strings from the mod-search report
       const problematicLicenses = [
         '(The Apache Software License, Version 2.0) jackson-databind (com.fasterxml.jackson.core',
         '(Apache-2.0) Apache Commons IO (commons-io',
@@ -228,12 +205,12 @@ describe('License Name Normalization', () => {
       ];
 
       const expectedCategories = [
-        LicenseCategory.A, // Apache variations
         LicenseCategory.A,
         LicenseCategory.A,
-        LicenseCategory.A, // MIT
-        LicenseCategory.A, // BSD
-        LicenseCategory.X  // LGPL
+        LicenseCategory.A,
+        LicenseCategory.A,
+        LicenseCategory.A,
+        LicenseCategory.X
       ];
 
       problematicLicenses.forEach((license, index) => {

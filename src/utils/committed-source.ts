@@ -335,7 +335,7 @@ function openBlobReader(repoPath: string): BlobReader {
     });
     git.on('close', exitCode => {
       // An exit while reads are outstanding is a failure even when git reports success. git exits on a blob
-      // it cannot read, so only that read fails: the next read starts a new process, as per-file reads did.
+      // it cannot read, so only that read fails: the next read starts a new process.
       const failure = { stdout: Buffer.alloc(0), stderr: Buffer.concat(stderr), exitCode: exitCode || 128, exceeded: false };
       while (requests.length) settle(failure);
       header = Buffer.alloc(0);

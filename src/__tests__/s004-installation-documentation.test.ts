@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CriterionAgentReviewResult, EvaluationStatus } from '../types';
+import { CriterionAgentReviewResult, EvaluationStatus, S004SignalGroup } from '../types';
 import {
   analyzeS004Documentation,
   classifyS004Documentation,
@@ -557,6 +557,29 @@ curl -X POST \\
     // The shared HTML report turns a row ending in "(evidence: path:line)" into a reference list.
     expect(row).toContain('Configure DB_HOST. [evidence: docs/forged.md:99)"');
     expect(row).not.toMatch(/^(.*?)\s*\(evidence: (.+)\)\s*$/s);
+  });
+
+  it('tags each example row with a single word, which the HTML report shows as a tag chip', () => {
+    const groups: Record<S004SignalGroup, true> = {
+      install_deploy_run: true,
+      docker_runtime: true,
+      env_configuration: true,
+      okapi_tenant_enablement: true,
+      stripes_setup: true,
+      build_test: true,
+      external_reference: true
+    };
+    const analysis = analyzeS004Documentation(tempRoot);
+    const strongestSignals = (Object.keys(groups) as S004SignalGroup[]).map((group, index) =>
+      ({ group, label: 'Example', path: 'README.md', excerpt: 'text', line: index + 1, strength: 'strong' as const }));
+
+    const { details } = formatS004Evidence({ ...analysis, classification: { ...analysis.classification, strongestSignals } });
+    const tags = [...details.matchAll(/^ {2}- README\.md:\d+ \[(.*?)\] Example:/gm)].map(match => match[1]);
+
+    expect(tags).toHaveLength(strongestSignals.length);
+    for (const tag of tags) {
+      expect(tag).toMatch(/^[\w/-]+$/);
+    }
   });
 
   it('escapes control characters in displayed file names', () => {

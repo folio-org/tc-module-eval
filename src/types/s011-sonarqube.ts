@@ -26,7 +26,7 @@ export interface S011ScopeSetting {
   value: string;
   path: string;
   line: number;
-  /** Where it was set: a build file, sonar-project.properties, or a CI workflow input. */
+  /** Where it was set: a build file, a properties file, a CI workflow input, or a -D option in .mvn/maven.config or a workflow. */
   source: 'pom' | 'gradle' | 'properties' | 'workflow-input' | 'command-line';
   /** False when it only affects coverage, which S011 does not check. */
   affectsS011: boolean;

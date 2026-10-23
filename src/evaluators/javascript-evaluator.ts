@@ -7,10 +7,6 @@ import { JavaScriptSharedEvaluator } from './javascript/javascript-shared-evalua
 import { FrontendEvaluator } from './javascript/frontend-evaluator';
 import { getLogger } from '../utils/logger';
 
-/**
- * JavaScript/UI module evaluator for FOLIO UI modules
- * Uses composition of section-specific evaluators for comprehensive evaluation
- */
 export class JavaScriptEvaluator extends CompositeLanguageEvaluator {
   private readonly administrativeEvaluator: AdministrativeEvaluator;
   private readonly sharedEvaluator: JavaScriptSharedEvaluator;

@@ -41,8 +41,7 @@ const MODULE_KIND_LABELS: Record<ModuleKind, string> = {
   ambiguous: 'not recognized'
 };
 
-// Findings about the analysis itself rather than about one service; listed last.
-const META_IDS = new Set(['evidence-coverage', 'dependency-scope', 'runtime-support']);
+const ANALYSIS_FINDING_IDS = new Set(['evidence-coverage', 'dependency-scope', 'runtime-support']);
 
 const OUTCOME_SECTIONS: Array<[S010Finding['outcome'], string]> = [
   ['violation', 'Problems found:'],
@@ -70,7 +69,7 @@ export function renderS010HumanDetails(
     if (!findings.length) continue;
     lines.push(heading);
     const groups = groupFindings(findings).map(group => ({ group, title: s010FindingTitle(group) }))
-      .sort((left, right) => Number(META_IDS.has(left.group[0].dependencyId)) - Number(META_IDS.has(right.group[0].dependencyId))
+      .sort((left, right) => Number(ANALYSIS_FINDING_IDS.has(left.group[0].dependencyId)) - Number(ANALYSIS_FINDING_IDS.has(right.group[0].dependencyId))
         || left.title.localeCompare(right.title, 'en', { sensitivity: 'base' }));
     for (const { group, title } of groups) {
       lines.push(`  - ${title}`, `    - ${reportText(group[0].rationale)}`, ...referenceLines(group));
@@ -91,7 +90,7 @@ export function renderS010HumanDetails(
  * a requested host, or undefined for findings about the analysis itself.
  */
 export function s010ServiceName(finding: S010Finding): string | undefined {
-  if (META_IDS.has(finding.dependencyId)) return undefined;
+  if (ANALYSIS_FINDING_IDS.has(finding.dependencyId)) return undefined;
   if (groupKey(finding) === 'folio-interface') return 'FOLIO interfaces';
   if (SERVICE_NAMES[finding.dependencyId]) return SERVICE_NAMES[finding.dependencyId];
   if (finding.scenario === 'configuration-absent') return shorten(findingSubject(finding) || finding.dependencyId);

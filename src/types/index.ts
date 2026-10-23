@@ -1,6 +1,4 @@
 /**
- * Evaluation status for a criteria
- *
  * FRAMEWORK USAGE NOTES:
  * - PASS: Criterion automatically verified as meeting requirements
  * - FAIL: Criterion automatically verified as NOT meeting requirements
@@ -15,9 +13,6 @@ export enum EvaluationStatus {
   NOT_APPLICABLE = 'not_applicable'
 }
 
-/**
- * A single criterion from the acceptance criteria
- */
 export interface Criterion {
   id: string;
   code: string;
@@ -25,9 +20,6 @@ export interface Criterion {
   section: string;
 }
 
-/**
- * Result of evaluating a single criterion
- */
 export interface CriterionResult {
   criterionId: string;
   status: EvaluationStatus;
@@ -37,9 +29,6 @@ export interface CriterionResult {
   agentReview?: CriterionAgentReviewResult;
 }
 
-/**
- * Complete evaluation result for a module
- */
 export interface EvaluationResult {
   repositoryUrl: string;
   moduleName: string;
@@ -178,9 +167,6 @@ export interface EvaluationRun {
   nextAgentReviewHandoff(): Promise<void>;
 }
 
-/**
- * Configuration for the evaluation process
- */
 export interface EvaluationConfig {
   tempDir?: string;
   outputDir?: string;
@@ -303,79 +289,32 @@ export interface CriterionAgentGeneratedProvider {
   modelSelector: string;
 }
 
-/**
- * Function signature for individual criterion evaluation methods
- */
 export type CriterionFunction = (repoPath: string, evaluationRun?: EvaluationRun) => Promise<CriterionResult>;
 
-/**
- * Base interface for section-specific evaluators
- */
 export interface SectionEvaluator {
-  /**
-   * The name of the section this evaluator handles
-   */
   readonly sectionName: string;
 
-  /**
-   * Array of criterion IDs this evaluator handles
-   */
   readonly criteriaIds: string[];
 
-  /**
-   * Evaluate all criteria in this section
-   * @param repoPath Path to the cloned repository
-   * @param criteriaFilter Optional array of criterion IDs to filter evaluation
-   * @returns Promise<CriterionResult[]> Results of all criteria in this section
-   */
   evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
-  /**
-   * Evaluate a specific criterion by ID
-   * @param criterionId The ID of the criterion to evaluate
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<CriterionResult> Result of the specific criterion
-   */
   evaluateCriterion(criterionId: string, repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult>;
 }
 
-/**
- * Interface for language-specific evaluators
- */
 export interface LanguageEvaluator {
-  /**
-   * Determine if this evaluator can handle the given repository
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<boolean> true if this evaluator can handle the repo
-   */
   canEvaluate(repoPath: string): Promise<boolean>;
 
-  /**
-   * Evaluate the repository against all applicable criteria
-   * @param repoPath Path to the cloned repository
-   * @param criteriaFilter Optional array of criterion IDs to filter evaluation
-   * @returns Promise<CriterionResult[]> Results of the evaluation
-   */
   evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
-  /**
-   * Get the language this evaluator handles
-   */
   getLanguage(): string;
 }
 
-/**
- * Report generation options
- */
 export interface ReportOptions {
   outputHtml?: boolean;
   outputJson?: boolean;
   outputDir?: string;
 }
 
-/**
- * Represents a third-party dependency with its licenses
- */
 export interface Dependency {
   name: string;
   version: string;
@@ -384,9 +323,6 @@ export interface Dependency {
   licenses?: Array<string | string[]>;
 }
 
-/**
- * License issue types for structured compliance reporting
- */
 export enum LicenseIssueType {
   CATEGORY_X_VIOLATION = 'CATEGORY_X_VIOLATION',
   UNKNOWN_LICENSE = 'UNKNOWN_LICENSE',
@@ -395,30 +331,21 @@ export enum LicenseIssueType {
   PARSER_ERROR = 'PARSER_ERROR'
 }
 
-/**
- * Represents a compliance issue with a specific dependency
- */
 export interface ComplianceIssue {
   dependency: Dependency;
-  reason: string; // Human-readable description
-  issueType: LicenseIssueType; // Structured type for programmatic handling
+  reason: string;
+  issueType: LicenseIssueType;
 }
 
-/**
- * Result of license compliance checking
- */
 export interface ComplianceResult {
   compliant: boolean;
   issues: ComplianceIssue[];
 }
 
-/**
- * Represents an error or warning during dependency extraction
- */
 export interface DependencyExtractionError {
   source: string;      // e.g., "maven-parser", "gradle-parser", "path-validation"
-  message: string;     // Human-readable error message
-  error?: Error;       // Original error for debugging/logging
+  message: string;
+  error?: Error;
   commandsDisabled?: boolean; // True when the build command was not run because local commands are off
 }
 
@@ -427,27 +354,17 @@ export interface DependencyExtractionError {
  * Allows callers to distinguish between "no dependencies found" (valid) and "extraction failed" (error)
  */
 export interface DependencyExtractionResult {
-  dependencies: Dependency[];               // Successfully extracted dependencies
+  dependencies: Dependency[];
   errors: DependencyExtractionError[];      // Fatal errors that prevented extraction
   warnings: DependencyExtractionError[];    // Non-fatal issues (e.g., "no build file found")
 }
 
-/**
- * Configuration interfaces for external JSON files used by license policy
- */
-
-/**
- * License categories configuration structure
- */
 export interface LicenseCategoriesConfig {
   _description?: string;
   _reference?: string;
   categories: Record<string, string>;
 }
 
-/**
- * Special exceptions configuration structure
- */
 export interface SpecialExceptionsConfig {
   _description?: string;
   _note?: string;
@@ -458,9 +375,6 @@ export interface SpecialExceptionsConfig {
   }>;
 }
 
-/**
- * License variations configuration structure
- */
 export interface LicenseVariationsConfig {
   _description?: string;
   _source?: string;

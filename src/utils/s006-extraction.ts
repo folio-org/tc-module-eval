@@ -425,8 +425,7 @@ function shouldSuppressS006TenantHostEndpoint(rawMatch: string, lineText: string
   const normalizedMatch = rawMatch.toLowerCase();
   const trimmedLine = lineText.trim();
 
-  // A host name cannot continue with `_`: Constants.LOCAL_ERROR is an identifier. Checked here rather
-  // than in the pattern, where rejecting `_` makes long dotted lines backtrack polynomially.
+  // A host name cannot continue with `_`: Constants.LOCAL_ERROR is an identifier.
   if (lineText.charAt(matchStart + rawMatch.length) === '_') {
     return true;
   }

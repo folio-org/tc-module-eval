@@ -69,7 +69,6 @@ const SIGNAL_RULES: SignalRule[] = [
   { group: 'build_test', label: 'Build steps', pattern: /\b(compile|package|assemble|mvn\s+(clean\s+)?(install|package)|gradle(w)?\s+(build|assemble)|npm\s+run\s+build|yarn\s+build|pnpm\s+build)\b/i, strength: 'candidate' },
   { group: 'external_reference', label: 'Link to other documentation', pattern: /https?:\/\/[^\s)]+/i, strength: 'candidate' }
 ];
-// Short tags for report rows; the HTML report shows them as badges, so they must be single words.
 const SIGNAL_TAGS: Record<S004SignalGroup, string> = {
   install_deploy_run: 'run',
   docker_runtime: 'services',
