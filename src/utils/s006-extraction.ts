@@ -50,6 +50,8 @@ export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
 ];
 
 export const MAX_S006_RETAINED_FINDINGS = 100;
+// Assigned values shorter than this, such as "1" or 'abc', are not secrets worth reviewing.
+const MIN_S006_SECRET_VALUE_LENGTH = 8;
 
 interface S006LineWithOffset {
   text: string;
@@ -326,7 +328,7 @@ function shouldSuppressS006SecretAssignment(
   }
 
   const value = s006AssignedValue(rawMatch);
-  if (isS006GitleaksOwnedSecretShape(value) || isS006HeaderNameConstant(rawMatch, value)) {
+  if (value.length < MIN_S006_SECRET_VALUE_LENGTH || isS006GitleaksOwnedSecretShape(value) || isS006HeaderNameConstant(rawMatch, value)) {
     return true;
   }
 
@@ -496,6 +498,13 @@ function buildS006GitleaksFinding(
   }
 
   const detector = getS006GitleaksDetector(source);
+  // Generic secret rules only; a specific secret type such as an AWS key or private key keeps any length.
+  if (
+    (source.RuleID === 'generic-api-key' || source.RuleID === 'password-secret-assignment') &&
+    s006GitleaksGenericValue(source).length < MIN_S006_SECRET_VALUE_LENGTH
+  ) {
+    return undefined;
+  }
   const context = classifyS006SourceContext(filePath, scannedTextByPath.get(filePath) ?? '');
   const excerptText = boundS006ExcerptText(source.Match || source.Secret || '');
   const valueClassification = classifyS006GitleaksValue(source, excerptText);
@@ -545,6 +554,13 @@ function buildS006GitleaksFinding(
     ...finding,
     rationale: buildS006GitleaksFindingRationale(finding, source, detector)
   };
+}
+
+// Gitleaks reports the bare value as its secret; it is split from the match only when the secret is blank
+// (the test fake's password-secret-assignment rule reports the whole assignment).
+function s006GitleaksGenericValue(source: S006GitleaksFinding): string {
+  const secret = (source.Secret ?? '').trim();
+  return secret && source.RuleID !== 'password-secret-assignment' ? secret : s006AssignedValue(secret || source.Match || '');
 }
 
 // Gitleaks' generic-api-key rule flags record IDs such as relationshipId; a plain UUID is an identifier, not a key.

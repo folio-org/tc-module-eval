@@ -219,7 +219,9 @@ function coverageRows(warnings: S006ScanWarning[], skippedFiles: S006SkippedFile
       ? S006_SKIPPED_REASON_LABELS[skippedFile.reason]
       : skippedFile.materialToCoverage
         ? 'Files of a type the built-in scan does not read, in folders where secrets are often kept'
-        : 'Symbolic links, which are not followed';
+        : skippedFile.message?.startsWith('Symbolic link')
+          ? 'Symbolic links, which are not followed'
+          : 'Data, stylesheet, sample, and disabled files in configuration folders';
     skippedByReason.set(heading, [...(skippedByReason.get(heading) ?? []), skippedFile.path]);
   }
 

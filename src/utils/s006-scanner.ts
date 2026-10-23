@@ -302,6 +302,14 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
         files.push(currentPath);
         return;
       }
+      if (candidateDecision.nonMaterialUnsupported) {
+        pushS006SkippedFile(skippedFiles, {
+          path: relativePath,
+          reason: 'unsupported-file',
+          message: 'A data, stylesheet, sample, or disabled file; the built-in scan does not read it.',
+          materialToCoverage: false
+        });
+      }
       if (candidateDecision.materialUnsupported) {
         pushS006SkippedFile(skippedFiles, {
           path: relativePath,
@@ -406,7 +414,11 @@ function collectBoundedS006EvidenceCandidates(repoPath: string, options: S006Rep
   };
 }
 
-function classifyS006CandidatePath(relativePath: string): { eligible: boolean; materialUnsupported: boolean } {
+// Data tables, stylesheets, sample payloads, and disabled files in configuration folders are not read and
+// do not weaken coverage; the report lists them as skipped.
+const S006_NON_MATERIAL_UNSUPPORTED_PATTERN = /\.(?:csv|xsl|sample|disabled)$/i;
+
+function classifyS006CandidatePath(relativePath: string): { eligible: boolean; materialUnsupported: boolean; nonMaterialUnsupported?: boolean } {
   const normalized = relativePath.replace(/\\/g, '/');
   if (GENERATED_REPORT_DIRECTORY_PATTERN.test(normalized)) {
     return { eligible: false, materialUnsupported: false };
@@ -420,9 +432,12 @@ function classifyS006CandidatePath(relativePath: string): { eligible: boolean; m
     return { eligible: true, materialUnsupported: false };
   }
 
+  const highSignal = isS006HighSignalPath(normalized);
+  const nonMaterial = highSignal && S006_NON_MATERIAL_UNSUPPORTED_PATTERN.test(normalized);
   return {
     eligible: false,
-    materialUnsupported: isS006HighSignalPath(normalized)
+    materialUnsupported: highSignal && !nonMaterial,
+    nonMaterialUnsupported: nonMaterial
   };
 }
 
@@ -545,11 +560,19 @@ function isS006MaterialCoveragePath(relativePath: string): boolean {
   return S006_MATERIAL_TRUNCATED_PATH_PATTERN.test(relativePath.replace(/\\/g, '/'));
 }
 
+// When the list is full, a skip that affects coverage replaces one that does not, so the bound never hides a gap.
 function pushS006SkippedFile(skippedFiles: S006SkippedFile[], skippedFile: S006SkippedFile): void {
-  if (skippedFiles.length >= MAX_S006_RETAINED_SKIPPED_FILES) {
+  if (skippedFiles.length < MAX_S006_RETAINED_SKIPPED_FILES) {
+    skippedFiles.push(skippedFile);
     return;
   }
-  skippedFiles.push(skippedFile);
+  if (skippedFile.materialToCoverage) {
+    const replaceable = skippedFiles.findIndex(existing => !existing.materialToCoverage);
+    if (replaceable >= 0) {
+      skippedFiles.splice(replaceable, 1);
+      skippedFiles.push(skippedFile);
+    }
+  }
 }
 
 function buildS006Coverage(

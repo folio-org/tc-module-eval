@@ -1499,7 +1499,7 @@
       "criterionId": "S006",
       "status": "manual",
       "evidence": "S006 manual: Found 1 possible secret or environment-specific value. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
-      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 1\n  - By type:\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n  - Files of a type the built-in scan does not read, in folders where secrets are often kept:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 1\n  - By type:\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n  - Data, stylesheet, sample, and disabled files in configuration folders:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "criterionId": "S006",
         "findingCount": 1,
@@ -1560,14 +1560,14 @@
             {
               "path": "src/main/resources/swagger.api/examples/error.sample",
               "reason": "unsupported-file",
-              "message": "The built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-              "materialToCoverage": true
+              "message": "A data, stylesheet, sample, or disabled file; the built-in scan does not read it.",
+              "materialToCoverage": false
             },
             {
               "path": "src/main/resources/swagger.api/examples/errors.sample",
               "reason": "unsupported-file",
-              "message": "The built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-              "materialToCoverage": true
+              "message": "A data, stylesheet, sample, or disabled file; the built-in scan does not read it.",
+              "materialToCoverage": false
             },
             {
               "path": "target",
@@ -1576,18 +1576,6 @@
             }
           ],
           "warnings": [
-            {
-              "kind": "unsupported-high-signal-file",
-              "message": "src/main/resources/swagger.api/examples/error.sample was not read: the built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-              "path": "src/main/resources/swagger.api/examples/error.sample",
-              "materialToCoverage": true
-            },
-            {
-              "kind": "unsupported-high-signal-file",
-              "message": "src/main/resources/swagger.api/examples/errors.sample was not read: the built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-              "path": "src/main/resources/swagger.api/examples/errors.sample",
-              "materialToCoverage": true
-            },
             {
               "kind": "scanner-unavailable",
               "message": "Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.",
@@ -1599,9 +1587,9 @@
         },
         "coverageSummary": {
           "skippedFileCount": 4,
-          "materialSkippedFileCount": 2,
-          "warningCount": 3,
-          "materialWarningCount": 3,
+          "materialSkippedFileCount": 0,
+          "warningCount": 1,
+          "materialWarningCount": 1,
           "skippedFileReasonCounts": {
             "generated-artifact": 2,
             "unsupported-file": 2
@@ -1617,18 +1605,6 @@
           "materiallyWeakenedCoverage": true
         },
         "warnings": [
-          {
-            "kind": "unsupported-high-signal-file",
-            "message": "src/main/resources/swagger.api/examples/error.sample was not read: the built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-            "path": "src/main/resources/swagger.api/examples/error.sample",
-            "materialToCoverage": true
-          },
-          {
-            "kind": "unsupported-high-signal-file",
-            "message": "src/main/resources/swagger.api/examples/errors.sample was not read: the built-in scan does not read this file type, and the file is in a folder where secrets are often kept.",
-            "path": "src/main/resources/swagger.api/examples/errors.sample",
-            "materialToCoverage": true
-          },
           {
             "kind": "scanner-unavailable",
             "message": "Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.",

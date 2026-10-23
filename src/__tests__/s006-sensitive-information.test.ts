@@ -1231,7 +1231,7 @@ describe('S006 deterministic classification by context, confidence, and coverage
       repoPath,
       'src/__tests__/auth.fixture.ts',
       [
-        'const headers = { token: abc };',
+        'const headers = { token: dummy-token };',
         'const password = "fake-password";',
         `const generated = "${generatedTestToken}";`
       ].join('\n')
@@ -2255,6 +2255,65 @@ describe('S006 reviewer decisions', () => {
 
     expect(result.coverage.skippedFiles.filter(file => file.reason === 'binary')).toHaveLength(20);
     expect(result.coverage.scannedBytes).toBe(20 * 1024);
+  });
+
+  it('lists data, stylesheet, sample, and disabled files in configuration folders as skipped without a coverage gap', async () => {
+    writeRepoFile(repoPath, 'src/main/resources/data/currencies.csv', 'code,name\nUSD,Dollar\n');
+    writeRepoFile(repoPath, 'src/main/resources/xslt/MARC21slim2OAIDC.xsl', '<xsl:stylesheet/>\n');
+    writeRepoFile(repoPath, 'src/main/resources/examples/error.sample', '{}\n');
+    writeRepoFile(repoPath, '.github/workflows/build.yml.disabled', 'name: build\n');
+    writeRepoFile(repoPath, 'config/keystore.jks', 'binary-ish\n');
+
+    const result = await analyzeWithGitleaksReport();
+    const details = formatS006Evidence(result).details;
+
+    expect(result.coverage.skippedFiles.filter(file => !file.materialToCoverage).map(file => file.path).sort()).toEqual([
+      '.github/workflows/build.yml.disabled',
+      'src/main/resources/data/currencies.csv',
+      'src/main/resources/examples/error.sample',
+      'src/main/resources/xslt/MARC21slim2OAIDC.xsl'
+    ]);
+    expect(result.coverage.warnings.map(warning => warning.path)).toEqual(['config/keystore.jks']);
+    expect(details).toContain([
+      'Skipped (does not affect the result):',
+      '  - Data, stylesheet, sample, and disabled files in configuration folders:',
+      '    - .github/workflows/build.yml.disabled'
+    ].join('\n'));
+  });
+
+  it('keeps a coverage gap when skipped files that do not affect the result fill the skipped list', async () => {
+    for (let index = 0; index < 260; index++) {
+      writeRepoFile(repoPath, `config/data/a${String(index).padStart(3, '0')}.csv`, 'a,b\n');
+    }
+    writeRepoFile(repoPath, 'config/zz/build/app.yml', 'name: app\n');
+
+    const result = await analyzeWithGitleaksReport();
+
+    expect(result.coverage.skippedFiles).toContainEqual(expect.objectContaining({ path: 'config/zz/build', materialToCoverage: true }));
+    expect(result.coverage.complete).toBe(false);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('ignores assigned values shorter than 8 characters, but keeps short values Gitleaks reports as a specific secret type', async () => {
+    writeRepoFile(repoPath, 'src/main/java/org/folio/CallNumber.java', 'class CallNumber {\n  static final String LETTER_TOKEN_PREFIX = "1";\n  static final String API_TOKEN = "Zq8vT3kL";\n}\n');
+    writeRepoFile(repoPath, 'src/views/Loan.test.js', "const stripes = { token: 'abc' };\n");
+    writeRepoFile(repoPath, 'config/aws.properties', 'aws.secret=abc1234\napi.key=xyz\n');
+    writeRepoFile(repoPath, 'config/auth.conf', 'authorization = "Zq8vT3kL9mN2pR7x=="\nauthorization = "Wm4nB7xQ2rT9kL5p"\n');
+
+    const result = await analyzeWithGitleaksReport([
+      { RuleID: 'aws-secret-access-key', Description: 'AWS secret access key', File: 'config/aws.properties', StartLine: 1, Match: 'aws.secret=abc1234', Secret: 'abc1234', Entropy: 3.5 },
+      { RuleID: 'generic-api-key', File: 'config/aws.properties', StartLine: 2, Match: 'api.key=xyz', Secret: 'xyz', Entropy: 1.5 },
+      // A long secret containing '=' and one reported with a blank secret are measured whole.
+      { RuleID: 'generic-api-key', File: 'config/auth.conf', StartLine: 1, Match: 'authorization = "Zq8vT3kL9mN2pR7x=="', Secret: 'Zq8vT3kL9mN2pR7x==', Entropy: 3.9 },
+      { RuleID: 'generic-api-key', File: 'config/auth.conf', StartLine: 2, Match: 'authorization = "Wm4nB7xQ2rT9kL5p"', Secret: ' ', Entropy: 3.9 }
+    ]);
+
+    expect(result.findings.map(finding => `${finding.path}:${finding.line} ${finding.detectorId}`).sort()).toEqual([
+      'config/auth.conf:1 password-secret-assignment',
+      'config/auth.conf:2 password-secret-assignment',
+      'config/aws.properties:1 provider-api-key',
+      'src/main/java/org/folio/CallNumber.java:3 password-secret-assignment'
+    ]);
   });
 
   it('merges the built-in finding into the Gitleaks finding for the same value on the same line, and keeps other values', async () => {
