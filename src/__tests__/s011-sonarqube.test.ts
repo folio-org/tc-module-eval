@@ -5,6 +5,7 @@ import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { CriterionResult, EvaluationStatus, RemoteLookups, S011Analysis } from '../types';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { SONAR_SCOPE_SETTING_KEYS } from '../utils/sonarcloud-snapshot';
+import { SONARCLOUD_KEPT_FIELDS, sonarCloudEndpoint } from '../tools/sonarcloud-fixture-trim';
 import { loadRemoteFixture, RecordedResponses, replayTransport } from './helpers/remote-replay';
 
 class TestEvaluator extends SharedEvaluator {}
@@ -37,6 +38,47 @@ function withMeasures(responses: RecordedResponses, project: string, measures: R
     status: 200,
     body: { component: { ...body.component, key: `org.folio:${project}`, measures: Object.entries(measures).map(([metric, value]) => ({ metric, value })) } }
   }));
+}
+
+/**
+ * Lookups whose JSON answers record every field the evaluator reads, as `endpoint path` (array elements are
+ * `[]`). Fields read but absent count too, so a read of a field the fixture trim drops is caught on trimmed
+ * fixtures as well.
+ */
+function recordingReads(inner: RemoteLookups, reads: Set<string>): RemoteLookups {
+  const watch = (value: unknown, endpoint: string, path: string): unknown => {
+    if (!value || typeof value !== 'object') return value;
+    const nested = (property: string) => Array.isArray(value) ? `${path}[]` : path ? `${path}.${property}` : property;
+    return new Proxy(value as object, {
+      // Listing an object's keys (Object.keys, spread, JSON.stringify) reads all of them.
+      ownKeys(target) {
+        if (!Array.isArray(target)) reads.add(`${endpoint} ${nested('*')}`);
+        return Reflect.ownKeys(target);
+      },
+      has(target, property) {
+        if (typeof property === 'string' && !Array.isArray(target)) reads.add(`${endpoint} ${nested(property)}`);
+        return Reflect.has(target, property);
+      },
+      get(target, property, receiver) {
+        const result = Reflect.get(target, property, receiver);
+        if (typeof property === 'symbol') return result;
+        const isArray = Array.isArray(target);
+        if (isArray && !/^\d+$/.test(property)) return result;
+        if (!isArray && !Object.prototype.hasOwnProperty.call(target, property) && property in Object.prototype) return result;
+        const next = nested(property);
+        reads.add(`${endpoint} ${next}`);
+        return watch(result, endpoint, next);
+      }
+    });
+  };
+  return {
+    records: inner.records,
+    async getJson(url: string) {
+      const answer = await inner.getJson(url);
+      const endpoint = sonarCloudEndpoint(url);
+      return answer.ok && endpoint ? { ...answer, json: watch(answer.json, endpoint, '') } : answer;
+    }
+  };
 }
 
 /** mod-users' responses with SonarCloud confirming that the token administers the project, and these project settings. */
@@ -83,6 +125,18 @@ public class BeanUtilsExtended {
 };
 
 describe('S011 SonarQube findings', () => {
+  // Every field the tests below read from SonarCloud. The fixtures are trimmed by `yarn capture:remote-fixtures`,
+  // so a field read here but dropped by the trim would make a recorded fixture answer differently from
+  // SonarCloud. Checked after any order or subset of the tests.
+  const reads = new Set<string>();
+  afterAll(() => {
+    const kept = (endpoint: string, path: string) => {
+      const fields = SONARCLOUD_KEPT_FIELDS[endpoint];
+      return !fields || fields.some(field => path === field || path.startsWith(`${field}.`) || path.startsWith(`${field}[]`)
+        || (!path.endsWith('*') && (field.startsWith(`${path}.`) || field.startsWith(`${path}[]`))));
+    };
+    expect([...reads].filter(read => !kept(read.split(' ')[0], read.split(' ')[1]))).toEqual([]);
+  });
   let root: string;
   let unrecorded: string[];
   beforeEach(async () => {
@@ -114,7 +168,7 @@ describe('S011 SonarQube findings', () => {
       criteriaFilter: ['S011'],
       repositoryCommit: options.commit === null ? undefined : options.commit ?? COMMITS[name],
       requestedBranch: options.branch,
-      remoteLookups: replay && (options.lookups ? options.lookups(replay.transport) : replay.transport)
+      remoteLookups: replay && recordingReads(options.lookups ? options.lookups(replay.transport) : replay.transport, reads)
     });
     const result = await new TestEvaluator('java').evaluateCriterion('S011', directory, run);
     unrecorded.push(...(replay?.unrecorded ?? []));
@@ -122,6 +176,15 @@ describe('S011 SonarQube findings', () => {
   }
 
   describe('on recorded SonarCloud projects', () => {
+    it('reads issue and hotspot fields the fixture trim keeps', async () => {
+      await evaluate(await repo('mod-search'), { responses: MOD_SEARCH });
+
+      expect([...reads]).toEqual(expect.arrayContaining([
+        'issues/search issues[].component', 'issues/search issues[].impacts', 'issues/search issues[].rule',
+        'hotspots/search hotspots[].ruleKey', 'qualityprofiles/search profiles[].isDefault'
+      ]));
+    });
+
     it('fails mod-search on its high issues and unreviewed hotspots, counting test code and impact severities', async () => {
       const result = await evaluate(await repo('mod-search', {
         'pom.xml': `<project><properties>

@@ -2,9 +2,11 @@
 // Maintainer tool: records the remote responses S014 and S011 read so tests replay them without the network.
 // Never run in CI. Usage:
 //   yarn capture:remote-fixtures [--platform-ref snapshot] [--template app-edge-locate ...]
-//   yarn capture:remote-fixtures --sonar /path/to/mod-users /path/to/mod-agreements ...
+//   yarn capture:remote-fixtures --sonar /path/to/mod-users /path/to/mod-agreements ... [--no-trim]
+//   yarn capture:remote-fixtures --retrim src/__tests__/fixtures/remote/sonarcloud-mod-users.json ...
 // --sonar takes local checkouts: S011 runs on each at its HEAD, so the rule-name lookup for its suppressions is
-// recorded too; each becomes sonarcloud-<repository>.json.
+// recorded too; each becomes sonarcloud-<repository>.json, its bodies trimmed to the fields the evaluator reads
+// (see sonarcloud-fixture-trim.ts) unless --no-trim is given. --retrim trims recorded fixtures again in place.
 import fs from 'fs-extra';
 import path from 'path';
 import { Command } from 'commander';
@@ -12,6 +14,7 @@ import { execFileSync } from 'child_process';
 import { RemoteEvidenceTransport } from '../utils/remote-evidence';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { analyzeS011 } from '../utils/s011-evaluator';
+import { trimSonarCloudResponses } from './sonarcloud-fixture-trim';
 import { checkApplicationTemplate, collectPlatformSnapshot, DEFAULT_PLATFORM_REF } from '../utils/s014-application-assignment';
 
 export const REMOTE_FIXTURE_DIR = path.join(__dirname, '..', '__tests__', 'fixtures', 'remote');
@@ -35,9 +38,9 @@ function recordingTransport(): { transport: RemoteEvidenceTransport; responses: 
   return { transport: new RemoteEvidenceTransport({ fetchImpl: recordingFetch }), responses };
 }
 
-async function writeFixture(output: string, description: string, responses: RemoteFixture['responses']): Promise<void> {
+async function writeFixture(output: string, description: string, responses: RemoteFixture['responses'], capturedAt = new Date().toISOString()): Promise<void> {
   const fixture: RemoteFixture = {
-    capturedAt: new Date().toISOString(),
+    capturedAt,
     description,
     responses: Object.fromEntries(Object.entries(responses).sort(([left], [right]) => left.localeCompare(right)))
   };
@@ -45,7 +48,18 @@ async function writeFixture(output: string, description: string, responses: Remo
   console.log(`Wrote ${Object.keys(responses).length} responses to ${output}`);
 }
 
-async function captureSonar(checkouts: string[], directory: string): Promise<void> {
+async function retrim(files: string[]): Promise<void> {
+  for (const file of files) {
+    const fixture: RemoteFixture = await fs.readJson(file);
+    const trimmed = trimSonarCloudResponses(fixture.responses);
+    const note = ', trimmed to the fields the evaluator reads';
+    const changed = JSON.stringify(trimmed) !== JSON.stringify(fixture.responses);
+    const description = !changed || fixture.description.endsWith(note) ? fixture.description : `${fixture.description}${note}`;
+    await writeFixture(file, description, trimmed, fixture.capturedAt);
+  }
+}
+
+async function captureSonar(checkouts: string[], directory: string, trim: boolean): Promise<void> {
   for (const checkout of checkouts) {
     const repositoryName = path.basename(path.resolve(checkout));
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: checkout, encoding: 'utf8' }).trim();
@@ -56,7 +70,8 @@ async function captureSonar(checkouts: string[], directory: string): Promise<voi
     const analysis = await analyzeS011(checkout, run);
     console.log(`${repositoryName}: ${analysis.summary}`);
     await writeFixture(path.join(directory, `sonarcloud-${repositoryName}.json`),
-      `SonarCloud org.folio:${repositoryName} as S011 reads it, evaluated at ${repositoryName} commit ${commit}`, responses);
+      `SonarCloud org.folio:${repositoryName} as S011 reads it, evaluated at ${repositoryName} commit ${commit}${trim ? ', trimmed to the fields the evaluator reads' : ''}`,
+      trim ? trimSonarCloudResponses(responses) : responses);
   }
 }
 
@@ -79,9 +94,11 @@ if (require.main === module) {
     .option('--template <application...>', 'application repositories whose template to record', [])
     .option('--output <file>', 'fixture file', path.join(REMOTE_FIXTURE_DIR, 'platform-lsp-snapshot.json'))
     .option('--sonar <checkout...>', 'record SonarCloud for these local module checkouts instead of the platform')
-    .action(async options => options.sonar
-      ? captureSonar(options.sonar, REMOTE_FIXTURE_DIR)
-      : capture(options.platformRef, options.template, options.output));
+    .option('--no-trim', 'with --sonar, keep whole response bodies')
+    .option('--retrim <fixture...>', 'trim recorded SonarCloud fixtures again, in place')
+    .action(async options => options.retrim ? retrim(options.retrim)
+      : options.sonar ? captureSonar(options.sonar, REMOTE_FIXTURE_DIR, options.trim)
+        : capture(options.platformRef, options.template, options.output));
   program.parseAsync().catch(error => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

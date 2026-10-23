@@ -256,7 +256,7 @@ Checked in order; the first that applies decides:
 
 Whether a suppression is reasonably justified is never decided by the tool. The report flags where suppressions depart from FOLIO's guidance (no comment, `NOSONAR`, `"all"`, class level, a security rule) and lists them for failing modules too. Optional agent review assesses each group of suppressions; see [Agent Review Configuration](agent-review.md#s011-sonarqube-suppression-review).
 
-Fixtures are recorded with `yarn capture:remote-fixtures --sonar <checkout...>`, which runs S011 on each local checkout and writes `sonarcloud-<repository>.json`.
+Fixtures are recorded with `yarn capture:remote-fixtures --sonar <checkout...>`, which runs S011 on each local checkout and writes `sonarcloud-<repository>.json`. Response bodies are trimmed to the fields the evaluator reads (`src/tools/sonarcloud-fixture-trim.ts`), keeping every request URL and the totals, paging and facets as recorded; `--no-trim` keeps whole bodies and `--retrim <fixture...>` trims recorded fixtures again. The S011 tests fail if the evaluator reads a field the trim drops, so add a new field to the trim list and re-record.
 
 ## S012 Officially Supported Build Tools
 
