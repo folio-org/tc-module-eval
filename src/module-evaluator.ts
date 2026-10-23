@@ -39,9 +39,10 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
 /**
  * Main orchestrator for module evaluation
  *
- * This framework provides a complete evaluation pipeline but most criterion
- * evaluations currently return MANUAL status. Implementation of specific
- * evaluation logic is needed to provide automated PASS/FAIL results.
+ * S001-S014 have automated evaluation logic and return MANUAL only when the
+ * evidence is inconclusive. The other 24 of the 38 criteria always return
+ * MANUAL: A001 is a manual review by design, and B001-B016 (Java) and
+ * F001-F007 (JavaScript) have no evaluation logic yet.
  */
 export class ModuleEvaluator {
   private gitUtils: GitUtils;
@@ -52,11 +53,9 @@ export class ModuleEvaluator {
     this.config = config;
     this.gitUtils = new GitUtils(config.tempDir);
 
-    // Register available evaluators
     this.evaluators = [
       new JavaEvaluator(),
       new JavaScriptEvaluator()
-      // Additional evaluators can be added here in the future
     ];
   }
 
@@ -71,10 +70,8 @@ export class ModuleEvaluator {
     try {
       getLogger().info(`Starting evaluation of: ${repositoryUrl}`);
 
-      // Clone the repository
       repoPath = await this.gitUtils.cloneRepository(repositoryUrl, this.config.branch);
       
-      // Determine appropriate evaluator
       const evaluator = await this.selectEvaluator(repoPath);
       if (!evaluator) {
         throw new Error('No suitable evaluator found for this repository');
@@ -82,12 +79,10 @@ export class ModuleEvaluator {
       
       getLogger().info(`Using ${evaluator.getLanguage()} evaluator`);
 
-      // Validate criteria filter if provided
       if (this.config.criteriaFilter) {
         this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
       }
 
-      // Get repository info
       const repoInfo = await this.gitUtils.getRepoInfo(repoPath);
 
       const commandRunner = this.config.commandRunner ??
@@ -119,7 +114,6 @@ export class ModuleEvaluator {
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);
       
-      // Compile results
       const result: EvaluationResult = {
         repositoryUrl,
         moduleName: repoInfo.name,
@@ -141,7 +135,6 @@ export class ModuleEvaluator {
       return result;
       
     } finally {
-      // Clean up cloned repository unless --no-cleanup was specified
       if (repoPath && !this.config.skipCleanup) {
         await this.gitUtils.cleanup(repoPath);
       } else if (repoPath && this.config.skipCleanup) {
@@ -200,10 +193,7 @@ export class ModuleEvaluator {
    * @param evaluator The language evaluator being used
    */
   private validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): void {
-    // Get available criteria IDs from the evaluator
     const availableCriteria = Array.from(getCriteriaForLanguage(evaluator.getLanguage()));
-
-    // Check each criterion in the filter
     const invalidCriteria = criteriaFilter.filter(id => !availableCriteria.includes(id));
 
     if (invalidCriteria.length > 0) {

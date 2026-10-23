@@ -34,14 +34,12 @@ export class ReportGenerator {
     
     const paths: { htmlPath?: string; jsonPath?: string } = {};
 
-    // Generate JSON report
     if (options.outputJson !== false) {
       const jsonPath = path.join(outputDir, `${baseName}.json`);
       await this.generateJsonReport(result, jsonPath);
       paths.jsonPath = jsonPath;
     }
 
-    // Generate HTML report
     if (options.outputHtml !== false) {
       const htmlPath = path.join(outputDir, `${baseName}.html`);
       await this.generateHtmlReport(result, htmlPath);

@@ -18,7 +18,6 @@
  * SECURITY WARNING: This module executes Gradle build commands on untrusted repositories.
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
- * - Directory traversal attack prevention through path.resolve()
  * - Command timeout enforcement (5 minutes)
  * - Repository path is validated before command execution
  *
@@ -43,13 +42,11 @@ import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
 
-// Gradle-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes), as for Maven: the first run downloads Gradle and all dependencies
 const LICENSE_REPORT_DIR_PROPERTY = 'tcModuleEval.licenseReportDir';
 // A license name combining several licenses, which normalization would cut down to its first part.
 const LICENSE_EXPRESSION = /\||\s(?:OR|AND|WITH)\s/;
 
-// Gradle build file patterns
 const GRADLE_BUILD_FILES = ['build.gradle', 'build.gradle.kts'];
 
 // Where the Gradle build may live: the repository root, or `service/` as in FOLIO's Grails modules

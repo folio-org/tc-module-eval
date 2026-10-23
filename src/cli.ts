@@ -88,7 +88,6 @@ program
   .action(() => {
     console.log('🔧 Supported Languages:');
     
-    // Create a temporary evaluator to get supported languages
     const config: EvaluationConfig = {};
     const evaluator = new ModuleEvaluator(config);
     const languages = evaluator.getSupportedLanguages();
@@ -109,17 +108,16 @@ program
     console.log('A TypeScript tool for evaluating FOLIO modules against technical council criteria.\n');
 
     console.log('🏗️  Framework Components:');
-    console.log('   ✅ Modular language evaluator system');
+    console.log('   ✅ Java and JavaScript language evaluators');
     console.log('   ✅ Git repository cloning and analysis');
-    console.log('   ✅ HTML and JSON report generation');
-    console.log('   ✅ Extensible architecture for new languages');
-    console.log('   ⚠️  Individual criterion evaluation (stub implementations)\n');
+    console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Framework infrastructure - IMPLEMENTED');
-    console.log('   ✅ Java project detection - IMPLEMENTED');
-    console.log('   ⚠️  Specific evaluation logic - STUB (returns MANUAL status)');
-    console.log('   📝 Most criteria require implementation for automated evaluation\n');
+    console.log('   ✅ Shared/Common criteria S001-S014 - IMPLEMENTED');
+    console.log('   ⚠️  A001 - MANUAL REVIEW by design');
+    console.log('   ⚠️  B001-B016 (Java) and F001-F007 (JavaScript) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 24 of the 38 criteria always return MANUAL (17 of 31 for Java, 8 of 22 for JavaScript);');
+    console.log('      S001-S014 return MANUAL when the evidence is inconclusive\n');
     
     console.log('📝 Usage Examples:');
     console.log('   # Evaluate a repository');
@@ -244,7 +242,6 @@ function printEvaluationSummary(result: EvaluationResult): void {
   console.log(`   ⚪ Not Applicable: ${stats.notApplicable}`);
 }
 
-// Handle case where no command is provided
 if (process.argv.length === 2) {
   program.outputHelp();
 }

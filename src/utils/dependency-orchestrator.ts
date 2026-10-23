@@ -44,7 +44,6 @@ function deduplicateDependencies(dependencies: Dependency[]): Dependency[] {
  * - Maven projects (pom.xml)
  * - Gradle projects (build.gradle, build.gradle.kts)
  * - npm/Node.js projects (package.json)
- * - Future: Go (go.mod) etc.
  *
  * @param repoPath - Path to the cloned repository
  * @returns Promise resolving to extraction result with dependencies and errors
@@ -64,7 +63,6 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
   }
 
   try {
-    // Check if path exists
     if (!fs.existsSync(repoPath)) {
       warnings.push({
         source: 'dependency-orchestrator',
@@ -73,7 +71,6 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
       return { dependencies: [], errors, warnings };
     }
 
-    // Check for Maven, Gradle, and npm projects once
     const hasMaven = await hasMavenProject(repoPath);
     const hasGradle = await hasGradleProject(repoPath);
     const hasNpm = await hasNpmProject(repoPath);
@@ -99,7 +96,6 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
       warnings.push(...npmResult.warnings);
     }
 
-    // If no build tools found, add a warning
     if (dependencies.length === 0 && errors.length === 0 && !hasMaven && !hasGradle && !hasNpm) {
       warnings.push({
         source: 'dependency-orchestrator',
@@ -107,12 +103,6 @@ export async function getDependencies(repoPath: string, evaluationRun?: Evaluati
       });
     }
 
-    // Future: Add more parsers here
-    // - Go (go.mod)
-    // - Rust (Cargo.toml)
-    // etc.
-
-    // Remove duplicates based on name and version
     const uniqueDependencies = deduplicateDependencies(dependencies);
     return { dependencies: uniqueDependencies, errors, warnings };
 

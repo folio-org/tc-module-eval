@@ -19,7 +19,6 @@
  * SECURITY WARNING: This module executes Maven build commands on untrusted repositories.
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
- * - Directory traversal attack prevention through path.resolve()
  * - Command timeout enforcement (300 seconds / 5 minutes)
  * - Repository path is validated before command execution
  *
@@ -42,21 +41,17 @@ import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 
-// Maven-specific constants
 const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
 const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
 const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
 const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
-// Maven-specific regex patterns
 const MAVEN_DEPENDENCY_PATTERN = /\[INFO\]\s+(.+?):(.+?):(.+?):(.+?):(.+)/;
 const MAVEN_COORDINATE_PATTERN = /^(.+?):(.+?):(.+?)$/;
 
-// Maven build file patterns
 const MAVEN_BUILD_FILES = ['pom.xml'];
 
-// Valid Maven packaging types
 const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb', 'rar', 'bundle'];
 
 /**
@@ -72,21 +67,17 @@ async function getMavenPackaging(repoPath: string): Promise<string> {
       return 'jar';
     }
 
-    // Parse XML using xml2js for robust handling of XML variations
     const parsed = await parseStringPromise(pomContent, {
       trim: true,
       explicitArray: true,
       mergeAttrs: false
     });
 
-    // Extract packaging from parsed XML
-    // Structure: parsed.project.packaging[0]
     const packaging = parsed?.project?.packaging?.[0];
 
     if (packaging && isNonEmptyString(packaging)) {
       const trimmedPackaging = packaging.trim();
 
-      // Validate against known packaging types
       if (!VALID_PACKAGING_TYPES.includes(trimmedPackaging)) {
         getLogger().warn(`Unknown Maven packaging type: ${trimmedPackaging}, defaulting to jar`);
         return 'jar';
@@ -117,9 +108,7 @@ function splitDualLicenses(license: string): string[] {
     return [];
   }
 
-  // Check if license contains pipe separator
   if (license.includes('|')) {
-    // Split on pipe and normalize each license
     return license
       .split('|')
       .map(l => l.trim())
@@ -133,7 +122,6 @@ function splitDualLicenses(license: string): string[] {
       });
   }
 
-  // Single license - normalize and return
   const normalized = normalizeLicenseName(license);
   if (!normalized) {
     getLogger().warn(`License normalization failed for "${license}", using original value.`);
@@ -172,7 +160,6 @@ function parseMavenCoordinates(coordinates: string): { groupId: string; artifact
 function parseMavenThirdPartyLine(line: string): Dependency | null {
   const trimmedLine = line.trim();
 
-  // Skip empty lines and headers
   if (!trimmedLine || trimmedLine.startsWith('Lists of') || !trimmedLine.startsWith('(')) {
     return null;
   }
@@ -190,7 +177,6 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
 
   const remaining = trimmedLine.substring(licenseEnd + 1).trim();
 
-  // Find the coordinates in parentheses
   const coordStart = remaining.indexOf('(');
   const coordEnd = remaining.indexOf(')');
 
@@ -200,7 +186,6 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
 
   const coordPart = remaining.substring(coordStart + 1, coordEnd);
 
-  // Split coordinates and URL
   const parts = coordPart.split(' - ');
   const coordinates = parts[0]?.trim();
 
@@ -208,7 +193,6 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
     return null;
   }
 
-  // Parse coordinates using helper function
   const parsed = parseMavenCoordinates(coordinates);
   if (!parsed) {
     return null;
@@ -216,8 +200,6 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
 
   const depName = `${parsed.groupId}:${parsed.artifactId}`;
 
-  // Split and normalize dual licenses using centralized function
-  // Example: "Apache-2.0|MIT" becomes ["Apache-2.0", "MIT"]
   const licenses = splitDualLicenses(licenseName);
 
   return {
@@ -329,7 +311,6 @@ export async function getMavenDependencies(
   }
 
   try {
-    // Determine packaging type to use correct Maven goal
     const packaging = await getMavenPackaging(validatedPath);
 
     // Choose appropriate goal based on packaging:
@@ -341,7 +322,6 @@ export async function getMavenDependencies(
 
     getLogger().info(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
 
-    // Execute Maven license plugin to generate third-party report
     const commandResult = await commandRunner.run({
       command: 'mvn',
       args: [
@@ -366,7 +346,6 @@ export async function getMavenDependencies(
       return { dependencies: [], errors, warnings };
     }
 
-    // Parse the generated THIRD-PARTY.txt file
     const thirdPartyFile = path.join(validatedPath, MAVEN_THIRD_PARTY_PATH);
     const thirdPartyContent = safeReadFile(thirdPartyFile);
 
