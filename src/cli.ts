@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import * as path from 'path';
 import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';

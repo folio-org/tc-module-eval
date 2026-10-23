@@ -72,18 +72,6 @@ export function readJsonFile(filePath: string, warnings?: string[]): Record<stri
   }
 }
 
-export function readTextFile(filePath: string, warnings?: string[]): string | undefined {
-  if (!fs.existsSync(filePath)) {
-    return undefined;
-  }
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (error) {
-    warnings?.push(`Unable to read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
-    return undefined;
-  }
-}
-
 export function readBoundedFileBytes(filePath: string, maxBytes: number): Buffer {
   if (maxBytes <= 0) {
     return Buffer.alloc(0);

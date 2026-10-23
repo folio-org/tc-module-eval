@@ -430,34 +430,6 @@ type CriteriaIdsForSection<
     : Result
   : Result;
 
-type CriteriaIdsForLanguage<
-  Catalog extends readonly { id: string; languages: readonly CriterionLanguage[] }[],
-  Language extends CriterionLanguage,
-  Result extends readonly string[] = readonly []
-> = Catalog extends readonly [infer Head, ...infer Tail]
-  ? Head extends { id: string; languages: readonly CriterionLanguage[] }
-    ? Tail extends readonly { id: string; languages: readonly CriterionLanguage[] }[]
-      ? Language extends Head['languages'][number]
-        ? CriteriaIdsForLanguage<Tail, Language, readonly [...Result, Head['id']]>
-        : CriteriaIdsForLanguage<Tail, Language, Result>
-      : Result
-    : Result
-  : Result;
-
-type CriteriaIdsForCatalog<
-  Catalog extends readonly { id: string }[],
-  Result extends readonly string[] = readonly []
-> = Catalog extends readonly [infer Head, ...infer Tail]
-  ? Head extends { id: string }
-    ? Tail extends readonly { id: string }[]
-      ? CriteriaIdsForCatalog<Tail, readonly [...Result, Head['id']]>
-      : Result
-    : Result
-  : Result;
-
-type JavaCriteria = CriteriaIdsForLanguage<typeof ACCEPTANCE_CRITERION_CATALOG, 'java'>;
-type AllCriteria = CriteriaIdsForCatalog<typeof ACCEPTANCE_CRITERION_CATALOG>;
-
 /**
  * Build the canonical, ordered list of criterion IDs for a section.
  *
@@ -494,48 +466,6 @@ export const BACKEND_CRITERIA = criteriaIdsForSection('Backend');
  * Frontend criteria - specific to frontend/UI modules
  */
 export const FRONTEND_CRITERIA = criteriaIdsForSection('Frontend');
-
-/**
- * Complete definitions of all criteria with descriptions
- */
-export const CRITERIA_DEFINITIONS: Record<string, CriterionDefinition> =
-  ACCEPTANCE_CRITERION_CATALOG.reduce<Record<string, CriterionDefinition>>((definitions, criterion) => {
-    definitions[criterion.id] = {
-      id: criterion.id,
-      description: criterion.description,
-      section: criterion.section
-    };
-    return definitions;
-  }, {});
-
-/**
- * All Java module criteria (combines administrative, shared, and backend)
- */
-export const JAVA_CRITERIA: JavaCriteria = [
-  ...ADMINISTRATIVE_CRITERIA,
-  ...SHARED_CRITERIA,
-  ...BACKEND_CRITERIA
-];
-
-/**
- * All available criteria across all module types
- */
-export const ALL_CRITERIA: AllCriteria = [
-  ...ADMINISTRATIVE_CRITERIA,
-  ...SHARED_CRITERIA,
-  ...BACKEND_CRITERIA,
-  ...FRONTEND_CRITERIA
-];
-
-/**
- * Criteria organized by section for easy lookup
- */
-export const CRITERIA_BY_SECTION = {
-  administrative: ADMINISTRATIVE_CRITERIA,
-  shared: SHARED_CRITERIA,
-  backend: BACKEND_CRITERIA,
-  frontend: FRONTEND_CRITERIA
-} as const;
 
 /**
  * Get all criteria IDs for a specific language/module type
@@ -577,44 +507,6 @@ export function getCriteriaForSection(
   return (ACCEPTANCE_CRITERION_CATALOG as readonly AcceptanceCriterionDefinition[])
     .filter(criterion => criterion.section === section && criterion.languages.includes(language))
     .map(criterion => criterion.id);
-}
-
-/**
- * Check if a criterion ID is valid
- * @param criterionId The criterion ID to validate
- * @returns true if the criterion ID exists
- */
-export function isValidCriterionId(criterionId: string): criterionId is CriterionId {
-  return ALL_CRITERIA.includes(criterionId as CriterionId);
-}
-
-/**
- * Get the section name for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The section name or 'unknown' if not found
- */
-export function getSectionForCriterion(criterionId: string): string {
-  const definition = CRITERIA_DEFINITIONS[criterionId];
-  return definition ? definition.section : 'Unknown';
-}
-
-/**
- * Get the description for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The description or 'Unknown criterion' if not found
- */
-export function getDescriptionForCriterion(criterionId: string): string {
-  const definition = CRITERIA_DEFINITIONS[criterionId];
-  return definition ? definition.description : 'Unknown criterion';
-}
-
-/**
- * Get the full definition for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The criterion definition or undefined if not found
- */
-export function getCriterionDefinition(criterionId: string): CriterionDefinition | undefined {
-  return CRITERIA_DEFINITIONS[criterionId];
 }
 
 /**

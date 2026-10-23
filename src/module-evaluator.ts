@@ -2,7 +2,7 @@ import { GitUtils } from './utils/git';
 import { JavaEvaluator } from './evaluators/java-evaluator';
 import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
 import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
-import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitions';
+import { getCriteriaForLanguage } from './criteria-definitions';
 import { getLogger } from './utils/logger';
 import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
 import { LocalCommandRunner } from './utils/command-runner';
