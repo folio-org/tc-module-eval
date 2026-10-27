@@ -194,11 +194,28 @@ describe('License Name Normalization', () => {
       expect(result.issues.map(issue => issue.issueType)).toEqual(issueTypes);
     });
 
-    test.each(['(MIT) AND (GPL-3.0)', '(MIT)|GPL-3.0'])('should still report %s as an unsplit expression', license => {
-      // Normalizing either one would keep only "MIT" (Category A).
+    test.each(['(MIT) AND (GPL-3.0)', '(MIT)|GPL-3.0', '(MIT)\nAND (GPL-3.0-only)'])('should still report %s as an unsplit expression', license => {
+      // Normalizing any of them would keep only "MIT" (Category A).
       const result = checkLicenseCompliance([{ name: 'org.example:lib', version: '1.0', licenses: [license] }], '');
 
       expect(result.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.PARSER_ERROR })]);
+    });
+
+    // Names that keep their parentheses but are not listed exactly; the "license name - url" form normalizes to a
+    // listed name.
+    test.each([
+      ['Example (Custom) License', [expect.objectContaining({
+        issueType: LicenseIssueType.UNKNOWN_LICENSE,
+        reason: "'Example (Custom) License' is not in the evaluator's list of known licenses."
+      })]],
+      ['(MIT)', []],
+      ['The (New) BSD License - http://www.opensource.org/licenses/bsd-license', []],
+      ['The GNU General Public License (GPL), Version 2, With Classpath Exception - https://www.gnu.org/software/classpath/license.html',
+        [expect.objectContaining({ issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B })]]
+    ])('should look up the parenthesised license name %s', (license, expected) => {
+      const result = checkLicenseCompliance([{ name: 'org.example:lib', version: '1.0', licenses: [license] }], '');
+
+      expect(result.issues).toEqual(expected);
     });
 
     test.each([

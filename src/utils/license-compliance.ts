@@ -262,11 +262,13 @@ export function checkLicenseCompliance(
     // Only uppercase OR/AND count as separators, to avoid false positives with license names like
     // "Common Development and Distribution License" that contain lowercase "and".
     // A name the policy lists exactly, such as "GPL-2.0-only WITH Classpath-exception-2.0", is a single license.
+    // Parentheses alone are part of names such as "The (New) BSD License"; they make an expression
+    // only around an operator, such as "(MIT OR Apache-2.0)" or "(MIT)\nAND (GPL-3.0-only)".
     const unsplitLicenses = allLicenses.flat().filter(license => !isListedLicenseName(license) && (
       license.includes('|') ||
       license.includes(' OR ') ||
       license.includes(' AND ') ||
-      (license.includes('(') && license.includes(')')) || // Unsplit complex expressions
+      (license.includes('(') && license.includes(')') && /\s(?:OR|AND|WITH)\s/.test(license)) || // Unsplit complex expressions
       license.includes(' WITH ') // SPDX exceptions
     ));
     if (unsplitLicenses.length > 0) {
