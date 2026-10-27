@@ -278,6 +278,34 @@ describe('backend evidence', () => {
     expect(evidence.snapshot.listedPaths).toEqual(['reference-data/groups/staff.json', 'src/main/resources/ref-data/addresstypes-1.0.0/home.json']);
   });
 
+  it('reads files of up to 1 MB, since data and OpenAPI specs over 256 KB share folders, and counts a larger one', async () => {
+    // Just under 1 MB; the real COUNTER_API.json is 816 KB.
+    const spec = JSON.stringify({ openapi: '3.1.0', info: { title: 'COUNTER API', description: 'x'.repeat(1000 * 1024) }, paths: {} });
+    const root = repository({
+      'pom.xml': pom('mod-example'),
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}"}',
+      // mod-source-record-manager's MARC mapping rules and mod-erm-usage-counter's COUNTER_API.json.
+      'mod-example-server/src/main/resources/rules/marc_bib_rules.json': JSON.stringify({ LDR: 'r'.repeat(600 * 1024) }),
+      'src/main/resources/COUNTER_API.json': spec
+    });
+
+    const evidence = await evidenceFor(root);
+
+    expect(evidence.snapshot.complete).toBe(true);
+    expect(evidence.snapshot.diagnostics).toEqual([]);
+    expect(evidence.snapshot.files.find(file => file.path === 'src/main/resources/COUNTER_API.json')?.content).toBe(spec);
+
+    // A larger file could still be a spec, so it still makes the evidence incomplete.
+    fs.writeFileSync(path.join(root, 'src/main/resources/openapi.yaml'), `openapi: 3.0.0\ninfo:\n  description: ${'y'.repeat(1024 * 1024)}\n`);
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'larger spec');
+
+    const larger = await evidenceFor(root);
+
+    expect(larger.snapshot.complete).toBe(false);
+    expect(larger.snapshot.diagnostics).toEqual([expect.objectContaining({ code: 'file-size', material: true, path: 'src/main/resources/openapi.yaml' })]);
+  });
+
   it('detects Spring Boot from its application class and storage from Spring\'s default Liquibase changelog', async () => {
     const root = repository({
       'pom.xml': pom('mod-example', `<version>2.0.0</version><dependencies>${dependency('folio-spring-base')}</dependencies>`),
