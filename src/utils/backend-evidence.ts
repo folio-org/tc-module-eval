@@ -5,6 +5,11 @@ import { getModuleKind, pomArtifactId } from './module-kind';
 import { errorMessage, isRecord } from './type-guards';
 
 const MAX_FILES = 2_000;
+// A file over the default 256 KB cannot be skipped as data without reading it: the largest selected files in
+// folio-org's backend repositories are reference data (mod-linked-data's 718 KB profile CSV, mod-source-record-manager's
+// 584 KB MARC mapping rules) but also OpenAPI specs in the same folders (mod-erm-usage-counter's 816 KB
+// COUNTER_API.json, mod-workflow's 462 KB openapi.yaml). Read them all; the 8 MB total budget still applies.
+const MAX_FILE_BYTES = 1024 * 1024;
 
 // The directories classifyModuleKind looks in for a descriptor, so a backend module always has a candidate here.
 const TEMPLATE_CANDIDATE = /^(?:descriptors\/|src\/main\/resources\/descriptors\/|service\/src\/main\/okapi\/)?ModuleDescriptor[^/]*\.json$/i;
@@ -38,6 +43,7 @@ export function getBackendEvidence(run: EvaluationRun, repoPath: string): Promis
   return run.getOrCreateArtifact('backendEvidence', async () =>
     collectBackendEvidence(await getModuleKind(run, repoPath), await readCommittedSource(repoPath, {
       maxFiles: MAX_FILES,
+      maxFileBytes: MAX_FILE_BYTES,
       include: path => isBackendEvidencePath(path) && !REFERENCE_DATA.test(path),
       list: path => REFERENCE_DATA.test(path),
       // RMB modules include shared RAML (raml-util, acq-models, raml-storage) as git submodules.
