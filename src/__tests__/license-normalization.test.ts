@@ -177,6 +177,22 @@ describe('License Name Normalization', () => {
       expect(unnamed.issues).toEqual([expect.objectContaining({ issueType: LicenseIssueType.UNDOCUMENTED_CATEGORY_B })]);
     });
 
+    // Spellings from the THIRD-PARTY.txt of FOLIO Maven modules (mod-users, mod-rtac-cache), normalized as the Maven
+    // parser does. Each one was an unknown or unreadable license before it was listed.
+    test.each([
+      [['Apache Software License, version 2.0', 'Lesser General Public License, version 3 or greater'], []],
+      [['Lesser General Public License, version 3 or greater'], [LicenseIssueType.CATEGORY_X_VIOLATION]],
+      [['BSD 2-Clause "Simplified" License'], []],
+      [['The (New) BSD License'], []],
+      [['The GNU General Public License (GPL), Version 2, With Classpath Exception'], [LicenseIssueType.UNDOCUMENTED_CATEGORY_B]]
+    ])('should check the Maven license spellings %j by their listed license', (licenses, issueTypes) => {
+      const dependency = { name: 'org.example:lib', version: '1.0', licenses: licenses.map(normalizeLicenseName) };
+
+      const result = checkLicenseCompliance([dependency], '');
+
+      expect(result.issues.map(issue => issue.issueType)).toEqual(issueTypes);
+    });
+
     test.each(['(MIT) AND (GPL-3.0)', '(MIT)|GPL-3.0'])('should still report %s as an unsplit expression', license => {
       // Normalizing either one would keep only "MIT" (Category A).
       const result = checkLicenseCompliance([{ name: 'org.example:lib', version: '1.0', licenses: [license] }], '');
