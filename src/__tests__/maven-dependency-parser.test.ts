@@ -68,12 +68,12 @@ describe('getMavenDependencies', () => {
     expect(result.dependencies).toEqual([
       { name: 'org.folio:mod-example', version: '1.0.0', licenses: ['Unknown'] },
       { name: 'at.yawk.lz4:lz4-java', version: '1.10.1', licenses: ['Apache License 2.0'] },
-      { name: 'net.java.dev.jna:jna', version: '5.16.0', licenses: ['Apache-2.0', 'LGPL-2.1-or-later'] },
+      { name: 'net.java.dev.jna:jna', version: '5.16.0', licenses: ['Apache-2.0', 'LGPL-2.1+'] },
       { name: 'org.javassist:javassist', version: '3.30.2-GA', licenses: ['Apache License 2.0', 'LGPL-2.1', 'MPL-1.1'] },
       {
         name: 'org.glassfish.jersey.media:jersey-media-json-jackson',
         version: '2.48',
-        licenses: ['Apache License, 2.0', 'EPL-2.0', 'The GNU General Public License (GPL), Version 2, With Classpath Exception']
+        licenses: ['Apache-2.0', 'EPL-2.0', 'GPL-2.0-only WITH Classpath-exception-2.0']
       },
       { name: 'net.bytebuddy:byte-buddy', version: '1.18.11', licenses: ['Apache License 2.0'] }
     ]);
