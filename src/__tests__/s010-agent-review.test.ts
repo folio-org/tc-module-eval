@@ -333,18 +333,72 @@ describe('S010 advisory agent review', () => {
     expect(request.instructions).toContain('Investigate in lifecycle order');
   });
 
-  it.each(['missing-phase', 'duplicate-phase', 'unknown-citation', 'generated-citation', 'omitted-dependency'])('rejects %s in decision-bearing records', async mode => {
+  it('drops a misremembered failure-bound citation and keeps the bound when a real one remains', async () => {
+    // Live mod-oai-pmh review: the agent read src/main/java/org/folio/rest/impl/OaiPmhImpl.java but cited it under
+    // the package of the file before it. One wrong path used to reject the whole review.
+    const factory = 'src/main/java/org/folio/oaipmh/dao/PostgresClientFactory.java';
+    await commit(factory, 'new SqlConnectOptions();');
+    await commit('src/main/java/org/folio/rest/impl/OaiPmhImpl.java', 'class OaiPmhImpl {}');
+    const deterministic = analysis();
+    deterministic.evidence.scenarios[0].dependencyId = 'database';
+    const records = bounds('unverified', factory);
+    records[2].evidenceReferences = [factory, 'src/main/java/org/folio/oaipmh/rest/impl/OaiPmhImpl.java'];
+    const review = await reviewS010WithAgent(repo, deterministic, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: [factory],
+      assessments: [{ technologyId: 'database', type: 'evidence_gap', summary: 'No query timeout is configured.',
+        evidenceReferences: [factory], failureBounds: records }],
+      reviewerActions: [{ action: 'Find the effective Vert.x query timeout.', evidenceReferences: [factory] }]
+    }));
+    expect(review.available).toBe(true);
+    expect(review.assessments?.[0].failureBounds?.map(bound => bound.evidenceReferences)).toEqual([[factory], [factory], [factory]]);
+  });
+
+  it('cites the file when the agent adds line numbers to a real path', async () => {
+    // Live mod-search shape: bound and action citations carried line ranges; assessment citations did not.
+    const tenant = 'src/main/java/org/folio/search/service/system/SearchTenantService.java';
+    const retry = 'src/main/java/org/folio/search/configuration/RetryTemplateConfiguration.java';
+    await commit(tenant, 'class SearchTenantService {}');
+    await commit(retry, 'class RetryTemplateConfiguration {}');
+    const records = bounds('unverified', tenant);
+    records[1].evidenceReferences = [`${tenant}:146-149`];
+    records[2].evidenceReferences = [`${retry}:38-40,86-91`, tenant];
+    const review = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: [tenant],
+      assessments: [{ technologyId: 'search', type: 'evidence_gap', summary: 'Retries are bounded; the deadline is not.',
+        evidenceReferences: [tenant], failureBounds: records }],
+      reviewerActions: [{ action: 'Find the effective search deadline.', evidenceReferences: [`${retry}:62-83`] }]
+    }));
+    expect(review.available).toBe(true);
+    expect(review.assessments?.[0].failureBounds?.map(bound => bound.evidenceReferences)).toEqual([[tenant], [tenant], [retry, tenant]]);
+    expect(review.reviewerActions?.[0].evidenceReferences).toEqual([retry]);
+  });
+
+  it.each([
+    ['missing-phase', undefined],
+    ['duplicate-phase', undefined],
+    ['unknown-citation', 'invalid failureBounds fields or citations'],
+    ['unknown-line-range-citation', 'invalid failureBounds fields or citations'],
+    // Live mod-search shape: the role was given as not_applicable for a phase that does not use the dependency.
+    ['not-applicable-requirement', 'invalid failureBounds fields or citations'],
+    ['generated-citation', 'requires repository evidence'],
+    ['generated-and-unknown-citation', 'requires repository evidence'],
+    ['omitted-dependency', undefined]
+  ])('rejects %s in decision-bearing records', async (mode, error) => {
     await commit('src/client.ts', 'export const deadlineMs = 2500;');
     const records = bounds('established');
     if (mode === 'missing-phase') records.pop();
     if (mode === 'duplicate-phase') records[2].phase = 'startup';
     if (mode === 'unknown-citation') records[2].evidenceReferences = ['missing.ts'];
+    if (mode === 'unknown-line-range-citation') records[1].evidenceReferences = ['missing.ts:146-149'];
+    if (mode === 'not-applicable-requirement') (records[1] as { requirement: string }).requirement = 'not_applicable';
     if (mode === 'generated-citation') records[2].evidenceReferences = ['.criterion-agent/S010/deterministic-summary.json'];
+    if (mode === 'generated-and-unknown-citation') records[2].evidenceReferences = ['.criterion-agent/S010/deterministic-summary.json', 'missing.ts'];
     const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
       recommendation: 'likely_sufficient', assessments: [{ technologyId: mode === 'omitted-dependency' ? 'discovered:other' : 'search',
         type: 'aligned_fact', summary: 'Bounded.', evidenceReferences: ['src/client.ts'], failureBounds: records }]
     }));
     expect(result.available).toBe(false);
+    if (error) expect(result.errors.join('\n')).toContain(error);
   });
 
   it('gives the agent valid JSON when the analysis is larger than the summary budget', async () => {
@@ -391,6 +445,9 @@ describe('S010 advisory agent review', () => {
     }));
 
     expect(candidates).toEqual({ candidateDependencyIds: ['folio-interfaces'] });
+    expect(request.instructions).toContain('technologyId folio-interfaces');
+    // Backend modules have no such candidate; told about it, the agent filed FOLIO module calls under it.
+    expect((await buildS010AgentReviewRequest(repo, analysis())).instructions).not.toContain('folio-interfaces');
     expect(together.available).toBe(true);
     expect(separately.available).toBe(false);
   });

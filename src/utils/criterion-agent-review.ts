@@ -513,7 +513,8 @@ export function normalizeCriterionAgentAdvisoryPayload(
     assessments,
     reviewerActions,
     warnings: [
-      ...(rawEvidenceReferences.length !== evidenceReferences.length
+      // Merged duplicates and line numbers on a listed path are not dropped citations.
+      ...(rawEvidenceReferences.some(reference => !normalizeAdvisoryEvidenceReferences([reference], manifestEntries).length)
         ? ['Dropped uncited or unknown advisory evidence references']
         : [])
     ]
@@ -574,8 +575,9 @@ function normalizeFailureBounds(value: unknown, manifestEntries: string[]): Crit
       || !['established', 'unverified', 'not_applicable'].includes(item.status)
       || typeof item.explanation !== 'string' || !item.explanation.trim()
       || !Array.isArray(item.evidenceReferences)) return undefined;
+    // Like assessment and action citations: unknown paths are dropped, and a record left with none is invalid.
     const evidenceReferences = normalizeAdvisoryEvidenceReferences(item.evidenceReferences, manifestEntries);
-    if (!evidenceReferences.length || evidenceReferences.length !== item.evidenceReferences.length) return undefined;
+    if (!evidenceReferences.length) return undefined;
     bounds.push({ phase: item.phase, requirement: item.requirement, status: item.status,
       explanation: redactEvaluatorSecrets(item.explanation).trim(), evidenceReferences });
   }
@@ -640,6 +642,10 @@ function parseAdvisoryConfidence(value: unknown): CriterionAgentReviewResult['co
   return undefined;
 }
 
+// Agents add line numbers to citations (src/Client.java:40-52,60) despite the instructions. The path
+// before them must still be an exact manifest entry; the line numbers are dropped.
+const LINE_LOCATOR = /:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/;
+
 function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestEntries: string[]): string[] {
   const references = rawReferences
     .map(reference => {
@@ -657,6 +663,8 @@ function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestE
       }
       return undefined;
     })
+    .map(reference => reference === undefined || manifestEntries.includes(reference) ? reference
+      : reference.replace(LINE_LOCATOR, ''))
     .filter((reference): reference is string => typeof reference === 'string' && manifestEntries.includes(reference));
 
   return [...new Set(references)];

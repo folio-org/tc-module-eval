@@ -103,9 +103,10 @@ identify evidence missed by narrow deterministic recognizers, but it cannot chan
 the deterministic status. Every assessment and reviewer action must cite committed
 repository source; generated summaries alone are not valid support. Citation paths
 are validated against the workspace; the agent is also instructed to include line
-numbers in assessment text and describe its actual investigation scope, but those
-claims are not independently verified. Disabled,
-excluded, unavailable, malformed, or uncited review leaves S010 manual.
+numbers in assessment summaries and failure-bound explanations, not in citations,
+and to describe its actual investigation scope, but those claims are not
+independently verified. Disabled, excluded, unavailable, malformed, or uncited
+review leaves S010 manual.
 
 Each dependency assessment includes cited `failureBounds` for process startup,
 tenant initialization, and runtime. Records distinguish required, optional, and
@@ -240,11 +241,13 @@ Only include environment variable names that the OpenCode subprocess actually ne
 
 ## Output Acceptance and Troubleshooting
 
-Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. Unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
+Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. A citation that is a listed path followed by line numbers, such as `src/Client.java:40-52,60`, counts as that path; the line numbers are dropped. Other unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
 
 Malformed or uncited assessment/action records reject the response; they are not
 silently dropped while preserving its overall conclusion. Nested failure-bound
-records are validated and require repository citations too. These checks enforce
+records are validated and require repository citations too: like assessment and
+action citations, an unknown path in a bound is discarded, and a bound left with
+no repository citation rejects the response. These checks enforce
 structural consistency, not the truth of model-authored explanations.
 
 The narrow exception is an unresolved S006 coverage-gap assessment whose ID was
