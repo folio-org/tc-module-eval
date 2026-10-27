@@ -1,6 +1,6 @@
 import { ChildProcessByStdio, spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 
 export interface CommittedSourceLimits {
   maxTreeBytes: number;
@@ -165,9 +165,9 @@ export async function readCommittedSource(
       if (blob.exitCode !== 0 || blob.exceeded) {
         diagnostics.push({
           code: blob.exceeded ? 'file-size' : 'git-error',
-          message: redactSensitiveText(blob.exceeded
+          message: blob.exceeded
             ? `Committed file exceeds the ${limits.maxFileBytes}-byte read limit`
-            : `Unable to read committed file: ${boundedStderr(blob.stderr)}`),
+            : `Unable to read committed file: ${boundedStderr(blob.stderr)}`,
           material: true,
           path: entry.path
         });
@@ -377,7 +377,7 @@ function openBlobReader(repoPath: string): BlobReader {
 function gitError(result: ProcessOutput, prefix: string): CommittedSourceDiagnostic {
   return {
     code: 'git-error',
-    message: redactSensitiveText(`${prefix}: ${boundedStderr(result.stderr)}`),
+    message: `${prefix}: ${boundedStderr(result.stderr)}`,
     material: true
   };
 }
@@ -387,7 +387,8 @@ function failedSnapshot(diagnostic: CommittedSourceDiagnostic, revision = ''): C
 }
 
 function boundedStderr(stderr: Buffer): string {
-  return stderr.toString('utf8').replace(/\s+/g, ' ').trim().slice(0, 512) || 'Git command failed';
+  // Masked before the cut, so the cut cannot leave part of a secret; stderr past 4096 bytes was not captured.
+  return redactEvaluatorSecrets(stderr.toString('utf8'), undefined, stderr.length >= 4096).replace(/\s+/g, ' ').trim().slice(0, 512) || 'Git command failed';
 }
 
 function isSafeRelativePath(candidate: string): boolean {

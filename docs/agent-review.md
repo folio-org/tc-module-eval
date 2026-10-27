@@ -6,7 +6,7 @@ Supported advisory criteria: `S004` installation documentation, `S005` personal 
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all seven currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all seven currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so neither repository content nor agent output is redacted; only the evaluator's own credentials are masked (see [Output masking](#output-masking)). Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
 - Criterion-supplied files are starting context and do not limit the browsable source inventory. A criterion may explicitly set `evidenceMode: 'supplied-files'` when it must restrict review to those files; repository browsing remains the default when the option is omitted.
 - If starting context names a path also present in the committed snapshot, the committed content is authoritative while the path remains listed as starting material.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
@@ -147,7 +147,7 @@ F003 asks the agent whether each missing id has English fallback text, whether e
 
 ## S006 Sensitive Information Review
 
-S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports show the matched value as a bounded excerpt so reviewers can judge it directly; value fingerprints are not reported.
+S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports hide matched values: an assignment shows only its name, such as `DB_PASSWORD=[REDACTED]`, and other findings show their kind, such as `[REDACTED_PROVIDER_API_KEY]`. This is part of S006, not output masking. Agent prose is shown as written, so a value the agent quotes despite its instructions appears in the report.
 
 Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
 
@@ -258,7 +258,7 @@ Agent-review failures are reported without exposing raw provider output or crede
 
 - **Timeout:** choose a faster model or explicitly increase `--criterion-agent-timeout-ms` within the supported range of 1–2147483647 ms.
 - **Provider error:** inspect provider credentials, quota, account status, and endpoint configuration. Do not print credentials while troubleshooting.
-- **Capture overflow:** the review command's output is mostly tool events, and the answer comes last. The evaluator keeps at most the last 16 MiB of it, so memory stays bounded. If more was written, the earlier output is dropped, together with the rest of the assistant message that was in progress at the cut, because its redaction context is gone. The review is then used only if the kept output contains the final answer's whole assistant message, and a warning reports the output size and the limit. Otherwise the review is unavailable with `capture truncated`. The `opencode debug` commands keep the first 64 KiB, and the review is unavailable if their output is cut.
+- **Capture overflow:** the review command's output is mostly tool events, and the answer comes last. The evaluator keeps at most the last 16 MiB of it, so memory stays bounded. If more was written, the earlier output is dropped, together with the rest of the assistant message that was in progress at the cut, because its lost start may have held the start of a masked credential. The review is then used only if the kept output contains the final answer's whole assistant message, and a warning reports the output size and the limit. Otherwise the review is unavailable with `capture truncated`. The `opencode debug` commands keep the first 64 KiB, and the review is unavailable if their output is cut.
 - **Malformed, invalid, or incomplete response:** inspect the evaluator's sanitized diagnosis and, if useful, rerun the OpenCode command manually in a trusted environment.
 
 These categories diagnose the observed command or response; they do not make claims about provider reliability. In every failure category, evaluation continues with the deterministic result and evidence.
@@ -268,16 +268,24 @@ evaluator package/version, configured agent model, and committed source paths ci
 by explicit structured criterion evidence or agent-review references. Incidental path
 text in narrative evidence and diagnostics does not add a source citation. HTML
 reports use that inventory for commit-pinned GitHub links and offer a report-safe
-JSON download with the standard `EvaluationResult` shape. Repository-controlled free
-text and agent diagnostics are redacted before either HTML payload is embedded;
-validated repository and cited-path identities are preserved so their links remain
-stable. Any credentials in the repository URL are removed before that identity is
-preserved or embedded in the download. OpenCode runtime metadata is omitted from the
+JSON download with the standard `EvaluationResult` shape. Both payloads, like the JSON
+report, have the evaluator's own credentials masked and are otherwise unchanged. Any
+credentials in the repository URL are removed before it is embedded in the download. OpenCode runtime metadata is omitted from the
 embedded download. Historical results without provenance remain renderable. Failed
 and timed-out reviews are shown as unavailable; configuration and no-evidence skips
 remain distinct.
 
-Malformed-response reports distinguish invalid transport records, sanitization rejection, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed before its decoded values are redacted.
+Malformed-response reports distinguish invalid transport records, unparseable or too deeply nested records, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed, and text parts of one message are joined, before credentials in its decoded values are masked, so a credential split across parts is still masked.
+
+## Output masking
+
+The evaluator masks its own credentials, not repository content. Wherever the exact current value of one of these variables appears in command output, agent output, error messages, the console error, or the JSON and HTML reports, it is replaced with `[REDACTED_<VARIABLE>]`, such as `[REDACTED_OPENROUTER_API_KEY]`:
+
+- `OPENROUTER_API_KEY` and `OPENAI_API_KEY` (agent review providers);
+- `SONAR_TOKEN` and `GITHUB_TOKEN` (remote lookups);
+- every variable named by `--criterion-agent-provider-env` or `--criterion-agent-proxy-env`.
+
+Every string of at least 8 characters in a trusted auth store's JSON (`--criterion-agent-auth-store`), such as API keys and OAuth tokens, becomes `[REDACTED_AUTH_STORE]`; a token OpenCode refreshes during the run is not known in advance and is not masked. Unset variables and values shorter than 8 characters are not masked. Only the exact value is matched, not an encoded form such as a JSON-escaped or percent-encoded one. Text is masked before it is cut to a size limit, and when output was already cut while it was captured, a credential's start left at the cut is dropped. Nothing else is redacted: repository text, command output, and agent advice that quote tokens, passwords, private URLs, or keys appear as written.
 
 ## GitHub Actions
 

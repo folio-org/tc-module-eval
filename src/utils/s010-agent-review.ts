@@ -7,7 +7,7 @@ import {
   S010ScenarioEvidence
 } from '../types';
 import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
@@ -39,7 +39,7 @@ export async function reviewS010WithAgent(
   try {
     request = await buildS010AgentReviewRequest(repoPath, analysis);
   } catch (error) {
-    return unavailable(`Unable to prepare S010 agent review material: ${redactedErrorMessage(error)}`);
+    return unavailable(`Unable to prepare S010 agent review material: ${errorMessage(error)}`);
   }
   const review = await runCriterionAgentReview(request, config, commandRunner);
   if (!review.available) return review;
@@ -202,9 +202,5 @@ function compactScenario(scenario: S010ScenarioEvidence): S010ScenarioEvidence &
 }
 
 function unavailable(message: string): CriterionAgentReviewResult {
-  return { ...unavailableResult('S010'), errors: [redactSensitiveText(message)] };
-}
-
-function redactedErrorMessage(error: unknown): string {
-  return redactSensitiveText(errorMessage(error));
+  return { ...unavailableResult('S010'), errors: [redactEvaluatorSecrets(message)] };
 }

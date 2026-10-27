@@ -1,5 +1,6 @@
 import { EvaluationResult } from '../types';
 import { createHtmlReport } from './report-html-template';
+import { redactEvaluatorSecretsInValue } from './redaction';
 
 export interface ReportRenderer {
   renderJson(result: EvaluationResult): string;
@@ -12,7 +13,7 @@ export interface ReportRenderer {
  */
 export class EvaluationReportRenderer implements ReportRenderer {
   renderJson(result: EvaluationResult): string {
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(redactEvaluatorSecretsInValue(result), null, 2);
   }
 
   renderHtml(result: EvaluationResult): string {

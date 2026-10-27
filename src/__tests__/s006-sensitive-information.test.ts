@@ -1816,10 +1816,8 @@ describe('S006 report formatting and criterion details', () => {
     expect(rendered.details).toContain('Agent review (advisory):');
     expect(rendered.details).toContain('  - Recommendation: Reviewer judgment needed');
     expect(rendered.details).not.toMatch(/needs_reviewer_judgment|Adapter:|Model label:/);
-    expect(rendered.details).toContain('[REDACTED_PRIVATE_URL]');
-    expect(rendered.details).toContain('token=[REDACTED]');
-    expect(rendered.details).not.toContain('http://192.168.1.10/admin');
-    expect(rendered.details).not.toContain('secretish');
+    // Agent prose is shown as written; only the deterministic findings hide matched values.
+    expect(rendered.details).toContain('  - Rationale: Example contains private URL http://192.168.1.10/admin and token=secretish');
   });
 });
 

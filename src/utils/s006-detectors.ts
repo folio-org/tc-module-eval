@@ -9,11 +9,10 @@ import {
   S006RunLocalValueFingerprint,
   S006ValueClassification
 } from '../types';
-import {
-  PRIVATE_KEY_BLOCK_PATTERN,
-  PRIVATE_URL_PATTERN,
-  URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN
-} from './redaction';
+
+const CREDENTIAL_URL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
+const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
+const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
 
 // %s, %d, and {} are printf and log format placeholders; {NAME} is a template placeholder such as {VAULT_TOKEN};
 // [] is an empty list, as in an OpenAPI security requirement (accessToken: []).

@@ -22,6 +22,7 @@ import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
 import { sanitizeStructuredOutput } from '../utils/opencode-output';
 import { LocalCommandRunner } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
+import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -321,7 +322,7 @@ describe('criterion agent review', () => {
   });
 
   it('converts unexpected optional review exceptions into unavailable results', async () => {
-    const result = await reviewCriterionWithAgent({
+    const result = await withEvaluatorSecrets(() => reviewCriterionWithAgent({
       criterionId: 'S005',
       status: EvaluationStatus.MANUAL,
       hasReviewMaterial: true,
@@ -335,14 +336,13 @@ describe('criterion agent review', () => {
         }
       }),
       review: async () => {
-        throw new Error('agent crashed with token=abc123');
+        throw new Error(`agent crashed with ${EVALUATOR_SECRETS.OPENAI_API_KEY}`);
       }
-    });
+    }));
 
     expect(result.agentReview?.available).toBe(false);
-    expect(result.agentReview?.errors.join('\n')).toContain('Agent review failed unexpectedly');
-    expect(result.agentReview?.errors.join('\n')).not.toContain('abc123');
-    expect(result.unavailableReason).toContain('Agent review failed unexpectedly');
+    expect(result.agentReview?.errors).toEqual(['Agent review failed unexpectedly: agent crashed with [REDACTED_OPENAI_API_KEY]']);
+    expect(result.unavailableReason).toBe('Agent review failed unexpectedly: agent crashed with [REDACTED_OPENAI_API_KEY]');
   });
 
   it('normalizes fake adapter advisory output against manifest references', async () => {
@@ -400,19 +400,15 @@ describe('criterion agent review', () => {
         summary: 'Fake summary.',
         rationale: 'Fake rationale.',
         evidenceReferences: ['schemas/user.json'],
-        warnings: ['warning token=abc123 should be redacted'],
-        errors: ['error password=hunter2 should be redacted']
+        warnings: ['warning'],
+        errors: ['error']
       } as unknown as CriterionAgentReviewConfig['fakeResult']
     });
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
-    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED]');
-    expect(result.errors.join('\n')).toContain('error password=[REDACTED]');
-    expect(result.warnings.join('\n')).not.toContain('should be redacted');
-    expect(result.errors.join('\n')).not.toContain('should be redacted');
-    expect(result.warnings.join('\n')).not.toContain('abc123');
-    expect(result.errors.join('\n')).not.toContain('hunter2');
+    expect(result.warnings).toContain('warning');
+    expect(result.errors).toContain('error');
   });
 
   it('prepares a bounded manifest workspace', () => {
@@ -692,21 +688,6 @@ describe('criterion agent review', () => {
     expect(result.evidenceReferences).toEqual(['README.md']);
   });
 
-  it('reports advice with an unsafe rationale as unavailable after sanitization', async () => {
-    const captured = sanitizeStructuredOutput(JSON.stringify({
-      recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'Inspect repository evidence.',
-      rationale: '"password": "SYNTHETIC_SECRET\\', evidenceReferences: ['README.md']
-    }), 'opencode-json', 10000);
-    const result = await runCriterionAgentReview({
-      criterionId: 'S006', repositoryPath: repoPath, instructions: 'review',
-      files: [{ repoRelativePath: 'README.md', content: 'Redacted evidence.' }], schemaDescription: 'schema'
-    }, { ...opencodeConfig(), enabledCriteria: ['S006'] }, new FakeRunner(undefined, undefined, captured.text));
-    expect(result.available).toBe(false);
-    expect(result.errors).toContain('OpenCode decode: sanitization rejected a record');
-    expect(result.rationale).toBeUndefined();
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
-  });
-
   it('keeps OpenCode metadata on malformed advisory output', async () => {
     const result = await runCriterionAgentReview({
       criterionId: 'S004',
@@ -853,17 +834,16 @@ else {
 
   it('retains allowlisted provider diagnostics from stdout on nonzero exit', async () => {
     const stdout = JSON.stringify({ type: 'error', error: { name: 'APIError', data: {
-      message: 'Rate limit: password=synthetic-credential', statusCode: 429,
+      message: `Rate limit for key ${EVALUATOR_SECRETS.OPENROUTER_API_KEY}`, statusCode: 429,
       responseBody: 'DO_NOT_PUBLISH', headers: { authorization: 'DO_NOT_PUBLISH' }
     } } });
     const runner = new FakeRunner(undefined, undefined, stdout, { 3: { status: 'failed', exitCode: 1 } });
-    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+    const result = await withEvaluatorSecrets(() => runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
       instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
-    }, opencodeConfig(), runner);
+    }, opencodeConfig(), runner));
     expect(result.available).toBe(false);
-    expect(result.errors.join('\n')).toContain('429');
-    expect(result.errors.join('\n')).toContain('APIError');
-    expect(JSON.stringify(result)).not.toMatch(/synthetic-credential|DO_NOT_PUBLISH/);
+    expect(result.errors.join('\n')).toContain('APIError: 429: Rate limit for key [REDACTED_OPENROUTER_API_KEY]');
+    expect(JSON.stringify(result)).not.toMatch(/fakeOpenRouterKey|DO_NOT_PUBLISH/);
   });
 
   it('normalizes common off-schema OpenCode advisory fields', async () => {

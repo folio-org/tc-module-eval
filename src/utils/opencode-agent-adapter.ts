@@ -13,7 +13,7 @@ import {
   normalizeCriterionAgentAdvisoryPayload,
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { decodeOpenCodeOutput, openCodeEventTrace, OpenCodeOutput, parseJsonObject } from './opencode-output';
 import { errorMessage } from './type-guards';
 
@@ -33,7 +33,7 @@ export async function runOpenCodeAgentReview(
     criterionId: request.criterionId,
     evidenceReferences: [],
     warnings: [],
-    errors: [redactSensitiveText(error)],
+    errors: [redactEvaluatorSecrets(error)],
     metadata: openCodeMetadata(config, workspace)
   });
 
@@ -184,7 +184,7 @@ export async function runOpenCodeAgentReview(
 }
 
 function commandContext(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig): string {
-  return redactSensitiveText(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
+  return redactEvaluatorSecrets(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
 }
 
 function commandFailure(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig, decoded?: OpenCodeOutput): string {
@@ -193,7 +193,7 @@ function commandFailure(stage: string, run: CommandExecutionResult, config: Crit
   const detail = provider ? [provider.name, provider.statusCode, provider.message].filter(value => value !== undefined).join(': ')
     : decoded?.diagnostic === 'final assistant message start not captured'
       ? 'kept the end of the output, but it did not contain the whole final answer'
-      : redactSensitiveText(run.errorMessage ?? '', 500);
+      : redactEvaluatorSecrets(run.errorMessage ?? '', 500);
   return `${commandContext(stage, run, config)}; ${reason}${run.stdoutTruncated && run.status !== 'success' ? '; capture truncated' : ''}${detail ? `; ${detail}` : ''}`;
 }
 

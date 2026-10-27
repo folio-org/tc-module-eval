@@ -2,7 +2,7 @@ import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, 
 import { CriterionAgentReviewRequest, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
 import { buildFrontendAgentReviewRequest, frontendBrowseInclude, givenObligations } from './frontend-agent-review';
 import { f003TranslationPaths } from './f003-internationalization';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
 
 export function hasF003AgentReviewMaterial(analysis: F003Analysis): boolean {
@@ -19,7 +19,7 @@ export async function reviewF003WithAgent(
   try {
     request = buildF003AgentReviewRequest(repoPath, analysis);
   } catch (error) {
-    return { ...unavailableResult('F003'), errors: [redactSensitiveText(`Unable to prepare F003 agent review material: ${errorMessage(error)}`)] };
+    return { ...unavailableResult('F003'), errors: [redactEvaluatorSecrets(`Unable to prepare F003 agent review material: ${errorMessage(error)}`)] };
   }
   return runCriterionAgentReview(request, config, commandRunner);
 }
