@@ -184,7 +184,8 @@ describe('License Name Normalization', () => {
       [['Lesser General Public License, version 3 or greater'], [LicenseIssueType.CATEGORY_X_VIOLATION]],
       [['BSD 2-Clause "Simplified" License'], []],
       [['The (New) BSD License'], []],
-      [['The GNU General Public License (GPL), Version 2, With Classpath Exception'], [LicenseIssueType.UNDOCUMENTED_CATEGORY_B]]
+      [['The GNU General Public License (GPL), Version 2, With Classpath Exception'], [LicenseIssueType.UNDOCUMENTED_CATEGORY_B]],
+      [['FSL-1.1-ALv2'], [LicenseIssueType.CATEGORY_X_VIOLATION]]
     ])('should check the Maven license spellings %j by their listed license', (licenses, issueTypes) => {
       const dependency = { name: 'org.example:lib', version: '1.0', licenses: licenses.map(normalizeLicenseName) };
 
