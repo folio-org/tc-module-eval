@@ -291,6 +291,19 @@ describe('criterion agent review', () => {
     }
   );
 
+  it('reads a line-numbered citation as its listed path, for every criterion', () => {
+    const result = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'likely_sufficient', confidence: 'high', summary: 'Checked.', rationale: 'Read.',
+      // A listed name that contains a colon stays itself; a line and column is not a line locator.
+      evidenceReferences: ['src/a.ts:12', 'src/b.ts:40-52,60', 'src/b.ts', 'src/c.ts:12:3'],
+      reviewerActions: [{ action: 'Check the deadline.', evidenceReferences: ['src/b.ts:7'] }]
+    }, ['src/a.ts', 'src/a.ts:12', 'src/b.ts', 'src/c.ts']);
+    expect(result).toMatchObject({ errors: [], evidenceReferences: ['src/a.ts:12', 'src/b.ts'],
+      reviewerActions: [{ evidenceReferences: ['src/b.ts'] }], warnings: [expect.stringContaining('Dropped')] });
+    expect(normalizeCriterionAgentAdvisoryPayload({ recommendation: 'pass', confidence: 'high', summary: 'S.', rationale: 'R.',
+      evidenceReferences: ['src/b.ts:10', 'src/b.ts:30', 'src/b.ts'] }, ['src/b.ts']).warnings).toEqual([]);
+  });
+
   it.each(['assessments', 'reviewerActions'])('rejects a malformed %s entry instead of keeping an unsupported synthesis', field => {
     const valid = field === 'assessments'
       ? { technologyId: 'java', type: 'aligned_fact', summary: 'Declared.', evidenceReferences: ['README.md'] }
