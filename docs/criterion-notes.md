@@ -47,7 +47,7 @@ S003 checks the dependencies the module distributes against the [ASF 3rd Party L
 
 - Only distributed dependencies are checked, including their transitive dependencies. Maven excludes `test` (and `system`) scope. Gradle uses only the license report's `runtimeClasspath`. npm installs and checks production dependencies only. UI modules are published as source and bundled by a platform that installs only their `dependencies`, so `devDependencies` are never shipped.
 - A Category X license fails. A Category B license, or an LGPL library on the special-exception list, needs a README label: the README must name the dependency itself (its full name or artifactId, as a whole name: `rhino.engine` does not name `rhino`), not just the license family. Only the first 1 MiB of a README inside the repository is read; a README or `pom.xml` that links outside the repository is ignored. An unnamed one, an unknown license, a missing license, or an unsplit license expression requires manual review.
-- An SPDX `AND` expression passes only when every operand passes. Licenses listed together for a Maven dependency all apply, unless `config/license-dual-licensed.json` records the dependency as offering a choice of license.
+- An SPDX `AND` expression passes only when every operand passes. Licenses listed together for a Maven or Gradle dependency all apply, unless `config/license-dual-licensed.json` records the dependency as offering a choice of license.
 
 ## S004 Installation Documentation
 
