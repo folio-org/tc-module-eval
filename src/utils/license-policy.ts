@@ -10,7 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { LicenseCategoriesConfig, SpecialExceptionsConfig, LicenseVariationsConfig } from '../types';
+import { DualLicensedConfig, LicenseCategoriesConfig, SpecialExceptionsConfig, LicenseVariationsConfig } from '../types';
 import { getLogger } from './logger';
 
 export enum LicenseCategory {
@@ -23,6 +23,7 @@ export enum LicenseCategory {
 let licensePolicy: Map<string, LicenseCategory> | null = null;
 let licenseVariations: Map<string, string> | null = null;
 let specialExceptionsConfig: SpecialExceptionsConfig | null = null;
+let dualLicensed: DualLicensedConfig['projects'] | null = null;
 
 function getConfigPath(): string {
   const currentDir = __dirname;
@@ -104,21 +105,31 @@ function loadSpecialExceptionsConfig(): SpecialExceptionsConfig {
  * @returns true if the dependency is in the special exceptions list
  */
 export function isSpecialException(dependencyName: string): boolean {
-  const config = loadSpecialExceptionsConfig();
+  return matchesAny(dependencyName, loadSpecialExceptionsConfig().exceptions);
+}
 
-  for (const exception of config.exceptions) {
-    if (exception.matchType === 'exact') {
-      if (dependencyName === exception.name) {
-        return true;
-      }
-    } else if (exception.matchType === 'prefix') {
-      if (dependencyName.startsWith(exception.name)) {
-        return true;
-      }
+function matchesAny(dependencyName: string, entries: Array<{ name: string; matchType: 'exact' | 'prefix' }>): boolean {
+  return entries.some(entry => entry.matchType === 'exact'
+    ? dependencyName === entry.name
+    : entry.matchType === 'prefix' && dependencyName.startsWith(entry.name));
+}
+
+/**
+ * Whether the dependency is listed in license-dual-licensed.json, so that the licenses its Maven
+ * POM lists are a choice rather than licenses that all apply.
+ */
+export function isDualLicensed(dependencyName: string): boolean {
+  if (dualLicensed === null) {
+    try {
+      const configPath = path.join(getConfigPath(), 'license-dual-licensed.json');
+      dualLicensed = (JSON.parse(fs.readFileSync(configPath, 'utf-8')) as DualLicensedConfig).projects ?? [];
+    } catch (error) {
+      // Without the list every license applies, which can only make the check stricter.
+      getLogger().error('Failed to load dual-licensed dependencies configuration:', error);
+      dualLicensed = [];
     }
   }
-
-  return false;
+  return matchesAny(dependencyName, dualLicensed);
 }
 
 /**

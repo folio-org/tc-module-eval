@@ -10,10 +10,12 @@
  * This parser fulfills the license-compliance.ts contract by:
  * 1. Splitting pipe-separated licenses ("Apache-2.0|MIT") into ["Apache-2.0", "MIT"]
  * 2. Normalizing license names via license-policy.normalizeLicenseName()
- * 3. Returning licenses as string arrays in Dependency objects
+ * 3. Returning licenses as string arrays in Dependency objects; several licenses on one
+ *    THIRD-PARTY.txt line form one set that all apply, unless config/license-dual-licensed.json
+ *    lists the dependency as offering a choice of them
  *
- * Maven uses the pipe character '|' to separate dual/multi-licenses in THIRD-PARTY.txt.
- * The splitDualLicenses() function handles this Maven-specific format.
+ * A license name containing '|' is split by splitDualLicenses(); the plugin writes each license
+ * in its own parenthesised group, so such names are not expected in practice.
  *
  * SECURITY WARNING: This module executes Maven build commands on untrusted repositories.
  * Security measures implemented:
@@ -33,7 +35,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
-import { normalizeLicenseName } from '../license-policy';
+import { isDualLicensed, normalizeLicenseName } from '../license-policy';
 import { errorMessage, isNonEmptyString, isValidDependency } from '../type-guards';
 import { commandError, readRepoTextFile, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
@@ -179,11 +181,15 @@ function parseMavenThirdPartyLine(line: string): Dependency | null {
     return null;
   }
 
+  const name = `${parsed.groupId}:${parsed.artifactId}`;
+  const licenses = licenseNames.flatMap(splitDualLicenses);
   return {
-    name: `${parsed.groupId}:${parsed.artifactId}`,
+    name,
     version: parsed.version,
-    // The plugin lists every license declared for the dependency; any one of them may be chosen.
-    licenses: licenseNames.flatMap(splitDualLicenses)
+    // The plugin lists every license the POM declares. A POM can declare one license per bundled
+    // component (Jersey lists Apache-2.0 for its bundled Guava), so the licenses all apply unless
+    // the dependency is known to offer a choice of them.
+    licenses: licenses.length > 1 && !isDualLicensed(name) ? [licenses] : licenses
   };
 }
 
