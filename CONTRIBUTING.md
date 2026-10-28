@@ -36,10 +36,11 @@ yarn global add .
 ## Verification
 
 Use `yarn test:unit --runInBand` and `yarn build` for routine verification.
+Run the full suite (`yarn jest --runInBand`) before every push.
 Bare `yarn test` (or `npm test`) includes network integration tests that clone
-external repositories and enable their build commands with `allowLocalCommands: true`.
-Run the full suite or `yarn test:integration` only when those target builds are
-explicitly authorized; the evaluator's safe CLI defaults do not protect this suite.
+external repositories and enable their build commands with `allowLocalCommands: true`,
+so run the full suite in an isolated environment such as the devcontainer;
+the evaluator's safe CLI defaults do not protect this suite.
 
 ## Architecture
 
