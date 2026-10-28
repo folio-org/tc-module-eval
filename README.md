@@ -98,6 +98,17 @@ against the testing sections of the same policy. It never runs tests, even with
 S013 is `manual` and lists the test runners it found. See
 [Criterion Notes](docs/criterion-notes.md#s013-unit-test-coverage).
 
+### F001 Consumed Interfaces Declared
+
+F001 checks that every backend interface a UI package calls is declared in `package.json` under
+`stripes.okapiInterfaces` or `stripes.optionalOkapiInterfaces`. It reads the request paths in the
+committed production source (stripes-connect manifests, `useOkapiKy()` calls and `fetch` on the Okapi
+URL, following constants inside the repository) and maps them to interfaces through the handler patterns
+of the S008 platform release, kept offline in `config/f001-handler-index.json`. A request that maps to
+one undeclared interface fails it, for modules and libraries alike; requests the tool cannot map leave it
+`manual`, with a checklist for the reviewer and, when agent review is enabled, the agent's results. See
+[Criterion Notes](docs/criterion-notes.md#f001-consumed-interfaces-declared).
+
 ### F003 Internationalization
 
 F003 checks that a UI package renders its text through react-intl from an English translation file,

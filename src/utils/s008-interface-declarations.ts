@@ -80,7 +80,8 @@ function parseDescriptorList(
   });
 }
 
-function collectFrontend(repoPath: string): S008DeclarationResult {
+/** The interfaces a UI package declares in package.json (`stripes.okapiInterfaces` and `optionalOkapiInterfaces`). */
+export function collectFrontend(repoPath: string): S008DeclarationResult {
   const selected = path.join(repoPath, 'package.json');
   if (!fs.existsSync(selected)) return result([], [{ code: 'declaration_source_missing', message: 'package.json is missing.', path: 'package.json', material: true }]);
   const source = readDeclarationSource(repoPath, selected, 'package.json');

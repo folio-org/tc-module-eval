@@ -462,10 +462,10 @@ function collectComponentPins(platform: Record<string, unknown>, diagnostics: Di
   return parsePlatformPins(platform['eureka-components'], 'component', diagnostics);
 }
 
-interface FetchOptions { fetchImpl: typeof fetch; timeoutMs: number; maxBytes: number }
-interface JsonResponse { parsed: unknown }
+export interface FetchOptions { fetchImpl: typeof fetch; timeoutMs: number; maxBytes: number }
+export interface JsonResponse { parsed: unknown }
 
-async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse> {
+export async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
   try {
@@ -494,7 +494,7 @@ async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse>
   }
 }
 
-function validateBaseUrl(value: string, label: string): URL {
+export function validateBaseUrl(value: string, label: string): URL {
   const url = new URL(value);
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error(`${label} URL must use HTTPS (HTTP is allowed only for loopback tests).`);
@@ -555,7 +555,7 @@ function asOptionalRecord(value: unknown): Record<string, any> | undefined {
   return isRecord(value) ? value : undefined;
 }
 
-async function mapLimit<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
   const output = new Array<R>(values.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
@@ -573,7 +573,7 @@ async function writeStable(filePath: string, value: unknown): Promise<void> {
   await fs.writeFile(filePath, stableStringify(value));
 }
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   return `${JSON.stringify(sortKeys(value), null, 2)}\n`;
 }
 
@@ -589,7 +589,7 @@ function uniqueByJson<T>(values: T[]): T[] {
 
 function byJson(left: unknown, right: unknown): number { return JSON.stringify(left).localeCompare(JSON.stringify(right)); }
 function safeName(value: string): string { return value.replace(/[^A-Za-z0-9_.-]/g, '_'); }
-function ensureTrailingSlash(url: URL): URL { return new URL(url.toString().replace(/\/?$/, '/')); }
+export function ensureTrailingSlash(url: URL): URL { return new URL(url.toString().replace(/\/?$/, '/')); }
 function positiveInteger(value: number, label: string): number { if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`); return value; }
 
 if (require.main === module) {

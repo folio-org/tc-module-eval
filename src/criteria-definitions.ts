@@ -332,11 +332,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F001',
     description: 'API interface requirements in package.json',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'API interface requirements in package.json'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F002',

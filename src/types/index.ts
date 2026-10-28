@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'backendEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -133,6 +133,8 @@ export interface EvaluationRunArtifacts {
   agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
   /** The committed production source, package.json and English translations the F criteria read. */
   frontendSource?: import('../utils/frontend-source').FrontendSource;
+  /** Every request a UI package's production code sends to the backend, for F001. */
+  uiRequestSites?: import('./f001-consumed-apis').UiRequestSites;
   /** The B criteria's shared evidence: repository kind, descriptor template, framework and storage. */
   backendEvidence?: import('./backend-evidence').BackendEvidence;
 }
@@ -208,6 +210,7 @@ export * from './s013-test-coverage';
 export * from './s014-application-assignment';
 export * from './remote-evidence';
 export * from './frontend-checklist';
+export * from './f001-consumed-apis';
 export * from './f003-internationalization';
 export * from './f005-stripes-version';
 export * from './backend-evidence';

@@ -15,6 +15,7 @@
     "test:integration": "jest --testMatch='**/*.integration.test.ts' --runInBand",
     "import:s008-catalog": "ts-node src/tools/import-s008-catalog.ts",
     "acquire:s008-catalog": "ts-node src/tools/acquire-s008-catalog.ts",
+    "build:f001-handler-index": "ts-node src/tools/build-f001-handler-index.ts",
     "capture:remote-fixtures": "ts-node src/tools/capture-remote-fixtures.ts",
     "clean": "rm -rf dist"
   },
