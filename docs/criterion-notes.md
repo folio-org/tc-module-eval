@@ -2,6 +2,14 @@
 
 This file records criterion behavior not covered in the README.
 
+## Rules for Every Criterion
+
+- Missing, truncated, unreadable or unverifiable evidence gives `manual` with a diagnostic, never `pass` and never an empty result. Every collector limit (depth, file count, rejected value) adds a diagnostic. A proven violation still fails.
+- Evaluated repositories are untrusted. Every repository or remote string in a report goes through `reportText` or `reportPath`. Reads, file counts and loops over repository-controlled lists are bounded, and symlinks outside the repository are never followed. Every regex or scan over repository or agent text has a linear-time test. Lookups keyed by repository data use `Map` or `Object.create(null)`.
+- Reports are written for TC members in plain English with a "What to do" line. They show no internal enum values and no model or adapter names, and agent review has the same layout for every criterion.
+- Agent review never changes a status. An invalid review item is dropped on its own instead of rejecting the whole review, structured JSON is never truncated, and a review that did not run is not shown as unavailable.
+- FOLIO shared workflows are modelled from their upstream YAML. A workflow or ref missing from `config/folio-shared-workflows.json` is unknown, not empty.
+
 ## S001 Open-Source License
 
 S001 reads up to 20 top-level license files: `LICENSE`, `LICENCE` and `COPYING` in any case, with an optional single suffix and extension such as `.md`, `-MIT` or `-2.0.txt` (multi-word names such as `LICENSE-THIRD-PARTY.txt` are notices, not the module's license). Only the first 64 KB of each is read. A file counts as the Apache License 2.0 only when a line among its first ten non-empty lines names it as the file's own license (the title and version, a "licensed/distributed under the Apache License, Version 2.0" notice, or an `Apache-2.0` SPDX id) before any line naming another license. Third-party notices appended after the Apache text do not matter; an MIT or other license file that merely mentions Apache-2.0 code does not pass.
@@ -39,6 +47,7 @@ S003 checks the dependencies the module distributes against the [ASF 3rd Party L
 
 - Only distributed dependencies are checked, including their transitive dependencies. Maven excludes `test` (and `system`) scope. Gradle uses only the license report's `runtimeClasspath`. npm installs and checks production dependencies only. UI modules are published as source and bundled by a platform that installs only their `dependencies`, so `devDependencies` are never shipped.
 - A Category X license fails. A Category B license, or an LGPL library on the special-exception list, needs a README label: the README must name the dependency itself (its full name or artifactId, as a whole name: `rhino.engine` does not name `rhino`), not just the license family. Only the first 1 MiB of a README inside the repository is read; a README or `pom.xml` that links outside the repository is ignored. An unnamed one, an unknown license, a missing license, or an unsplit license expression requires manual review.
+- An SPDX `AND` expression passes only when every operand passes. Licenses listed together for a Maven or Gradle dependency all apply, unless `config/license-dual-licensed.json` records the dependency as offering a choice of license.
 
 ## S004 Installation Documentation
 
