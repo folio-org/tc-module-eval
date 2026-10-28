@@ -23,6 +23,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S012: 'Officially supported build tools',
   S013: 'Unit test coverage and technologies',
   S014: 'Application assignment',
+  F001: 'Consumed interfaces declared',
   F003: 'Internationalization',
   F005: 'Stripes version',
   B001: 'Module descriptor template'

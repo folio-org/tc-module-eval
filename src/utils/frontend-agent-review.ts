@@ -71,6 +71,10 @@ export interface FrontendAgentReviewOptions {
   discoveredKinds: string[];
   browseInclude: (path: string) => boolean;
   browseScope: string;
+  /** Criterion reference material for the agent, under `.criterion-agent/<ID>/`. */
+  extraFiles?: Array<{ name: string; content: string }>;
+  /** The criterion's own validation rule, applied after the shared ones. */
+  validateCriterion?: (review: CriterionAgentReviewResult) => string | undefined;
 }
 
 /**
@@ -137,8 +141,9 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
     }, {
       repoRelativePath: `.criterion-agent/${criterionId}/response-shape.json`,
       content: JSON.stringify(responseShape, null, 2)
-    }],
-    validateReview: (review, availableSourcePaths) => validateFrontendReview(criterionId, checklist, discoveredKinds, review, availableSourcePaths),
+    }, ...(options.extraFiles ?? []).map(file => ({ repoRelativePath: `.criterion-agent/${criterionId}/${file.name}`, content: file.content }))],
+    validateReview: (review, availableSourcePaths) => validateFrontendReview(criterionId, checklist, discoveredKinds, review, availableSourcePaths)
+      ?? options.validateCriterion?.(review),
     schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty evidenceReferences string[] of repository paths, assessments[] (one object per obligation ID in checklist.json, plus discovered ones: technologyId, type, summary, evidenceReferences string[], coverageDisposition investigated|immaterial|unresolved), and reviewerActions[] of { action, evidenceReferences string[] }. See response-shape.json for a complete example.'
   };
 }
