@@ -385,6 +385,17 @@ export interface SpecialExceptionsConfig {
   }>;
 }
 
+export interface DualLicensedConfig {
+  _description?: string;
+  _reference?: string;
+  projects: Array<{
+    name: string;
+    matchType: 'exact' | 'prefix';
+    licenses: string;
+    source: string;
+  }>;
+}
+
 export interface LicenseVariationsConfig {
   _description?: string;
   _source?: string;

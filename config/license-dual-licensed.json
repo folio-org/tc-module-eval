@@ -1,0 +1,102 @@
+{
+  "_description": "Maven dependencies whose POM license list is a choice of licenses (dual or multi licensing), so any one listed license may be chosen. A POM can also list one license per bundled component, and then every listed license applies, so the evaluator treats a list that is not matched here as licenses that all apply. matchType 'prefix' with a trailing ':' matches a whole groupId. An entry changes the result only when the listed licenses differ in category or include an unknown name; otherwise it changes only how the licenses are shown.",
+  "_reference": "https://www.apache.org/legal/resolved.html#how-should-i-handle-a-work-when-there-is-a-choice-of-license",
+  "projects": [
+    {
+      "name": "ch.qos.logback:",
+      "matchType": "prefix",
+      "licenses": "EPL-1.0 (EPL-2.0 in current sources) OR LGPL-2.1-only",
+      "source": "https://github.com/qos-ch/logback/blob/master/LICENSE.txt"
+    },
+    {
+      "name": "com.github.java-json-tools:",
+      "matchType": "prefix",
+      "licenses": "LGPL-3.0-or-later OR Apache-2.0",
+      "source": "https://github.com/java-json-tools/json-patch/blob/master/LICENSE"
+    },
+    {
+      "name": "com.github.jsqlparser:jsqlparser",
+      "matchType": "exact",
+      "licenses": "LGPL-2.1 OR Apache-2.0",
+      "source": "https://github.com/JSQLParser/JSqlParser/blob/master/README.md#license"
+    },
+    {
+      "name": "io.vertx:",
+      "matchType": "prefix",
+      "licenses": "EPL-1.0 or EPL-2.0 (by repository) OR Apache-2.0",
+      "source": "https://github.com/eclipse-vertx/vert.x/blob/master/NOTICE.md and the io.vertx:vertx5-parent POM"
+    },
+    {
+      "name": "jakarta.annotation:jakarta.annotation-api",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/jakartaee/common-annotations-api/blob/master/NOTICE.md"
+    },
+    {
+      "name": "jakarta.el:jakarta.el-api",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/jakartaee/expression-language/blob/master/NOTICE.md"
+    },
+    {
+      "name": "jakarta.persistence:jakarta.persistence-api",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR BSD-3-Clause",
+      "source": "https://github.com/jakartaee/persistence/blob/master/LICENSE.md"
+    },
+    {
+      "name": "jakarta.transaction:jakarta.transaction-api",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/jakartaee/transactions/blob/master/NOTICE.md"
+    },
+    {
+      "name": "javax.mail:mailapi",
+      "matchType": "exact",
+      "licenses": "CDDL-1.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "Source file headers in javax.mail:mail:1.4.3 sources: 'subject to the terms of either the GNU General Public License Version 2 only (\"GPL\") or the Common Development and Distribution License(\"CDDL\")'"
+    },
+    {
+      "name": "javax.ws.rs:javax.ws.rs-api",
+      "matchType": "exact",
+      "licenses": "CDDL-1.1 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "Source file headers in javax.ws.rs:javax.ws.rs-api:2.0.1 sources: 'subject to the terms of either the GNU General Public License Version 2 only (\"GPL\") or the Common Development and Distribution License(\"CDDL\")'"
+    },
+    {
+      "name": "javax.xml.bind:jaxb-api",
+      "matchType": "exact",
+      "licenses": "CDDL-1.1 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "Source file headers in javax.xml.bind:jaxb-api:2.3.1 sources: 'subject to the terms of either the GNU General Public License Version 2 only (\"GPL\") or the Common Development and Distribution License(\"CDDL\")'"
+    },
+    {
+      "name": "net.java.dev.jna:",
+      "matchType": "prefix",
+      "licenses": "Apache-2.0 OR LGPL-2.1-or-later",
+      "source": "https://github.com/java-native-access/jna/blob/master/LICENSE"
+    },
+    {
+      "name": "org.glassfish:jakarta.el",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/jakartaee/expression-language/blob/master/NOTICE.md"
+    },
+    {
+      "name": "org.glassfish.hk2:osgi-resource-locator",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/eclipse-ee4j/glassfish-hk2-extra/blob/master/NOTICE.md"
+    },
+    {
+      "name": "org.hdrhistogram:HdrHistogram",
+      "matchType": "exact",
+      "licenses": "CC0-1.0 OR BSD-2-Clause",
+      "source": "https://github.com/HdrHistogram/HdrHistogram/blob/master/LICENSE.txt"
+    },
+    {
+      "name": "org.javassist:javassist",
+      "matchType": "exact",
+      "licenses": "MPL-1.1 OR LGPL-2.1-or-later OR Apache-2.0",
+      "source": "https://github.com/jboss-javassist/javassist/blob/master/README.md"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ The Technical Council is responsible for managing the configuration files for th
 - config/license-categories.json
 - config/license-variation.json
 - config/special-exception.json
+- config/license-dual-licensed.json (Maven dependencies whose listed licenses are a choice, not licenses that all apply)
 
 ## Rationale
 
