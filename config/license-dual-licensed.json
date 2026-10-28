@@ -1,5 +1,5 @@
 {
-  "_description": "Maven dependencies whose POM license list is a choice of licenses (dual or multi licensing), so any one listed license may be chosen. A POM can also list one license per bundled component, and then every listed license applies, so the evaluator treats a list that is not matched here as licenses that all apply. matchType 'prefix' with a trailing ':' matches a whole groupId. An entry changes the result only when the listed licenses differ in category or include an unknown name; otherwise it changes only how the licenses are shown.",
+  "_description": "Maven and Gradle dependencies whose license list is a choice of licenses (dual or multi licensing), so any one listed license may be chosen. A POM can also list one license per bundled component, and then every listed license applies, so the evaluator treats a list that is not matched here as licenses that all apply. matchType 'prefix' with a trailing ':' matches a whole groupId. An entry changes the result only when the listed licenses differ in category or include an unknown name; otherwise it changes only how the licenses are shown.",
   "_reference": "https://www.apache.org/legal/resolved.html#how-should-i-handle-a-work-when-there-is-a-choice-of-license",
   "projects": [
     {
@@ -15,10 +15,22 @@
       "source": "https://github.com/java-json-tools/json-patch/blob/master/LICENSE"
     },
     {
+      "name": "com.github.javaparser:",
+      "matchType": "prefix",
+      "licenses": "LGPL-3.0-or-later OR Apache-2.0",
+      "source": "https://github.com/javaparser/javaparser/blob/master/LICENSE"
+    },
+    {
       "name": "com.github.jsqlparser:jsqlparser",
       "matchType": "exact",
       "licenses": "LGPL-2.1 OR Apache-2.0",
       "source": "https://github.com/JSQLParser/JSqlParser/blob/master/README.md#license"
+    },
+    {
+      "name": "com.h2database:h2",
+      "matchType": "exact",
+      "licenses": "MPL-2.0 OR EPL-1.0",
+      "source": "https://h2database.com/html/license.html"
     },
     {
       "name": "io.vertx:",
@@ -51,10 +63,22 @@
       "source": "https://github.com/jakartaee/transactions/blob/master/NOTICE.md"
     },
     {
+      "name": "jakarta.websocket:jakarta.websocket-api",
+      "matchType": "exact",
+      "licenses": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+      "source": "https://github.com/jakartaee/websocket/blob/master/NOTICE.md"
+    },
+    {
       "name": "javax.mail:mailapi",
       "matchType": "exact",
       "licenses": "CDDL-1.0 OR GPL-2.0 WITH Classpath-exception-2.0",
       "source": "Source file headers in javax.mail:mail:1.4.3 sources: 'subject to the terms of either the GNU General Public License Version 2 only (\"GPL\") or the Common Development and Distribution License(\"CDDL\")'"
+    },
+    {
+      "name": "javax.persistence:javax.persistence-api",
+      "matchType": "exact",
+      "licenses": "EPL-1.0 OR BSD-3-Clause (EDL-1.0)",
+      "source": "https://www.eclipse.org/legal/ ('Eclipse Distribution License (EDL): The BSD license used by some Eclipse Foundation projects which implement permissive dual-licensing along with the EPL'); source file headers in javax.persistence:javax.persistence-api:2.2 sources: 'made available under the terms of the Eclipse Public License v1.0 and Eclipse Distribution License v. 1.0'"
     },
     {
       "name": "javax.ws.rs:javax.ws.rs-api",

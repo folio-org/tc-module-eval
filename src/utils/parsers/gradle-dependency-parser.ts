@@ -9,7 +9,9 @@
  * This parser fulfills the license-compliance.ts contract by:
  * 1. Extracting licenses as arrays from JSON license reports
  * 2. Normalizing license names via license-policy.normalizeLicenseName()
- * 3. Returning licenses as string arrays in Dependency objects
+ * 3. Returning licenses as string arrays in Dependency objects; several licenses of one module form
+ *    one set that all apply, unless config/license-dual-licensed.json lists the module as offering a
+ *    choice of them
  * 4. No splitting needed - the report lists each license of a module separately
  *
  * SECURITY WARNING: This module executes Gradle build commands on untrusted repositories.
@@ -34,7 +36,7 @@ import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtrac
 import { isNonEmptyString, isValidDependency } from '../type-guards';
 import { commandError, safeReadFile, validateRepoPath } from './common';
 import { isWithinRepo } from '../repo-files';
-import { isListedLicenseName, normalizeLicenseName } from '../license-policy';
+import { isDualLicensed, isListedLicenseName, normalizeLicenseName } from '../license-policy';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { GRADLE_NETWORK_POLICY } from '../build-tool-policies';
@@ -57,7 +59,9 @@ const GRADLE_PROJECT_DIRS = ['', 'service'];
 // ASF policy covers what the module distributes, so every project's license report is limited to
 // the runtime classpath and test configurations are not checked. The root report is written as
 // index.json, listing every license of each module and leaving out BOMs (which only manage
-// versions), to the evaluator's own directory given by LICENSE_REPORT_DIR_PROPERTY.
+// versions), to the evaluator's own directory given by LICENSE_REPORT_DIR_PROPERTY. As in Maven, a
+// module whose own POM declares licenses is reported with those, not with its parent POMs' licenses too
+// (jk1 adds them by default, so jakarta.validation-api would get the EE4J parent's EPL-2.0).
 //
 // Everything is configured in projectsEvaluated, which runs after every project's own afterEvaluate
 // callbacks, so it overrides what the build sets, even late. The renderer is loaded through the
@@ -87,6 +91,9 @@ gradle.projectsEvaluated {
   report.renderers = renderers
   report.outputDir = gradle.startParameter.systemPropertiesArgs['${LICENSE_REPORT_DIR_PROPERTY}']
   report.excludeBoms = true
+  if (report.hasProperty('unionParentPomLicenses')) {
+    report.unionParentPomLicenses = false
+  }
 }
 `;
 
@@ -132,11 +139,14 @@ function parseGradleLicenseReportDependency(dep: any): Dependency | null {
   const licenses = [...new Set(licenseNames.filter(isNonEmptyString).map(license => license.trim()).map(license =>
     LICENSE_EXPRESSION.test(license) && !isListedLicenseName(license) ? license : normalizeLicenseName(license)
   ))];
+  const moduleName = name.trim();
 
   return {
-    name: name.trim(),
+    name: moduleName,
     version: version.trim(),
-    licenses
+    // A POM can list one license per bundled component (Jersey lists Apache-2.0 for its bundled Guava),
+    // so the licenses all apply unless the dependency is known to offer a choice of them.
+    licenses: licenses.length > 1 && !isDualLicensed(moduleName) ? [licenses] : licenses
   };
 }
 
