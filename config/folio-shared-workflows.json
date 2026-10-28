@@ -1,0 +1,73 @@
+{
+  "formatVersion": "1.0",
+  "source": "https://github.com/folio-org/.github",
+  "ref": "v1",
+  "reviewedCommit": "c5547d0bd17ed5925fddb52e9612f5017fb34ae3",
+  "reviewedAt": "2026-10-23",
+  "notes": [
+    "What FOLIO's reusable workflows supply when a repository does not set it. Each value was checked against the workflow files at reviewedCommit.",
+    "maven-build.yml runs on ubuntu-latest and installs no Maven of its own, so Maven is the runner image's. ui-install-and-lint.yml installs Node with actions/setup-node and runs the runner's Yarn.",
+    "Refresh this table, including the runner tool versions, when folio-org/.github moves the v1 tag or GitHub updates the ubuntu-latest image."
+  ],
+  "workflows": {
+    "maven.yml": {
+      "buildTool": "maven",
+      "runner": "ubuntu-latest",
+      "maven": {
+        "version": "3.10.0",
+        "source": "actions/runner-images Ubuntu 24.04 image 20261012.334.1",
+        "recordedAt": "2026-10-23"
+      },
+      "java": "21",
+      "docker": true,
+      "sonar": true,
+      "sonarExclusions": ["**/*.md", ".github/**", "**/*.json"]
+    },
+    "gradle.yml": {
+      "buildTool": "gradle",
+      "runner": "ubuntu-latest",
+      "gradle": "wrapper",
+      "gradleDirectory": "service",
+      "java": "17",
+      "docker": true,
+      "sonar": false
+    },
+    "ui.yml": {
+      "buildTool": "yarn",
+      "runner": "ubuntu-latest",
+      "node": "22.x",
+      "yarn": {
+        "version": "1.22.22",
+        "source": "actions/runner-images Ubuntu 24.04 image 20261012.334.1",
+        "recordedAt": "2026-10-23"
+      },
+      "sonar": true,
+      "sonarSources": ["./src"],
+      "sonarExclusions": [
+        "docs/**",
+        "examples/**",
+        "**/*.md",
+        "**/stories/*",
+        "**/.stories.*",
+        "LICENSE",
+        "artifacts/**",
+        "ci/**",
+        "node_modules/**",
+        "**/tests/**",
+        "**/test/**",
+        "resources/bigtest/interactors/**",
+        "resources/bigtest/network/**",
+        "**/*-test.*",
+        "**/*.test.*",
+        "karma.conf.*",
+        "jest.config.*",
+        "**/*.css",
+        "**/*.json"
+      ],
+      "testJobs": [
+        { "enabledInput": "jest-enabled", "enabledByDefault": true, "commandInput": "jest-test-command", "defaultCommand": "yarn test" },
+        { "enabledInput": "bigtest-enabled", "enabledByDefault": false, "commandInput": "bigtest-test-command", "defaultCommand": "yarn test" }
+      ]
+    }
+  }
+}

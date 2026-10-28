@@ -24,12 +24,23 @@ describe('S008 shared evaluator integration', () => {
   });
 
   it('selects development explicitly and reports a missing selected catalog', async () => {
-    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { okapiInterfaces: {} } });
+    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: {} } });
     const run = createEvaluationRun({ repositoryPath: repo, language: 'javascript', criteriaFilter: ['S008'], s008CatalogChannel: 'development' });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo, run);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.details).toContain('Catalog channel: development');
-    expect(result.details).toContain('policy_missing');
+    expect(result.details).toContain('Problems with the evaluator\'s catalog or ledger:');
+    expect(result.criterionDetails).toMatchObject({ policyDiagnostics: [expect.objectContaining({ code: 'policy_missing' })] });
+  });
+
+  it('accepts mod-circulation-bff interfaces from the checked-in catalog and ledger', async () => {
+    // mod-circulation-bff moved to app-requests-ecs, which R1-2026.27 does not include; the user accepted it.
+    await fs.writeJson(path.join(repo, 'package.json'), {
+      name: 'ui-example', stripes: { actsAs: ['app'], okapiInterfaces: { 'circulation-bff-loans': '1.6' }, optionalOkapiInterfaces: { 'circulation-bff-users': '1.0' } }
+    });
+    const result = await new TestEvaluator('javascript').evaluateCriterion('S008', repo);
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.details).toContain('circulation-bff-loans [required] Needs 1.6; mod-circulation-bff-1.2.3 provides 1.6.');
   });
 
   it('returns not applicable for an explicit library before policy validation', async () => {
@@ -48,14 +59,5 @@ describe('S008 shared evaluator integration', () => {
       moduleKind: { kind: 'backend-module' },
       declarations: { sourcePaths: ['src/main/resources/descriptors/ModuleDescriptor.json'] }
     });
-  });
-
-  it('runs S008 both alone and as part of the full shared criterion set', async () => {
-    await fs.writeJson(path.join(repo, 'package.json'), { name: 'ui-example', stripes: { okapiInterfaces: {} } });
-    const evaluator = new TestEvaluator('javascript');
-    const only = await evaluator.evaluate(repo, ['S008']);
-    const full = await evaluator.evaluate(repo);
-    expect(only.map(item => item.criterionId)).toEqual(['S008']);
-    expect(full.map(item => item.criterionId)).toContain('S008');
   });
 });

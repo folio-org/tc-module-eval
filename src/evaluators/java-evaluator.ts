@@ -5,11 +5,8 @@ import { CompositeLanguageEvaluator } from './base/composite-language-evaluator'
 import { AdministrativeEvaluator } from './shared/administrative-evaluator';
 import { JavaSharedEvaluator } from './java/java-shared-evaluator';
 import { BackendEvaluator } from './java/backend-evaluator';
+import { hasGradleProject } from '../utils/parsers/gradle-dependency-parser';
 
-/**
- * Java-specific module evaluator
- * Uses composition of section-specific evaluators for comprehensive evaluation
- */
 export class JavaEvaluator extends CompositeLanguageEvaluator {
   private readonly administrativeEvaluator: AdministrativeEvaluator;
   private readonly sharedEvaluator: JavaSharedEvaluator;
@@ -28,8 +25,7 @@ export class JavaEvaluator extends CompositeLanguageEvaluator {
 
   async canEvaluate(repoPath: string): Promise<boolean> {
     const hasPomXml = await fs.pathExists(path.join(repoPath, 'pom.xml'));
-    const hasBuildGradle = await fs.pathExists(path.join(repoPath, 'build.gradle')) ||
-                          await fs.pathExists(path.join(repoPath, 'build.gradle.kts'));
+    const hasBuildGradle = await hasGradleProject(repoPath);
     const hasJavaFiles = await this.hasJavaSourceFiles(repoPath);
 
     return hasPomXml || hasBuildGradle || hasJavaFiles;

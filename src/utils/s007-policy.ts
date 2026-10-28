@@ -4,9 +4,15 @@ import Ajv, { ErrorObject } from 'ajv';
 import policySchema from '../schemas/officially-supported-technologies.schema.json';
 import {
   S007OfficiallySupportedTechnologiesPolicy,
+  S007PolicyArea,
+  S007PolicyConsumer,
   S007PolicyDiagnostic,
-  S007PolicyLoadResult
+  S007PolicyLoadResult,
+  S007PolicySection,
+  S007TechnologyPolicyEntry
 } from '../types';
+import { errorMessage } from './type-guards';
+import { isMissingFileError } from './repo-files';
 
 export const DEFAULT_S007_POLICY_PATH = path.resolve(
   __dirname,
@@ -26,8 +32,8 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
     return failure(policyPath, {
       code: missing ? 'policy_missing' : 'policy_read_error',
       message: missing
-        ? `Officially supported technologies policy not found: ${policyPath}`
-        : `Unable to read officially supported technologies policy: ${errorMessage(error)}`,
+        ? `The officially supported technologies list was not found at ${policyPath}.`
+        : `The officially supported technologies list could not be read: ${errorMessage(error)}`,
       path: policyPath
     });
   }
@@ -38,7 +44,7 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
   } catch (error) {
     return failure(policyPath, {
       code: 'policy_parse_error',
-      message: `Officially supported technologies policy is not valid JSON: ${errorMessage(error)}`,
+      message: `The officially supported technologies list is not valid JSON: ${errorMessage(error)}`,
       path: policyPath
     });
   }
@@ -57,6 +63,24 @@ export async function loadS007Policy(policyPath = DEFAULT_S007_POLICY_PATH): Pro
     sourcePath: policyPath,
     diagnostics: []
   };
+}
+
+/** The policy sections one criterion applies to one kind of module (frontend for JavaScript, backend for Java). */
+export function policySections(
+  policy: S007OfficiallySupportedTechnologiesPolicy,
+  consumer: S007PolicyConsumer,
+  area: S007PolicyArea
+): S007PolicySection[] {
+  return policy.sections.filter(section => section.consumer === consumer && section.area === area);
+}
+
+/** The policy entry listed under `id` or one of its aliases, and the section it is in. */
+export function findPolicyEntry(sections: S007PolicySection[], id: string): { entry: S007TechnologyPolicyEntry; section: S007PolicySection } | undefined {
+  for (const section of sections) {
+    const entry = section.entries.find(candidate => candidate.id === id || candidate.aliases.includes(id));
+    if (entry) return { entry, section };
+  }
+  return undefined;
 }
 
 export function normalizeS007PolicyVersionExpression(expression: string): string {
@@ -85,16 +109,8 @@ function toSchemaDiagnostic(error: ErrorObject): S007PolicyDiagnostic {
   const instancePath = error.instancePath || '/';
   return {
     code: 'policy_schema_error',
-    message: `Policy schema validation failed at ${instancePath}: ${error.message ?? 'invalid value'}`,
+    message: `The officially supported technologies list has an invalid value at ${instancePath}: ${error.message ?? 'invalid value'}.`,
     path: instancePath,
     schemaPath: error.schemaPath
   };
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

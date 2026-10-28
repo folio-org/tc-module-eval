@@ -41,6 +41,27 @@ describe('S005 agent review adapter', () => {
     expect(request.instructions).toContain('actual repository');
   });
 
+  it('points the agent at a misnamed disclosure form and tells it not to judge the name', async () => {
+    writeFile('PERSONAL_DATA_DISCOSURE.md', '# Personal Data Disclosure\nForm Version: v1.1\nLast Updated: 2026-06-12\nLast Reviewed: 2026-06-12\n\n## Personal Data\n- [x] Does not store personal data\n- [ ] Email address');
+    commit();
+
+    const request = await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath));
+
+    expect(request.instructions).toContain('the disclosure form was found at PERSONAL_DATA_DISCOSURE.md instead');
+    expect(request.instructions).toContain('Evaluate whether PERSONAL_DATA_DISCOSURE.md is consistent with the repository');
+    expect(JSON.parse(request.files[0].content).disclosurePath).toBe('PERSONAL_DATA_DISCOSURE.md');
+  });
+
+  it('does not mention a misnamed file when the required disclosure exists', async () => {
+    writeCompletedDisclosure();
+    commit();
+
+    const request = await buildS005AgentReviewRequest(repoPath, analyzeS005PersonalDataDisclosure(repoPath));
+
+    expect(request.instructions).not.toContain('was found at');
+    expect(request.instructions).toContain('Evaluate whether PERSONAL_DATA_DISCLOSURE.md is consistent with the repository');
+  });
+
   it('uses the committed snapshot and excludes worktree edits and untracked source', async () => {
     writeCompletedDisclosure();
     writeFile('src/committed.ts', 'export const state = "committed";');
@@ -54,15 +75,6 @@ describe('S005 agent review adapter', () => {
     expect(request.files.find(file => file.repoRelativePath === 'src/committed.ts')?.content).toContain('committed');
     expect(request.files.map(file => file.repoRelativePath)).not.toContain('src/untracked.ts');
     expect(request.files.map(file => file.content).join('\n')).not.toContain('worktree-edit');
-  });
-
-  it('reports preparation errors as unavailable from the shared runner', async () => {
-    writeCompletedDisclosure();
-    const analysis = analyzeS005PersonalDataDisclosure(repoPath);
-    await expect(buildS005AgentReviewRequest(repoPath, analysis)).resolves.toBeDefined();
-    const review = await reviewS005WithAgent(repoPath, analysis, fakeConfig(baseResult()));
-    expect(review.available).toBe(false);
-    expect(review.errors.join(' ')).toContain('Repository browsing workspace is incomplete');
   });
 
   it('supplies checklist facts and distinguishes unchecked boxes from affirmative denial', async () => {

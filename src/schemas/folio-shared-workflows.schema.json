@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://folio.org/schemas/folio-shared-workflows.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "source", "ref", "reviewedAt", "workflows"],
+  "properties": {
+    "formatVersion": { "const": "1.0" },
+    "source": { "type": "string", "pattern": "^https://github\\.com/folio-org/\\.github$" },
+    "ref": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "reviewedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "reviewedAt": { "$ref": "#/definitions/date" },
+    "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "workflows": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z0-9-]+\\.ya?ml$" },
+      "additionalProperties": { "$ref": "#/definitions/workflow" }
+    }
+  },
+  "definitions": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "recordedVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source", "recordedAt"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "source": { "type": "string", "minLength": 1 },
+        "recordedAt": { "$ref": "#/definitions/date" }
+      }
+    },
+    "patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildTool"],
+      "properties": {
+        "buildTool": { "enum": ["maven", "gradle", "yarn"] },
+        "runner": { "type": "string", "minLength": 1 },
+        "maven": { "$ref": "#/definitions/recordedVersion" },
+        "gradle": { "const": "wrapper" },
+        "gradleDirectory": { "type": "string", "minLength": 1 },
+        "node": { "type": "string", "minLength": 1 },
+        "yarn": { "$ref": "#/definitions/recordedVersion" },
+        "java": { "type": "string", "minLength": 1 },
+        "docker": { "type": "boolean" },
+        "sonar": { "type": "boolean" },
+        "sonarSources": { "$ref": "#/definitions/patterns" },
+        "sonarExclusions": { "$ref": "#/definitions/patterns" },
+        "testJobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["enabledInput", "enabledByDefault", "commandInput", "defaultCommand"],
+            "properties": {
+              "enabledInput": { "type": "string", "minLength": 1 },
+              "enabledByDefault": { "type": "boolean" },
+              "commandInput": { "type": "string", "minLength": 1 },
+              "defaultCommand": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "buildTool": { "const": "maven" } } }, "then": { "required": ["maven"] } },
+        { "if": { "properties": { "buildTool": { "const": "gradle" } } }, "then": { "required": ["gradle"] } },
+        { "if": { "properties": { "buildTool": { "const": "yarn" } } }, "then": { "required": ["node", "yarn"] } }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { CriterionResult, EvaluationStatus, SectionEvaluator, CriterionFunction } from '../types';
+import { CriterionResult, EvaluationStatus, SectionEvaluator, CriterionFunction, ModuleKindResult } from '../types';
 import { SharedEvaluator } from '../evaluators/shared/shared-evaluator';
 import { JavaScriptSharedEvaluator } from '../evaluators/javascript/javascript-shared-evaluator';
 import { CompositeLanguageEvaluator } from '../evaluators/base/composite-language-evaluator';
@@ -6,17 +6,16 @@ import { BaseSectionEvaluator } from '../evaluators/base/section-evaluator';
 import { CatalogSectionEvaluator } from '../evaluators/base/catalog-section-evaluator';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 import { createEvaluationRun } from '../utils/evaluation-run';
+import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
-// Mock fs-extra (needed by SharedEvaluator -> LicenseUtils)
+// Mock fs-extra (needed by SharedEvaluator criteria)
 jest.mock('fs-extra', () => ({
   pathExists: jest.fn().mockResolvedValue(false),
   readFile: jest.fn().mockResolvedValue('')
 }));
 
-// Concrete subclass for testing SharedEvaluator
 class TestSharedEvaluator extends SharedEvaluator {}
 
-// Concrete subclass that overrides a handler
 class OverriddenSharedEvaluator extends SharedEvaluator {
   constructor() {
     super();
@@ -28,7 +27,6 @@ class OverriddenSharedEvaluator extends SharedEvaluator {
   }
 }
 
-// Stub section evaluator for CompositeLanguageEvaluator tests
 class StubSectionEvaluator extends BaseSectionEvaluator {
   readonly sectionName: string;
 
@@ -41,7 +39,6 @@ class StubSectionEvaluator extends BaseSectionEvaluator {
   }
 }
 
-// Concrete CompositeLanguageEvaluator for testing
 class TestCompositeEvaluator extends CompositeLanguageEvaluator {
   private sections: SectionEvaluator[];
 
@@ -108,7 +105,7 @@ describe('SharedEvaluator', () => {
 
     expect(result.criterionId).toBe('S002');
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('Module descriptor artifact stage returned unsafe-to-run');
+    expect(result.evidence).toBe('The evaluator could not safely look for the module descriptor. The repository path is not valid: /fake/path. A reviewer needs to check it by hand.');
   });
 });
 
@@ -125,11 +122,35 @@ describe('EvaluationRun', () => {
       errors: ['not found']
     });
 
-    const first = await run.getOrCreateArtifact('moduleDescriptor', producer);
-    const second = await run.getOrCreateArtifact('moduleDescriptor', producer);
+    // Concurrent callers share the in-flight producer rather than each starting one.
+    const [first, second] = await Promise.all([
+      run.getOrCreateArtifact('moduleDescriptor', producer),
+      run.getOrCreateArtifact('moduleDescriptor', producer)
+    ]);
+    const third = await run.getOrCreateArtifact('moduleDescriptor', producer);
 
     expect(first).toBe(second);
+    expect(third).toBe(first);
+    expect(run.artifacts.moduleDescriptor).toBe(first);
     expect(producer).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry an artifact whose producer failed', async () => {
+    const run = createEvaluationRun({ repositoryPath: '/repo', language: 'java' });
+    const moduleKind: ModuleKindResult = { kind: 'library', evidence: [], warnings: [] };
+    const producer = jest.fn()
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValue(moduleKind);
+
+    const failed = await Promise.allSettled([
+      run.getOrCreateArtifact('moduleKind', producer),
+      run.getOrCreateArtifact('moduleKind', producer)
+    ]);
+
+    expect(failed.map(result => result.status)).toEqual(['rejected', 'rejected']);
+    expect(run.artifacts.moduleKind).toBeUndefined();
+    await expect(run.getOrCreateArtifact('moduleKind', producer)).resolves.toBe(moduleKind);
+    expect(producer).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -178,22 +199,71 @@ describe('BaseSectionEvaluator', () => {
   it('should return MANUAL result when an individual handler throws during evaluate', async () => {
     const evaluator = new StubSectionEvaluator('Test', {
       'X001': async () => ({ criterionId: 'X001', status: EvaluationStatus.PASS, evidence: 'ok' }),
-      'X002': async () => { throw new Error('Handler exploded with http://localhost:8080/health'); },
+      'X002': async () => { throw new Error(`Handler exploded at http://localhost:8080/health with ${EVALUATOR_SECRETS.SONAR_TOKEN}`); },
       'X003': async () => ({ criterionId: 'X003', status: EvaluationStatus.PASS, evidence: 'ok' }),
     });
 
-    const results = await evaluator.evaluate('/fake/path');
+    const results = await withEvaluatorSecrets(() => evaluator.evaluate('/fake/path'));
 
     expect(results).toHaveLength(3);
     expect(results[0].status).toBe(EvaluationStatus.PASS);
-    // The throwing handler should produce a MANUAL error result
     expect(results[1].criterionId).toBe('X002');
     expect(results[1].status).toBe(EvaluationStatus.MANUAL);
-    expect(results[1].evidence).toContain('Handler exploded');
-    expect(results[1].evidence).toContain('[REDACTED_PRIVATE_URL]');
-    expect(results[1].evidence).not.toContain('localhost:8080');
-    // Evaluation continues after the error
+    expect(results[1].evidence).toBe('Evaluation failed: Handler exploded at http://localhost:8080/health with [REDACTED_SONAR_TOKEN]');
     expect(results[2].status).toBe(EvaluationStatus.PASS);
+  });
+
+  it('should overlap agent reviews but keep deterministic work sequential and results in order', async () => {
+    const run = createEvaluationRun({ repositoryPath: '/repo', language: 'java' });
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    let deterministic = 0;
+    let maxDeterministic = 0;
+    let reviews = 0;
+    let maxReviews = 0;
+    const finished: string[] = [];
+    // Earlier criteria review longest, so reviews finish in reverse order.
+    const criterion = (id: string, reviewMs?: number, failure?: 'analysis' | 'review'): CriterionFunction => async (_repoPath, evaluationRun) => {
+      deterministic++;
+      maxDeterministic = Math.max(maxDeterministic, deterministic);
+      await delay(5);
+      deterministic--;
+      if (failure === 'analysis') throw new Error(`${id} analysis failed`);
+      if (reviewMs === undefined) return { criterionId: id, status: EvaluationStatus.PASS, evidence: `${id} done` };
+      const review = await evaluationRun!.runAgentReview(async () => {
+        reviews++;
+        maxReviews = Math.max(maxReviews, reviews);
+        await delay(reviewMs);
+        reviews--;
+        if (failure === 'review') throw new Error(`${id} review failed`);
+        return `${id} reviewed`;
+      });
+      finished.push(id);
+      return { criterionId: id, status: EvaluationStatus.MANUAL, evidence: review };
+    };
+    const evaluator = new StubSectionEvaluator('Test', {
+      X001: criterion('X001', 120),
+      X002: criterion('X002', undefined, 'analysis'),
+      X003: criterion('X003', 100),
+      X004: criterion('X004', 80, 'review'),
+      X005: criterion('X005', 60),
+      X006: criterion('X006'),
+      X007: criterion('X007', 20)
+    });
+
+    const results = await evaluator.evaluate('/repo', undefined, run);
+
+    expect(results.map(result => [result.criterionId, result.evidence])).toEqual([
+      ['X001', 'X001 reviewed'],
+      ['X002', 'Evaluation failed: X002 analysis failed'],
+      ['X003', 'X003 reviewed'],
+      ['X004', 'Evaluation failed: X004 review failed'],
+      ['X005', 'X005 reviewed'],
+      ['X006', 'X006 done'],
+      ['X007', 'X007 reviewed']
+    ]);
+    expect(maxDeterministic).toBe(1);
+    expect(maxReviews).toBe(3);
+    expect(finished[0]).not.toBe('X001');
   });
 });
 
@@ -244,7 +314,6 @@ describe('CompositeLanguageEvaluator', () => {
       'X001': async () => ({ criterionId: 'X001', status: EvaluationStatus.PASS, evidence: 'ok' }),
     });
 
-    // Create a section that throws during evaluate()
     const throwingSection: SectionEvaluator = {
       sectionName: 'Broken',
       criteriaIds: ['Z001'],

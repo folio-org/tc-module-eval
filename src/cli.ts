@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import * as path from 'path';
 import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
-import { EvaluationConfig, EvaluationResult, ReportOptions } from './types';
+import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
+import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
+import { errorMessage } from './utils/type-guards';
+import { redactEvaluatorSecrets } from './utils/redaction';
 
 const program = new Command();
 
@@ -27,6 +29,10 @@ program
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
+  .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014)')
+  .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
+  .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
+  .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B004, B005 and B006, once implemented, relax some new-module rules for it')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
@@ -52,6 +58,12 @@ program
       if (options.branch) {
         console.log(`🌿 Branch: ${options.branch}`);
       }
+      if (options.allowRemoteLookups) {
+        console.log(`🌐 Remote lookups allowed (SonarCloud, folio-org/platform-lsp ${options.platformRef}, FAR)`);
+      }
+      if (options.existingModule) {
+        console.log('🏷️  Evaluating as an existing module');
+      }
       if (options.allowLocalCommands) {
         console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
       }
@@ -69,8 +81,7 @@ program
 
     } catch (error) {
       console.error('\n❌ Evaluation failed:\n');
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(errorMessage);
+      console.error(redactEvaluatorSecrets(errorMessage(error)));
       process.exit(1);
     }
   });
@@ -81,7 +92,6 @@ program
   .action(() => {
     console.log('🔧 Supported Languages:');
     
-    // Create a temporary evaluator to get supported languages
     const config: EvaluationConfig = {};
     const evaluator = new ModuleEvaluator(config);
     const languages = evaluator.getSupportedLanguages();
@@ -102,17 +112,16 @@ program
     console.log('A TypeScript tool for evaluating FOLIO modules against technical council criteria.\n');
 
     console.log('🏗️  Framework Components:');
-    console.log('   ✅ Modular language evaluator system');
+    console.log('   ✅ Java and JavaScript language evaluators');
     console.log('   ✅ Git repository cloning and analysis');
-    console.log('   ✅ HTML and JSON report generation');
-    console.log('   ✅ Extensible architecture for new languages');
-    console.log('   ⚠️  Individual criterion evaluation (stub implementations)\n');
+    console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Framework infrastructure - IMPLEMENTED');
-    console.log('   ✅ Java project detection - IMPLEMENTED');
-    console.log('   ⚠️  Specific evaluation logic - STUB (returns MANUAL status)');
-    console.log('   📝 Most criteria require implementation for automated evaluation\n');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001 (Java), and F001-F003 and F005 (JavaScript) - IMPLEMENTED');
+    console.log('   ⚠️  A001 - MANUAL REVIEW by design');
+    console.log('   ⚠️  B002-B016 (Java) and F004, F006-F007 (JavaScript) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 19 of the 38 criteria always return MANUAL (16 of 31 for Java, 4 of 22 for JavaScript);');
+    console.log('      S001-S014, B001, F001-F003 and F005 return MANUAL when the evidence is inconclusive\n');
     
     console.log('📝 Usage Examples:');
     console.log('   # Evaluate a repository');
@@ -158,6 +167,12 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
   if (!['official', 'development'].includes(options.s008Catalog)) {
     throw new Error('Invalid S008 catalog. Use official or development.');
   }
+  if (options.application !== undefined && !isValidRemoteName(options.application)) {
+    throw new Error('Invalid --application. Use an application name such as app-search.');
+  }
+  if (!isValidPlatformRef(options.platformRef)) {
+    throw new Error('Invalid --platform-ref. Use a platform-lsp branch, tag or commit such as snapshot or R1-2026.');
+  }
   return {
     tempDir: options.tempDir,
     outputDir: options.output,
@@ -167,7 +182,11 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     allowLocalCommands: options.allowLocalCommands === true,
     commandExecutionEnvironment: resolveCommandExecutionEnvironment(),
     agentReview: buildCriterionAgentReviewConfig(options),
-    s008CatalogChannel: options.s008Catalog
+    s008CatalogChannel: options.s008Catalog,
+    allowRemoteLookups: options.allowRemoteLookups === true,
+    s014Application: options.application,
+    s014PlatformRef: options.platformRef,
+    existingModule: options.existingModule === true
   };
 }
 
@@ -216,10 +235,10 @@ function printEvaluationSummary(result: EvaluationResult): void {
   console.log(`   Total Criteria: ${result.criteria.length}`);
 
   const stats = {
-    pass: result.criteria.filter(c => c.status === 'pass').length,
-    fail: result.criteria.filter(c => c.status === 'fail').length,
-    manual: result.criteria.filter(c => c.status === 'manual').length,
-    notApplicable: result.criteria.filter(c => c.status === 'not_applicable').length
+    pass: result.criteria.filter(c => c.status === EvaluationStatus.PASS).length,
+    fail: result.criteria.filter(c => c.status === EvaluationStatus.FAIL).length,
+    manual: result.criteria.filter(c => c.status === EvaluationStatus.MANUAL).length,
+    notApplicable: result.criteria.filter(c => c.status === EvaluationStatus.NOT_APPLICABLE).length
   };
 
   console.log(`   ✅ Passed: ${stats.pass}`);
@@ -228,7 +247,6 @@ function printEvaluationSummary(result: EvaluationResult): void {
   console.log(`   ⚪ Not Applicable: ${stats.notApplicable}`);
 }
 
-// Handle case where no command is provided
 if (process.argv.length === 2) {
   program.outputHelp();
 }

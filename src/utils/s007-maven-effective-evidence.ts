@@ -10,11 +10,14 @@ import {
 } from '../types';
 import { MAVEN_NETWORK_POLICY } from './build-tool-policies';
 import { isWithinRepo } from './repo-files';
-import { finalizeS007TechnologyEvidence, matchJavaIdentity } from './s007-technology-evidence';
+import { finalizeS007TechnologyEvidence, matchJavaIdentity, mavenDependencyKey } from './s007-technology-evidence';
+import { asArray, xmlText } from './manifest-parsers';
 
 const EFFECTIVE_POM_GOAL = 'org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom';
 const MAX_EFFECTIVE_POM_BYTES = 2 * 1024 * 1024;
 const MAX_EFFECTIVE_POMS = 12;
+/** Maven runs for different POMs are independent; a few run at once. */
+const MAX_CONCURRENT_EFFECTIVE_POMS = 3;
 
 interface MavenProjectIdentity {
   groupId: string;
@@ -26,6 +29,7 @@ interface EffectiveMavenDependency {
   key: string;
   coordinates: string;
   version: string;
+  test: boolean;
 }
 
 export async function enrichS007WithMavenEffectivePom(
@@ -41,8 +45,14 @@ export async function enrichS007WithMavenEffectivePom(
   let diagnostics = evidence.diagnostics;
   let changed = false;
 
-  for (const [sourcePath, unresolved] of [...unresolvedByPom].slice(0, MAX_EFFECTIVE_POMS)) {
-    const effective = await produceEffectivePom(repoPath, sourcePath, evaluationRun, commandRunner);
+  const poms = [...unresolvedByPom].slice(0, MAX_EFFECTIVE_POMS);
+  const effectivePoms = await settleWithConcurrency(poms, MAX_CONCURRENT_EFFECTIVE_POMS, ([sourcePath]) =>
+    produceEffectivePom(repoPath, sourcePath, evaluationRun, commandRunner));
+  // Apply the results in POM order, not in the order the runs finished.
+  for (const [index, [sourcePath, unresolved]] of poms.entries()) {
+    const outcome = effectivePoms[index];
+    if (outcome.status === 'rejected') throw outcome.reason;
+    const effective = outcome.value;
     if (!effective) continue;
 
     const resolvedCoordinates = new Set<string>();
@@ -56,6 +66,9 @@ export async function enrichS007WithMavenEffectivePom(
       changed = true;
       return {
         ...observation,
+        // A version inferred from a property is replaced by the one Maven actually resolved.
+        declaredVersion: observation.versionProperty ? undefined : observation.declaredVersion,
+        versionProperty: undefined,
         resolvedVersion,
         versionSourcePath: sourcePath,
         resolutionSource: 'maven-effective-pom',
@@ -76,10 +89,20 @@ export async function enrichS007WithMavenEffectivePom(
     for (const dependency of effective.dependencies) {
       const [groupId, artifactId] = dependency.coordinates.split(':');
       if (!matchJavaIdentity(groupId, artifactId)) continue;
-      if (representedKeys.has(dependency.key)) continue;
-      const message = `Effective Maven model for ${sourcePath} includes inherited S007-relevant dependency ${dependency.coordinates} (${dependency.key}) that was not represented by static repository evidence.`;
-      if (!diagnostics.some(diagnostic => diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message)) {
-        diagnostics = [...diagnostics, { code: 'effective_model_unrepresented', message, material: true, path: sourcePath }];
+      if (representedKeys.has(dependency.key) || dependency.test) continue;
+      const subject = `${dependency.coordinates}${dependency.key === `${dependency.coordinates}:jar:` ? '' : ` (${dependency.key})`} ${dependency.version}`;
+      const message = `Maven's effective POM includes ${subject}, which is not declared in the repository's own build files, so the tool did not check it.`;
+      if (!diagnostics.some(diagnostic =>
+        diagnostic.code === 'effective_model_unrepresented' && diagnostic.message === message && diagnostic.path === sourcePath
+      )) {
+        diagnostics = [...diagnostics, {
+          code: 'effective_model_unrepresented',
+          message,
+          material: true,
+          path: sourcePath,
+          subject,
+          listHeading: 'In the Maven effective POM but not declared in the repository, so not checked'
+        }];
         changed = true;
       }
     }
@@ -92,9 +115,8 @@ export async function enrichS007WithMavenEffectivePom(
       }
       if (
         diagnostic.code === 'version_unresolved' &&
-        [...resolvedCoordinates].some(coordinates =>
-          diagnostic.message === `Version for ${coordinates} could not be resolved from local Maven metadata.`
-        )
+        diagnostic.subject !== undefined &&
+        resolvedCoordinates.has(diagnostic.subject)
       ) {
         return false;
       }
@@ -103,12 +125,36 @@ export async function enrichS007WithMavenEffectivePom(
   }
 
   if (!changed) return evidence;
+  // Finalizing also drops BOM warnings once every dependency has a version, including those of a parent POM in the
+  // repository that was not itself resolved because it declares no dependency without a version.
   return finalizeS007TechnologyEvidence({
     ...evidence,
     observations,
     diagnostics,
     complete: !diagnostics.some(diagnostic => diagnostic.material)
   });
+}
+
+/** Like Promise.allSettled over items.map(run), with at most `limit` runs in flight. */
+async function settleWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = { status: 'fulfilled', value: await run(items[index]) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 function unresolvedMavenObservations(
@@ -119,9 +165,9 @@ function unresolvedMavenObservations(
     if (
       observation.ecosystem !== 'java' ||
       observation.evidenceKind !== 'dependency-declaration' ||
-      !observation.sourcePath.endsWith('pom.xml') ||
-      observation.declaredVersion ||
+      (observation.declaredVersion && !observation.versionProperty) ||
       observation.resolvedVersion ||
+      observation.testScope ||
       observation.versionResolutionEligible === false ||
       !observation.mavenDependency
     ) continue;
@@ -138,12 +184,22 @@ async function produceEffectivePom(
 ): Promise<{ versions: Map<string, Set<string>>; dependencies: EffectiveMavenDependency[] } | undefined> {
   const pomPath = path.resolve(repoPath, sourcePath);
   if (!pomPath.startsWith(`${path.resolve(repoPath)}${path.sep}`) && pomPath !== path.resolve(repoPath)) return undefined;
-  if (
-    !fs.existsSync(pomPath) ||
-    fs.lstatSync(pomPath).isSymbolicLink() ||
-    !fs.statSync(pomPath).isFile() ||
-    !isWithinRepo(repoPath, pomPath)
-  ) return undefined;
+  // Read the project identity before Maven runs: the build can rewrite repository files, for example replace
+  // pom.xml with a link to a file outside the repository. A file that cannot be read skips enrichment only.
+  let sourceProject: Awaited<ReturnType<typeof parseMavenProject>>;
+  try {
+    if (
+      !fs.existsSync(pomPath) ||
+      fs.lstatSync(pomPath).isSymbolicLink() ||
+      !fs.statSync(pomPath).isFile() ||
+      fs.statSync(pomPath).size > MAX_EFFECTIVE_POM_BYTES ||
+      !isWithinRepo(repoPath, pomPath)
+    ) return undefined;
+    sourceProject = await parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true);
+  } catch {
+    return undefined;
+  }
+  if (!sourceProject) return undefined;
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 's007-effective-pom-'));
   const outputPath = path.join(workspace, 'effective-pom.xml');
@@ -157,7 +213,10 @@ async function produceEffectivePom(
         pomPath,
         EFFECTIVE_POM_GOAL,
         `-Doutput=${outputPath}`,
-        '-Dstyle.color=never'
+        '-Dstyle.color=never',
+        // Runs for different POMs share the local repository; lock it across processes, not just within one JVM.
+        '-Daether.syncContext.named.factory=file-lock',
+        '-Daether.syncContext.named.nameMapper=file-gav'
       ],
       cwd: repoPath,
       timeoutMs: 180000,
@@ -169,11 +228,8 @@ async function produceEffectivePom(
 
     const stat = fs.lstatSync(outputPath, { throwIfNoEntry: false });
     if (!stat?.isFile() || stat.isSymbolicLink() || stat.size > MAX_EFFECTIVE_POM_BYTES) return undefined;
-    const [sourceProject, effectiveProject] = await Promise.all([
-      parseMavenProject(fs.readFileSync(pomPath, 'utf-8'), true),
-      parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false)
-    ]);
-    if (!sourceProject || !effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
+    const effectiveProject = await parseMavenProject(fs.readFileSync(outputPath, 'utf-8'), false);
+    if (!effectiveProject || !sameProject(sourceProject.identity, effectiveProject.identity)) {
       return undefined;
     }
     return { versions: effectiveProject.versions, dependencies: effectiveProject.dependencies };
@@ -219,7 +275,7 @@ async function parseMavenProject(
       classifier: xmlText(dependency?.classifier)
     });
     versions.set(key, new Set([...(versions.get(key) ?? []), version]));
-    dependencies.push({ key, coordinates, version });
+    dependencies.push({ key, coordinates, version, test: xmlText(dependency?.scope) === 'test' });
   }
   return { identity, versions, dependencies };
 }
@@ -230,10 +286,6 @@ function sameProject(source: MavenProjectIdentity, effective: MavenProjectIdenti
     source.version === effective.version;
 }
 
-function mavenDependencyKey(dependency: NonNullable<S007TechnologyObservation['mavenDependency']>): string {
-  return [dependency.groupId, dependency.artifactId, dependency.type, dependency.classifier].join(':');
-}
-
 function mavenCoordinatesFromDependency(dependency: any): string | undefined {
   const groupId = xmlText(dependency?.groupId);
   const artifactId = xmlText(dependency?.artifactId);
@@ -242,17 +294,4 @@ function mavenCoordinatesFromDependency(dependency: any): string | undefined {
 
 function isConcreteVersion(value: string): boolean {
   return value.length > 0 && !value.includes('${') && !value.includes('[') && !value.includes('(');
-}
-
-function xmlText(value: unknown): string {
-  if (typeof value === 'string') return value.trim();
-  if (value && typeof value === 'object' && '_' in value && typeof (value as { _: unknown })._ === 'string') {
-    return (value as { _: string })._.trim();
-  }
-  return '';
-}
-
-function asArray<T>(value: T | T[] | undefined): T[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
 }

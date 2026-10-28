@@ -1,10 +1,7 @@
 import {
   CriterionAgentReviewResult,
   EvaluationStatus,
-  S006FindingConfidence,
   S006FindingContext,
-  S006FindingSeverity,
-  S006ReportFinding,
   S006SensitiveInformationAnalysisResult,
   S006SensitiveInformationFinding,
   S006SkippedFile,
@@ -16,8 +13,18 @@ import {
   rankS006Severity,
   strongestS006ReportFindings
 } from './s006-ranking';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
-import { buildFindingSummary, projectS006ReportFinding } from './s006-report-details';
+import { renderAgentReviewLines } from './agent-review-report';
+import { truncateToByteBudget } from './redaction';
+import { capitalize, overflowLine, reportPath, reportText } from './report-text';
+import {
+  S006_CATEGORY_LABELS,
+  S006_CONTEXT_LABELS_PLAIN,
+  S006_DETECTOR_TAGS,
+  S006_SKIPPED_REASON_LABELS,
+  s006AgentReviewSubjectNames,
+  s006AssignedName
+} from './s006-report-details';
+import { MAX_S006_SCAN_BYTES_PER_FILE } from './s006-scanner';
 
 const MAX_REPORT_LIST_ITEMS = 8;
 
@@ -25,201 +32,93 @@ export function formatS006Evidence(
   analysis: S006SensitiveInformationAnalysisResult,
   agentReview?: CriterionAgentReviewResult
 ): { evidence: string; details: string } {
-  const report = summarizeS006Report(analysis);
-
-  const evidence = formatS006EvidenceSummary(
-    analysis,
-    report.deterministicFailures.length,
-    report.materialWarnings.length,
-    report.materialSkippedFiles.length
-  );
+  const failFindings = analysis.findings.filter(finding => finding.statusImpact === 'deterministic_fail');
+  const strongestFindings = strongestS006ReportFindings(analysis.findings, MAX_REPORT_LIST_ITEMS);
   const lines: Array<string | undefined> = [
-    'Review summary:',
-    `  - Status: ${analysis.classification.status}`,
-    `  - Findings: ${analysis.findings.length} retained (${report.deterministicFailures.length} deterministic failure${report.deterministicFailures.length === 1 ? '' : 's'}, ${report.manualFindings.length} scanner/pattern candidate${report.manualFindings.length === 1 ? '' : 's'})`,
-    ...formatAggregateRangeLines(analysis.findings),
-    `  - Secret scanner: ${formatScannerSummary(analysis)}`,
-    `  - Coverage: ${formatCoverageSummary(analysis, report.materialSkippedFiles.length, report.materialWarnings.length)}`,
-    agentReview?.available
-      ? `  - Agent review: ${agentReview.recommendation ?? 'completed'}${agentReview.confidence ? ` (${agentReview.confidence} confidence)` : ''}`
-      : analysis.classification.status === EvaluationStatus.MANUAL
-        ? `  - Agent review: not applied (${analysis.agentReviewUnavailableReason ?? 'disabled or unconfigured'})`
-        : undefined,
-    '',
-    'Why:',
-    ...formatWhyLines(analysis, report.deterministicFailures.length, report.materialWarnings.length, report.materialSkippedFiles.length),
-    '',
-    'Reviewer focus:',
-    ...formatReviewerFocusLines(analysis, report.deterministicFailures.length, report.materialWarnings, report.materialSkippedFiles, agentReview),
-    '',
-    'Finding groups:',
+    ...formatWhatToDoLines(analysis, failFindings.length),
+    'Findings:',
+    `  - Values that fail S006: ${failFindings.length}`,
+    `  - Values to check: ${analysis.findings.length - failFindings.length}`,
     ...formatFindingGroupLines(analysis.findings),
     '',
-    'Top examples:',
-    ...formatCompactFindingLines(report.strongestFindings.map(projectS006ReportFinding)),
-    ...formatFindingOverflowLine(analysis.findings.length, report.strongestFindings.length),
-    '',
+    ...(strongestFindings.length ? [
+      'Strongest examples (values hidden):',
+      ...formatExampleLines(strongestFindings),
+      ...overflowLine(analysis.findings.length, strongestFindings.length, '  '),
+      ''
+    ] : []),
     'Coverage:',
-    `  - Candidate files discovered: ${analysis.coverage.candidateFiles}`,
-    `  - Files scanned: ${analysis.coverage.scannedFiles}`,
-    `  - Bytes scanned: ${analysis.coverage.scannedBytes}`,
-    `  - Skipped files: ${analysis.coverage.skippedFiles.length} (${report.materialSkippedFiles.length} material, ${report.nonMaterialSkippedFiles.length} non-material)`,
-    `  - Coverage complete: ${analysis.coverage.complete ? 'yes' : 'no'}`,
-    `  - Coverage warnings: ${analysis.coverage.warnings.length} (${report.materialWarnings.length} material, ${report.nonMaterialWarnings.length} non-material)`,
-    ...formatWarningLines('Material coverage warnings:', report.materialWarnings),
-    ...formatWarningLines('Non-material coverage warnings:', report.nonMaterialWarnings),
-    ...formatSkippedLines('Material skipped files:', report.materialSkippedFiles),
-    ...formatSkippedLines('Non-material skipped files:', report.nonMaterialSkippedFiles)
+    `  - Gitleaks: ${formatScannerSummary(analysis)}`,
+    analysis.scanner.ignoreFilePresent
+      ? '  - Note: the repository has a .gitleaksignore file, which tells Gitleaks to skip the findings it lists. Check that it does not hide a real secret.'
+      : undefined,
+    `  - Built-in scan: read ${analysis.coverage.scannedFiles} of ${analysis.coverage.candidateFiles} file${analysis.coverage.candidateFiles === 1 ? '' : 's'} (${formatKilobytes(analysis.coverage.scannedBytes)} read)`,
+    `  - Complete: ${analysis.coverage.complete ? 'yes' : analysis.coverage.materiallyWeakened ? 'no, see Coverage gaps' : 'no, but nothing left out affects the result; see Skipped'}`,
+    ...formatCoverageGapLines(analysis),
+    ...formatOtherLimitLines(analysis)
   ];
 
-  appendAgentReviewLines(lines, analysis, agentReview);
+  const reviewLines: Array<string | undefined> = [];
+  appendAgentReviewLines(reviewLines, analysis, agentReview);
+  const join = (items: Array<string | undefined>) => items.filter((line): line is string => line !== undefined).join('\n');
 
+  // The agent review has its own budget after the scan results: one assessment per finding can be long,
+  // and cutting it short would leave a truncation note inside the review section.
   return {
-    evidence: truncateToByteBudget(evidence, 700),
-    details: truncateToByteBudget(lines.filter((line): line is string => line !== undefined).join('\n'), 12_000)
+    evidence: truncateToByteBudget(`S006 ${analysis.classification.status}: ${analysis.classification.reason}`, 700),
+    details: truncateToByteBudget(join(lines), 12_000) + (reviewLines.length ? `\n${truncateToByteBudget(join(reviewLines), 24_000)}` : '')
   };
+}
+
+function formatWhatToDoLines(analysis: S006SensitiveInformationAnalysisResult, failCount: number): string[] {
+  const findings = analysis.findings;
+  const lines: string[] = [];
+  if (failCount > 0) {
+    lines.push('  - Remove the values marked "Fails S006" from the repository, load them from environment variables or a secret store, and replace each one, because the old value stays in the Git history.');
+  }
+  if (findings.some(finding => finding.context === 'ci_or_deployment_configuration')) {
+    lines.push('  - In CI and deployment files, read secrets from the CI secret store (for example ${{ secrets.NAME }}) instead of writing the value.');
+  }
+  if (findings.some(finding => finding.statusImpact !== 'deterministic_fail' && isSecretCategory(finding))) {
+    lines.push('  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.');
+  }
+  if (findings.some(finding => finding.category === 'tenant_or_host_endpoint' || finding.category === 'private_url')) {
+    lines.push('  - Check that the host names and network addresses are public or local examples, not details of a real deployment.');
+  }
+  if (findings.some(finding => finding.context === 'local_docker_defaults')) {
+    lines.push('  - Check that local Docker defaults are used only for local development.');
+  }
+  if (analysis.coverage.materiallyWeakened) {
+    lines.push('  - Check the files under Coverage gaps, which were not fully scanned.');
+  }
+  return lines.length ? ['What to do:', ...lines, ''] : [];
+}
+
+function isSecretCategory(finding: S006SensitiveInformationFinding): boolean {
+  return finding.category !== 'tenant_or_host_endpoint' &&
+    finding.category !== 'private_url' &&
+    finding.category !== 'local_absolute_path';
 }
 
 function formatScannerSummary(analysis: S006SensitiveInformationAnalysisResult): string {
-  const findingLabel = `${analysis.scanner.findingCount} Gitleaks finding${analysis.scanner.findingCount === 1 ? '' : 's'}`;
-  if (analysis.scanner.status === 'completed') {
-    return `Gitleaks completed; ${findingLabel}`;
+  if (analysis.scanner.status !== 'completed') {
+    return 'did not run, see Coverage gaps';
   }
-
-  const warning = analysis.scanner.warning;
-  const warningText = warning
-    ? `; ${warning.kind}: ${warning.message}`
-    : '';
-  return `Gitleaks unavailable; ${findingLabel}${warningText}`;
-}
-
-interface S006ReportSummary {
-  strongestFindings: S006SensitiveInformationFinding[];
-  deterministicFailures: S006SensitiveInformationFinding[];
-  manualFindings: S006SensitiveInformationFinding[];
-  materialWarnings: S006ScanWarning[];
-  nonMaterialWarnings: S006ScanWarning[];
-  materialSkippedFiles: S006SkippedFile[];
-  nonMaterialSkippedFiles: S006SkippedFile[];
-}
-
-function summarizeS006Report(analysis: S006SensitiveInformationAnalysisResult): S006ReportSummary {
-  return {
-    strongestFindings: strongestS006ReportFindings(analysis.findings, MAX_REPORT_LIST_ITEMS),
-    deterministicFailures: analysis.findings.filter(finding => finding.statusImpact === 'deterministic_fail'),
-    manualFindings: analysis.findings.filter(finding => finding.statusImpact !== 'deterministic_fail'),
-    materialWarnings: analysis.coverage.warnings.filter(warning => warning.materialToCoverage),
-    nonMaterialWarnings: analysis.coverage.warnings.filter(warning => !warning.materialToCoverage),
-    materialSkippedFiles: analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage),
-    nonMaterialSkippedFiles: analysis.coverage.skippedFiles.filter(skippedFile => !skippedFile.materialToCoverage)
-  };
-}
-
-function formatS006EvidenceSummary(
-  analysis: S006SensitiveInformationAnalysisResult,
-  deterministicFailureCount: number,
-  materialWarningCount: number,
-  materialSkippedFileCount: number
-): string {
-  if (analysis.classification.status === EvaluationStatus.PASS) {
-    return `S006 pass: no retained sensitive/environment-specific findings; scanned ${analysis.coverage.scannedFiles} of ${analysis.coverage.candidateFiles} candidate files.`;
-  }
-  if (analysis.classification.status === EvaluationStatus.FAIL) {
-    return `S006 fail: ${deterministicFailureCount} deterministic failure finding${deterministicFailureCount === 1 ? '' : 's'}; ${analysis.findings.length} total retained finding${analysis.findings.length === 1 ? '' : 's'}.`;
-  }
-
-  const coverageNote = analysis.coverage.materiallyWeakened
-    ? `; coverage incomplete with ${materialWarningCount} material warning${materialWarningCount === 1 ? '' : 's'} and ${materialSkippedFileCount} material skipped file${materialSkippedFileCount === 1 ? '' : 's'}`
-    : '';
-  return `S006 manual: ${analysis.findings.length} retained finding${analysis.findings.length === 1 ? '' : 's'}; no deterministic failures${coverageNote}.`;
-}
-
-function formatCoverageSummary(
-  analysis: S006SensitiveInformationAnalysisResult,
-  materialSkippedFileCount: number,
-  materialWarningCount: number
-): string {
-  const scanCount = `scanned ${analysis.coverage.scannedFiles} of ${analysis.coverage.candidateFiles} candidate files`;
-  if (analysis.coverage.complete) {
-    return `complete; ${scanCount}`;
-  }
-  return `incomplete; ${scanCount}; ${materialSkippedFileCount} material skipped file${materialSkippedFileCount === 1 ? '' : 's'}; ${materialWarningCount} material warning${materialWarningCount === 1 ? '' : 's'}`;
-}
-
-function formatWhyLines(
-  analysis: S006SensitiveInformationAnalysisResult,
-  deterministicFailureCount: number,
-  materialWarningCount: number,
-  materialSkippedFileCount: number
-): string[] {
-  if (analysis.classification.status === EvaluationStatus.PASS) {
-    return [
-      '  - No retained findings were detected.',
-      analysis.coverage.complete
-        ? '  - Candidate scan coverage was complete.'
-        : '  - Candidate scan coverage had only non-material gaps.'
-    ];
-  }
-
-  const lines = [
-    deterministicFailureCount > 0
-      ? `  - ${deterministicFailureCount} high-confidence live-looking finding${deterministicFailureCount === 1 ? '' : 's'} in production or CI/deployment context can fail S006.`
-      : '  - No deterministic failure was found.',
-    analysis.findings.length - deterministicFailureCount > 0
-      ? `  - ${analysis.findings.length - deterministicFailureCount} scanner/pattern candidate${analysis.findings.length - deterministicFailureCount === 1 ? '' : 's'} ${analysis.findings.length - deterministicFailureCount === 1 ? 'needs' : 'need'} reviewer judgment.`
-      : undefined,
-    analysis.coverage.materiallyWeakened
-      ? `  - Scan coverage is materially weakened by ${materialWarningCount || 'one or more'} warning${materialWarningCount === 1 ? '' : 's'} and ${materialSkippedFileCount} material skipped file${materialSkippedFileCount === 1 ? '' : 's'}.`
-      : undefined
-  ];
-
-  return lines.filter((line): line is string => line !== undefined);
-}
-
-function formatReviewerFocusLines(
-  analysis: S006SensitiveInformationAnalysisResult,
-  deterministicFailureCount: number,
-  materialWarnings: S006ScanWarning[],
-  materialSkippedFiles: S006SkippedFile[],
-  agentReview?: CriterionAgentReviewResult
-): string[] {
-  const lines: string[] = [];
-  if (deterministicFailureCount > 0) {
-    lines.push('  - Inspect deterministic failure findings first; these are live-looking secrets in production or CI/deployment context.');
-  }
-  if (analysis.findings.some(finding => finding.context === 'ci_or_deployment_configuration')) {
-    lines.push('  - Verify whether CI workflow values are real committed values or safe references to external secret stores.');
-  }
-  if (analysis.findings.some(finding => finding.category === 'tenant_or_host_endpoint' || finding.category === 'private_url')) {
-    lines.push('  - Check endpoint findings for environment-specific deployment details that should not be public.');
-  }
-  if (analysis.findings.some(finding => finding.context === 'documentation' || finding.context === 'test_fixture' || finding.context === 'sample_or_example')) {
-    lines.push('  - Confirm documentation, sample, and test findings are examples rather than operational credentials.');
-  }
-  if (analysis.findings.some(finding => finding.context === 'local_docker_defaults')) {
-    lines.push('  - Confirm local Docker defaults are not reused outside local development.');
-  }
-  if (materialWarnings.length || materialSkippedFiles.length) {
-    lines.push('  - Review material coverage gaps before treating the scan as complete.');
-  }
-  if (!agentReview?.available && analysis.classification.status === EvaluationStatus.MANUAL) {
-    lines.push('  - Agent advisory review was unavailable; make the S006 call from the findings and coverage notes.');
-  }
-
-  return lines.length ? lines : ['  - No reviewer follow-up beyond normal S006 confirmation.'];
+  const count = analysis.scanner.findingCount;
+  return `ran and reported ${count} possible secret${count === 1 ? '' : 's'}`;
 }
 
 function formatFindingGroupLines(findings: S006SensitiveInformationFinding[]): string[] {
   if (!findings.length) {
-    return ['  - none'];
+    return [];
   }
 
   const groups = new Map<string, {
     count: number;
     context: S006FindingContext;
-    category: string;
-    maxSeverity: S006FindingSeverity;
-    maxConfidence: S006FindingConfidence;
+    category: S006SensitiveInformationFinding['category'];
+    severityRank: number;
+    confidenceRank: number;
   }>();
 
   for (const finding of findings) {
@@ -227,101 +126,114 @@ function formatFindingGroupLines(findings: S006SensitiveInformationFinding[]): s
     const existing = groups.get(key);
     if (existing) {
       existing.count += 1;
-      existing.maxSeverity = rankS006Severity(finding.severity) < rankS006Severity(existing.maxSeverity) ? finding.severity : existing.maxSeverity;
-      existing.maxConfidence = rankS006Confidence(finding.confidence) < rankS006Confidence(existing.maxConfidence) ? finding.confidence : existing.maxConfidence;
+      existing.severityRank = Math.min(existing.severityRank, rankS006Severity(finding.severity));
+      existing.confidenceRank = Math.min(existing.confidenceRank, rankS006Confidence(finding.confidence));
     } else {
       groups.set(key, {
         count: 1,
         context: finding.context,
         category: finding.category,
-        maxSeverity: finding.severity,
-        maxConfidence: finding.confidence
+        severityRank: rankS006Severity(finding.severity),
+        confidenceRank: rankS006Confidence(finding.confidence)
       });
     }
   }
 
-  return [...groups.values()]
+  const sorted = [...groups.values()]
     .sort((left, right) =>
-      rankS006Severity(left.maxSeverity) - rankS006Severity(right.maxSeverity) ||
-      rankS006Confidence(left.maxConfidence) - rankS006Confidence(right.maxConfidence) ||
+      left.severityRank - right.severityRank ||
+      left.confidenceRank - right.confidenceRank ||
       rankS006Context(left.context) - rankS006Context(right.context) ||
       right.count - left.count ||
       left.category.localeCompare(right.category)
-    )
-    .slice(0, MAX_REPORT_LIST_ITEMS)
-    .map(group =>
-      `  - ${group.count} ${formatFindingCategory(group.category, group.count)} in ${formatFindingContext(group.context)} (maximum confidence ${group.maxConfidence}, maximum severity ${group.maxSeverity})`
     );
+  return [
+    '  - By type:',
+    ...sorted.slice(0, MAX_REPORT_LIST_ITEMS).map(group => {
+      const label = S006_CATEGORY_LABELS[group.category];
+      return `    - ${group.count} ${group.count === 1 ? label.one : label.many} in ${S006_CONTEXT_LABELS_PLAIN[group.context]}`;
+    }),
+    ...overflowLine(sorted.length, MAX_REPORT_LIST_ITEMS, '    ')
+  ];
 }
 
-function formatCompactFindingLines(findings: S006ReportFinding[]): string[] {
-  if (!findings.length) {
-    return ['  - none'];
-  }
-
-  return findings.slice(0, MAX_REPORT_LIST_ITEMS).map(finding => {
-    const location = `${finding.path}${finding.line === undefined ? '' : `:${finding.line}`}`;
-    const lineRange = finding.endLine && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
-    const label = finding.disposition === 'deterministic_failure'
-      ? 'deterministic failure'
-      : 'scanner/pattern candidate';
-    return `  - ${location}${lineRange} | ${label} | rule ${finding.detectorId} | ${formatFindingCategory(finding.category, 1)} | ${formatFindingContext(finding.context)} | ${formatConfidenceSeverity(finding.confidence, finding.severity)} | ${finding.excerpt.text}`;
+function formatExampleLines(findings: S006SensitiveInformationFinding[]): string[] {
+  return findings.map(finding => {
+    const location = `${reportPath(finding.path)}${finding.line === undefined ? '' : `:${finding.line}`}`;
+    const lineRange = finding.endLine && finding.line !== undefined && finding.endLine !== finding.line ? `-${finding.endLine}` : '';
+    const label = S006_CATEGORY_LABELS[finding.category].one;
+    const name = s006AssignedName(finding);
+    const where = `${name ? `assigned to ${reportText(name)} ` : ''}in ${S006_CONTEXT_LABELS_PLAIN[finding.context]}`;
+    const foundByBoth = finding.detectedBy.length > 1 ? ', found by both Gitleaks and the built-in scan' : '';
+    const description = finding.statusImpact === 'deterministic_fail'
+      ? `Fails S006: ${label} that looks real, ${where}${foundByBoth}`
+      : `${capitalize(label)} ${where}${VALUE_NOTES[finding.valueClassification]}${foundByBoth}`;
+    return `  - ${location}${lineRange} [${S006_DETECTOR_TAGS[finding.detectorId]}] ${description}`;
   });
 }
 
-function formatConfidenceSeverity(confidence: S006FindingConfidence, severity: S006FindingSeverity): string {
-  return `confidence ${confidence}, severity ${severity}`;
+const VALUE_NOTES: Record<S006SensitiveInformationFinding['valueClassification'], string> = {
+  placeholder: ', placeholder value',
+  synthetic: ', looks like a test or example value',
+  'live-looking': ''
+};
+
+function formatCoverageGapLines(analysis: S006SensitiveInformationAnalysisResult): string[] {
+  const rows = coverageRows(
+    analysis.coverage.warnings.filter(warning => warning.materialToCoverage),
+    analysis.coverage.skippedFiles.filter(skippedFile => skippedFile.materialToCoverage)
+  );
+  return rows.length ? ['', 'Coverage gaps:', ...rows] : [];
 }
 
-function formatAggregateRangeLines(findings: S006SensitiveInformationFinding[]): string[] {
-  const summary = buildFindingSummary(findings);
-  if (!summary.confidenceRange || !summary.severityRange) {
-    return [];
-  }
-  return [
-    `  - Aggregate confidence range: ${summary.confidenceRange.minimum} to ${summary.confidenceRange.maximum} (maximum ${summary.confidenceRange.maximum})`,
-    `  - Aggregate severity range: ${summary.severityRange.minimum} to ${summary.severityRange.maximum} (maximum ${summary.severityRange.maximum})`
-  ];
+function formatOtherLimitLines(analysis: S006SensitiveInformationAnalysisResult): string[] {
+  const rows = coverageRows(
+    analysis.coverage.warnings.filter(warning => !warning.materialToCoverage),
+    analysis.coverage.skippedFiles.filter(skippedFile => !skippedFile.materialToCoverage)
+  );
+  return rows.length ? ['', 'Skipped (does not affect the result):', ...rows] : [];
 }
 
-function formatFindingCategory(category: string, count: number): string {
-  const label = category.split('_').join(' ');
-  if (count === 1 || label.endsWith('s')) {
-    return label;
-  }
-  return `${label}s`;
-}
-
-function formatFindingContext(context: S006FindingContext): string {
-  return context.split('_').join(' ');
-}
-
-function formatWarningLines(heading: string, warnings: S006ScanWarning[]): string[] {
-  if (!warnings.length) {
-    return [`  - ${heading} none`];
-  }
-
-  return [
-    `  - ${heading}`,
-    ...warnings.slice(0, MAX_REPORT_LIST_ITEMS).map(warning =>
-      `    - ${warning.path ? `${warning.path} [${warning.kind}]` : `[${warning.kind}]`} ${warning.message}`
-    ),
-    ...overflowLine(warnings.length, MAX_REPORT_LIST_ITEMS)
-  ];
-}
-
-function formatSkippedLines(heading: string, skippedFiles: S006SkippedFile[]): string[] {
-  if (!skippedFiles.length) {
-    return [`  - ${heading} none`];
+// A file that was skipped and also warned about appears once; files skipped for the same reason share one row.
+function coverageRows(warnings: S006ScanWarning[], skippedFiles: S006SkippedFile[]): string[] {
+  const skippedPaths = new Set(skippedFiles.map(skippedFile => skippedFile.path));
+  const rows: string[] = [];
+  const pathWarnings = new Map<string, string[]>();
+  for (const warning of warnings) {
+    if (warning.path && skippedPaths.has(warning.path)) {
+      continue;
+    }
+    if (warning.path && (warning.kind === 'file-truncated' || warning.kind === 'unreadable-file')) {
+      const heading = warning.kind === 'file-truncated'
+        ? `Files only partly read (at most ${formatKilobytes(MAX_S006_SCAN_BYTES_PER_FILE)} of each)`
+        : 'Files or folders that could not be read';
+      pathWarnings.set(heading, [...(pathWarnings.get(heading) ?? []), warning.path]);
+      continue;
+    }
+    rows.push(`  - ${reportText(warning.message)}`);
   }
 
-  return [
-    `  - ${heading}`,
-    ...skippedFiles.slice(0, MAX_REPORT_LIST_ITEMS).map(skippedFile =>
-      `    - ${skippedFile.path} [${skippedFile.reason}]${skippedFile.message ? ` ${skippedFile.message}` : ''}`
-    ),
-    ...overflowLine(skippedFiles.length, MAX_REPORT_LIST_ITEMS)
-  ];
+  const skippedByReason = new Map<string, string[]>();
+  for (const skippedFile of skippedFiles) {
+    // Only symbolic links are unsupported without being material; material ones sit in high-signal folders.
+    const heading = skippedFile.reason !== 'unsupported-file'
+      ? S006_SKIPPED_REASON_LABELS[skippedFile.reason]
+      : skippedFile.materialToCoverage
+        ? 'Files of a type the built-in scan does not read, in folders where secrets are often kept'
+        : skippedFile.message?.startsWith('Symbolic link')
+          ? 'Symbolic links, which are not followed'
+          : 'Data, stylesheet, sample, and disabled files in configuration folders';
+    skippedByReason.set(heading, [...(skippedByReason.get(heading) ?? []), skippedFile.path]);
+  }
+
+  for (const [heading, paths] of [...pathWarnings, ...skippedByReason]) {
+    rows.push(
+      `  - ${heading}:`,
+      ...paths.slice(0, MAX_REPORT_LIST_ITEMS).map(filePath => `    - ${reportPath(filePath)}`),
+      ...overflowLine(paths.length, MAX_REPORT_LIST_ITEMS, '    ')
+    );
+  }
+  return rows;
 }
 
 function appendAgentReviewLines(
@@ -330,18 +242,7 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    lines.push(
-      '',
-      'Agent review:',
-      agentReview.recommendation ? `  - Advisory recommendation: ${agentReview.recommendation}` : undefined,
-      agentReview.confidence ? `  - Confidence: ${agentReview.confidence}` : undefined,
-      agentReview.summary ? `  - Summary: ${redactSensitiveText(agentReview.summary)}` : undefined,
-      agentReview.rationale ? `  - Rationale: ${redactSensitiveText(agentReview.rationale)}` : undefined,
-      agentReview.warnings.length ? `  - Warnings: ${redactSensitiveText(agentReview.warnings.join('; '))}` : undefined,
-      agentReview.errors.length ? `  - Errors: ${redactSensitiveText(agentReview.errors.join('; '))}` : undefined,
-      agentReview.metadata ? `  - Adapter: ${agentReview.metadata.adapter}` : undefined,
-      agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined
-    );
+    lines.push('', ...renderAgentReviewLines(agentReview, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the S006 result stays Manual review.');
     return;
   }
 
@@ -352,14 +253,10 @@ function appendAgentReviewLines(
   lines.push(
     '',
     'Agent review:',
-    `  - Not applied: ${analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured'}`
+    `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured')}`
   );
 }
 
-function formatFindingOverflowLine(total: number, visible: number): string[] {
-  return total > visible ? [`  - Additional retained findings omitted from report details: ${total - visible}`] : [];
-}
-
-function overflowLine(total: number, visible: number): string[] {
-  return total > visible ? [`    - ... ${total - visible} more`] : [];
+function formatKilobytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes} bytes` : `${Math.round(bytes / 1024)} KB`;
 }

@@ -14,7 +14,7 @@ This tool provides a modular, extensible framework for automatically evaluating 
 
 See [Criterion Notes](docs/criterion-notes.md) for criterion-specific behavior, runtime requirements, and review boundaries.
 
-**Note**: Dependency analysis includes all transitive dependencies for Maven, Gradle, and npm projects.  Go modules are not supported yet.
+**Note**: Dependency analysis covers the dependencies a module distributes, including transitive ones, for Maven, Gradle, and npm projects; test-only and development dependencies are excluded.  Go modules are not supported yet.
 
 ## Security
 
@@ -32,6 +32,8 @@ folio-eval evaluate <repo-url> --allow-local-commands
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 
 Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
+
+Evaluated repositories are open source, so reports show repository text, command output, and agent advice as written. Only the evaluator's own credentials are masked: the values of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SONAR_TOKEN`, `GITHUB_TOKEN`, and any variable passed to OpenCode with `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` become `[REDACTED_<VARIABLE>]` in all output, and the keys in an OpenCode auth store become `[REDACTED_AUTH_STORE]`. See [Output masking](docs/agent-review.md#output-masking).
 
 ### S007 Officially Supported Technologies
 
@@ -65,9 +67,86 @@ To update the policy:
    applicability exceptions, deprecations, and reviewer notes explicitly.
 4. Run `yarn test --runInBand --testPathPattern=s007-policy` and `yarn build`.
 
-The policy also retains build-tool, testing, and infrastructure sections for future
-criteria. S007 consumes only applicable language and framework entries. See
-[Criterion Notes](docs/criterion-notes.md) for reviewer guidance.
+S007 consumes only applicable language and framework entries. S012 consumes the
+build-tool sections and S013 the testing sections; the infrastructure sections are kept
+for future criteria. See [Criterion Notes](docs/criterion-notes.md) for reviewer guidance.
+
+### S012 Officially Supported Build Tools
+
+S012 checks the tools that build the module (Maven, Gradle, Make, Yarn, npm, Node.js,
+and others) against the build-tool sections of the same policy. It reads build files
+and GitHub Actions workflows only, so it runs in safe mode without network access.
+When a repository pins no version, the versions FOLIO's shared workflows supply come
+from the maintainer-reviewed `config/folio-shared-workflows.json`. See
+[Criterion Notes](docs/criterion-notes.md#s012-officially-supported-build-tools).
+
+### S011 SonarQube Findings
+
+S011 reads the module's SonarCloud analysis (`org.folio:<repository>`) and fails on any open
+security issue, unreviewed security hotspot, open high or blocker issue (test code included), or
+duplication above 3%. It also scans the repository and its CI for Sonar rule suppressions
+(`@SuppressWarnings`, `NOSONAR`) and exclusions, which a reviewer must judge. It needs
+`--allow-remote-lookups` and cannot pass unless `SONAR_TOKEN` can administer the SonarCloud
+project. See [Criterion Notes](docs/criterion-notes.md#s011-sonarqube-findings).
+
+### S013 Unit Test Coverage
+
+S013 reads the module's overall test coverage from SonarCloud, which must be at least 80%,
+and checks the test runners its build files declare (JUnit for Java, Jest for UI modules)
+against the testing sections of the same policy. It never runs tests, even with
+`--allow-local-commands`, and needs `--allow-remote-lookups` to read SonarCloud; without it
+S013 is `manual` and lists the test runners it found. See
+[Criterion Notes](docs/criterion-notes.md#s013-unit-test-coverage).
+
+### F001 Consumed Interfaces Declared
+
+F001 checks that every backend interface a UI package calls is declared in `package.json` under
+`stripes.okapiInterfaces` or `stripes.optionalOkapiInterfaces`. It reads the request paths in the
+committed production source (stripes-connect manifests, `useOkapiKy()` calls and `fetch` on the Okapi
+URL, following constants inside the repository) and maps them to interfaces through the handler patterns
+of the S008 platform release, kept offline in `config/f001-handler-index.json`. A request that maps to
+one undeclared interface fails it, for modules and libraries alike; requests the tool cannot map leave it
+`manual`, with a checklist for the reviewer and, when agent review is enabled, the agent's results. See
+[Criterion Notes](docs/criterion-notes.md#f001-consumed-interfaces-declared).
+
+### F002 End-to-End Tests
+
+F002 checks that a UI package's end-to-end tests, if it has any, use the supported technology: Cypress
+12.0 or later, which the officially supported technologies page lists as pending verification. It finds
+the tools from the committed `package.json`, `yarn.lock`, configuration files, test directories and what
+CI runs (GitHub workflows, including FOLIO's shared `ui.yml` test jobs, and the `Jenkinsfile`). Without
+browser test tooling it is not applicable; another end-to-end framework, such as Playwright, fails it;
+Karma or BigTest suites, which may be component tests, and Cypress below 12.0 are left `manual`, with a
+checklist for the reviewer and, when agent review is enabled, the agent's results. See
+[Criterion Notes](docs/criterion-notes.md#f002-end-to-end-tests).
+
+### F003 Internationalization
+
+F003 checks that a UI package renders its text through react-intl from an English translation file,
+`translations/<namespace>/en.json`. It reads the committed production source (`src/`, `lib/` and
+root-level files, without tests or stories) and fails without react-intl or a valid `en.json`. Message
+ids missing from `en.json`, hard-coded user-visible text and invalid ICU messages make it `manual`,
+with a checklist for the reviewer and, when agent review is enabled, the agent's results per item. A
+package that renders no user interface, such as stripes-connect, is not applicable. See
+[Criterion Notes](docs/criterion-notes.md#f003-internationalization).
+
+### F005 Stripes Version
+
+F005 checks that a UI module uses the Stripes version on the officially supported technologies
+page. It takes S007's own finding for `@folio/stripes` from the same policy, so the two always agree,
+and `--criteria F005` works on its own. A Stripes library that does not depend on `@folio/stripes`,
+such as stripes-components, is left to the reviewer with a checklist item. See
+[Criterion Notes](docs/criterion-notes.md#f005-stripes-version).
+
+### B001 Module Descriptor Template
+
+B001 checks that a backend or edge module commits a module descriptor template that matches the Okapi
+ModuleDescriptor schema, with build placeholders such as `${artifactId}` replaced from `pom.xml` and
+`gradle.properties`. It runs no build; S002 checks the descriptor the build generates. Shared libraries
+are not applicable, and a repository that is neither a module nor a known library is left to the
+reviewer. `--existing-module` marks the evaluation of an existing module rather than a new one; later
+B criteria relax some new-module rules for it. See
+[Criterion Notes](docs/criterion-notes.md#b001-module-descriptor-template).
 
 ### Agent Review
 
@@ -78,6 +157,22 @@ Stripes/React modules. Difficult static cases remain manual and can use the opti
 agent review for broader cited analysis, for example
 `--criterion-agent-opencode --criterion-agent-criteria S010`. Agent advice never changes
 the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-third-party-system-resilience).
+
+### Remote Lookups
+
+Evaluation is offline by default. S011 (SonarQube findings) and S013 (test coverage) need to read
+SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platform) needs to read
+`folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in:
+
+```bash
+folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
+```
+
+`--application` is the application named in the evaluation's Jira task. `--platform-ref` picks the
+platform-lsp branch, tag or commit (default `snapshot`). Remote reads are read-only, allowlisted and
+bounded, and each one is recorded in the report. An optional `SONAR_TOKEN` is sent to SonarCloud only;
+S011 reads SonarCloud's own project settings only when that token can administer the project. See
+[Criterion Notes](docs/criterion-notes.md#remote-lookups).
 
 ### For Local Development: Use Devcontainer
 
@@ -154,6 +249,9 @@ All inputs are optional:
 | `java_version` | Java version for Maven/Gradle builds | `21` |
 | `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
+| `allow_remote_lookups` | Allow read-only lookups of SonarCloud, platform-lsp and FAR, needed for S011, S013 and S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
+| `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
+| `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
 
 #### Outputs
 
@@ -222,7 +320,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011, S013 and S014, also tick remote lookups, and for S014 enter the application named in the evaluation's Jira task.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 

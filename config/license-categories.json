@@ -18,6 +18,7 @@
     "Unicode-3.0": "A",
     "Universal Permissive License, Version 1.0": "A",
     "The Apache Software License, Version 1.1": "A",
+    "Zlib": "A",
 
     "MPL-1.1": "B-WCL",
     "MPL-2.0": "B-WCL",
@@ -30,6 +31,7 @@
     "CDDL-1.0": "B-WCL",
     "CDDL-1.1": "B-WCL",
     "Common Development and Distribution License 1.0": "B-WCL",
+    "GPL-2.0-only WITH Classpath-exception-2.0": "B-WCL",
 
     "GPL-2.0": "X",
     "GPL-2.0+": "X",
@@ -50,6 +52,7 @@
     "BCL": "X",
     "Business Source License": "X",
     "BUSL-1.1": "X",
-    "Commons Clause": "X"
+    "Commons Clause": "X",
+    "FSL-1.1-ALv2": "X"
   }
 }

@@ -1,18 +1,19 @@
 import { GitUtils } from './utils/git';
 import { JavaEvaluator } from './evaluators/java-evaluator';
 import { JavaScriptEvaluator } from './evaluators/javascript-evaluator';
-import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult } from './types';
-import { getCriteriaForLanguage, isValidCriterionId } from './criteria-definitions';
+import { LanguageEvaluator, EvaluationResult, EvaluationConfig, CriterionResult, EvaluationStatus } from './types';
+import { getCriteriaForLanguage } from './criteria-definitions';
 import { getLogger } from './utils/logger';
 import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluation-run';
 import { LocalCommandRunner } from './utils/command-runner';
+import { RemoteEvidenceTransport } from './utils/remote-evidence';
 import packageMetadata from '../package.json';
 
 export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
   const explicitReferences = new Set<string>();
   const collect = (value: unknown, key?: string): void => {
     if (typeof value === 'string') {
-      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences') {
+      if (key === 'path' || key === 'sourcePath' || key === 'versionSourcePath' || key === 'evidenceReferences' || key === 'projectFiles') {
         explicitReferences.add(value);
       }
       return;
@@ -22,6 +23,8 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
       return;
     }
     if (value && typeof value === 'object') {
+      // S009 records each hashed source file as a key of fileHashes.
+      if (key === 'fileHashes') Object.keys(value).forEach(file => explicitReferences.add(file));
       Object.entries(value).forEach(([childKey, child]) => collect(child, childKey));
     }
   };
@@ -36,9 +39,10 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
 /**
  * Main orchestrator for module evaluation
  *
- * This framework provides a complete evaluation pipeline but most criterion
- * evaluations currently return MANUAL status. Implementation of specific
- * evaluation logic is needed to provide automated PASS/FAIL results.
+ * S001-S014, B001, F001-F003 and F005 have automated evaluation logic and return MANUAL
+ * only when the evidence is inconclusive. The other 19 of the 38 criteria always
+ * return MANUAL: A001 is a manual review by design, and B002-B016 (Java) and
+ * F004 and F006-F007 (JavaScript) have no evaluation logic yet.
  */
 export class ModuleEvaluator {
   private gitUtils: GitUtils;
@@ -49,29 +53,20 @@ export class ModuleEvaluator {
     this.config = config;
     this.gitUtils = new GitUtils(config.tempDir);
 
-    // Register available evaluators
     this.evaluators = [
       new JavaEvaluator(),
       new JavaScriptEvaluator()
-      // Additional evaluators can be added here in the future
     ];
   }
 
-  /**
-   * Evaluate a FOLIO module repository
-   * @param repositoryUrl GitHub URL of the repository
-   * @returns Promise<EvaluationResult> Complete evaluation result
-   */
   async evaluateModule(repositoryUrl: string): Promise<EvaluationResult> {
     let repoPath = '';
 
     try {
       getLogger().info(`Starting evaluation of: ${repositoryUrl}`);
 
-      // Clone the repository
       repoPath = await this.gitUtils.cloneRepository(repositoryUrl, this.config.branch);
       
-      // Determine appropriate evaluator
       const evaluator = await this.selectEvaluator(repoPath);
       if (!evaluator) {
         throw new Error('No suitable evaluator found for this repository');
@@ -79,12 +74,10 @@ export class ModuleEvaluator {
       
       getLogger().info(`Using ${evaluator.getLanguage()} evaluator`);
 
-      // Validate criteria filter if provided
       if (this.config.criteriaFilter) {
-        await this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
+        this.validateCriteriaFilter(this.config.criteriaFilter, evaluator);
       }
 
-      // Get repository info
       const repoInfo = await this.gitUtils.getRepoInfo(repoPath);
 
       const commandRunner = this.config.commandRunner ??
@@ -102,12 +95,21 @@ export class ModuleEvaluator {
         criteriaFilter: this.config.criteriaFilter,
         commandRunner,
         agentReview: this.config.agentReview,
-        s008CatalogChannel: this.config.s008CatalogChannel
+        s008CatalogChannel: this.config.s008CatalogChannel,
+        repositoryCommit: repoInfo.commit,
+        requestedBranch: this.config.branch,
+        remoteLookups: this.config.remoteLookups ?? (this.config.allowRemoteLookups
+          ? new RemoteEvidenceTransport({
+              credentials: { sonarToken: process.env.SONAR_TOKEN || undefined, githubToken: process.env.GITHUB_TOKEN || undefined }
+            })
+          : undefined),
+        s014Application: this.config.s014Application,
+        s014PlatformRef: this.config.s014PlatformRef,
+        existingModule: this.config.existingModule
       });
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);
       
-      // Compile results
       const result: EvaluationResult = {
         repositoryUrl,
         moduleName: repoInfo.name,
@@ -129,7 +131,6 @@ export class ModuleEvaluator {
       return result;
       
     } finally {
-      // Clean up cloned repository unless --no-cleanup was specified
       if (repoPath && !this.config.skipCleanup) {
         await this.gitUtils.cleanup(repoPath);
       } else if (repoPath && this.config.skipCleanup) {
@@ -138,11 +139,6 @@ export class ModuleEvaluator {
     }
   }
 
-  /**
-   * Select the appropriate evaluator for the repository
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<LanguageEvaluator | null> Selected evaluator or null
-   */
   private async selectEvaluator(repoPath: string): Promise<LanguageEvaluator | null> {
     for (const evaluator of this.evaluators) {
       if (await evaluator.canEvaluate(repoPath)) {
@@ -152,46 +148,25 @@ export class ModuleEvaluator {
     return null;
   }
 
-  /**
-   * Summarize evaluation results
-   * @param results Array of criterion results
-   * @returns string Summary of results
-   */
   private summarizeResults(results: CriterionResult[]): string {
-    const pass = results.filter(r => r.status === 'pass').length;
-    const fail = results.filter(r => r.status === 'fail').length;
-    const manual = results.filter(r => r.status === 'manual').length;
-    const notApplicable = results.filter(r => r.status === 'not_applicable').length;
+    const pass = results.filter(r => r.status === EvaluationStatus.PASS).length;
+    const fail = results.filter(r => r.status === EvaluationStatus.FAIL).length;
+    const manual = results.filter(r => r.status === EvaluationStatus.MANUAL).length;
+    const notApplicable = results.filter(r => r.status === EvaluationStatus.NOT_APPLICABLE).length;
 
     return `${pass} passed, ${fail} failed, ${manual} require manual review, ${notApplicable} not applicable`;
   }
 
-  /**
-   * Add a new language evaluator
-   * @param evaluator Language evaluator to add
-   */
   addEvaluator(evaluator: LanguageEvaluator): void {
     this.evaluators.push(evaluator);
   }
 
-  /**
-   * Get list of supported languages
-   * @returns string[] Array of supported language names
-   */
   getSupportedLanguages(): string[] {
     return this.evaluators.map(evaluator => evaluator.getLanguage());
   }
 
-  /**
-   * Validate criteria filter against available criteria
-   * @param criteriaFilter Array of criterion IDs to validate
-   * @param evaluator The language evaluator being used
-   */
-  private async validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): Promise<void> {
-    // Get available criteria IDs from the evaluator
+  private validateCriteriaFilter(criteriaFilter: string[], evaluator: LanguageEvaluator): void {
     const availableCriteria = Array.from(getCriteriaForLanguage(evaluator.getLanguage()));
-
-    // Check each criterion in the filter
     const invalidCriteria = criteriaFilter.filter(id => !availableCriteria.includes(id));
 
     if (invalidCriteria.length > 0) {

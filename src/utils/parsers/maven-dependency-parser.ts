@@ -3,7 +3,6 @@
  *
  * Handles extraction of third-party dependencies from Maven projects including:
  * - Maven license plugin output (THIRD-PARTY.txt)
- * - Maven dependency:list command output
  * - Maven coordinate parsing
  * - Maven-specific dual license format (pipe-separated: "Apache-2.0|MIT")
  *
@@ -11,15 +10,16 @@
  * This parser fulfills the license-compliance.ts contract by:
  * 1. Splitting pipe-separated licenses ("Apache-2.0|MIT") into ["Apache-2.0", "MIT"]
  * 2. Normalizing license names via license-policy.normalizeLicenseName()
- * 3. Returning licenses as string arrays in Dependency objects
+ * 3. Returning licenses as string arrays in Dependency objects; several licenses on one
+ *    THIRD-PARTY.txt line form one set that all apply, unless config/license-dual-licensed.json
+ *    lists the dependency as offering a choice of them
  *
- * Maven uses the pipe character '|' to separate dual/multi-licenses in THIRD-PARTY.txt.
- * The splitDualLicenses() function handles this Maven-specific format.
+ * A license name containing '|' is split by splitDualLicenses(); the plugin writes each license
+ * in its own parenthesised group, so such names are not expected in practice.
  *
  * SECURITY WARNING: This module executes Maven build commands on untrusted repositories.
  * Security measures implemented:
  * - Path validation and sanitization via validateRepoPath()
- * - Directory traversal attack prevention through path.resolve()
  * - Command timeout enforcement (300 seconds / 5 minutes)
  * - Repository path is validated before command execution
  *
@@ -35,59 +35,46 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
-import { normalizeLicenseName } from '../license-policy';
-import { isNonEmptyString, isValidDependency } from '../type-guards';
-import { safeReadFile, validateRepoPath } from './common';
+import { isDualLicensed, normalizeLicenseName } from '../license-policy';
+import { errorMessage, isNonEmptyString, isValidDependency } from '../type-guards';
+import { commandError, readRepoTextFile, safeReadFile, validateRepoPath } from './common';
 import { getLogger } from '../logger';
 import { defaultCommandRunner } from '../command-runner';
 import { MAVEN_NETWORK_POLICY } from '../build-tool-policies';
 
-// Maven-specific constants
-const COMMAND_TIMEOUT = 300000; // 300 seconds (5 minutes)
+const COMMAND_TIMEOUT = 300000;
 const MAX_BUFFER = 50 * 1024 * 1024; // 50MB for Maven verbose output
+const MAX_POM_BYTES = 4 * 1024 * 1024;
 const MAVEN_THIRD_PARTY_PATH = path.join('target', 'licenses', 'THIRD-PARTY.txt');
-const MAVEN_DEPENDENCIES_PATH = path.join('target', 'dependencies.txt');
 
-// Maven-specific regex patterns
-const MAVEN_DEPENDENCY_PATTERN = /\[INFO\]\s+(.+?):(.+?):(.+?):(.+?):(.+)/;
 const MAVEN_COORDINATE_PATTERN = /^(.+?):(.+?):(.+?)$/;
+// Licenses and name, then the last " (groupId:artifactId:version - URL)" group on the line.
+// The coordinate parts exclude ':' so that a long run of colons cannot cause cubic backtracking.
+const MAVEN_THIRD_PARTY_LINE_PATTERN = /^(.*) \(([^\s():]+:[^\s():]+:[^\s():]+) - .*\)$/;
 
-// Maven build file patterns
 const MAVEN_BUILD_FILES = ['pom.xml'];
 
-// Valid Maven packaging types
 const VALID_PACKAGING_TYPES = ['pom', 'jar', 'war', 'ear', 'maven-plugin', 'ejb', 'rar', 'bundle'];
 
-/**
- * Determine the Maven packaging type from pom.xml using proper XML parsing
- * @param repoPath - Path to Maven project
- * @returns Promise resolving to packaging type ('pom', 'jar', 'war', etc.) or 'jar' as default
- */
 async function getMavenPackaging(repoPath: string): Promise<string> {
   try {
-    const pomPath = path.join(repoPath, 'pom.xml');
-    if (!fs.existsSync(pomPath)) {
-      getLogger().warn('pom.xml not found, defaulting to jar packaging');
+    const pomContent = readRepoTextFile(repoPath, 'pom.xml', MAX_POM_BYTES);
+    if (pomContent === null) {
+      getLogger().warn('pom.xml not found in the repository, defaulting to jar packaging');
       return 'jar';
     }
 
-    const pomContent = fs.readFileSync(pomPath, 'utf-8');
-
-    // Parse XML using xml2js for robust handling of XML variations
     const parsed = await parseStringPromise(pomContent, {
       trim: true,
       explicitArray: true,
       mergeAttrs: false
     });
 
-    // Extract packaging from parsed XML
-    // Structure: parsed.project.packaging[0]
     const packaging = parsed?.project?.packaging?.[0];
 
     if (packaging && isNonEmptyString(packaging)) {
       const trimmedPackaging = packaging.trim();
 
-      // Validate against known packaging types
       if (!VALID_PACKAGING_TYPES.includes(trimmedPackaging)) {
         getLogger().warn(`Unknown Maven packaging type: ${trimmedPackaging}, defaulting to jar`);
         return 'jar';
@@ -118,9 +105,7 @@ function splitDualLicenses(license: string): string[] {
     return [];
   }
 
-  // Check if license contains pipe separator
   if (license.includes('|')) {
-    // Split on pipe and normalize each license
     return license
       .split('|')
       .map(l => l.trim())
@@ -130,11 +115,10 @@ function splitDualLicenses(license: string): string[] {
         if (!normalized) {
           getLogger().warn(`License normalization failed for "${l}", using original value.`);
         }
-        return normalized || l; // Use original if normalization returns empty
+        return normalized || l;
       });
   }
 
-  // Single license - normalize and return
   const normalized = normalizeLicenseName(license);
   if (!normalized) {
     getLogger().warn(`License normalization failed for "${license}", using original value.`);
@@ -142,11 +126,6 @@ function splitDualLicenses(license: string): string[] {
   return [normalized || license];
 }
 
-/**
- * Parse Maven coordinates (groupId:artifactId:version)
- * @param coordinates - Coordinate string to parse
- * @returns Parsed coordinate parts or null if invalid
- */
 function parseMavenCoordinates(coordinates: string): { groupId: string; artifactId: string; version: string } | null {
   if (!isNonEmptyString(coordinates)) {
     return null;
@@ -166,73 +145,57 @@ function parseMavenCoordinates(coordinates: string): { groupId: string; artifact
 }
 
 /**
- * Parse a single line from Maven THIRD-PARTY.txt file
- * @param line - Line to parse
- * @returns Parsed dependency or null if invalid
+ * Parses a dependency line from license-maven-plugin's default third-party-file.ftl template:
+ * `(License A) (License B) Name (groupId:artifactId:version - URL)`. Each license is one
+ * parenthesised group, written as-is, so a license name can contain balanced parentheses.
+ * The name can contain parentheses too, so the coordinates are read from the end of the line.
+ * A name that itself starts with a parenthesised group cannot be told apart from a license.
+ * @returns the dependency, or null when the line does not have this form
  */
 function parseMavenThirdPartyLine(line: string): Dependency | null {
-  const trimmedLine = line.trim();
-
-  // Skip empty lines and headers
-  if (!trimmedLine || trimmedLine.startsWith('Lists of') || !trimmedLine.startsWith('(')) {
+  const match = line.trim().match(MAVEN_THIRD_PARTY_LINE_PATTERN);
+  if (!match) {
     return null;
   }
+  const [, licensesAndName, coordinates] = match;
 
-  // Parse format: (License Name) Artifact Name (groupId:artifactId:version - URL)
-  const licenseEnd = trimmedLine.indexOf(')');
-  if (licenseEnd === -1) {
-    return null;
+  const licenseNames: string[] = [];
+  let position = 0;
+  while (licensesAndName[position] === '(') {
+    let depth = 0;
+    let end = position;
+    for (; end < licensesAndName.length; end++) {
+      if (licensesAndName[end] === '(') depth++;
+      if (licensesAndName[end] === ')' && --depth === 0) break;
+    }
+    if (depth !== 0) {
+      return null;
+    }
+    licenseNames.push(licensesAndName.substring(position + 1, end).trim());
+    position = end + 1;
+    while (licensesAndName[position] === ' ') position++;
   }
 
-  const licenseName = trimmedLine.substring(1, licenseEnd).trim();
-  if (!isNonEmptyString(licenseName)) {
-    return null;
-  }
-
-  const remaining = trimmedLine.substring(licenseEnd + 1).trim();
-
-  // Find the coordinates in parentheses
-  const coordStart = remaining.indexOf('(');
-  const coordEnd = remaining.indexOf(')');
-
-  if (coordStart === -1 || coordEnd === -1) {
-    return null;
-  }
-
-  const coordPart = remaining.substring(coordStart + 1, coordEnd);
-
-  // Split coordinates and URL
-  const parts = coordPart.split(' - ');
-  const coordinates = parts[0]?.trim();
-
-  if (!isNonEmptyString(coordinates)) {
-    return null;
-  }
-
-  // Parse coordinates using helper function
   const parsed = parseMavenCoordinates(coordinates);
-  if (!parsed) {
+  if (licenseNames.length === 0 || !parsed) {
     return null;
   }
 
-  const depName = `${parsed.groupId}:${parsed.artifactId}`;
-
-  // Split and normalize dual licenses using centralized function
-  // Example: "Apache-2.0|MIT" becomes ["Apache-2.0", "MIT"]
-  const licenses = splitDualLicenses(licenseName);
-
+  const name = `${parsed.groupId}:${parsed.artifactId}`;
+  const licenses = licenseNames.flatMap(splitDualLicenses);
   return {
-    name: depName,
+    name,
     version: parsed.version,
-    licenses
+    // The plugin lists every license the POM declares. A POM can declare one license per bundled
+    // component (Jersey lists Apache-2.0 for its bundled Guava), so the licenses all apply unless
+    // the dependency is known to offer a choice of them.
+    licenses: licenses.length > 1 && !isDualLicensed(name) ? [licenses] : licenses
   };
 }
 
 /**
- * Parse Maven THIRD-PARTY.txt file format
- * Expected format: (License Name) Artifact Name (groupId:artifactId:version - URL)
- * @param content - Content of the THIRD-PARTY.txt file
- * @returns Array of parsed dependencies
+ * @throws Error with a plain-language reason when a dependency line cannot be read, so the
+ * dependency is reported instead of being left out of the license check
  */
 function parseMavenThirdPartyFile(content: string): Dependency[] {
   if (!isNonEmptyString(content)) {
@@ -240,64 +203,31 @@ function parseMavenThirdPartyFile(content: string): Dependency[] {
   }
 
   const dependencies: Dependency[] = [];
-  const lines = content.split('\n');
+  const unreadable: string[] = [];
 
-  for (const line of lines) {
+  for (const line of content.split('\n')) {
+    // Dependency lines start with a license group; the header and blank lines do not.
+    if (!line.trim().startsWith('(')) {
+      continue;
+    }
     const dependency = parseMavenThirdPartyLine(line);
     if (dependency && isValidDependency(dependency)) {
       dependencies.push(dependency);
+    } else {
+      unreadable.push(line.trim());
     }
+  }
+
+  if (unreadable.length > 0) {
+    throw new Error(
+      `${MAVEN_THIRD_PARTY_PATH} has ${unreadable.length === 1 ? '1 dependency line' : `${unreadable.length} dependency lines`} ` +
+      `that could not be read, so the dependency list is incomplete. First unreadable line: ${unreadable[0]}`
+    );
   }
 
   return dependencies;
 }
 
-/**
- * Check if an error is caused by command timeout
- * @param error - Error object to check
- * @returns True if error was caused by timeout
- */
-/**
- * Parse Maven dependency:list output
- * @param output - Output from mvn dependency:list command
- * @returns Array of parsed dependencies (without license information)
- */
-function parseMavenDependencyList(output: string): Dependency[] {
-  if (!isNonEmptyString(output)) {
-    return [];
-  }
-
-  const dependencies: Dependency[] = [];
-  const lines = output.split('\n');
-
-  for (const line of lines) {
-    // Look for dependency lines like: "[INFO]    org.apache.commons:commons-lang3:jar:3.12.0:compile"
-    const match = line.match(MAVEN_DEPENDENCY_PATTERN);
-    if (match && match.length >= 5) {
-      const [, groupId, artifactId, , version] = match;
-
-      if (isNonEmptyString(groupId) && isNonEmptyString(artifactId) && isNonEmptyString(version)) {
-        const dependency: Dependency = {
-          name: `${groupId.trim()}:${artifactId.trim()}`,
-          version: version.trim(),
-          licenses: undefined // License info not available from dependency:list
-        };
-
-        if (isValidDependency(dependency)) {
-          dependencies.push(dependency);
-        }
-      }
-    }
-  }
-
-  return dependencies;
-}
-
-/**
- * Check if a Maven project exists in the repository
- * @param repoPath - Path to repository
- * @returns Promise resolving to true if Maven project exists
- */
 export async function hasMavenProject(repoPath: string): Promise<boolean> {
   if (!isNonEmptyString(repoPath)) {
     return false;
@@ -305,11 +235,6 @@ export async function hasMavenProject(repoPath: string): Promise<boolean> {
   return MAVEN_BUILD_FILES.some(file => fs.existsSync(path.join(repoPath, file)));
 }
 
-/**
- * Extract dependencies from Maven project using license plugin
- * @param repoPath - Path to Maven project
- * @returns Promise resolving to extraction result with dependencies and errors
- */
 export async function getMavenDependencies(
   repoPath: string,
   evaluationRun?: EvaluationRun,
@@ -330,7 +255,6 @@ export async function getMavenDependencies(
   }
 
   try {
-    // Determine packaging type to use correct Maven goal
     const packaging = await getMavenPackaging(validatedPath);
 
     // Choose appropriate goal based on packaging:
@@ -342,13 +266,15 @@ export async function getMavenDependencies(
 
     getLogger().info(`Using Maven goal: ${mavenGoal} (packaging: ${packaging})`);
 
-    // Execute Maven license plugin to generate third-party report
     const commandResult = await commandRunner.run({
       command: 'mvn',
       args: [
         mavenGoal,
         '-Dlicense.outputDirectory=target/licenses',
-        '-Dlicense.includeTransitiveDependencies=true'
+        '-Dlicense.includeTransitiveDependencies=true',
+        // ASF policy covers what the module distributes; test-scoped libraries are not shipped.
+        // `system` is the plugin's default exclusion and is kept.
+        '-Dlicense.excludedScopes=test,system'
       ],
       cwd: validatedPath,
       timeoutMs: COMMAND_TIMEOUT,
@@ -360,15 +286,10 @@ export async function getMavenDependencies(
     getLogger().info('Maven license plugin output:', commandResult.stdout);
 
     if (commandResult.status !== 'success') {
-      errors.push({
-        source: 'maven-parser',
-        message: `Failed to extract Maven dependencies: ${commandResult.errorMessage ?? commandResult.status}`,
-        error: new Error(commandResult.stderr || commandResult.errorMessage || commandResult.status)
-      });
+      errors.push(commandError('maven-parser', 'Maven', commandResult));
       return { dependencies: [], errors, warnings };
     }
 
-    // Parse the generated THIRD-PARTY.txt file
     const thirdPartyFile = path.join(validatedPath, MAVEN_THIRD_PARTY_PATH);
     const thirdPartyContent = safeReadFile(thirdPartyFile);
 
@@ -385,21 +306,20 @@ export async function getMavenDependencies(
 
     warnings.push({
       source: 'maven-parser',
-      message: 'Maven license plugin did not generate THIRD-PARTY.txt file. ' +
-               'This typically means the project has no third-party dependencies. ' +
-               `Expected location: ${MAVEN_THIRD_PARTY_PATH}`
+      message: `Maven ran but did not write a third-party license list (${MAVEN_THIRD_PARTY_PATH}). ` +
+               'This usually means the module has no third-party dependencies.'
     });
 
     return { dependencies: [], errors, warnings };
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     getLogger().error('Maven dependency extraction failed:');
-    getLogger().error('  Message:', errorMessage);
+    getLogger().error('  Message:', message);
 
     errors.push({
       source: 'maven-parser',
-      message: `Failed to extract Maven dependencies: ${errorMessage}`,
+      message: `Maven could not list the dependencies: ${message}`,
       error: error instanceof Error ? error : new Error(String(error))
     });
     return { dependencies: [], errors, warnings };

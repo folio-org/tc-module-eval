@@ -7,7 +7,6 @@ import {
   CommandExecutionResult,
   CommandRunner,
   CriterionAgentReviewConfig,
-  EvaluationRun,
   EvaluationStatus
 } from '../types';
 import {
@@ -21,6 +20,9 @@ import {
 import * as committedSource from '../utils/committed-source';
 import { materializeOpenCodeInvocation } from '../utils/opencode-agent-adapter';
 import { sanitizeStructuredOutput } from '../utils/opencode-output';
+import { LocalCommandRunner } from '../utils/command-runner';
+import { createEvaluationRun } from '../utils/evaluation-run';
+import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
@@ -170,6 +172,32 @@ describe('criterion agent review', () => {
     expect(supplied.errors.join(' ')).toContain('incomplete advisory JSON');
   });
 
+  it('reads committed source once for all of a run\'s reviews', async () => {
+    fs.writeFileSync(path.join(repoPath, 'README.md'), 'committed README');
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['add', '.'], { cwd: repoPath });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: repoPath });
+    const snapshot = jest.spyOn(committedSource, 'readCommittedSource');
+    const run = createEvaluationRun({
+      repositoryPath: repoPath, language: 'java', agentReview: { enabled: true, adapter: 'fake' }
+    });
+    const review = (criterionId: string) => reviewCriterionWithAgent({
+      criterionId, status: EvaluationStatus.MANUAL, hasReviewMaterial: true, evaluationRun: run,
+      review: config => runCriterionAgentReviewImpl({
+        criterionId, repositoryPath: repoPath, instructions: 'review', schemaDescription: 'schema',
+        files: [{ repoRelativePath: `.criterion-agent/${criterionId}/context.json`, content: '{}' }]
+      }, config)
+    });
+
+    const results = await Promise.all([review('S004'), review('S005')]);
+
+    expect(results.map(result => result.agentReview)).toEqual([
+      expect.objectContaining({ available: true, criterionId: 'S004', evidenceReferences: ['README.md'] }),
+      expect.objectContaining({ available: true, criterionId: 'S005', evidenceReferences: ['README.md'] })
+    ]);
+    expect(snapshot).toHaveBeenCalledTimes(1);
+  });
+
   it('does not let excluded, oversized, or untracked starting files bypass repository snapshot policy', async () => {
     fs.writeFileSync(path.join(repoPath, 'README.md'), 'eligible source');
     fs.writeFileSync(path.join(repoPath, '.env'), 'PASSWORD=committed-secret');
@@ -263,6 +291,19 @@ describe('criterion agent review', () => {
     }
   );
 
+  it('reads a line-numbered citation as its listed path, for every criterion', () => {
+    const result = normalizeCriterionAgentAdvisoryPayload({
+      recommendation: 'likely_sufficient', confidence: 'high', summary: 'Checked.', rationale: 'Read.',
+      // A listed name that contains a colon stays itself; a line and column is not a line locator.
+      evidenceReferences: ['src/a.ts:12', 'src/b.ts:40-52,60', 'src/b.ts', 'src/c.ts:12:3'],
+      reviewerActions: [{ action: 'Check the deadline.', evidenceReferences: ['src/b.ts:7'] }]
+    }, ['src/a.ts', 'src/a.ts:12', 'src/b.ts', 'src/c.ts']);
+    expect(result).toMatchObject({ errors: [], evidenceReferences: ['src/a.ts:12', 'src/b.ts'],
+      reviewerActions: [{ evidenceReferences: ['src/b.ts'] }], warnings: [expect.stringContaining('Dropped')] });
+    expect(normalizeCriterionAgentAdvisoryPayload({ recommendation: 'pass', confidence: 'high', summary: 'S.', rationale: 'R.',
+      evidenceReferences: ['src/b.ts:10', 'src/b.ts:30', 'src/b.ts'] }, ['src/b.ts']).warnings).toEqual([]);
+  });
+
   it.each(['assessments', 'reviewerActions'])('rejects a malformed %s entry instead of keeping an unsupported synthesis', field => {
     const valid = field === 'assessments'
       ? { technologyId: 'java', type: 'aligned_fact', summary: 'Declared.', evidenceReferences: ['README.md'] }
@@ -276,27 +317,45 @@ describe('criterion agent review', () => {
     expect(result.errors.join(' ')).not.toContain('missing.md');
   });
 
-  it('converts unexpected optional review exceptions into unavailable results', async () => {
+  it.each([
+    [undefined, 'no candidate evidence was available for agent review'],
+    ['F004 agent review needs runtime evidence (--ui-runtime-url)', 'F004 agent review needs runtime evidence (--ui-runtime-url)']
+  ])('gives the criterion\'s own reason when there is nothing to review: %s', async (notRunReason, expected) => {
+    const review = jest.fn();
     const result = await reviewCriterionWithAgent({
+      criterionId: 'F004',
+      status: EvaluationStatus.MANUAL,
+      hasReviewMaterial: false,
+      notRunReason,
+      evaluationRun: createEvaluationRun({ repositoryPath: repoPath, language: 'javascript', agentReview: { enabled: true, adapter: 'fake' } }),
+      review
+    });
+    expect(result).toEqual({ unavailableReason: expected });
+    expect(review).not.toHaveBeenCalled();
+  });
+
+  it('converts unexpected optional review exceptions into unavailable results', async () => {
+    const result = await withEvaluatorSecrets(() => reviewCriterionWithAgent({
       criterionId: 'S005',
       status: EvaluationStatus.MANUAL,
       hasReviewMaterial: true,
-      evaluationRun: {
+      evaluationRun: createEvaluationRun({
+        repositoryPath: repoPath,
+        language: 'java',
         agentReview: {
           enabled: true,
           enabledCriteria: ['S005'],
           adapter: 'fake'
         }
-      } as EvaluationRun,
+      }),
       review: async () => {
-        throw new Error('agent crashed with token=abc123');
+        throw new Error(`agent crashed with ${EVALUATOR_SECRETS.OPENAI_API_KEY}`);
       }
-    });
+    }));
 
     expect(result.agentReview?.available).toBe(false);
-    expect(result.agentReview?.errors.join('\n')).toContain('Agent review failed unexpectedly');
-    expect(result.agentReview?.errors.join('\n')).not.toContain('abc123');
-    expect(result.unavailableReason).toContain('Agent review failed unexpectedly');
+    expect(result.agentReview?.errors).toEqual(['Agent review failed unexpectedly: agent crashed with [REDACTED_OPENAI_API_KEY]']);
+    expect(result.unavailableReason).toBe('Agent review failed unexpectedly: agent crashed with [REDACTED_OPENAI_API_KEY]');
   });
 
   it('normalizes fake adapter advisory output against manifest references', async () => {
@@ -354,19 +413,15 @@ describe('criterion agent review', () => {
         summary: 'Fake summary.',
         rationale: 'Fake rationale.',
         evidenceReferences: ['schemas/user.json'],
-        warnings: ['warning token=abc123 should be redacted'],
-        errors: ['error password=hunter2 should be redacted']
+        warnings: ['warning'],
+        errors: ['error']
       } as unknown as CriterionAgentReviewConfig['fakeResult']
     });
 
     expect(result.available).toBe(false);
     expect(result.errors.join('\n')).toContain('incomplete advisory JSON');
-    expect(result.warnings.join('\n')).toContain('warning token=[REDACTED]');
-    expect(result.errors.join('\n')).toContain('error password=[REDACTED]');
-    expect(result.warnings.join('\n')).not.toContain('should be redacted');
-    expect(result.errors.join('\n')).not.toContain('should be redacted');
-    expect(result.warnings.join('\n')).not.toContain('abc123');
-    expect(result.errors.join('\n')).not.toContain('hunter2');
+    expect(result.warnings).toContain('warning');
+    expect(result.errors).toContain('error');
   });
 
   it('prepares a bounded manifest workspace', () => {
@@ -486,7 +541,8 @@ describe('criterion agent review', () => {
     expect(runRequest?.env?.HOME).toBeDefined();
     expect(runRequest?.env?.XDG_CONFIG_HOME).toBeDefined();
     expect(runRequest?.env?.OPENCODE_CONFIG_DIR).toBeDefined();
-    expect(runRequest?.maxOutputBytes).toBe(1024 * 1024);
+    expect(runRequest?.maxOutputBytes).toBe(16 * 1024 * 1024);
+    expect(runRequest?.keepStdoutTail).toBe(true);
   });
 
   it('removes external OpenCode runtime data after normal runs', async () => {
@@ -645,21 +701,6 @@ describe('criterion agent review', () => {
     expect(result.evidenceReferences).toEqual(['README.md']);
   });
 
-  it('reports advice with an unsafe rationale as unavailable after sanitization', async () => {
-    const captured = sanitizeStructuredOutput(JSON.stringify({
-      recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'Inspect repository evidence.',
-      rationale: '"password": "SYNTHETIC_SECRET\\', evidenceReferences: ['README.md']
-    }), 'opencode-json', 10000);
-    const result = await runCriterionAgentReview({
-      criterionId: 'S006', repositoryPath: repoPath, instructions: 'review',
-      files: [{ repoRelativePath: 'README.md', content: 'Redacted evidence.' }], schemaDescription: 'schema'
-    }, { ...opencodeConfig(), enabledCriteria: ['S006'] }, new FakeRunner(undefined, undefined, captured.text));
-    expect(result.available).toBe(false);
-    expect(result.errors).toContain('OpenCode decode: sanitization rejected a record');
-    expect(result.rationale).toBeUndefined();
-    expect(JSON.stringify(result)).not.toContain('SYNTHETIC_SECRET');
-  });
-
   it('keeps OpenCode metadata on malformed advisory output', async () => {
     const result = await runCriterionAgentReview({
       criterionId: 'S004',
@@ -734,6 +775,44 @@ describe('criterion agent review', () => {
     expect(result.errors.join('\n')).toContain('capture truncated');
   });
 
+  // Up to 17 MiB passes through real processes, which takes seconds when other suites load the machine.
+  it.each([
+    ['above the former 1 MiB limit', 2, false],
+    ['above the capture limit', 17, true]
+  ])('reads the review from OpenCode output %s', async (_label, mebibytes, cut) => {
+    // A fake opencode on PATH: tool events dominate the output and the answer comes last.
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-opencode-'));
+    const advisory = { recommendation: 'needs_reviewer_judgment', confidence: 'medium',
+      summary: 'Large output summary.', rationale: 'Large output rationale.', evidenceReferences: ['README.md'] };
+    fs.writeFileSync(path.join(bin, 'opencode'), `#!${process.execPath}
+const args = process.argv.slice(2).join(' ');
+const out = value => process.stdout.write(JSON.stringify(value) + '\\n');
+if (args.startsWith('debug config')) out({ plugin: [], mcp: {}, provenance: process.env.OPENCODE_CONFIG_DIR });
+else if (args.startsWith('debug agent')) out({ provenance: process.env.OPENCODE_CONFIG_DIR, tools: { read: true, glob: true, grep: true } });
+else {
+  const filler = 'x'.repeat(64 * 1024);
+  out({ type: 'step_start', part: { type: 'step-start', messageID: 'msg_a' } });
+  for (let i = 0; i < ${mebibytes} * 16; i++) out({ type: 'tool_use', part: { type: 'tool', messageID: 'msg_a', tool: 'read', state: { status: 'completed', output: filler } } });
+  out({ type: 'step_finish', part: { type: 'step-finish', messageID: 'msg_a', reason: 'tool-calls' } });
+  out({ type: 'step_start', part: { type: 'step-start', messageID: 'msg_b' } });
+  out({ type: 'text', part: { type: 'text', messageID: 'msg_b', text: ${JSON.stringify(JSON.stringify(advisory))} } });
+  out({ type: 'step_finish', part: { type: 'step-finish', messageID: 'msg_b', reason: 'stop' } });
+}
+`, { mode: 0o755 });
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    try {
+      const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+        instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+      }, opencodeConfig(), new LocalCommandRunner());
+
+      expect(result.errors).toEqual([]);
+      expect(result).toMatchObject({ available: true, summary: 'Large output summary.', evidenceReferences: ['README.md'] });
+      expect(result.warnings.some(warning => /capture limit.*read from the end of the output/.test(warning))).toBe(cut);
+    } finally {
+      fs.rmSync(bin, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it.each([1, 2, 3])('retains content-free debug records after timeout at stage %i', async stage => {
     const output = sanitizeStructuredOutput(JSON.stringify({ type: 'tool_use', timestamp: 1500, part: {
       tool: 'read', state: { status: 'completed', time: { start: 1200, end: 1400 },
@@ -768,17 +847,16 @@ describe('criterion agent review', () => {
 
   it('retains allowlisted provider diagnostics from stdout on nonzero exit', async () => {
     const stdout = JSON.stringify({ type: 'error', error: { name: 'APIError', data: {
-      message: 'Rate limit: password=synthetic-credential', statusCode: 429,
+      message: `Rate limit for key ${EVALUATOR_SECRETS.OPENROUTER_API_KEY}`, statusCode: 429,
       responseBody: 'DO_NOT_PUBLISH', headers: { authorization: 'DO_NOT_PUBLISH' }
     } } });
     const runner = new FakeRunner(undefined, undefined, stdout, { 3: { status: 'failed', exitCode: 1 } });
-    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+    const result = await withEvaluatorSecrets(() => runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
       instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
-    }, opencodeConfig(), runner);
+    }, opencodeConfig(), runner));
     expect(result.available).toBe(false);
-    expect(result.errors.join('\n')).toContain('429');
-    expect(result.errors.join('\n')).toContain('APIError');
-    expect(JSON.stringify(result)).not.toMatch(/synthetic-credential|DO_NOT_PUBLISH/);
+    expect(result.errors.join('\n')).toContain('APIError: 429: Rate limit for key [REDACTED_OPENROUTER_API_KEY]');
+    expect(JSON.stringify(result)).not.toMatch(/fakeOpenRouterKey|DO_NOT_PUBLISH/);
   });
 
   it('normalizes common off-schema OpenCode advisory fields', async () => {

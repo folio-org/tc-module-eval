@@ -9,19 +9,26 @@ import {
   S006RunLocalValueFingerprint,
   S006ValueClassification
 } from '../types';
-import {
-  PRIVATE_KEY_BLOCK_PATTERN,
-  PRIVATE_URL_PATTERN,
-  URL_CREDENTIAL_PATTERN as CREDENTIAL_URL_PATTERN
-} from './redaction';
 
+const CREDENTIAL_URL_PATTERN = /\bhttps?:\/\/[^:\s/@]+(?::[^@\s/]+)?@[^\s"'`<>)]*/gi;
+const PRIVATE_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|(?:[A-Za-z0-9-]+\.)+(?:internal|local|corp|lan))(?::\d+)?(?=[/?#\s"'`<>)]|$)(?:[/?#][^\s"'`<>)]*)?/gi;
+const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]+?-----END \1-----/g;
+
+// %s, %d, and {} are printf and log format placeholders; {NAME} is a template placeholder such as {VAULT_TOKEN};
+// [] is an empty list, as in an OpenAPI security requirement (accessToken: []).
 const PLACEHOLDER_VALUE_PATTERN =
-  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
+  /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|%[sd]|\{\}|\[\]|\{[A-Za-z_][A-Za-z0-9_.-]*\}|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
-const SECRET_ASSIGNMENT_KEY = '\\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey)[A-Za-z0-9_.-]*\\b';
+// The key is a whole run of [A-Za-z0-9_.-] from its first letter, digit, or underscore to its end, contains a keyword, and ends
+// in a letter, digit, or underscore. The lookbehind starts it only once per run and the captured lookahead takes the run once,
+// because a key that could start at every word boundary and end anywhere in the run backtracks quadratically on long dotted lines
+// (cubically when keywords repeat). When an unquoted value stops at 200 characters inside a run, the rest of that run is not a key.
+const SECRET_ASSIGNMENT_KEY = '\\b(?<![A-Za-z0-9_][.-]*)(?=[A-Za-z0-9_.-]*?(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|accesskey|refresh[_-]?token|refreshtoken|client[_-]?secret|clientsecret|secret[_-]?access[_-]?key|secretaccesskey))(?=([A-Za-z0-9_.-]*))\\1\\b';
 const SECRET_ASSIGNMENT_VALUE = `(?:"(?:\\\\.|[^"\\\\\\n]){1,200}"|'(?:\\\\.|[^'\\\\\\n]){1,200}'|[^\\r\\n"'\\\`,;#]{1,200})`;
-const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*[:=]\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
+// `==`, `===`, and `=>` compare or declare functions; they never assign a value.
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_ASSIGNMENT_KEY}\\s*(?::=|[:=](?![=>]))\\s*${SECRET_ASSIGNMENT_VALUE}`, 'gi');
+const SYNTHETIC_VALUE_WORDS = new Set(['example', 'sample', 'dummy', 'fake', 'test', 'fixture', 'mock', 'localhost', 'localdev', 'changeme']);
 
 export const MAX_S006_EXCERPT_BYTES = 700;
 
@@ -199,7 +206,10 @@ export const S006_DETECTOR_REGISTRY: ReadonlyArray<S006DetectorRegistryEntry> = 
     id: 'tenant-host-endpoint',
     category: 'tenant_or_host_endpoint',
     label: 'Tenant or host endpoint',
-    pattern: /\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db)[a-z0-9.-]*\.(?:edu|org|com|net|internal|local)(?![a-z0-9.-])(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
+    // Matches a whole host name (from its first letter or digit to the end of the run of host characters)
+    // that ends in one of the listed domains and has a label starting with a keyword. The run is matched once through a captured lookahead,
+    // because nested repetition over dotted labels backtracks cubically on long lines with no match.
+    pattern: /\b(?:https?:\/\/)?(?<![a-z0-9][a-z0-9.-]*?)(?=[a-z0-9.-]*?(?<![a-z0-9])(?:okapi|folio|tenant|prod|stage|staging|kafka|postgres|redis|database|db))(?=([a-z0-9.-]+))\1(?<=\.(?:edu|org|com|net|internal|local))(?::\d+)?(?:\/[^\s"'`<>)]*)?/gi,
     defaultConfidence: 'medium',
     severityByConfidence: { low: 'low', medium: 'medium', high: 'high' },
     statusContributionByConfidence: { low: 'pass_neutral', medium: 'manual_candidate', high: 'manual_candidate' },
@@ -343,7 +353,7 @@ export function boundS006ExcerptText(input: string): string {
 
 function getS006FingerprintSource(detector: S006DetectorRegistryEntry, rawMatch: string): string {
   if (detector.id === 'password-secret-assignment') {
-    return rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
+    return s006AssignedValue(rawMatch);
   }
   if (detector.id === 'bearer-or-jwt-token' && /^Bearer\s+/i.test(rawMatch)) {
     return rawMatch.replace(/^Bearer\s+/i, '').trim();
@@ -355,11 +365,11 @@ function getS006FingerprintSource(detector: S006DetectorRegistryEntry, rawMatch:
 }
 
 function classifyAssignmentValue(rawMatch: string): S006ValueClassification {
-  const value = rawMatch.replace(/^[^:=]+[:=]\s*/, '').replace(/^["']|["']$/g, '').trim();
+  const value = s006AssignedValue(rawMatch);
   if (PLACEHOLDER_VALUE_PATTERN.test(value)) {
     return 'placeholder';
   }
-  if (DEFAULT_CREDENTIAL_VALUE_PATTERN.test(value) || SYNTHETIC_VALUE_PATTERN.test(value) || value.length < 8) {
+  if (DEFAULT_CREDENTIAL_VALUE_PATTERN.test(value) || hasS006SyntheticMarker(value) || value.length < 8) {
     return 'synthetic';
   }
   return 'live-looking';
@@ -370,8 +380,21 @@ function classifySyntheticOrLive(rawMatch: string): S006ValueClassification {
   if (PLACEHOLDER_VALUE_PATTERN.test(normalized)) {
     return 'placeholder';
   }
-  if (SYNTHETIC_VALUE_PATTERN.test(normalized)) {
+  if (hasS006SyntheticMarker(normalized)) {
     return 'synthetic';
   }
   return 'live-looking';
+}
+
+/** The assigned value without the name, operator, or surrounding quotes. */
+export function s006AssignedValue(rawMatch: string): string {
+  return rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '').replace(/^["']|["']$/g, '').trim();
+}
+
+/** True when the value is marked as made up, including inside camelCase or snake_case words such as dummyToken. */
+export function hasS006SyntheticMarker(value: string): boolean {
+  return SYNTHETIC_VALUE_PATTERN.test(value) || value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .some(word => SYNTHETIC_VALUE_WORDS.has(word.toLowerCase()));
 }

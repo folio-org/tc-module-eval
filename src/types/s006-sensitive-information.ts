@@ -18,6 +18,7 @@ export type S006FindingContext =
   | 'test_fixture'
   | 'sample_or_example'
   | 'local_docker_defaults'
+  | 'helper_script'
   | 'generated_content'
   | 'unknown';
 
@@ -41,6 +42,9 @@ export type S006DetectorId =
 export type S006ValueClassification = 'placeholder' | 'synthetic' | 'live-looking';
 
 export type S006FindingStatusImpact = 'deterministic_fail' | 'manual_review';
+
+/** Which scan reported a finding: Gitleaks, the built-in scan, or both for the same value on the same line. */
+export type S006FindingSource = 'gitleaks' | 'built-in';
 
 export interface S006Excerpt {
   text: string;
@@ -113,6 +117,7 @@ export interface S006SensitiveInformationFinding {
   valueFingerprint: S006RunLocalValueFingerprint;
   statusImpact: S006FindingStatusImpact;
   rationale: string;
+  detectedBy: S006FindingSource[];
 }
 
 export interface S006ReportFinding {
@@ -127,6 +132,7 @@ export interface S006ReportFinding {
   disposition: 'deterministic_failure' | 'scanner_or_pattern_candidate';
   excerpt: S006Excerpt;
   rationale: string;
+  detectedBy: S006FindingSource[];
 }
 
 export type S006SkippedFileReason =
@@ -178,6 +184,8 @@ export interface S006SecretScannerSummary {
   status: 'completed' | 'unavailable';
   findingCount: number;
   warning?: S006ScanWarning;
+  /** The repository has a root .gitleaksignore file, which Gitleaks reads to skip the findings it lists. */
+  ignoreFilePresent?: boolean;
 }
 
 export interface S006DeterministicClassification {
@@ -219,4 +227,6 @@ export interface S006ReportDetails {
   classification: S006DeterministicClassification;
   warnings: S006ScanWarning[];
   agentReviewUnavailableReason?: string;
+  /** Location (`path:line`) of each scanner finding the agent review assessed, keyed by its `finding:N` id. */
+  agentReviewSubjectNames?: Record<string, string>;
 }

@@ -34,7 +34,7 @@ export interface S005PersonalDataDisclosureChecklistItem {
   rawLabel: string;
   checked: boolean;
   /** All categories represented by this checklist row. The singular field is retained for compatibility. */
-  normalizedCategories?: S005PersonalDataCategory[];
+  normalizedCategories: S005PersonalDataCategory[];
   normalizedCategory: S005PersonalDataCategory;
 }
 
@@ -140,6 +140,11 @@ export interface S005PersonalDataDisclosureAnalysisResult {
   parseResult?: S005PersonalDataDisclosureParseResult;
   evidenceScan?: S005PersonalDataEvidenceScanResult;
   classification: S005PersonalDataDeterministicClassification;
+  /**
+   * Set when the required file is missing and a near match was analyzed in its place: the status the
+   * near match would get under the required name. S005 still fails; this decides whether agent review runs.
+   */
+  nearMatchStatus?: EvaluationStatus.FAIL | EvaluationStatus.MANUAL;
   agentReviewUnavailableReason?: string;
   possibleMismatches: S005PersonalDataPossibleMismatch[];
   matchingEvidence: S005PersonalDataEvidenceAssessment[];

@@ -3,12 +3,27 @@ import {
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
   EvaluationStatus,
-  S010Analysis
+  S010Analysis,
+  S010ScenarioEvidence
 } from '../types';
-import { CriterionAgentReviewRequest, runCriterionAgentReview } from './criterion-agent-review';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { CriterionAgentReviewRequest, DISCOVERED_TECHNOLOGY_ID, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
+import { redactEvaluatorSecrets } from './redaction';
+import { errorMessage } from './type-guards';
 
 const SUMMARY_PATH = '.criterion-agent/S010/deterministic-summary.json';
+const SUMMARY_BYTES = 48 * 1024;
+const MAX_SUMMARY_REFERENCES = 5;
+// UI modules can list dozens of interfaces; the agent assesses them as one dependency.
+const FOLIO_INTERFACES_ID = 'folio-interfaces';
+
+/** The dependency the agent assesses for a scenario dependency. */
+export function s010CandidateId(dependencyId: string): string {
+  return dependencyId.startsWith('folio-interface:') ? FOLIO_INTERFACES_ID : dependencyId;
+}
+
+function candidateIds(analysis: S010Analysis): Set<string> {
+  return new Set(analysis.evidence.scenarios.map(scenario => s010CandidateId(scenario.dependencyId)));
+}
 
 export function hasS010AgentReviewMaterial(analysis: S010Analysis): boolean {
   return analysis.status === EvaluationStatus.MANUAL && analysis.evidence.moduleKind.kind !== 'library';
@@ -36,28 +51,15 @@ export async function buildS010AgentReviewRequest(
   repoPath: string,
   analysis: S010Analysis
 ): Promise<CriterionAgentReviewRequest> {
-  const summary = truncateToByteBudget(JSON.stringify({
-    criterionId: 'S010',
-    deterministicStatus: analysis.status,
-    summary: analysis.summary,
-    runtimeKind: analysis.evidence.runtimeKind,
-    discoveryCoverage: analysis.evidence.discoveryCoverage,
-    semanticCoverage: analysis.evidence.semanticCoverage,
-    scenarios: analysis.evidence.scenarios.map(scenario => ({
-      ...scenario,
-      proof: scenario.proof === 'clear-fail-fast' && scenario.boundedFailure !== 'proven'
-        ? 'failure-propagation-observed-duration-unverified' : scenario.proof
-    })),
-    findings: analysis.findings,
-    diagnostics: analysis.diagnostics
-  }, null, 2), 48 * 1024);
+  const summary = deterministicSummary(analysis);
+  const candidates = candidateIds(analysis);
   return {
     criterionId: 'S010',
     repositoryPath: repoPath,
     instructions: [
       'Act as an advisory reviewer for S010: Gracefully handles the absence of third party systems or related configuration.',
       'The deterministic summary is a starting point, not an exhaustive inventory or a conclusion to accept. Seek missed dependencies and evidence contradicting the analyzer. Follow calls, wrappers, configuration, failure handling, startup/readiness paths, and tests across files, including files absent from the summary.',
-      'Describe the scope actually investigated and unresolved paths in your rationale. Cite exact repository paths in evidenceReferences and give supporting line numbers in assessment summaries. Never treat an uninspected or excluded path as proof of absence. If you cannot complete a material trace within the review budget, return needs_reviewer_judgment with a narrow follow-up action; do not claim comprehensive coverage.',
+      'Describe the scope actually investigated and unresolved paths in your rationale. Cite exact repository paths in evidenceReferences, copied from repository-files.json or the repoRelativePath of a file you read, and give supporting line numbers in assessment summaries and failureBounds explanations, never in evidenceReferences. Never treat an uninspected or excluded path as proof of absence. If you cannot complete a material trace within the review budget, return needs_reviewer_judgment with a narrow follow-up action; do not claim comprehensive coverage.',
       'Inventory runtime dependencies outside this module, including FOLIO modules, databases, brokers, object storage, search, and external services. Do not assess S008 or S009 governance acceptance.',
       'For each material dependency, trace dependency, operation, configuration or enabling condition, failure path, bounded failure mechanism, fallback outcome, startup coupling, health/readiness effect, and relevant tests.',
       'Investigate in lifecycle order: startup callbacks and bean creation performing I/O; tenant/provisioning handlers and their helpers; runtime callers and listeners; then effective client timeouts and retries. Exception propagation, finite retry counts, and a complete-operation deadline are different facts; do not substitute one for another.',
@@ -70,11 +72,15 @@ export async function buildS010AgentReviewRequest(
       'Tests strengthen evidence but are not mandatory. General Node.js behavior is outside deterministic phase-one support and needs reviewer judgment.',
       'This review is advisory only. Do not change, approve, pass, fail, or override the deterministic S010 status.',
       'Every assessment and reviewer action must cite one or more actual repository repoRelativePath values in repository-files.json; generated summary and snapshot-manifest files do not count as repository citations.',
-      'Use a deterministic dependencyId from the summary as technologyId, or discovered:<normalized-id> for a missed dependency found in repository source.',
+      'Use a candidate id from candidate-dependencies.json as technologyId, or discovered:<normalized-id> for a missed dependency found in repository source.',
+      // Only UI modules have this candidate; offered to a backend module, it is used for FOLIO module calls and rejected.
+      ...(candidates.has(FOLIO_INTERFACES_ID) ? [
+        `Scenarios whose dependencyId starts with folio-interface: are the FOLIO interfaces a UI module needs; assess them together as one dependency with technologyId ${FOLIO_INTERFACES_ID}, naming any interface that behaves differently.`
+      ] : []),
       'Use likely_insufficient only with a cited substantive_concern. Use needs_reviewer_judgment only with a cited narrow reviewer action naming the missing fact and the decision it resolves.',
       'Return at least one assessment, accounting for every ID in candidateDependencyIds and every additional discovered dependency. Candidates are analyzer suggestions, not established external dependencies. Each assessment must contain technologyId, type, summary, and evidenceReferences. Allowed type values are aligned_fact, substantive_concern, analyzer_limitation, evidence_gap, and policy_question.',
       'For an internal component that is not an independent external dependency, use type analyzer_limitation with coverageDisposition immaterial and omit failureBounds. Cite why it is internal and incorporate relevant configuration into the actual service assessment. Do not exclude a candidate by filename alone. Actual external dependencies must include failureBounds.',
-      'failureBounds must contain exactly one record for each phase: startup, tenant_initialization, runtime. Each record contains phase, requirement (required|optional|conditional|unknown), status (established|unverified|not_applicable), explanation, and repository evidenceReferences. For established, explain the effective mechanism and its connection to the complete operation including retries and intervening calls. For unverified, name the missing fact. For not_applicable, cite why the dependency is not used in that phase. Conditional dependencies still require evaluation of the enabled path.',
+      'failureBounds must contain exactly one record for each phase: startup, tenant_initialization, runtime. Each record contains phase, requirement (required|optional|conditional|unknown), status (established|unverified|not_applicable), explanation, and repository evidenceReferences. requirement is the role of the dependency, so it is never not_applicable; a phase that does not use the dependency has status not_applicable. For established, explain the effective mechanism and its connection to the complete operation including retries and intervening calls. For unverified, name the missing fact. For not_applicable, cite why the dependency is not used in that phase. Conditional dependencies still require evaluation of the enabled path.',
       'Use likely_sufficient only if all applicable phase bounds are established or demonstrably not_applicable and requirements are known. Supported aligned_fact observations may coexist with unverified bounds; distinguish the observed behavior from its unknown duration. Unresolved decision-relevant bounds or roles require needs_reviewer_judgment and a cited action, unless a cited substantive concern supports likely_insufficient. Optional deployment tuning is compatible with established bounds; uncertainty about whether any finite bound exists is not tuning. Keep the executive summary consistent with these records.',
       'Each reviewerActions entry must contain exactly action and evidenceReferences. For needs_reviewer_judgment, return at least one reviewer action.',
       'Every evidenceReferences value must exactly match a repoRelativePath listed in repository-files.json (without the docs/ workspace prefix). Do not cite a path merely because deterministic-summary.json mentions it.',
@@ -83,7 +89,7 @@ export async function buildS010AgentReviewRequest(
     files: [
       { repoRelativePath: SUMMARY_PATH, content: summary },
       { repoRelativePath: '.criterion-agent/S010/candidate-dependencies.json', content: JSON.stringify({
-        candidateDependencyIds: [...new Set(analysis.evidence.scenarios.map(scenario => scenario.dependencyId))]
+        candidateDependencyIds: [...candidates]
       }) },
       { repoRelativePath: '.criterion-agent/S010/response-shape.json', content: JSON.stringify({
         note: 'Shape example only, not findings. Replace IDs, prose, roles, statuses, and citations with investigated evidence. Account for every candidate. Internal components may use analyzer_limitation with coverageDisposition immaterial and no failureBounds. Do not omit record fields for not_applicable phases of actual dependencies.',
@@ -93,7 +99,7 @@ export async function buildS010AgentReviewRequest(
           evidenceReferences: ['actual/source/path'],
           assessments: [{ technologyId: 'dependency-id', type: 'evidence_gap', summary: 'State the missing fact and its impact.',
             evidenceReferences: ['actual/source/path'], failureBounds: ['startup', 'tenant_initialization', 'runtime'].map(phase => ({
-              phase, requirement: 'required', status: 'unverified', explanation: 'Name the missing complete-operation bound, or explain the verified mechanism including retries.',
+              phase, requirement: 'required', status: 'unverified', explanation: 'Name the missing complete-operation bound, or explain the verified mechanism including retries, with supporting line numbers.',
               evidenceReferences: ['actual/source/path']
             })) }],
           reviewerActions: [{ action: 'Name the fact needed to resolve the decision.', evidenceReferences: ['actual/source/path'] }]
@@ -109,9 +115,9 @@ function validateS010Review(
   review: CriterionAgentReviewResult
 ): string | undefined {
   if (!review.assessments?.length) return 'S010 agent review returned no cited practical assessments.';
-  const dependencyIds = new Set(analysis.evidence.scenarios.map(scenario => scenario.dependencyId));
+  const dependencyIds = candidateIds(analysis);
   for (const assessment of review.assessments) {
-    if (!dependencyIds.has(assessment.technologyId) && !/^discovered:[a-z0-9][a-z0-9._-]*$/.test(assessment.technologyId)) {
+    if (!dependencyIds.has(assessment.technologyId) && !DISCOVERED_TECHNOLOGY_ID.test(assessment.technologyId)) {
       return 'S010 agent review returned an assessment for an unknown dependency.';
     }
   }
@@ -144,10 +150,61 @@ function validateS010Review(
   return undefined;
 }
 
-function unavailable(message: string): CriterionAgentReviewResult {
-  return { available: false, criterionId: 'S010', evidenceReferences: [], warnings: [], errors: [redactSensitiveText(message)] };
+// The analysis as valid JSON within the byte budget: references are capped per scenario, and when the
+// whole still does not fit, the scenarios and findings that decide the status are kept and the rest
+// are counted as omitted, rather than cutting the JSON text.
+function deterministicSummary(analysis: S010Analysis): string {
+  const scenarios = analysis.evidence.scenarios.map(scenario => ({
+    ...compactScenario(scenario),
+    proof: scenario.proof === 'clear-fail-fast' && scenario.boundedFailure !== 'proven'
+      ? 'failure-propagation-observed-duration-unverified' : scenario.proof
+  }));
+  const findings = [...analysis.findings]
+    .sort((left, right) => Number(right.statusDetermining) - Number(left.statusDetermining))
+    .map(finding => ({
+      id: finding.id, dependencyId: finding.dependencyId, scenario: finding.scenario, outcome: finding.outcome,
+      statusDetermining: finding.statusDetermining, rationale: finding.rationale.slice(0, 1_000)
+    }));
+  const render = (kept: number): string => JSON.stringify({
+    criterionId: 'S010',
+    deterministicStatus: analysis.status,
+    summary: analysis.summary.slice(0, 2_000),
+    runtimeKind: analysis.evidence.runtimeKind,
+    discoveryCoverage: analysis.evidence.discoveryCoverage,
+    semanticCoverage: analysis.evidence.semanticCoverage,
+    scenarios: scenarios.slice(0, kept),
+    ...(scenarios.length > kept ? { omittedScenarios: scenarios.length - kept } : {}),
+    findings: findings.slice(0, kept),
+    ...(findings.length > kept ? { omittedFindings: findings.length - kept } : {}),
+    diagnostics: analysis.diagnostics.slice(0, 20).map(diagnostic => ({
+      ...diagnostic, message: diagnostic.message.slice(0, 1_000), ...(diagnostic.path ? { path: diagnostic.path.slice(0, 500) } : {})
+    })),
+    ...(analysis.diagnostics.length > 20 ? { omittedDiagnostics: analysis.diagnostics.length - 20 } : {})
+  }, null, 2);
+  let kept = Math.max(scenarios.length, findings.length);
+  let text = render(kept);
+  while (Buffer.byteLength(text) > SUMMARY_BYTES && kept > 0) {
+    kept = Math.floor(kept / 2);
+    text = render(kept);
+  }
+  // Only repository-made identifiers (a huge environment variable name, say) can still overflow;
+  // the agent must quote ids exactly, so they are not cut, and the review is skipped instead.
+  if (Buffer.byteLength(text) > SUMMARY_BYTES) throw new Error('the dependency summary is too large to send');
+  return text;
 }
 
-function errorMessage(error: unknown): string {
-  return redactSensitiveText(error instanceof Error ? error.message : String(error));
+function compactScenario(scenario: S010ScenarioEvidence): S010ScenarioEvidence & { omittedSourceReferences?: number } {
+  const references = scenario.sourceReferences.slice(0, MAX_SUMMARY_REFERENCES)
+    .map(reference => ({ ...reference, path: reference.path.slice(0, 500), detail: reference.detail.slice(0, 300) }));
+  return {
+    ...scenario,
+    ...(scenario.rationale ? { rationale: scenario.rationale.slice(0, 1_000) } : {}),
+    sourceReferences: references,
+    ...(scenario.sourceReferences.length > MAX_SUMMARY_REFERENCES
+      ? { omittedSourceReferences: scenario.sourceReferences.length - MAX_SUMMARY_REFERENCES } : {})
+  };
+}
+
+function unavailable(message: string): CriterionAgentReviewResult {
+  return { ...unavailableResult('S010'), errors: [redactEvaluatorSecrets(message)] };
 }

@@ -2,11 +2,11 @@
 
 Some criteria can add optional OpenCode advisory review to manual results. Agent output is reviewer background only; it does not directly pass or fail a criterion.
 
-Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, and `S010` third-party system resilience review.
+Supported advisory criteria: `S004` installation documentation, `S005` personal data disclosure consistency, `S006` sensitive/environment-specific information review, `S007` officially supported technologies review, `S010` third-party system resilience review, `S011` SonarQube suppression review, `F001` consumed interfaces review, `F002` end-to-end tests review, and `F003` internationalization review.
 
 Agent review runs through reusable criterion-agent infrastructure:
 
-- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all five currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so repository content is not redacted; agent output and error text are still redacted before they reach reports. Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
+- Repository browsing is the shared default for every criterion that calls `runCriterionAgentReview()`, including all nine currently supported criteria. The runner prepares an isolated snapshot of eligible committed repository source only after review enablement and configuration checks pass. Evaluated modules are public open-source repositories, so neither repository content nor agent output is redacted; only the evaluator's own credentials are masked (see [Output masking](#output-masking)). Enabling review exposes eligible source to the configured model provider, not just scanner-selected excerpts.
 - Criterion-supplied files are starting context and do not limit the browsable source inventory. A criterion may explicitly set `evidenceMode: 'supplied-files'` when it must restrict review to those files; repository browsing remains the default when the option is omitted.
 - If starting context names a path also present in the committed snapshot, the committed content is authoritative while the path remains listed as starting material.
 - OpenCode runs with generated temporary `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` paths.
@@ -103,9 +103,10 @@ identify evidence missed by narrow deterministic recognizers, but it cannot chan
 the deterministic status. Every assessment and reviewer action must cite committed
 repository source; generated summaries alone are not valid support. Citation paths
 are validated against the workspace; the agent is also instructed to include line
-numbers in assessment text and describe its actual investigation scope, but those
-claims are not independently verified. Disabled,
-excluded, unavailable, malformed, or uncited review leaves S010 manual.
+numbers in assessment summaries and failure-bound explanations, not in citations,
+and to describe its actual investigation scope, but those claims are not
+independently verified. Disabled, excluded, unavailable, malformed, or uncited
+review leaves S010 manual.
 
 Each dependency assessment includes cited `failureBounds` for process startup,
 tenant initialization, and runtime. Records distinguish required, optional, and
@@ -126,9 +127,32 @@ I/O, then tenant/provisioning helpers, runtime callers, and effective client bou
 The agent summary labels exception propagation with unknown duration neutrally;
 this projection does not change deterministic analysis.
 
+## S011 SonarQube Suppression Review
+
+S011 review runs for a deterministic `manual` result when the repository or its CI suppresses a Sonar rule or narrows the analysis scope. The evaluator groups suppressions by rule and file, with stable IDs such as `suppression:java:S2077:src/main/java/org/folio/search/service/reindex/jdbc/SubjectRepository.java`, `nosonar:<path>` and `all:<path>`, and scope settings by file (`scope:pom.xml`). Each group comes with its lines, rule name, the FOLIO guidance it departs from, and adjacent comments, in `.criterion-agent/S011/review-groups.json`.
+
+The agent reads the suppressed code and returns exactly one assessment per group, with the group ID as `technologyId`: `aligned_fact` when the suppression looks justified, `substantive_concern` when it does not, `evidence_gap` when the code does not settle it. Each must cite the group's own file; a group whose file is not in the review snapshot must stay `evidence_gap`. `likely_sufficient` needs every group `aligned_fact`, `likely_insufficient` a `substantive_concern`, and `needs_reviewer_judgment` a cited reviewer action. A review that misses a group, adds an unknown one, or breaks these rules is rejected and S011 stays `manual` without advice. Issues accepted or hotspots reviewed in SonarCloud, and SonarCloud project settings, are listed for the human only; they are not repository files.
+
+## F00x Frontend Criteria Review
+
+F criteria share one contract (`src/utils/frontend-agent-review.ts`); F001, F002 and F003 use it, and F004, F006 and F007 will follow. Enabling agent review without `--criterion-agent-criteria` runs it for F001, F002 and F003 whenever they are manual (Q6).
+
+- **Obligations.** Each checklist item that is not reviewer-only gives one obligation per subject (a message id, a text, a path and line), or one for the whole item. IDs are short and per run: `F003-C1#1`, `F003-C1#2`, … At most 25 are given to the agent, subject obligations first in item order, then whole-item ones; the rest are shown as "Not given to the agent (limit of 25)".
+- **Starting material** under `.criterion-agent/<ID>/`: `checklist.json` (items, their first 20 starting points and the obligations given), `evidence-summary.json` (the deterministic findings, lists cut until it fits in 48 KB) and `response-shape.json` (a complete example), plus the criterion's reference material (F001: `handler-patterns.json`).
+- **Browse scope.** A request may narrow the committed snapshot with `browseInclude`. F criteria browse production source (`src/`, `lib/`, root-level files, without tests, stories, examples, fixtures and mocks), CSS under `src/` and `lib/`, and `package.json`; F003 adds its own `translations/<namespace>/en.json`, or every candidate `en.json` when the namespace is unclear. F002 adds `test/` and `tests/` directories at any depth (stripes-components keeps its Karma suites in `lib/<Component>/tests/`), `cypress/`, `.github/workflows/`, the `Jenkinsfile` and test-runner configuration files at the root. Otherwise tests, guides, other locales and CHANGELOG are left out. The scope is stated in the prompt and in the report ("Agent review scope" under what the tool found).
+- **Timeout.** F criteria use 420,000 ms per OpenCode command unless `--criterion-agent-timeout-ms` is given.
+- **Validation**, all or nothing, no retry. The response is rejected when an obligation has no assessment or more than one, or an assessment names an ID that is neither an obligation nor an allowed `discovered:<kind>:<n>` (F001: `interface`; F003: `text`, `id`); an assessment has no `coverageDisposition`; the review, an assessment or an action cites no repository path; an `investigated` obligation does not cite its own file, or an obligation about a file outside the snapshot is not `unresolved`; an `aligned_fact` is `unresolved` or an `evidence_gap` is `investigated`; a discovered assessment is anything but `substantive_concern` or `evidence_gap`; `likely_sufficient` comes with a concern, gap, policy question, unresolved disposition or withheld obligation; `likely_insufficient` has no `substantive_concern`; or `needs_reviewer_judgment` has no reviewer action; or the criterion's own rule fails (F001: a `substantive_concern` must name, in backticks in its summary, an interface id that `package.json` does not declare; the id need not be in the handler index, since newer interfaces are not). `likely_sufficient` therefore means every obligation given was checked and holds.
+- **Report.** Each checklist item shows the agent's result for its obligations ("Supported by evidence", "Potential problem", "Needs verification", …); discovered findings, the recommendation, summary and reviewer actions follow in the review's own section. A criterion with nothing to review can give its own reason (`notRunReason`) instead of "no candidate evidence was available".
+
+F001 runs only when F001 is manual, so it never sees a fail; the reviewer confirms each undeclared interface (F001-C1, reviewer only, as is F001-C4 on shared-library hooks, whose source is outside the snapshot). It asks the agent to follow the constants, props and hooks of each request the tool could not map (F001-C2), to identify the interface of each path not in the handler index (F001-C3), and to report requests to undeclared interfaces the tool missed as `discovered:interface:<n>`. Unresolved requests come first under the limit of 25, then paths not in the index. `handler-patterns.json` lists, for the first path segment of each of those requests, the platform's interfaces and patterns that start with it (cut to 48 KB), and the prompt lists the declared interfaces.
+
+F002 asks the agent to read each tool's configuration and a sample of its test files and say whether they are component tests (a component rendered without a running FOLIO system) or end-to-end tests, and in which framework (F002-C1, one obligation per tool), and to say which runner each CI job uses, including the test jobs of FOLIO's shared `ui.yml` (F002-C2, one obligation). The prompt names the page's entry ("Cypress 12.0, pending verification") and that Karma, BigTest and other tools are not listed. There are no `discovered:` IDs.
+
+F003 asks the agent whether each missing id has English fallback text, whether each hard-coded candidate is shown to users, whether computed id families resolve to keys, and whether each invalid text would fail in react-intl; and to report other hard-coded text or missing ids as `discovered:text:<n>` or `discovered:id:<n>`.
+
 ## S006 Sensitive Information Review
 
-S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports show the matched value as a bounded excerpt so reviewers can judge it directly; value fingerprints are not reported.
+S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports hide matched values: an assignment shows only its name, such as `DB_PASSWORD=[REDACTED]`, and other findings show their kind, such as `[REDACTED_PROVIDER_API_KEY]`. This is part of S006, not output masking. Agent prose is shown as written, so a value the agent quotes despite its instructions appears in the report.
 
 Deterministic `fail` is reserved for high-confidence production, CI, or deployment evidence such as live-looking secrets, credential URLs, or production-like private keys. Documentation, samples, tests, fixtures, synthetic or default-ish values, local Docker defaults, tenant/host/private URL evidence, and materially weakened scan coverage remain `manual` for reviewer judgment.
 
@@ -185,7 +209,7 @@ folio-eval evaluate <repo-url> \
   --criterion-agent-timeout-ms 420000
 ```
 
-The default timeout is 120,000 ms. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
+The default timeout is 120,000 ms, or 420,000 ms for F criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
 
 Advanced options:
 
@@ -200,7 +224,7 @@ Advanced options:
 
 When this flag is used, the evaluator keeps the manifest and review inputs but still deletes the entire separate OpenCode runtime directory, including configuration, auth data, and session storage. The JSON report's `agentReview.metadata.retainedWorkspacePath` identifies the workspace. Treat retained inputs as private repository content; do not publish the whole workspace.
 
-`agent-debug.json` records each command's start/end time, duration, status, exit code/signal, output byte counts, and truncation flags, including failed and timed-out commands. For the review command it also retains up to 2,000 content-free events: event type, OpenCode-reported timestamp, allowlisted tool name/status, and tool duration when supplied. Unknown names are replaced with `other`. Prompts, environment variables, credentials, paths, tool inputs/outputs, assistant prose, and reasoning text are not included in the trace. The trace file is owner-readable/writable only.
+`agent-debug.json` records each command's start/end time, duration, status, exit code/signal, output byte counts, and truncation flags, including failed and timed-out commands. For the review command it also retains up to 2,000 content-free events from the captured output, which is the end of the output when it was cut: event type, OpenCode-reported timestamp, allowlisted tool name/status, and tool duration when supplied. Unknown names are replaced with `other`. Prompts, environment variables, credentials, paths, tool inputs/outputs, assistant prose, and reasoning text are not included in the trace. The trace file is owner-readable/writable only.
 
 The trace is updated before and after each command, not continuously. Event timestamps are reported by OpenCode, not measured provider latency. Missing events, capture truncation, and `omittedEvents` limit what can be concluded; a quiet interval cannot distinguish model computation from provider waiting. A forcibly killed evaluator may leave only the last command's `running` entry. Debug mode does not increase timeouts, change permissions, or retry commands.
 
@@ -221,11 +245,13 @@ Only include environment variable names that the OpenCode subprocess actually ne
 
 ## Output Acceptance and Troubleshooting
 
-Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. Unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
+Available advice must cite actual repository files in `repository-files.json`. The top-level review and every returned assessment and action must each include a repository citation; generated summaries, policy context, and snapshot manifests alone are insufficient. A citation that is a listed path followed by line numbers, such as `src/Client.java:40-52,60`, counts as that path; the line numbers are dropped. Other unknown citations are discarded, and a response without required citations is unavailable. Citation validation establishes path availability, not the correctness of a claim or proof that the agent read the file. Deterministic status and findings remain unchanged.
 
 Malformed or uncited assessment/action records reject the response; they are not
 silently dropped while preserving its overall conclusion. Nested failure-bound
-records are validated and require repository citations too. These checks enforce
+records are validated and require repository citations too: like assessment and
+action citations, an unknown path in a bound is discarded, and a bound left with
+no repository citation rejects the response. These checks enforce
 structural consistency, not the truth of model-authored explanations.
 
 The narrow exception is an unresolved S006 coverage-gap assessment whose ID was
@@ -239,7 +265,7 @@ Agent-review failures are reported without exposing raw provider output or crede
 
 - **Timeout:** choose a faster model or explicitly increase `--criterion-agent-timeout-ms` within the supported range of 1–2147483647 ms.
 - **Provider error:** inspect provider credentials, quota, account status, and endpoint configuration. Do not print credentials while troubleshooting.
-- **Capture overflow:** the review is unavailable; the evaluator does not infer advice from a captured prefix.
+- **Capture overflow:** the review command's output is mostly tool events, and the answer comes last. The evaluator keeps at most the last 16 MiB of it, so memory stays bounded. If more was written, the earlier output is dropped, together with the rest of the assistant message that was in progress at the cut, because its lost start may have held the start of a masked credential. The review is then used only if the kept output contains the final answer's whole assistant message, and a warning reports the output size and the limit. Otherwise the review is unavailable with `capture truncated`. The `opencode debug` commands keep the first 64 KiB, and the review is unavailable if their output is cut.
 - **Malformed, invalid, or incomplete response:** inspect the evaluator's sanitized diagnosis and, if useful, rerun the OpenCode command manually in a trusted environment.
 
 These categories diagnose the observed command or response; they do not make claims about provider reliability. In every failure category, evaluation continues with the deterministic result and evidence.
@@ -249,16 +275,24 @@ evaluator package/version, configured agent model, and committed source paths ci
 by explicit structured criterion evidence or agent-review references. Incidental path
 text in narrative evidence and diagnostics does not add a source citation. HTML
 reports use that inventory for commit-pinned GitHub links and offer a report-safe
-JSON download with the standard `EvaluationResult` shape. Repository-controlled free
-text and agent diagnostics are redacted before either HTML payload is embedded;
-validated repository and cited-path identities are preserved so their links remain
-stable. Any credentials in the repository URL are removed before that identity is
-preserved or embedded in the download. OpenCode runtime metadata is omitted from the
+JSON download with the standard `EvaluationResult` shape. Both payloads, like the JSON
+report, have the evaluator's own credentials masked and are otherwise unchanged. Any
+credentials in the repository URL are removed before it is embedded in the download. OpenCode runtime metadata is omitted from the
 embedded download. Historical results without provenance remain renderable. Failed
 and timed-out reviews are shown as unavailable; configuration and no-evidence skips
 remain distinct.
 
-Malformed-response reports distinguish invalid transport records, sanitization rejection, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed before its decoded values are redacted.
+Malformed-response reports distinguish invalid transport records, unparseable or too deeply nested records, and invalid final assistant JSON. Capture diagnostics retain at most 16 content-free entries with record numbers, allowlisted rejection categories, and assistant JSON parseability before and after sanitization. They do not retain raw rejected text, arbitrary field names, or tool previews. Native tool/reasoning payloads are omitted from captured output while their lifecycle boundaries remain; incomplete file previews cannot invalidate later advice. Advisory JSON is parsed, and text parts of one message are joined, before credentials in its decoded values are masked, so a credential split across parts is still masked.
+
+## Output masking
+
+The evaluator masks its own credentials, not repository content. Wherever the exact current value of one of these variables appears in command output, agent output, error messages, the console error, or the JSON and HTML reports, it is replaced with `[REDACTED_<VARIABLE>]`, such as `[REDACTED_OPENROUTER_API_KEY]`:
+
+- `OPENROUTER_API_KEY` and `OPENAI_API_KEY` (agent review providers);
+- `SONAR_TOKEN` and `GITHUB_TOKEN` (remote lookups);
+- every variable named by `--criterion-agent-provider-env` or `--criterion-agent-proxy-env`.
+
+Every string of at least 8 characters in a trusted auth store's JSON (`--criterion-agent-auth-store`), such as API keys and OAuth tokens, becomes `[REDACTED_AUTH_STORE]`; a token OpenCode refreshes during the run is not known in advance and is not masked. Unset variables and values shorter than 8 characters are not masked. Only the exact value is matched, not an encoded form such as a JSON-escaped or percent-encoded one. Text is masked before it is cut to a size limit, and when output was already cut while it was captured, a credential's start left at the cut is dropped. Nothing else is redacted: repository text, command output, and agent advice that quote tokens, passwords, private URLs, or keys appear as written.
 
 ## GitHub Actions
 

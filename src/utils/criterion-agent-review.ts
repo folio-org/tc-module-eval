@@ -10,12 +10,20 @@ import {
   EvaluationStatus
 } from '../types';
 import { LocalCommandRunner } from './command-runner';
-import { prepareRepositoryBrowsing } from './agent-review-repository';
-import { isWithinRepo } from './repo-files';
+import type { CommittedSourceSnapshot } from './committed-source';
+import { prepareRepositoryBrowsing, readRepositorySnapshot } from './agent-review-repository';
+import { isWithinRepo, relativePosixPath } from './repo-files';
 import { removeOpenCodeRuntimeCredentials, runOpenCodeAgentReview } from './opencode-agent-adapter';
-import { redactSensitiveText, truncateToByteBudget } from './redaction';
+import { redactEvaluatorSecrets, truncateToByteBudget } from './redaction';
+import { errorMessage, isRecord } from './type-guards';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
+
+/** A technologyId the agent adds for something the analyzer missed: discovered:<normalized-id>. */
+export const DISCOVERED_TECHNOLOGY_ID = /^discovered:[a-z0-9][a-z0-9._-]*$/;
+
+/** S006's generated scanner summary; the only generated file an unresolved coverage-gap assessment may cite. */
+export const S006_FINDING_SUMMARY_PATH = '.criterion-agent/S006/finding-summary.json';
 
 export interface CriterionAgentReviewFile {
   repoRelativePath: string;
@@ -31,11 +39,18 @@ export interface CriterionAgentReviewRequest {
   evidenceMode?: 'repository' | 'supplied-files';
   /** Add criterion context that depends on the source actually available to the review. */
   prepareAdditionalFiles?: (availableSourcePaths: ReadonlySet<string>) => CriterionAgentReviewFile[];
-  /** Apply criterion-specific semantic checks after shared normalization and citation validation. */
+  /**
+   * Apply criterion-specific semantic checks after shared normalization and citation validation.
+   * A hook may first normalize the review in place, as S007 does for discovered technology IDs.
+   */
   validateReview?: (
     review: CriterionAgentReviewResult,
     availableSourcePaths: ReadonlySet<string>
   ) => string | undefined;
+  /** Narrows the browsable committed source, on top of the shared exclusions. */
+  browseInclude?: (repoRelativePath: string) => boolean;
+  /** Timeout for each OpenCode command when the run sets none (--criterion-agent-timeout-ms). */
+  defaultTimeoutMs?: number;
   /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
   coverageGapIds?: string[];
   schemaDescription: string;
@@ -57,6 +72,8 @@ export interface OptionalCriterionAgentReviewRequest {
   criterionId: string;
   status: EvaluationStatus;
   hasReviewMaterial: boolean;
+  /** Why the review does not run without review material; by default, no candidate evidence was available. */
+  notRunReason?: string;
   evaluationRun: EvaluationRun;
   review: (
     config: CriterionAgentReviewConfig,
@@ -76,7 +93,7 @@ export async function reviewCriterionWithAgent(
     return {};
   }
   if (!request.hasReviewMaterial) {
-    return { unavailableReason: 'no candidate evidence was available for agent review' };
+    return { unavailableReason: request.notRunReason ?? 'no candidate evidence was available for agent review' };
   }
   if (!request.evaluationRun.agentReview?.enabled) {
     return { unavailableReason: 'agent review is disabled or unconfigured' };
@@ -88,20 +105,25 @@ export async function reviewCriterionWithAgent(
     return { unavailableReason: `agent review is not enabled for ${request.criterionId}` };
   }
 
+  const run = request.evaluationRun;
+  const config: CriterionAgentReviewConfig = {
+    ...request.evaluationRun.agentReview,
+    readRepositorySnapshot: () => run.getOrCreateArtifact('agentReviewSnapshot', () => readRepositorySnapshot(run.repositoryPath))
+  };
   let agentReview: CriterionAgentReviewResult;
   try {
-    agentReview = await request.review(request.evaluationRun.agentReview, request.evaluationRun.commandRunner);
+    agentReview = await run.runAgentReview(() => request.review(config, run.commandRunner));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     return {
       agentReview: {
         available: false,
         criterionId: request.criterionId,
         evidenceReferences: [],
         warnings: [],
-        errors: [`Agent review failed unexpectedly: ${redactSensitiveText(message)}`]
+        errors: [`Agent review failed unexpectedly: ${redactEvaluatorSecrets(message)}`]
       },
-      unavailableReason: `Agent review failed unexpectedly: ${redactSensitiveText(message)}`
+      unavailableReason: `Agent review failed unexpectedly: ${redactEvaluatorSecrets(message)}`
     };
   }
   if (!agentReview.available) {
@@ -127,6 +149,9 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [`Agent review is not enabled for ${request.criterionId}`] };
   }
 
+  if (config.timeoutMs === undefined && request.defaultTimeoutMs !== undefined) {
+    config = { ...config, timeoutMs: request.defaultTimeoutMs };
+  }
   const validationError = validateAgentReviewConfig(config, request.repositoryPath);
   if (validationError) {
     return { ...unavailable, errors: [validationError] };
@@ -134,16 +159,16 @@ export async function runCriterionAgentReview(
 
   let prepared: PreparedCriterionAgentReview;
   try {
-    prepared = await prepareCriterionAgentReviewEvidence(request);
+    prepared = await prepareCriterionAgentReviewEvidence(request, config.readRepositorySnapshot);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review evidence: ${error instanceof Error ? error.message : String(error)}`)] };
+    return { ...unavailable, errors: [redactEvaluatorSecrets(`Unable to prepare agent review evidence: ${errorMessage(error)}`)] };
   }
 
   let workspace: PreparedCriterionReviewWorkspace;
   try {
     workspace = prepareCriterionReviewWorkspace(prepared.request);
   } catch (error) {
-    return { ...unavailable, errors: [redactSensitiveText(`Unable to prepare agent review workspace: ${error instanceof Error ? error.message : String(error)}`)] };
+    return { ...unavailable, errors: [redactEvaluatorSecrets(`Unable to prepare agent review workspace: ${errorMessage(error)}`)] };
   }
   try {
     if (config.adapter === 'fake') {
@@ -187,7 +212,8 @@ export interface PreparedCriterionAgentReview {
 }
 
 export async function prepareCriterionAgentReviewEvidence(
-  request: CriterionAgentReviewRequest
+  request: CriterionAgentReviewRequest,
+  readSnapshot?: () => Promise<CommittedSourceSnapshot>
 ): Promise<PreparedCriterionAgentReview> {
   let preparedRequest: PreparedCriterionAgentReviewRequest;
   let availableSourcePaths: ReadonlySet<string>;
@@ -198,7 +224,7 @@ export async function prepareCriterionAgentReviewEvidence(
     preparedRequest = suppliedRequest;
     availableSourcePaths = new Set(request.files.map(file => file.repoRelativePath));
   } else {
-    const preparedRepository = await prepareRepositoryBrowsing(request);
+    const preparedRepository = await prepareRepositoryBrowsing(request, readSnapshot);
     preparedRequest = preparedRepository.request;
     availableSourcePaths = preparedRepository.sourcePaths;
   }
@@ -233,10 +259,9 @@ function validateRepositoryCitations(
   availableSourcePaths: ReadonlySet<string>
 ): CriterionAgentReviewResult {
   if (!request.repositoryBrowsing || !review.available) return review;
-  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.criterionId === 'S006'
-      && request.coverageGapIds?.includes(item.technologyId)
+  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.coverageGapIds?.includes(item.technologyId)
       && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
-      && item.evidenceReferences.includes('.criterion-agent/S006/finding-summary.json'))).map(item => item.evidenceReferences),
+      && item.evidenceReferences.includes(S006_FINDING_SUMMARY_PATH))).map(item => item.evidenceReferences),
     ...(review.assessments ?? []).flatMap(item => (item.failureBounds ?? []).map(bound => bound.evidenceReferences)),
     ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
   if (references.some(citations => !citations.some(citation => availableSourcePaths.has(citation)))) {
@@ -256,7 +281,7 @@ export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentR
     const entries = request.files.map(file => {
       const safeRelativePath = safeWorkspaceRelativePath(file.repoRelativePath);
       const workspacePath = path.join(docsRoot, safeRelativePath);
-      const workspaceKey = path.relative(docsRoot, workspacePath).split(path.sep).join('/');
+      const workspaceKey = relativePosixPath(docsRoot, workspacePath);
       if (usedWorkspacePaths.has(workspaceKey)) {
         throw new Error(`Duplicate agent review workspace path: ${workspaceKey}`);
       }
@@ -271,7 +296,7 @@ export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentR
       return {
         id: safeRelativePath,
         repoRelativePath: file.repoRelativePath,
-        workspacePath: path.relative(rootPath, workspacePath).split(path.sep).join('/')
+        workspacePath: relativePosixPath(rootPath, workspacePath)
       };
     });
 
@@ -370,7 +395,7 @@ function endpointMatchesAllowedUrl(endpoint: URL, allowed: string): boolean {
   return endpoint.pathname === parsedAllowed.pathname || endpoint.pathname.startsWith(allowedPath);
 }
 
-function unavailableResult(criterionId: string): CriterionAgentReviewResult {
+export function unavailableResult(criterionId: string): CriterionAgentReviewResult {
   return {
     available: false,
     criterionId,
@@ -390,10 +415,10 @@ function normalizeFakeCriterionReviewResult(
     request.files.map(file => file.repoRelativePath)
   );
   const warnings = [
-    ...stringArray(rawResult.warnings).map(warning => redactSensitiveText(warning)),
+    ...stringArray(rawResult.warnings).map(warning => redactEvaluatorSecrets(warning)),
     ...normalized.warnings
   ];
-  const errors = stringArray(rawResult.errors).map(error => redactSensitiveText(error));
+  const errors = stringArray(rawResult.errors).map(error => redactEvaluatorSecrets(error));
   const metadata = rawResult.metadata ?? {
     adapter: 'fake' as const,
     modelLabel: config.modelLabel,
@@ -464,8 +489,8 @@ export function normalizeCriterionAgentAdvisoryPayload(
   const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries, errors);
   const recommendation = parseAdvisoryRecommendation(payload.recommendation);
   const confidence = parseAdvisoryConfidence(payload.confidence);
-  const summary = typeof payload.summary === 'string' ? redactSensitiveText(payload.summary).trim() : undefined;
-  const rationale = typeof payload.rationale === 'string' ? redactSensitiveText(payload.rationale).trim() : undefined;
+  const summary = typeof payload.summary === 'string' ? redactEvaluatorSecrets(payload.summary).trim() : undefined;
+  const rationale = typeof payload.rationale === 'string' ? redactEvaluatorSecrets(payload.rationale).trim() : undefined;
   if (!recommendation) errors.push('recommendation must be a supported advisory recommendation');
   if (!confidence) errors.push('confidence must be low, medium, high, or a finite number between 0 and 1');
   if (!summary) errors.push('summary must be a nonblank string');
@@ -488,7 +513,8 @@ export function normalizeCriterionAgentAdvisoryPayload(
     assessments,
     reviewerActions,
     warnings: [
-      ...(rawEvidenceReferences.length !== evidenceReferences.length
+      // Merged duplicates and line numbers on a listed path are not dropped citations.
+      ...(rawEvidenceReferences.some(reference => !normalizeAdvisoryEvidenceReferences([reference], manifestEntries).length)
         ? ['Dropped uncited or unknown advisory evidence references']
         : [])
     ]
@@ -514,7 +540,7 @@ function normalizeAssessments(
       manifestEntries
     );
     const summary = typeof candidate.summary === 'string'
-      ? redactSensitiveText(candidate.summary).trim()
+      ? redactEvaluatorSecrets(candidate.summary).trim()
       : '';
     const coverageDisposition = candidate.coverageDisposition as NonNullable<CriterionAgentReviewResult['assessments']>[number]['coverageDisposition'];
     if (coverageDisposition !== undefined && !['investigated', 'immaterial', 'unresolved'].includes(coverageDisposition)) return reject('invalid coverageDisposition');
@@ -549,10 +575,11 @@ function normalizeFailureBounds(value: unknown, manifestEntries: string[]): Crit
       || !['established', 'unverified', 'not_applicable'].includes(item.status)
       || typeof item.explanation !== 'string' || !item.explanation.trim()
       || !Array.isArray(item.evidenceReferences)) return undefined;
+    // Like assessment and action citations: unknown paths are dropped, and a record left with none is invalid.
     const evidenceReferences = normalizeAdvisoryEvidenceReferences(item.evidenceReferences, manifestEntries);
-    if (!evidenceReferences.length || evidenceReferences.length !== item.evidenceReferences.length) return undefined;
+    if (!evidenceReferences.length) return undefined;
     bounds.push({ phase: item.phase, requirement: item.requirement, status: item.status,
-      explanation: redactSensitiveText(item.explanation).trim(), evidenceReferences });
+      explanation: redactEvaluatorSecrets(item.explanation).trim(), evidenceReferences });
   }
   return bounds;
 }
@@ -575,7 +602,7 @@ function normalizeReviewerActions(
       manifestEntries
     );
     const action = typeof candidate.action === 'string'
-      ? redactSensitiveText(candidate.action).trim()
+      ? redactEvaluatorSecrets(candidate.action).trim()
       : '';
     if (!action || evidenceReferences.length === 0) return reject('missing nonblank action or source-manifest citation');
     return [{ action, evidenceReferences }];
@@ -615,13 +642,17 @@ function parseAdvisoryConfidence(value: unknown): CriterionAgentReviewResult['co
   return undefined;
 }
 
+// Agents add line numbers to citations (src/Client.java:40-52,60) despite the instructions. The path
+// before them must still be an exact manifest entry; the line numbers are dropped.
+const LINE_LOCATOR = /:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/;
+
 function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestEntries: string[]): string[] {
   const references = rawReferences
     .map(reference => {
       if (typeof reference === 'string') {
         return reference;
       }
-      if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+      if (isRecord(reference)) {
         const candidate = reference as Record<string, unknown>;
         if (typeof candidate.repoRelativePath === 'string') {
           return candidate.repoRelativePath;
@@ -632,6 +663,8 @@ function normalizeAdvisoryEvidenceReferences(rawReferences: unknown[], manifestE
       }
       return undefined;
     })
+    .map(reference => reference === undefined || manifestEntries.includes(reference) ? reference
+      : reference.replace(LINE_LOCATOR, ''))
     .filter((reference): reference is string => typeof reference === 'string' && manifestEntries.includes(reference));
 
   return [...new Set(references)];

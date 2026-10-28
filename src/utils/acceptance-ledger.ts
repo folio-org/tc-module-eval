@@ -1,17 +1,17 @@
 import path from 'path';
 import fs from 'fs-extra';
-import crypto from 'crypto';
 import Ajv, { ErrorObject } from 'ajv';
 import schema from '../schemas/acceptance-ledger.schema.json';
 import { AcceptanceLedger, S008PolicyDiagnostic, S008PolicyLoadResult } from '../types';
+import { errorMessage } from './type-guards';
+import { isMissingFileError, isPathInside, relativePosixPath, sha256Digest } from './repo-files';
 
 export const DEFAULT_ACCEPTANCE_LEDGER_PATH = path.resolve(__dirname, '../../config/acceptance-ledger.json');
 const EVALUATOR_ROOT = path.resolve(__dirname, '../..');
 
 /** Reports policy files bundled with the evaluator by their project-relative path, not the local checkout location. */
 export function displayPolicyPath(sourcePath: string): string {
-  const relative = path.relative(EVALUATOR_ROOT, sourcePath);
-  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative.split(path.sep).join('/') : sourcePath;
+  return isPathInside(EVALUATOR_ROOT, sourcePath) ? relativePosixPath(EVALUATOR_ROOT, sourcePath) : sourcePath;
 }
 const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
 
@@ -38,7 +38,7 @@ function validateSemantics(ledger: AcceptanceLedger): S008PolicyDiagnostic[] {
   const diagnostics: S008PolicyDiagnostic[] = [];
   duplicateDiagnostics(ledger.families.map(item => item.id), 'family ID', '/families', diagnostics);
   duplicateDiagnostics(ledger.moduleIdentities.map(item => item.identity), 'module identity', '/moduleIdentities', diagnostics);
-  duplicateDiagnostics(ledger.libraryCoordinates.map(coordinateKey), 'library coordinate', '/libraryCoordinates', diagnostics);
+  duplicateDiagnostics(ledger.libraryCoordinates.map(libraryCoordinateKey), 'library coordinate', '/libraryCoordinates', diagnostics);
   const familyIds = new Set(ledger.families.map(item => item.id));
   for (const [index, mapping] of [...ledger.moduleIdentities, ...ledger.libraryCoordinates].entries()) {
     if (!familyIds.has(mapping.familyId)) {
@@ -48,7 +48,7 @@ function validateSemantics(ledger: AcceptanceLedger): S008PolicyDiagnostic[] {
   return diagnostics;
 }
 
-function coordinateKey(value: AcceptanceLedger['libraryCoordinates'][number]): string {
+export function libraryCoordinateKey(value: AcceptanceLedger['libraryCoordinates'][number]): string {
   return value.ecosystem === 'maven'
     ? `maven:${value.groupId}:${value.artifactId}`
     : `npm:${value.packageName}`;
@@ -70,7 +70,7 @@ export async function readJson(sourcePath: string): Promise<
   try {
     content = await fs.readFile(sourcePath, 'utf8');
   } catch (error) {
-    const missing = Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+    const missing = isMissingFileError(error);
     return { ok: false, sourcePath, diagnostics: [{
       code: missing ? 'policy_missing' : 'policy_read_error',
       message: missing ? `Trusted policy file not found: ${sourcePath}` : `Unable to read trusted policy file: ${errorMessage(error)}`,
@@ -86,7 +86,7 @@ export async function readJson(sourcePath: string): Promise<
 
 export function success<T>(sourcePath: string, content: string, value: T): S008PolicyLoadResult<T> {
   deepFreeze(value);
-  return { ok: true, value, sourcePath, digest: `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`, diagnostics: [] };
+  return { ok: true, value, sourcePath, digest: sha256Digest(content), diagnostics: [] };
 }
 
 export function failure<T>(sourcePath: string, diagnostics: S008PolicyDiagnostic[]): S008PolicyLoadResult<T> {
@@ -101,8 +101,4 @@ function deepFreeze(value: unknown): void {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return;
   Object.freeze(value);
   for (const child of Object.values(value)) deepFreeze(child);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

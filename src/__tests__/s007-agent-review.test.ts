@@ -10,6 +10,7 @@ import {
 } from '../types';
 import * as committedSource from '../utils/committed-source';
 import { prepareCriterionAgentReviewEvidence, prepareCriterionReviewWorkspace, reviewCriterionWithAgent } from '../utils/criterion-agent-review';
+import { createEvaluationRun } from '../utils/evaluation-run';
 import { buildS007AgentReviewRequest, reviewS007WithAgent } from '../utils/s007-agent-review';
 import { loadS007Policy } from '../utils/s007-policy';
 
@@ -156,7 +157,7 @@ describe('S007 agent review', () => {
     expect(review.errors.join('\n')).toContain('requires repository evidence');
   });
 
-  it('preserves status and redacts advisory output, not repository source', async () => {
+  it('preserves status and keeps repository source and advisory text as written', async () => {
     await commit({ 'package.json': '{"dependencies":{"react":"^18"},"token":"source-secret-value"}' });
     const deterministic = analysis(finding('react', 'package.json'));
     const request = await prepared(await buildS007AgentReviewRequest(repoPath, deterministic));
@@ -168,7 +169,7 @@ describe('S007 agent review', () => {
       assessments: [{ technologyId: 'react', type: 'aligned_fact', summary: 'React is declared.', evidenceReferences: ['package.json'] }]
     }));
     expect(deterministic.status).toBe(EvaluationStatus.MANUAL);
-    expect(`${review.summary}\n${review.rationale}`).not.toMatch(/output-secret-value|output-password-value/);
+    expect([review.summary, review.rationale]).toEqual(['token=output-secret-value', 'password=output-password-value']);
   });
 
   it.each([
@@ -199,7 +200,7 @@ describe('S007 agent review', () => {
 
     const result = await reviewCriterionWithAgent({
       criterionId: 'S007', status: EvaluationStatus.MANUAL, hasReviewMaterial: true,
-      evaluationRun: { agentReview: fakeConfig({}) } as any,
+      evaluationRun: createEvaluationRun({ repositoryPath: repoPath, language: 'java', agentReview: fakeConfig({}) }),
       review: config => reviewS007WithAgent(repoPath, deterministic, config)
     });
     expect(result.agentReview?.available).toBe(false);

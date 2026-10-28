@@ -1,6 +1,4 @@
 /**
- * Evaluation status for a criteria
- *
  * FRAMEWORK USAGE NOTES:
  * - PASS: Criterion automatically verified as meeting requirements
  * - FAIL: Criterion automatically verified as NOT meeting requirements
@@ -15,9 +13,6 @@ export enum EvaluationStatus {
   NOT_APPLICABLE = 'not_applicable'
 }
 
-/**
- * A single criterion from the acceptance criteria
- */
 export interface Criterion {
   id: string;
   code: string;
@@ -25,9 +20,6 @@ export interface Criterion {
   section: string;
 }
 
-/**
- * Result of evaluating a single criterion
- */
 export interface CriterionResult {
   criterionId: string;
   status: EvaluationStatus;
@@ -37,9 +29,6 @@ export interface CriterionResult {
   agentReview?: CriterionAgentReviewResult;
 }
 
-/**
- * Complete evaluation result for a module
- */
 export interface EvaluationResult {
   repositoryUrl: string;
   moduleName: string;
@@ -61,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's009DependencyEvidence' | 's010ThirdPartyEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -70,6 +59,8 @@ export interface CommandExecutionRequest {
   cwd: string;
   timeoutMs?: number;
   maxOutputBytes?: number;
+  /** When stdout exceeds maxOutputBytes, keep its last complete lines instead of its first bytes. */
+  keepStdoutTail?: boolean;
   stdoutFormat?: 'text' | 'json' | 'opencode-json';
   captureDebugTrace?: boolean;
   env?: Record<string, string | undefined>;
@@ -118,7 +109,7 @@ export interface ModuleDescriptorArtifact {
     | 'ambiguous-candidates'
     | 'unsafe-to-run'
     | 'command-failed';
-  strategy?: 'maven-generation' | 'frontend-script' | 'static-root';
+  strategy?: 'maven-generation' | 'gradle-generation' | 'frontend-script' | 'static-root';
   descriptorPath?: string;
   absolutePath?: string;
   command?: CommandExecutionResult;
@@ -130,30 +121,60 @@ export interface EvaluationRunArtifacts {
   moduleDescriptor?: ModuleDescriptorArtifact;
   moduleKind?: ModuleKindResult;
   s007TechnologyEvidence?: import('./s007-officially-supported-technologies').S007TechnologyEvidenceResult;
+  /** S007's policy and analysis, shared with F005 so both report the same Stripes finding. Read-only once produced. */
+  s007Analysis?: import('./s007-officially-supported-technologies').S007RunAnalysis;
   s009DependencyEvidence?: import('./s009-library-acceptance').S009DependencyEvidence;
   s010ThirdPartyEvidence?: import('./s010-third-party-resilience').S010Evidence;
+  buildTestEvidence?: import('./s012-build-tools').BuildTestEvidence;
+  platformMembership?: import('./s014-application-assignment').S014PlatformSnapshot;
+  sonarCloudSnapshot?: import('./sonarcloud-snapshot').SonarCloudSnapshot;
+  s011SuppressionScan?: import('./s011-sonarqube').S011SuppressionScan;
+  /** The committed source every agent review browses; read once and frozen, since the reviews share it. */
+  agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
+  /** The committed production source, package.json and English translations the F criteria read. */
+  frontendSource?: import('../utils/frontend-source').FrontendSource;
+  /** Every request a UI package's production code sends to the backend, for F001. */
+  uiRequestSites?: import('./f001-consumed-apis').UiRequestSites;
+  /** The B criteria's shared evidence: repository kind, descriptor template, framework and storage. */
+  backendEvidence?: import('./backend-evidence').BackendEvidence;
 }
 
 export interface EvaluationRun {
   repositoryPath: string;
   repositoryUrl?: string;
   repositoryName?: string;
-  language: string;
+  language: import('../criteria-definitions').CriterionLanguage;
   selectedCriteria: string[];
   artifacts: EvaluationRunArtifacts;
   commandObservations: Map<string, CommandExecutionResult>;
   commandRunner?: CommandRunner;
   agentReview?: CriterionAgentReviewConfig;
   s008CatalogChannel: import('./s008-interface-acceptance').S008CatalogChannel;
+  /** The evaluated commit; absent for direct evaluateCriterion calls. */
+  repositoryCommit?: string;
+  /** The --branch value, if one was given. */
+  requestedBranch?: string;
+  /** The remote-evidence transport; absent unless --allow-remote-lookups was given. */
+  remoteLookups?: import('./remote-evidence').RemoteLookups;
+  /** The application the evaluation's Jira task names (--application). */
+  s014Application?: string;
+  /** The platform-lsp branch, tag or commit S014 reads (--platform-ref). */
+  s014PlatformRef?: string;
+  /** Evaluate an existing module rather than a new one (--existing-module), which relaxes some new-module rules. */
+  existingModule: boolean;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
   ): Promise<NonNullable<EvaluationRunArtifacts[K]>>;
+  /**
+   * Run one criterion's agent review once a review slot is free, after handing the section loop on to the next
+   * criterion. Call it at most once per criterion: a second call would start the next criterion early.
+   */
+  runAgentReview<T>(review: () => Promise<T>): Promise<T>;
+  /** Resolves when the next runAgentReview call starts, so the section loop can start the next criterion. */
+  nextAgentReviewHandoff(): Promise<void>;
 }
 
-/**
- * Configuration for the evaluation process
- */
 export interface EvaluationConfig {
   tempDir?: string;
   outputDir?: string;
@@ -165,6 +186,14 @@ export interface EvaluationConfig {
   commandExecutionEnvironment?: CommandExecutionEnvironment;
   agentReview?: CriterionAgentReviewConfig;
   s008CatalogChannel?: import('./s008-interface-acceptance').S008CatalogChannel;
+  /** Allow read-only lookups of SonarCloud, platform-lsp and FAR (--allow-remote-lookups). */
+  allowRemoteLookups?: boolean;
+  /** Replaces the remote-evidence transport, like commandRunner; implies remote lookups are allowed. */
+  remoteLookups?: import('./remote-evidence').RemoteLookups;
+  s014Application?: string;
+  s014PlatformRef?: string;
+  /** Evaluate an existing module rather than a new one (--existing-module). */
+  existingModule?: boolean;
 }
 
 export * from './s004-installation-documentation';
@@ -174,6 +203,18 @@ export * from './s007-officially-supported-technologies';
 export * from './s008-interface-acceptance';
 export * from './s009-library-acceptance';
 export * from './s010-third-party-resilience';
+export * from './s011-sonarqube';
+export * from './sonarcloud-snapshot';
+export * from './s012-build-tools';
+export * from './s013-test-coverage';
+export * from './s014-application-assignment';
+export * from './remote-evidence';
+export * from './frontend-checklist';
+export * from './f001-consumed-apis';
+export * from './f002-e2e-tests';
+export * from './f003-internationalization';
+export * from './f005-stripes-version';
+export * from './backend-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
@@ -250,6 +291,8 @@ export interface CriterionAgentReviewConfig {
   fakeResult?: CriterionAgentReviewResult;
   generatedProvider?: CriterionAgentGeneratedProvider;
   providerConfigError?: string;
+  /** Set per run by reviewCriterionWithAgent so a run's reviews share one committed-source read. */
+  readRepositorySnapshot?: () => Promise<import('../utils/committed-source').CommittedSourceSnapshot>;
 }
 
 export interface CriterionAgentGeneratedProvider {
@@ -260,89 +303,40 @@ export interface CriterionAgentGeneratedProvider {
   modelSelector: string;
 }
 
-/**
- * Function signature for individual criterion evaluation methods
- */
 export type CriterionFunction = (repoPath: string, evaluationRun?: EvaluationRun) => Promise<CriterionResult>;
 
-/**
- * Base interface for section-specific evaluators
- */
 export interface SectionEvaluator {
-  /**
-   * The name of the section this evaluator handles
-   */
   readonly sectionName: string;
 
-  /**
-   * Array of criterion IDs this evaluator handles
-   */
   readonly criteriaIds: string[];
 
-  /**
-   * Evaluate all criteria in this section
-   * @param repoPath Path to the cloned repository
-   * @param criteriaFilter Optional array of criterion IDs to filter evaluation
-   * @returns Promise<CriterionResult[]> Results of all criteria in this section
-   */
   evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
-  /**
-   * Evaluate a specific criterion by ID
-   * @param criterionId The ID of the criterion to evaluate
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<CriterionResult> Result of the specific criterion
-   */
   evaluateCriterion(criterionId: string, repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult>;
 }
 
-/**
- * Interface for language-specific evaluators
- */
 export interface LanguageEvaluator {
-  /**
-   * Determine if this evaluator can handle the given repository
-   * @param repoPath Path to the cloned repository
-   * @returns Promise<boolean> true if this evaluator can handle the repo
-   */
   canEvaluate(repoPath: string): Promise<boolean>;
 
-  /**
-   * Evaluate the repository against all applicable criteria
-   * @param repoPath Path to the cloned repository
-   * @param criteriaFilter Optional array of criterion IDs to filter evaluation
-   * @returns Promise<CriterionResult[]> Results of the evaluation
-   */
   evaluate(repoPath: string, criteriaFilter?: string[], evaluationRun?: EvaluationRun): Promise<CriterionResult[]>;
 
-  /**
-   * Get the language this evaluator handles
-   */
   getLanguage(): string;
 }
 
-/**
- * Report generation options
- */
 export interface ReportOptions {
   outputHtml?: boolean;
   outputJson?: boolean;
   outputDir?: string;
 }
 
-/**
- * Represents a third-party dependency with its licenses
- */
 export interface Dependency {
   name: string;
   version: string;
-  // A dependency can have multiple licenses, or none declared
-  licenses?: string[];
+  // Alternative licenses (any one may be chosen), or none declared. An array entry is a set of
+  // licenses that all apply together, such as SPDX "MIT AND Zlib".
+  licenses?: Array<string | string[]>;
 }
 
-/**
- * License issue types for structured compliance reporting
- */
 export enum LicenseIssueType {
   CATEGORY_X_VIOLATION = 'CATEGORY_X_VIOLATION',
   UNKNOWN_LICENSE = 'UNKNOWN_LICENSE',
@@ -351,30 +345,22 @@ export enum LicenseIssueType {
   PARSER_ERROR = 'PARSER_ERROR'
 }
 
-/**
- * Represents a compliance issue with a specific dependency
- */
 export interface ComplianceIssue {
   dependency: Dependency;
-  reason: string; // Human-readable description
-  issueType: LicenseIssueType; // Structured type for programmatic handling
+  reason: string;
+  issueType: LicenseIssueType;
 }
 
-/**
- * Result of license compliance checking
- */
 export interface ComplianceResult {
   compliant: boolean;
   issues: ComplianceIssue[];
 }
 
-/**
- * Represents an error or warning during dependency extraction
- */
 export interface DependencyExtractionError {
   source: string;      // e.g., "maven-parser", "gradle-parser", "path-validation"
-  message: string;     // Human-readable error message
-  error?: Error;       // Original error for debugging/logging
+  message: string;
+  error?: Error;
+  commandsDisabled?: boolean; // True when the build command was not run because local commands are off
 }
 
 /**
@@ -382,27 +368,17 @@ export interface DependencyExtractionError {
  * Allows callers to distinguish between "no dependencies found" (valid) and "extraction failed" (error)
  */
 export interface DependencyExtractionResult {
-  dependencies: Dependency[];               // Successfully extracted dependencies
+  dependencies: Dependency[];
   errors: DependencyExtractionError[];      // Fatal errors that prevented extraction
   warnings: DependencyExtractionError[];    // Non-fatal issues (e.g., "no build file found")
 }
 
-/**
- * Configuration interfaces for external JSON files used by license policy
- */
-
-/**
- * License categories configuration structure
- */
 export interface LicenseCategoriesConfig {
   _description?: string;
   _reference?: string;
   categories: Record<string, string>;
 }
 
-/**
- * Special exceptions configuration structure
- */
 export interface SpecialExceptionsConfig {
   _description?: string;
   _note?: string;
@@ -413,9 +389,17 @@ export interface SpecialExceptionsConfig {
   }>;
 }
 
-/**
- * License variations configuration structure
- */
+export interface DualLicensedConfig {
+  _description?: string;
+  _reference?: string;
+  projects: Array<{
+    name: string;
+    matchType: 'exact' | 'prefix';
+    licenses: string;
+    source: string;
+  }>;
+}
+
 export interface LicenseVariationsConfig {
   _description?: string;
   _source?: string;

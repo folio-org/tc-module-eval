@@ -35,8 +35,32 @@ function normalizeEvaluationReport(report: EvaluationResult): NormalizedEvaluati
       if (criterion.criterionId === 'S010') {
         return normalizeS010GoldenCriterion(criterion);
       }
+      if (criterion.criterionId === 'S012') {
+        return normalizeS012GoldenCriterion(criterion);
+      }
       return criterion;
     }),
+  };
+}
+
+function normalizeS012GoldenCriterion(criterion: EvaluationResult['criteria'][number]): EvaluationResult['criteria'][number] {
+  const details = criterion.criterionDetails as Record<string, any> | undefined;
+  if (!details) return criterion;
+  return {
+    ...criterion,
+    details: details.summary,
+    criterionDetails: {
+      area: details.area,
+      findings: (details.findings ?? []).map((finding: any) => ({
+        toolId: finding.toolId,
+        classification: finding.classification,
+        contribution: finding.contribution,
+        statusDetermining: finding.statusDetermining,
+        versions: (finding.versions ?? []).map((check: any) => `${check.label}: ${check.text} (${check.comparison})`)
+      })),
+      buildFiles: (details.evidence?.files ?? []).map((file: any) => `${file.kind}:${file.path}`),
+      diagnosticCodes: (details.evidence?.diagnostics ?? []).map((diagnostic: any) => diagnostic.code).sort()
+    }
   };
 }
 
@@ -199,16 +223,16 @@ function normalizeS005DetailsText(details: string | undefined): string | undefin
     .split('\n')
     .filter(line =>
       line.startsWith('Artifact mechanics:') ||
-      line.startsWith('Parsed disclosure fields:') ||
-      line.startsWith('Deterministic evidence:') ||
+      line.startsWith('Disclosure form:') ||
+      line.startsWith('Evidence from the code:') ||
       line.startsWith('Possible mismatches:') ||
       line.startsWith('Agent review:') ||
       line.includes('Repository kind:') ||
       line.includes('Required file:') ||
       line.includes('Discovery status:') ||
-      line.includes('Parse state:') ||
-      line.includes('Evidence files scanned:') ||
-      line.includes('Evidence signals found:') ||
+      line.includes('Form status:') ||
+      line.includes('Files scanned:') ||
+      line.includes('Matches found:') ||
       line.includes('Not applied:')
     )
     .join('\n');
@@ -237,12 +261,10 @@ describe('CLI Integration Tests', () => {
   const testOutputDir = path.join(os.tmpdir(), 'folio-eval-integration-tests', Date.now().toString());
 
   beforeAll(async () => {
-    // Create test output directory
     await fs.ensureDir(testOutputDir);
   });
 
   afterAll(async () => {
-    // Clean up test output directory
     try {
       await fs.remove(testOutputDir);
     } catch (error) {
@@ -250,7 +272,6 @@ describe('CLI Integration Tests', () => {
     }
   });
 
-  // Extended timeout for integration tests (5 minutes per test)
   jest.setTimeout(300000);
 
   describe('Repository Evaluation', () => {
@@ -262,13 +283,10 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
 
-      // Verify evaluation result structure
       expect(result).toBeDefined();
       expect(result.moduleName).toBe('mod-search');
       expect(result.repositoryUrl).toBe(repoUrl);
@@ -277,27 +295,22 @@ describe('CLI Integration Tests', () => {
       expect(result.criteria).toBeInstanceOf(Array);
       expect(result.criteria.length).toBeGreaterThan(0);
 
-      // Verify each result has required fields
       result.criteria.forEach((criterionResult) => {
         expect(criterionResult.criterionId).toBeDefined();
         expect(criterionResult.status).toMatch(/pass|fail|manual|not_applicable/);
         expect(criterionResult.evidence).toBeDefined();
       });
 
-      // Generate reports
       const reportGenerator = new ReportGenerator(testOutputDir);
       const reportPaths = await reportGenerator.generateReports(result);
 
-      // Verify reports were generated
       expect(reportPaths.htmlPath).toBeDefined();
       expect(reportPaths.jsonPath).toBeDefined();
 
-      // Verify HTML report exists and has content
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
       expect(htmlContent).toContain('mod-search');
       expect(htmlContent).toContain('Evaluation Report');
 
-      // Verify JSON report is valid JSON
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
       const jsonData = JSON.parse(jsonContent);
       expect(jsonData.moduleName).toBe('mod-search');
@@ -312,13 +325,10 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
 
-      // Verify evaluation result structure
       expect(result).toBeDefined();
       expect(result.moduleName).toBe('mod-source-record-storage');
       expect(result.repositoryUrl).toBe(repoUrl);
@@ -327,15 +337,12 @@ describe('CLI Integration Tests', () => {
       expect(result.criteria).toBeInstanceOf(Array);
       expect(result.criteria.length).toBeGreaterThan(0);
 
-      // Generate reports
       const reportGenerator = new ReportGenerator(testOutputDir);
       const reportPaths = await reportGenerator.generateReports(result);
 
-      // Verify reports were generated
       expect(reportPaths.htmlPath).toBeDefined();
       expect(reportPaths.jsonPath).toBeDefined();
 
-      // Verify JSON structure
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
       const jsonData = JSON.parse(jsonContent);
       expect(jsonData.moduleName).toBe('mod-source-record-storage');
@@ -351,13 +358,10 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
 
-      // Verify evaluation result structure
       expect(result).toBeDefined();
       expect(result.moduleName).toBe('ui-data-import');
       expect(result.repositoryUrl).toBe(repoUrl);
@@ -366,15 +370,12 @@ describe('CLI Integration Tests', () => {
       expect(result.criteria).toBeInstanceOf(Array);
       expect(result.criteria.length).toBeGreaterThan(0);
 
-      // Generate reports
       const reportGenerator = new ReportGenerator(testOutputDir);
       const reportPaths = await reportGenerator.generateReports(result);
 
-      // Verify reports were generated
       expect(reportPaths.htmlPath).toBeDefined();
       expect(reportPaths.jsonPath).toBeDefined();
 
-      // Verify JSON structure
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
       const jsonData = JSON.parse(jsonContent);
       expect(jsonData.moduleName).toBe('ui-data-import');
@@ -392,14 +393,11 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
       expect(result).toBeDefined();
 
-      // Generate only JSON report
       const reportGenerator = new ReportGenerator(testOutputDir);
       const reportOptions: ReportOptions = {
         outputHtml: false,
@@ -408,11 +406,9 @@ describe('CLI Integration Tests', () => {
       };
       const reportPaths = await reportGenerator.generateReports(result, reportOptions);
 
-      // Verify only JSON report was generated
       expect(reportPaths.htmlPath).toBeUndefined();
       expect(reportPaths.jsonPath).toBeDefined();
 
-      // Verify JSON file exists
       const jsonExists = await fs.pathExists(reportPaths.jsonPath!);
       expect(jsonExists).toBe(true);
     });
@@ -425,14 +421,11 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
       expect(result).toBeDefined();
 
-      // Generate only HTML report
       const reportGenerator = new ReportGenerator(testOutputDir);
       const reportOptions: ReportOptions = {
         outputHtml: true,
@@ -441,11 +434,9 @@ describe('CLI Integration Tests', () => {
       };
       const reportPaths = await reportGenerator.generateReports(result, reportOptions);
 
-      // Verify only HTML report was generated
       expect(reportPaths.htmlPath).toBeDefined();
       expect(reportPaths.jsonPath).toBeUndefined();
 
-      // Verify HTML file exists
       const htmlExists = await fs.pathExists(reportPaths.htmlPath!);
       expect(htmlExists).toBe(true);
     });
@@ -474,7 +465,7 @@ describe('CLI Integration Tests', () => {
           expect.objectContaining({
             technologyId: 'java', classification: 'compliant', contribution: 'pass', statusDetermining: false,
             advisories: expect.arrayContaining([
-              'Exception applicability is unresolved, but the base rule and every possible exception give the same version-compliance outcome.'
+              'The tool could not tell whether the policy exception applies, but the result is the same either way.'
             ])
           })
         ]) });
@@ -517,17 +508,13 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       await evaluator.evaluateModule(repoUrl);
 
-      // Check that no temporary directories remain in system temp
       const tempDir = path.join(os.tmpdir(), 'folio-eval');
       if (await fs.pathExists(tempDir)) {
         const dirs = await fs.readdir(tempDir);
-        // There should be very few or no mod-search directories
         const modSearchDirs = dirs.filter(d => d.startsWith('mod-search'));
         expect(modSearchDirs.length).toBeLessThanOrEqual(1);
       }
@@ -544,19 +531,15 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       await evaluator.evaluateModule(repoUrl);
 
-      // Check that temporary directory still exists
       expect(await fs.pathExists(tempDir)).toBe(true);
       const dirs = await fs.readdir(tempDir);
       const modSearchDirs = dirs.filter(d => d.startsWith('mod-search'));
       expect(modSearchDirs.length).toBeGreaterThan(0);
 
-      // Clean up manually
       for (const dir of modSearchDirs) {
         await fs.remove(path.join(tempDir, dir));
       }
@@ -573,13 +556,10 @@ describe('CLI Integration Tests', () => {
         allowLocalCommands: true,
       };
 
-      // Create evaluator with config
       const evaluator = new ModuleEvaluator(config);
 
-      // Run evaluation
       const result = await evaluator.evaluateModule(repoUrl);
 
-      // Verify only specified criteria are in results
       expect(result.criteria.length).toBeLessThanOrEqual(2);
       result.criteria.forEach((r) => {
         expect(['A001', 'S001']).toContain(r.criterionId);
@@ -606,7 +586,7 @@ describe('CLI Integration Tests', () => {
       expect(result.criteria).toHaveLength(1);
       expect(result.criteria[0].criterionId).toBe('S002');
       expect(result.criteria[0].status).toBe('pass');
-      expect(result.criteria[0].evidence).toContain('ModuleDescriptor.json validates against Okapi schema baseline');
+      expect(result.criteria[0].evidence).toContain('ModuleDescriptor.json (committed at the repository root) matches the Okapi ModuleDescriptor schema');
     });
 
     test('should include S002 evidence in JSON and escaped HTML reports', async () => {
@@ -618,8 +598,8 @@ describe('CLI Integration Tests', () => {
         criteria: [{
           criterionId: 'S002',
           status: EvaluationStatus.PASS,
-          evidence: 'Module descriptor ModuleDescriptor.json validates against Okapi schema baseline',
-          details: 'Warnings:\n  - <script>alert("x")</script>\nCommand: mvn process-resources (success)'
+          evidence: 'The module descriptor ModuleDescriptor.json (committed at the repository root) matches the Okapi ModuleDescriptor schema.',
+          details: 'Notes:\n  - <script>alert("x")</script>\nBuild command: mvn process-resources (ran locally and succeeded)'
         }]
       };
 
@@ -627,7 +607,7 @@ describe('CLI Integration Tests', () => {
       const reportPaths = await reportGenerator.generateReports(result);
 
       const jsonContent = await fs.readFile(reportPaths.jsonPath!, 'utf-8');
-      expect(jsonContent).toContain('Okapi schema baseline');
+      expect(jsonContent).toContain('Okapi ModuleDescriptor schema');
 
       const htmlContent = await fs.readFile(reportPaths.htmlPath!, 'utf-8');
       expect(htmlContent).toContain('\\u003cscript\\u003ealert');
@@ -701,7 +681,7 @@ describe('CLI Integration Tests', () => {
           criterionId: 'S004',
           status: EvaluationStatus.MANUAL,
           evidence: 'S004 manual: Candidate documentation exists',
-          details: 'Strongest signals:\n  - README.md [env_configuration] <script>alert("x")</script> token=abc123'
+          details: 'Strongest examples:\n  - README.md [config] <script>alert("x")</script> token=abc123'
         }]
       };
 
@@ -752,7 +732,7 @@ describe('CLI Integration Tests', () => {
 
         expect(evaluation.criteria).toHaveLength(1);
         expect(s007?.status).toBe(EvaluationStatus.PASS);
-        expect(s007?.details).toContain('frontend-third-party-frameworks/react');
+        expect(s007?.details).toContain('Policy rule: React ^18.2.0');
         expect(s007?.details).not.toMatch(/policy selector|policy release|flower release/i);
 
         const reports = await new ReportGenerator(testOutputDir).generateReports(evaluation);
@@ -763,7 +743,7 @@ describe('CLI Integration Tests', () => {
         expect(jsonS007.status).toBe('pass');
         expect(jsonS007.criterionDetails.findings[0].matchedPolicy).toBeDefined();
         expect(embeddedReportData(html).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'S007' })]));
-        expect(html).toContain('Result contribution: pass');
+        expect(html).toContain('Policy rule: React ^18.2.0');
         expect(html).toContain(jsonS007.criterionDetails.findings[0].matchedPolicy.entryId);
       } finally {
         await fs.remove(localRepo);
@@ -799,14 +779,29 @@ describe('CLI Integration Tests', () => {
         files: { 'pom.xml': '<project><artifactId>folio-spring-base</artifactId></project>' }
       },
       {
+        // A timeout and catch do not show that the service is optional.
         name: 's010-stripes-ui',
-        expected: EvaluationStatus.PASS,
+        expected: EvaluationStatus.MANUAL,
         files: {
           'package.json': JSON.stringify({ name: 's010-stripes-ui', dependencies: { react: '^18', '@folio/stripes-core': '^10' } }),
           'src/components/Lookup.tsx': [
             'export async function lookup() {',
             '  const controller = new AbortController();',
             '  try { return await fetch("https://example.org/search", { signal: controller.signal }); }',
+            '  catch (error) { return []; }',
+            '}'
+          ].join('\n')
+        }
+      },
+      {
+        name: 's010-stripes-ui-switchable',
+        expected: EvaluationStatus.PASS,
+        files: {
+          'package.json': JSON.stringify({ name: 's010-stripes-ui-switchable', dependencies: { react: '^18', '@folio/stripes-core': '^10' } }),
+          'src/components/Lookup.tsx': [
+            'export async function lookup(stripes) {',
+            "  if (!stripes.hasInterface('search')) return [];",
+            '  try { return await fetch("https://example.org/search", { signal: AbortSignal.timeout(2000) }); }',
             '  catch (error) { return []; }',
             '}'
           ].join('\n')

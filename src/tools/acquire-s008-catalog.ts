@@ -6,6 +6,14 @@ import { Command } from 'commander';
 import { S008CatalogChannel } from '../types';
 import { isSupportedEurekaVersionExpression } from '../utils/eureka-interface-compatibility';
 import { importS008Catalog } from './import-s008-catalog';
+import {
+  parseApplicationModuleReference,
+  parseFarApplication,
+  parsePlatformApplicationPins,
+  parsePlatformPins
+} from '../utils/platform-applications';
+import { errorMessage, isRecord } from '../utils/type-guards';
+import { sha256Digest } from '../utils/repo-files';
 
 const DEFAULT_PLATFORM_RAW_BASE = 'https://raw.githubusercontent.com/folio-org/platform-lsp';
 const DEFAULT_FAR_URL = 'https://far.ci.folio.org';
@@ -212,18 +220,8 @@ async function acquireApplication(
     diagnostics.push(httpDiagnostic('far_request_failed', error, exactId));
     return undefined;
   }
-  const envelope = asOptionalRecord(response.parsed);
-  const records = Array.isArray(envelope?.applicationDescriptors) ? envelope!.applicationDescriptors : [];
-  const totalRecords = typeof envelope?.totalRecords === 'number' ? envelope.totalRecords : records.length;
-  if (records.length !== 1 || totalRecords !== 1) {
-    diagnostics.push({ code: 'far_cardinality', material: true, message: `Expected exactly one FAR result for ${exactId}; received ${totalRecords}.`, source: url.toString() });
-    return undefined;
-  }
-  const application = asOptionalRecord(records[0]);
-  if (!application || application.id !== exactId || application.name !== pin.name || application.version !== pin.version) {
-    diagnostics.push({ code: 'far_identity_mismatch', material: true, message: `FAR result did not exactly match ${exactId}.`, source: url.toString() });
-    return undefined;
-  }
+  const application = parseFarApplication(response.parsed, pin, url.toString(), diagnostics);
+  if (!application) return undefined;
   const snapshotPath = `snapshots/applications/${safeName(exactId)}.json`;
   await writeStable(path.join(path.dirname(snapshotsDir), snapshotPath), application);
   const references = [
@@ -268,28 +266,13 @@ function moduleReferences(
     }
   }
   const parsedReferences = references.flatMap(reference => {
-    const record = asOptionalRecord(reference);
-    if (!record || typeof record.id !== 'string') {
-      diagnostics.push({ code: 'invalid_module_reference', material: true, message: `${applicationId} contains a module reference without an exact ID.` });
-      return [];
-    }
-    const identity = moduleIdentity(record);
-    if (!identity) {
-      diagnostics.push({ code: 'unresolved_module_identity', material: true, message: `Unable to derive module identity for ${record.id}.`, source: applicationId });
-      return [];
-    }
-    const version = typeof record.version === 'string' && record.version
-      ? record.version
-      : record.id.slice(identity.length + 1);
-    if (!version || record.id !== `${identity}-${version}`) {
-      diagnostics.push({ code: 'unresolved_module_version', material: true, message: `Unable to derive exact module version for ${record.id}.`, source: applicationId });
-      return [];
-    }
-    const candidate = embeddedById.get(record.id);
+    const parsed = parseApplicationModuleReference(reference, applicationId, diagnostics);
+    if (!parsed) return [];
+    const candidate = embeddedById.get(parsed.id);
     const embeddedRecord = asOptionalRecord(candidate);
-    const usableEmbedded = embeddedRecord?.id === record.id ? candidate : undefined;
-    if (candidate && !usableEmbedded) diagnostics.push({ code: 'embedded_descriptor_mismatch', material: true, message: `${field} entry did not match ${record.id}.`, source: applicationId });
-    return [{ id: record.id, identity, version, sourceApplication: applicationId, embedded: usableEmbedded }];
+    const usableEmbedded = embeddedRecord?.id === parsed.id ? candidate : undefined;
+    if (candidate && !usableEmbedded) diagnostics.push({ code: 'embedded_descriptor_mismatch', material: true, message: `${field} entry did not match ${parsed.id}.`, source: applicationId });
+    return [{ ...parsed, sourceApplication: applicationId, embedded: usableEmbedded }];
   });
   const referenceIds = new Set(parsedReferences.map(reference => reference.id));
   for (const embeddedId of embeddedById.keys()) {
@@ -444,7 +427,7 @@ function buildDiscovery(references: ModuleReference[], descriptors: AcquiredDesc
   for (const descriptor of descriptors) {
     const current = identities.get(descriptor.moduleIdentity)!;
     current.descriptorStatus = 'acquired';
-    current.descriptors.push({ moduleId: descriptor.moduleId, source: descriptor.source, digest: digest(stableStringify(descriptor.descriptor)) });
+    current.descriptors.push({ moduleId: descriptor.moduleId, source: descriptor.source, digest: sha256Digest(stableStringify(descriptor.descriptor)) });
     if (!current.suggestions.displayName && typeof descriptor.descriptor.name === 'string') current.suggestions.displayName = descriptor.descriptor.name;
     const repository = repositoryHint(descriptor.descriptor);
     if (repository) current.suggestions.canonicalRepositories = [repository];
@@ -465,46 +448,24 @@ function componentSourceManifest(component: ComponentPin, descriptors: AcquiredD
   };
   const acquired = descriptors.find(descriptor => descriptor.componentProvenance?.name === component.name);
   return acquired?.componentProvenance
-    ? { ...acquired.componentProvenance, descriptorHash: digest(stableStringify(acquired.descriptor)) }
+    ? { ...acquired.componentProvenance, descriptorHash: sha256Digest(stableStringify(acquired.descriptor)) }
     : { name: component.name, version: component.version, status: 'unresolved' };
 }
 
+// S008 catalogs accepted platform releases, so experimental applications stay out (S014 counts them).
 function collectApplicationPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ApplicationPin[] {
-  const applications = asOptionalRecord(platform.applications);
-  if (platform.applications !== undefined && !applications) {
-    diagnostics.push({ code: 'invalid_application_container', material: true, message: 'Platform applications must be an object.' });
-  }
-  const groups: Array<{ values: unknown; optional: boolean }> = [
-    { values: applications?.required, optional: false },
-    { values: applications?.optional, optional: true }
-  ];
-  return groups.flatMap(group => parsePins(group.values, group.optional, 'application', diagnostics));
+  return parsePlatformApplicationPins(platform, ['required', 'optional'], diagnostics)
+    .map(({ name, version, tier }) => ({ name, version, optional: tier !== 'required' }));
 }
 
 function collectComponentPins(platform: Record<string, unknown>, diagnostics: Diagnostic[]): ComponentPin[] {
-  return parsePins(platform['eureka-components'], false, 'component', diagnostics).map(({ name, version }) => ({ name, version }));
+  return parsePlatformPins(platform['eureka-components'], 'component', diagnostics);
 }
 
-function parsePins(values: unknown, optional: boolean, kind: string, diagnostics: Diagnostic[]): ApplicationPin[] {
-  if (values === undefined) return [];
-  if (!Array.isArray(values)) {
-    diagnostics.push({ code: `invalid_${kind}_pins`, material: true, message: `Platform ${kind} pins must be an array.` });
-    return [];
-  }
-  return values.flatMap((value, index) => {
-    const record = asOptionalRecord(value);
-    if (!record || typeof record.name !== 'string' || typeof record.version !== 'string' || !record.name || !record.version) {
-      diagnostics.push({ code: `invalid_${kind}_pin`, material: true, message: `Platform ${kind} pin ${index} lacks concrete name/version.` });
-      return [];
-    }
-    return [{ name: record.name, version: record.version, optional }];
-  }).sort(byJson);
-}
+export interface FetchOptions { fetchImpl: typeof fetch; timeoutMs: number; maxBytes: number }
+export interface JsonResponse { parsed: unknown }
 
-interface FetchOptions { fetchImpl: typeof fetch; timeoutMs: number; maxBytes: number }
-interface JsonResponse { parsed: unknown }
-
-async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse> {
+export async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
   try {
@@ -533,7 +494,7 @@ async function fetchJson(url: URL, options: FetchOptions): Promise<JsonResponse>
   }
 }
 
-function validateBaseUrl(value: string, label: string): URL {
+export function validateBaseUrl(value: string, label: string): URL {
   const url = new URL(value);
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error(`${label} URL must use HTTPS (HTTP is allowed only for loopback tests).`);
@@ -543,15 +504,6 @@ function validateBaseUrl(value: string, label: string): URL {
 
 function validateCommit(value: string): void {
   if (!/^[0-9a-f]{40}$/.test(value) || /^0+$/.test(value)) throw new Error('--platform-commit must be an explicit immutable 40-character lowercase commit SHA');
-}
-
-function moduleIdentity(reference: Record<string, unknown>): string | undefined {
-  if (typeof reference.name === 'string' && reference.name) return reference.name;
-  const id = reference.id as string;
-  if (typeof reference.version === 'string' && id.endsWith(`-${reference.version}`)) {
-    return id.slice(0, -reference.version.length - 1);
-  }
-  return undefined;
 }
 
 function repositoryHint(descriptor: Record<string, unknown>): string | undefined {
@@ -580,7 +532,7 @@ function diagnoseProvideVersions(descriptor: Record<string, unknown>, moduleId: 
 }
 
 function httpDiagnostic(code: string, error: unknown, source: string): Diagnostic {
-  return { code, material: true, message: error instanceof Error ? error.message : String(error), source };
+  return { code, material: true, message: errorMessage(error), source };
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -600,10 +552,10 @@ function asRecord(value: unknown, label: string): Record<string, any> {
 }
 
 function asOptionalRecord(value: unknown): Record<string, any> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : undefined;
+  return isRecord(value) ? value : undefined;
 }
 
-async function mapLimit<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
   const output = new Array<R>(values.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
@@ -621,7 +573,7 @@ async function writeStable(filePath: string, value: unknown): Promise<void> {
   await fs.writeFile(filePath, stableStringify(value));
 }
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   return `${JSON.stringify(sortKeys(value), null, 2)}\n`;
 }
 
@@ -636,9 +588,8 @@ function uniqueByJson<T>(values: T[]): T[] {
 }
 
 function byJson(left: unknown, right: unknown): number { return JSON.stringify(left).localeCompare(JSON.stringify(right)); }
-function digest(content: string): string { return `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`; }
 function safeName(value: string): string { return value.replace(/[^A-Za-z0-9_.-]/g, '_'); }
-function ensureTrailingSlash(url: URL): URL { return new URL(url.toString().replace(/\/?$/, '/')); }
+export function ensureTrailingSlash(url: URL): URL { return new URL(url.toString().replace(/\/?$/, '/')); }
 function positiveInteger(value: number, label: string): number { if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`); return value; }
 
 if (require.main === module) {
@@ -665,7 +616,7 @@ if (require.main === module) {
       });
     });
   program.parseAsync().catch(error => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(errorMessage(error));
     process.exitCode = 1;
   });
 }

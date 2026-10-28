@@ -1,3 +1,5 @@
+import type { EvaluationStatus } from './index';
+
 export type S007PolicyArea =
   | 'frontend'
   | 'backend'
@@ -144,6 +146,10 @@ export interface S007TechnologyObservation {
   resolvedVersion?: string;
   versionSourcePath?: string;
   resolutionSource?: 'maven-effective-pom';
+  /** The declared version was inferred from this Maven property by the Spring Boot `<artifactId>.version` convention. */
+  versionProperty?: string;
+  /** Declared only for tests (Maven test scope or a Gradle test configuration), so it does not decide the status. */
+  testScope?: true;
   mavenDependency?: {
     groupId: string;
     artifactId: string;
@@ -182,6 +188,10 @@ export interface S007EvidenceDiagnostic {
   message: string;
   material: boolean;
   path?: string;
+  /** The dependency or selector the message is about, so the report can list several in one row. */
+  subject?: string;
+  /** Row heading for that combined list, e.g. "Not found in yarn.lock". */
+  listHeading?: string;
 }
 
 export interface S007TechnologyEvidenceResult {
@@ -205,9 +215,11 @@ export type S007FindingClassification =
   | 'unlisted-framework'
   | 'unresolved'
   | 'conflicting'
-  | 'coverage-incomplete';
+  | 'coverage-incomplete'
+  | 'test-dependency';
 
-export type S007FindingContribution = 'pass' | 'manual' | 'fail';
+/** A note is shown in the report but does not affect the status. */
+export type S007FindingContribution = 'pass' | 'manual' | 'fail' | 'note';
 
 export interface S007MatchedPolicyEntry {
   sectionId: S007PolicySectionId;
@@ -218,6 +230,9 @@ export interface S007MatchedPolicyEntry {
   constraint?: S007VersionConstraint;
 }
 
+/** How a declared version range compares with a policy constraint. */
+export type S007VersionComparison = 'compliant' | 'noncompliant' | 'overlap' | 'unresolved';
+
 export interface S007FindingEvidence {
   path: string;
   detail: string;
@@ -225,6 +240,9 @@ export interface S007FindingEvidence {
   resolvedVersion?: string;
   versionSourcePath?: string;
   resolutionSource?: 'maven-effective-pom';
+  versionProperty?: string;
+  /** The artifact shows the technology is used, but its own version is not the technology's version. */
+  ownVersionLine?: true;
 }
 
 export interface S007TechnologyFinding {
@@ -241,11 +259,17 @@ export interface S007TechnologyFinding {
 
 export interface S007AnalysisResult {
   criterionId: 'S007';
-  status: 'pass' | 'fail' | 'manual' | 'not_applicable';
+  status: EvaluationStatus;
   summary: string;
   policyFormatVersion?: string;
   findings: S007TechnologyFinding[];
   policyDiagnostics: S007PolicyDiagnostic[];
   evidenceDiagnostics: S007EvidenceDiagnostic[];
   agentReviewUnavailableReason?: string;
+}
+
+/** The policy S007 applied and its analysis, produced once per run and shared by S007 and F005. */
+export interface S007RunAnalysis {
+  policyLoad: S007PolicyLoadResult;
+  analysis: S007AnalysisResult;
 }

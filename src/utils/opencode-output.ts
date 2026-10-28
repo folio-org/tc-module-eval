@@ -1,8 +1,9 @@
-import { isSensitiveKey, redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
+import { isRecord } from './type-guards';
 
 const UNSAFE_OUTPUT = '{"type":"unsafe_output"}';
 
-// A strict projection, not redacted free text: no paths, arguments, output, or reasoning.
+// A strict projection of known fields: no paths, arguments, output, or reasoning.
 export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
   const part = asObject(event?.part);
   const state = asObject(part.state);
@@ -30,7 +31,9 @@ export function sanitizeStructuredOutput(
   output: string,
   format: 'json' | 'opencode-json',
   maxBytes: number,
-  captureDebugTrace = false
+  captureDebugTrace = false,
+  keepTail = false,
+  startCut = false
 ): { text: string; truncated: boolean; diagnostics: string[] } {
   const records: string[] = [];
   const diagnostics: string[] = [];
@@ -40,7 +43,12 @@ export function sanitizeStructuredOutput(
   };
   let bytes = 0;
   const whole = parseJsonObject(output);
-  const inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  let inputs = whole ? [output] : format === 'json' ? [output] : output.split(/\r?\n/).filter(line => line.trim());
+  if (startCut && format === 'opencode-json') {
+    // The message in progress at the cut lost its start, which may have held the start of a secret.
+    const firstStart = inputs.findIndex(line => parseJsonObject(line)?.type === 'step_start');
+    inputs = firstStart < 0 ? [] : inputs.slice(firstStart);
+  }
   const parsedInputs = inputs.map(parseJsonObject);
   if (format === 'opencode-json') combineNativeTextParts(parsedInputs);
   for (const [index, parsed] of parsedInputs.entries()) {
@@ -54,28 +62,21 @@ export function sanitizeStructuredOutput(
         record = JSON.stringify(sanitizeValue({ type: parsed.type, part: { messageID: part.messageID } }));
       } else if (format === 'opencode-json' && extractOpenCodeEventText(parsed) !== undefined) {
         const rawText = extractOpenCodeEventText(parsed)!;
-        const candidate = selectJsonObjectFromText(rawText);
-        const payload = candidate?.value;
+        const payload = parseJsonObjectFromText(rawText);
         let safeText = rawText ? '[invalid advisory JSON]' : '';
-        if (payload) {
-          // Do not extract an object from inside an enclosing secret assignment.
-          const prefix = redactSensitiveText(rawText.slice(0, candidate!.start));
-          rejectIncompleteSecretAssignment(prefix);
-          if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(prefix)) throw new Error('Incomplete secret assignment');
-          safeText = JSON.stringify(sanitizeValue(payload, 0, false));
-        }
+        if (payload) safeText = JSON.stringify(sanitizeValue(payload));
         note(`record ${index + 1}: assistant JSON ${payload ? 'parsed' : 'invalid'}; sanitized JSON ${parseJsonObject(safeText) ? 'parsed' : 'invalid'}`);
         record = JSON.stringify({ type: 'text', part: {
           type: 'text', messageID: sanitizeValue(asObject(parsed.part).messageID ?? asObject(parsed.message).id),
           text: safeText, advisoryInvalid: Boolean(rawText) && !payload
         } });
       } else {
-        record = JSON.stringify(sanitizeValue(parsed, 0, format !== 'opencode-json' || Boolean(parsed.type)));
+        record = JSON.stringify(sanitizeValue(parsed));
       }
     } catch (error) {
       // No fragment of unparseable structured data is safe to publish/cache.
       record = UNSAFE_OUTPUT;
-      const reasons = ['Invalid framing', 'Malformed embedded JSON', 'Incomplete secret assignment', 'Structured output nesting limit'];
+      const reasons = ['Invalid framing', 'Structured output nesting limit'];
       const reason = error instanceof Error && reasons.includes(error.message) ? error.message : 'Sanitization failed';
       const type = ['text', 'tool_use', 'reasoning', 'step_start', 'step_finish', 'error'].includes(String(parsed?.type)) ? parsed!.type : 'other';
       note(`record ${index + 1}: ${type}; ${reason}`);
@@ -84,15 +85,21 @@ export function sanitizeStructuredOutput(
       record = JSON.stringify({ ...JSON.parse(record), debugTrace: openCodeEventTrace(parsed) });
     }
     const size = Buffer.byteLength(record) + (records.length ? 1 : 0);
-    if (bytes + size > maxBytes) return { text: records.join('\n'), truncated: true, diagnostics };
+    if (bytes + size > maxBytes && !keepTail) return { text: records.join('\n'), truncated: true, diagnostics };
     records.push(record);
     bytes += size;
   }
-  return { text: records.join('\n'), truncated: false, diagnostics };
+  // Tail mode drops whole records from the start; the newest records carry the final answer.
+  let truncated = false;
+  while (bytes > maxBytes) {
+    bytes -= Buffer.byteLength(records.shift()!) + (records.length ? 1 : 0);
+    truncated = true;
+  }
+  return { text: records.join('\n'), truncated, diagnostics };
 }
 
 // Capture is already byte-bounded by the runner. Assemble decoded text before
-// redaction so neither JSON strings nor secret assignments lose their context.
+// masking so a secret split across text parts is still masked whole.
 function combineNativeTextParts(events: Array<Record<string, unknown> | undefined>): void {
   let pending: Record<string, unknown> | undefined;
   let messageID: unknown;
@@ -116,63 +123,15 @@ function combineNativeTextParts(events: Array<Record<string, unknown> | undefine
   }
 }
 
-function sanitizeValue(value: unknown, depth = 0, embedded = true): unknown {
+// Masks the evaluator's own secrets in every decoded string and key.
+function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 64) throw new Error('Structured output nesting limit');
-  if (typeof value === 'string') {
-    // Recognize embedded JSON at every encoding boundary, including tool output.
-    const trimmed = value.trim();
-    if (/^[\["{]/.test(trimmed)) {
-      try {
-        return JSON.stringify(sanitizeValue(JSON.parse(trimmed), depth + 1, embedded));
-      } catch (error) {
-        if (!(error instanceof SyntaxError)) throw error;
-      }
-    }
-    // This is decoded prose, not serialized JSON. Preserve enclosing assignment
-    // and private-key context before separating any inline JSON objects.
-    const prose = redactSensitiveText(value);
-    try {
-      rejectIncompleteSecretAssignment(prose);
-    } catch (error) {
-      // Advice must remain useful; a placeholder cannot stand in for its rationale.
-      if (!embedded) throw error;
-      // Suppress an unsafe string, not its enclosing config or provider error.
-      return '[REDACTED_UNSAFE_TEXT]';
-    }
-    // Already-decoded advisory strings are prose, not replacement JSON syntax.
-    if (!embedded) return prose;
-    const spans = objectSpans(prose);
-    let result = '';
-    let offset = 0;
-    for (const span of spans) {
-      result += prose.slice(offset, span.start);
-      result += span.value
-        ? JSON.stringify(sanitizeValue(span.value, depth + 1))
-        : '[REDACTED_UNPARSEABLE_FRAGMENT]';
-      offset = span.end;
-    }
-    return result + prose.slice(offset);
-  }
-  if (Array.isArray(value)) return value.map(entry => sanitizeValue(entry, depth + 1, embedded));
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-      const safeKey = sanitizeValue(key, depth + 1, embedded) as string;
-      return [safeKey, isSensitiveKey(key) || safeKey !== key ? '[REDACTED]' : sanitizeValue(entry, depth + 1, embedded)];
-    }));
+  if (typeof value === 'string') return redactEvaluatorSecrets(value);
+  if (Array.isArray(value)) return value.map(entry => sanitizeValue(entry, depth + 1));
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [redactEvaluatorSecrets(key), sanitizeValue(entry, depth + 1)]));
   }
   return value;
-}
-
-function rejectIncompleteSecretAssignment(prose: string): void {
-  const assignments = prose.matchAll(/\b[\w-]*(?:password|passwd|secret|token|api[_-]?key)[\w-]*["']?\s*[:=]\s*(["'])/gi);
-  for (const assignment of assignments) {
-    let closed = false;
-    for (let index = assignment.index! + assignment[0].length; index < prose.length; index += 1) {
-      if (prose[index] === '\\') index += 1;
-      else if (prose[index] === assignment[1]) { closed = true; break; }
-    }
-    if (!closed) throw new Error('Incomplete secret assignment');
-  }
 }
 
 // JSON-like object spans, not ordinary prose braces such as {timeout}.
@@ -194,7 +153,7 @@ function objectSpans(text: string): Array<{ start: number; end: number; value?: 
 export function parseJsonObject(output: string): Record<string, unknown> | undefined {
   try {
     const parsed = JSON.parse(output);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
@@ -209,15 +168,19 @@ export interface OpenCodeOutput {
   failure?: 'provider_error' | 'incomplete_response' | 'no_assistant_text' | 'malformed_json';
   finishReason?: string;
   providerError?: { name?: string; message?: string; statusCode?: number };
-  diagnostic?: 'invalid transport record' | 'sanitization rejected a record' | 'final assistant JSON invalid';
+  diagnostic?: 'invalid transport record' | 'sanitization rejected a record' | 'final assistant JSON invalid' |
+    'final assistant message start not captured';
 }
 
-export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
+// requireMessageStart: the output's start was cut, so accept only a final message
+// whose step_start was captured; otherwise its first text parts may be missing.
+export function decodeOpenCodeOutput(output: string, requireMessageStart = false): OpenCodeOutput {
   const parsed = parseJsonObject(output);
-  if (parsed && !parsed.type) return { payload: parsed };
+  if (parsed && !parsed.type && !requireMessageStart) return { payload: parsed };
   let textParts: string[] = [];
   let messageID: unknown;
   let lifecycle = false;
+  let messageStarted = false;
   let finishReason: string | undefined;
   const lines = output.split(/\r?\n/).filter(line => line.trim());
   for (const line of lines) {
@@ -228,9 +191,9 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
       const error = asObject(event.error);
       const data = asObject(error.data);
       return { failure: 'provider_error', providerError: {
-        name: typeof error.name === 'string' ? redactSensitiveText(error.name, 100) : undefined,
-        message: typeof data.message === 'string' ? redactSensitiveText(data.message, 500) :
-          typeof error.message === 'string' ? redactSensitiveText(error.message, 500) : undefined,
+        name: typeof error.name === 'string' ? redactEvaluatorSecrets(error.name, 100) : undefined,
+        message: typeof data.message === 'string' ? redactEvaluatorSecrets(data.message, 500) :
+          typeof error.message === 'string' ? redactEvaluatorSecrets(error.message, 500) : undefined,
         statusCode: typeof data.statusCode === 'number' ? data.statusCode : undefined
       } };
     }
@@ -241,6 +204,7 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
       finishReason = undefined;
       messageID = currentID;
       lifecycle = true;
+      messageStarted = event.type === 'step_start';
     }
     if (event.type === 'step_finish') {
       lifecycle = true;
@@ -256,18 +220,21 @@ export function decodeOpenCodeOutput(output: string): OpenCodeOutput {
     }
   }
   if (lifecycle && finishReason !== 'stop') return { failure: 'incomplete_response', finishReason };
+  if (requireMessageStart && !messageStarted) {
+    return { failure: 'incomplete_response', finishReason, diagnostic: 'final assistant message start not captured' };
+  }
   if (!textParts.join('').trim()) return { failure: 'no_assistant_text', finishReason };
   const payload = parseJsonObjectFromText(textParts.join('').trim());
   return payload ? { payload, finishReason } : { failure: 'malformed_json', finishReason, diagnostic: 'final assistant JSON invalid' };
 }
 
 function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return isRecord(value) ? value : {};
 }
 
 function extractOpenCodeEventText(event: Record<string, unknown>): string | undefined {
   const part = event.part;
-  if (part && typeof part === 'object' && !Array.isArray(part)) {
+  if (isRecord(part)) {
     const candidate = part as Record<string, unknown>;
     if (candidate.type === 'text') return firstString(candidate.text, candidate.content);
   }
@@ -275,7 +242,7 @@ function extractOpenCodeEventText(event: Record<string, unknown>): string | unde
   if (partsText) return partsText;
   if (event.type === 'text') return firstString(event.text, event.content);
   const message = event.message;
-  if (message && typeof message === 'object' && !Array.isArray(message)) {
+  if (isRecord(message)) {
     const candidate = message as Record<string, unknown>;
     return extractTextParts(candidate.content) || extractTextParts(candidate.parts);
   }
@@ -287,7 +254,7 @@ function extractTextParts(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   const parts = value.flatMap(entry => {
     if (typeof entry === 'string') return [entry];
-    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    if (isRecord(entry)) {
       const text = firstString((entry as Record<string, unknown>).text, (entry as Record<string, unknown>).content);
       return text ? [text] : [];
     }
@@ -301,20 +268,13 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 function parseJsonObjectFromText(text: string): Record<string, unknown> | undefined {
-  return selectJsonObjectFromText(text)?.value;
-}
-
-function selectJsonObjectFromText(text: string): { start: number; value?: Record<string, unknown> } | undefined {
   const whole = parseJsonObject(text);
-  if (whole) return { start: 0, value: whole };
+  if (whole) return whole;
   const fences = [...text.matchAll(/^[ \t]*```json[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*```[ \t]*$|(?![\s\S]))/gmi)];
   const finalFence = fences[fences.length - 1];
-  if (finalFence) return {
-    start: finalFence.index! + finalFence[0].indexOf('\n') + 1,
-    value: parseJsonObject(finalFence[1].trim())
-  };
+  if (finalFence) return parseJsonObject(finalFence[1].trim());
   const spans = objectSpans(text);
-  return spans[spans.length - 1];
+  return spans[spans.length - 1]?.value;
 }
 
 function findBalancedObjectEnd(text: string, start: number): number {

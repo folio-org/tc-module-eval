@@ -1,0 +1,1008 @@
+{
+  "capturedAt": "2026-10-23T12:21:04.200Z",
+  "description": "SonarCloud org.folio:ui-agreements as S011 reads it, evaluated at ui-agreements commit 802a80e929f1b8ef2cb65aa3685bb4434599754a, trimmed to the fields the evaluator reads",
+  "responses": {
+    "https://sonarcloud.io/api/ce/component?component=org.folio%3Aui-agreements": {
+      "status": 200,
+      "body": {
+        "queue": [],
+        "current": {
+          "id": "AaC0vxiC8WyLALO_wrRs",
+          "type": "REPORT",
+          "componentId": "AWb0iPpnTnw0J_G3HL_5",
+          "componentKey": "org.folio:ui-agreements",
+          "componentName": "ui-agreements",
+          "componentQualifier": "TRK",
+          "analysisId": "3532ef46-4bf9-463d-8d62-0bada3af2b0d",
+          "status": "SUCCESS",
+          "submittedAt": "2026-09-18T13:40:17+0000",
+          "submitterLogin": "ankitasen-ubmainz@github",
+          "startedAt": "2026-09-18T13:40:17+0000",
+          "executedAt": "2026-09-18T13:40:25+0000",
+          "executionTimeMs": 7454,
+          "logs": false,
+          "hasScannerContext": true,
+          "organization": "folio-org",
+          "branch": "master",
+          "branchType": "LONG",
+          "warningCount": 0,
+          "warnings": []
+        }
+      }
+    },
+    "https://sonarcloud.io/api/components/show?component=org.folio%3Aui-agreements": {
+      "status": 200,
+      "body": {
+        "component": {
+          "organization": "folio-org",
+          "key": "org.folio:ui-agreements",
+          "name": "ui-agreements",
+          "qualifier": "TRK",
+          "analysisDate": "2026-09-18T13:39:20+0000",
+          "tags": [
+            "erm",
+            "dev-k-int"
+          ],
+          "visibility": "public",
+          "leakPeriodDate": "2026-07-23T14:43:23+0000",
+          "version": "not provided"
+        },
+        "ancestors": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-agreements&status=REVIEWED&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "hotspots": []
+      }
+    },
+    "https://sonarcloud.io/api/hotspots/search?projectKey=org.folio%3Aui-agreements&status=TO_REVIEW&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 62
+        },
+        "hotspots": [
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLineSections/FormCoverage/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 352,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLineSections/FormEresource/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 478,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLineSections/FormEresource/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 623,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 231,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 335,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 417,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 521,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 703,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementLinesFieldArray/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 814,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 239,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 295,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 659,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 715,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 939,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 995,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1219,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1275,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1499,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1555,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 232,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 288,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 652,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 708,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 932,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 988,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1212,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1268,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1492,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/InternalContacts/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1548,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 393,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 449,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 813,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 869,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1101,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1157,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1381,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1437,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1661,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/Lines/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1717,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 282,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 338,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 702,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 758,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 982,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1038,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1262,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1318,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1542,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/UsageData/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 1598,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/OpenBasketButton/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 50,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/OpenBasketButton/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 163,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/TitleCard/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 156,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/views/Agreement/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 182,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/views/Agreement/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 202,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/views/Agreement/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 487,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/views/Title/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 171,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/components/views/Title/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 297,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/routes/BasketRoute/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 628,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/routes/BasketRoute/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 673,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/routes/BasketRoute/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 755,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/routes/BasketRoute/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 801,
+            "ruleKey": "javascript:S5332"
+          },
+          {
+            "component": "org.folio:ui-agreements:src/routes/BasketRoute/testResources.js",
+            "securityCategory": "encrypt-data",
+            "vulnerabilityProbability": "LOW",
+            "line": 884,
+            "ruleKey": "javascript:S5332"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-agreements&issueStatuses=ACCEPTED%2CFALSE_POSITIVE&facets=issueStatuses&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 0,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 0
+        },
+        "issues": [],
+        "facets": [
+          {
+            "property": "issueStatuses",
+            "values": [
+              {
+                "val": "OPEN",
+                "count": 189
+              },
+              {
+                "val": "CONFIRMED",
+                "count": 0
+              },
+              {
+                "val": "FALSE_POSITIVE",
+                "count": 0
+              },
+              {
+                "val": "ACCEPTED",
+                "count": 0
+              },
+              {
+                "val": "FIXED",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-agreements&issueStatuses=OPEN%2CCONFIRMED&impactSeverities=HIGH%2CBLOCKER&facets=rules&ps=500&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 10,
+        "p": 1,
+        "ps": 500,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 500,
+          "total": 10
+        },
+        "issues": [
+          {
+            "rule": "javascript:S3776",
+            "component": "org.folio:ui-agreements:src/RemoteKB/components/RemoteKbResourceView/RemoteKbResourceView.js",
+            "line": 120,
+            "message": "Refactor this function to reduce its Cognitive Complexity from 28 to the 15 allowed.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S7746",
+            "component": "org.folio:ui-agreements:src/routes/AgreementViewRoute/AgreementViewRoute.js",
+            "line": 187,
+            "message": "Prefer `return value` over `return Promise.resolve(value)`.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/routes/AgreementViewRoute/AgreementViewRoute.js",
+            "line": 264,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/routes/AgreementEditRoute/AgreementEditRoute.js",
+            "line": 232,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/components/IdentifierReassignmentForm/DestinationTitleIdentifierField/DestinationTitleIdentifierField.js",
+            "line": 89,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/components/IdentifierReassignmentForm/SourceTitleIdentifierField/SourceTitleIdentifierField.js",
+            "line": 52,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/components/IdentifierReassignmentForm/SourceTitleIdentifierField/SourceTitleIdentifierField.js",
+            "line": 83,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S2004",
+            "component": "org.folio:ui-agreements:src/components/IdentifierReassignmentForm/SourceTitleIdentifierField/SourceTitleIdentifierField.js",
+            "line": 149,
+            "message": "Refactor this code to not nest functions more than 4 levels deep.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S7727",
+            "component": "org.folio:ui-agreements:src/components/utilities/filterObjectKeys.js",
+            "line": 4,
+            "message": "Do not pass function `filterFunc` directly to `.filter(…)`.",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S3776",
+            "component": "org.folio:ui-agreements:src/components/EResourceCount/EResourceCount.js",
+            "line": 39,
+            "message": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          }
+        ],
+        "facets": [
+          {
+            "property": "rules",
+            "values": [
+              {
+                "val": "javascript:S2004",
+                "count": 6
+              },
+              {
+                "val": "javascript:S3776",
+                "count": 2
+              },
+              {
+                "val": "javascript:S7746",
+                "count": 1
+              },
+              {
+                "val": "javascript:S7727",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-agreements&issueStatuses=OPEN%2CCONFIRMED&impactSoftwareQualities=SECURITY&ps=100&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 2,
+        "p": 1,
+        "ps": 100,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 100,
+          "total": 2
+        },
+        "issues": [
+          {
+            "rule": "javascript:S5332",
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "line": 59,
+            "message": "Using http protocol is insecure. Use https instead.",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "LOW"
+              }
+            ]
+          },
+          {
+            "rule": "javascript:S5332",
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "line": 136,
+            "message": "Using http protocol is insecure. Use https instead.",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "LOW"
+              }
+            ]
+          }
+        ],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/issues/search?componentKeys=org.folio%3Aui-agreements&issueStatuses=OPEN%2CCONFIRMED&types=VULNERABILITY&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "total": 2,
+        "p": 1,
+        "ps": 1,
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 2
+        },
+        "issues": [
+          {
+            "rule": "javascript:S5332",
+            "component": "org.folio:ui-agreements:src/components/AgreementSections/CoveredEResourcesList/testResources.js",
+            "line": 59,
+            "message": "Using http protocol is insecure. Use https instead.",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "LOW"
+              }
+            ]
+          }
+        ],
+        "facets": []
+      }
+    },
+    "https://sonarcloud.io/api/measures/component?component=org.folio%3Aui-agreements&metricKeys=coverage%2Cline_coverage%2Cbranch_coverage%2Clines_to_cover%2Cuncovered_lines%2Cconditions_to_cover%2Cuncovered_conditions%2Cduplicated_lines_density&branch=master": {
+      "status": 200,
+      "body": {
+        "component": {
+          "id": "AWb0iPpnTnw0J_G3HL_5",
+          "key": "org.folio:ui-agreements",
+          "name": "ui-agreements",
+          "qualifier": "TRK",
+          "measures": [
+            {
+              "metric": "coverage",
+              "value": "78.1",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_conditions",
+              "value": "859",
+              "bestValue": false
+            },
+            {
+              "metric": "duplicated_lines_density",
+              "value": "36.8",
+              "bestValue": false
+            },
+            {
+              "metric": "lines_to_cover",
+              "value": "4935"
+            },
+            {
+              "metric": "branch_coverage",
+              "value": "69.2",
+              "bestValue": false
+            },
+            {
+              "metric": "uncovered_lines",
+              "value": "831",
+              "bestValue": false
+            },
+            {
+              "metric": "line_coverage",
+              "value": "83.2",
+              "bestValue": false
+            },
+            {
+              "metric": "conditions_to_cover",
+              "value": "2787"
+            }
+          ]
+        }
+      }
+    },
+    "https://sonarcloud.io/api/navigation/component?component=org.folio%3Aui-agreements": {
+      "status": 200,
+      "body": {
+        "key": "org.folio:ui-agreements",
+        "organization": "folio-org",
+        "organizationName": "folio-org",
+        "id": "AWb0iPpnTnw0J_G3HL_5",
+        "name": "ui-agreements",
+        "isFavorite": false,
+        "badgeToken": "d278c316c41e4f2048f89e3b1834914c47e7c45e",
+        "createdAt": "2018-11-08T19:15:09+0000",
+        "visibility": "public",
+        "version": "not provided",
+        "analysisDate": "2026-09-18T13:39:20+0000",
+        "ciName": "Github Actions",
+        "analysisDateAllBranches": "2026-09-18T13:39:20+0000",
+        "qualityProfiles": [
+          {
+            "key": "AWtMlysOeA8Wl0oXGh3y",
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "deleted": false
+          }
+        ],
+        "qualityGate": {
+          "key": 9,
+          "name": "Sonar way",
+          "isDefault": true
+        },
+        "breadcrumbs": [
+          {
+            "key": "org.folio:ui-agreements",
+            "name": "ui-agreements",
+            "qualifier": "TRK"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_analyses/search?project=org.folio%3Aui-agreements&ps=1&branch=master": {
+      "status": 200,
+      "body": {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 1,
+          "total": 22
+        },
+        "analyses": [
+          {
+            "key": "3532ef46-4bf9-463d-8d62-0bada3af2b0d",
+            "date": "2026-09-18T13:39:20+0000",
+            "events": [
+              {
+                "key": "AaC0vzIUsK1RJQQ78K8Q",
+                "category": "VERSION",
+                "name": "not provided"
+              },
+              {
+                "key": "AaC0vzIKsK1RJQQ78K8P",
+                "category": "QUALITY_GATE",
+                "name": "Green (was Red)",
+                "description": ""
+              },
+              {
+                "key": "AaC0vzIKsK1RJQQ78K8O",
+                "category": "QUALITY_PROFILE",
+                "name": "Changes in 'FOLIO-JS Sonar Way' (js)"
+              }
+            ],
+            "projectVersion": "not provided",
+            "manualNewCodePeriodBaseline": false,
+            "revision": "802a80e929f1b8ef2cb65aa3685bb4434599754a"
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/project_branches/list?project=org.folio%3Aui-agreements": {
+      "status": 200,
+      "body": {
+        "branches": [
+          {
+            "name": "master",
+            "isMain": true
+          },
+          {
+            "name": "release-1.1",
+            "isMain": false
+          },
+          {
+            "name": "release-v1.2",
+            "isMain": false
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/qualityprofiles/search?project=org.folio%3Aui-agreements&organization=folio-org": {
+      "status": 200,
+      "body": {
+        "profiles": [
+          {
+            "name": "FOLIO-JS Sonar Way",
+            "language": "js",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    "https://sonarcloud.io/api/rules/search?organization=folio-org&rule_keys=javascript%3AS2004%2Cjavascript%3AS3776%2Cjavascript%3AS5332%2Cjavascript%3AS7727%2Cjavascript%3AS7746&f=name&ps=100": {
+      "status": 200,
+      "body": {
+        "total": 5,
+        "p": 1,
+        "ps": 100,
+        "rules": [
+          {
+            "key": "javascript:S5332",
+            "name": "Clear-text protocols should not be used",
+            "type": "VULNERABILITY",
+            "impacts": [
+              {
+                "softwareQuality": "SECURITY",
+                "severity": "LOW"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S2004",
+            "name": "Functions should not be nested too deeply",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S3776",
+            "name": "Cognitive Complexity of functions should not be too high",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S7727",
+            "name": "Function references should not be passed directly to iterator methods",
+            "type": "BUG",
+            "impacts": [
+              {
+                "softwareQuality": "RELIABILITY",
+                "severity": "HIGH"
+              },
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          },
+          {
+            "key": "javascript:S7746",
+            "name": "Promise.resolve() and Promise.reject() should not be used in async functions or promise callbacks",
+            "type": "CODE_SMELL",
+            "impacts": [
+              {
+                "softwareQuality": "MAINTAINABILITY",
+                "severity": "HIGH"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

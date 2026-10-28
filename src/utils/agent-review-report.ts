@@ -1,6 +1,8 @@
 import { CriterionAgentReviewResult } from '../types';
+import { S006_FINDING_SUMMARY_PATH } from './criterion-agent-review';
+import { reportPath, reportText } from './report-text';
 
-const ASSESSMENT_LABELS = {
+export const ASSESSMENT_LABELS = {
   aligned_fact: ['Supported by evidence', 'The reviewed source supports this finding; this is not a certification of the whole criterion.'],
   substantive_concern: ['Potential problem', 'The reviewed source indicates a possible problem. Confirm its impact before making a decision.'],
   analyzer_limitation: ['Automated check limitation', 'The automated check could not establish this behavior. That limitation is not itself a defect.'],
@@ -8,15 +10,22 @@ const ASSESSMENT_LABELS = {
   policy_question: ['TC interpretation needed', 'A Technical Council interpretation is needed to decide how the criterion applies.']
 } as const;
 
+export const COVERAGE_LABELS = {
+  investigated: 'Investigated directly',
+  immaterial: 'Not material to this scoped decision',
+  unresolved: 'Needs further verification'
+} as const;
+
 const SUBJECT_NAMES: Record<string, string> = {
   search: 'Search service', kafka: 'Kafka', database: 'Database',
   'object-storage': 'Object storage', okapi: 'Okapi', java: 'Java',
+  'folio-interfaces': 'FOLIO interfaces',
   'spring-boot': 'Spring Boot', lombok: 'Lombok'
 };
 
 // Details use indentation as structure. Model-authored newlines must stay prose.
-function prose(value: string | undefined): string {
-  return (value ?? '').replace(/\s+/g, ' ').trim();
+export function prose(value: string | undefined): string {
+  return reportText((value ?? '').replace(/\s+/g, ' ').trim());
 }
 
 export function renderAgentReviewLines(
@@ -53,12 +62,11 @@ export function renderAgentReviewLines(
         `      - ${explanation}`,
         `      - Finding: ${prose(assessment.summary)}`,
         '      - Sources:',
-        ...assessment.evidenceReferences.map(reference => `        - ${reference === '.criterion-agent/S006/finding-summary.json'
-          ? 'Automated scan coverage diagnostics' : prose(reference)}`)
+        ...assessment.evidenceReferences.map(reference => `        - ${reference === S006_FINDING_SUMMARY_PATH
+          ? 'Automated scan coverage diagnostics' : reportPath(reference)}`)
       );
       if (assessment.coverageDisposition) {
-        const labels = { investigated: 'Investigated directly', immaterial: 'Not material to this scoped decision', unresolved: 'Needs further verification' };
-        lines.push(`      - Coverage judgment: ${labels[assessment.coverageDisposition]}`);
+        lines.push(`      - Coverage judgment: ${COVERAGE_LABELS[assessment.coverageDisposition]}`);
       }
       for (const bound of assessment.failureBounds ?? []) {
         const phases = { startup: 'Process startup', tenant_initialization: 'Tenant initialization', runtime: 'Runtime operations' };
@@ -66,7 +74,7 @@ export function renderAgentReviewLines(
         lines.push(`      - ${phases[bound.phase]} — ${statuses[bound.status]}:`,
           `        - Dependency role: ${bound.requirement}`,
           `        - ${prose(bound.explanation)}`,
-          '        - Sources:', ...bound.evidenceReferences.map(reference => `          - ${prose(reference)}`));
+          '        - Sources:', ...bound.evidenceReferences.map(reference => `          - ${reportPath(reference)}`));
       }
     }
   }
@@ -76,12 +84,12 @@ export function renderAgentReviewLines(
       lines.push(
         `    - ${prose(action.action)}`,
         '      - Sources:',
-        ...action.evidenceReferences.map(reference => `        - ${prose(reference)}`)
+        ...action.evidenceReferences.map(reference => `        - ${reportPath(reference)}`)
       );
     }
   }
   if (review.evidenceReferences.length) {
-    lines.push('  - Sources:', ...review.evidenceReferences.map(reference => `    - ${prose(reference)}`));
+    lines.push('  - Sources:', ...review.evidenceReferences.map(reference => `    - ${reportPath(reference)}`));
   }
   return lines;
 }

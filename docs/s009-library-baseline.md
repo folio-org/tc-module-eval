@@ -44,3 +44,13 @@ Released Maven coordinates were additionally checked against their POMs under `h
 | `org.folio:vertx-lib-example` | Vert.x example artifact. |
 
 Future additions or mapping changes require TC review and a direct edit to the canonical acceptance ledger. Discovery output is evidence only and must never be applied as acceptance automatically.
+
+## Later additions
+
+On 2026-10-22 the user approved these coordinates because they were already in production use in FOLIO repositories (folio-vertx-lib, mod-data-import, and raml-module-builder for `okapi-common`; ui-users, ui-inventory, and ui-agreements for the npm packages). Each family's ledger decision reference records this.
+
+| Coordinate | Family |
+| --- | --- |
+| `org.folio.okapi:okapi-common` | `okapi` (Okapi), a new legacy-baseline family |
+| `@folio/service-interaction` | `folio_service-interaction`, the existing module family |
+| `@folio/handler-stripes-registry` | `folio_handler-stripes-registry`, the existing module family |

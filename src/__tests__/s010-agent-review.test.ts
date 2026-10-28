@@ -333,18 +333,139 @@ describe('S010 advisory agent review', () => {
     expect(request.instructions).toContain('Investigate in lifecycle order');
   });
 
-  it.each(['missing-phase', 'duplicate-phase', 'unknown-citation', 'generated-citation', 'omitted-dependency'])('rejects %s in decision-bearing records', async mode => {
+  it('drops a misremembered failure-bound citation and keeps the bound when a real one remains', async () => {
+    // Live mod-oai-pmh review: the agent read src/main/java/org/folio/rest/impl/OaiPmhImpl.java but cited it under
+    // the package of the file before it. One wrong path used to reject the whole review.
+    const factory = 'src/main/java/org/folio/oaipmh/dao/PostgresClientFactory.java';
+    await commit(factory, 'new SqlConnectOptions();');
+    await commit('src/main/java/org/folio/rest/impl/OaiPmhImpl.java', 'class OaiPmhImpl {}');
+    const deterministic = analysis();
+    deterministic.evidence.scenarios[0].dependencyId = 'database';
+    const records = bounds('unverified', factory);
+    records[2].evidenceReferences = [factory, 'src/main/java/org/folio/oaipmh/rest/impl/OaiPmhImpl.java'];
+    const review = await reviewS010WithAgent(repo, deterministic, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: [factory],
+      assessments: [{ technologyId: 'database', type: 'evidence_gap', summary: 'No query timeout is configured.',
+        evidenceReferences: [factory], failureBounds: records }],
+      reviewerActions: [{ action: 'Find the effective Vert.x query timeout.', evidenceReferences: [factory] }]
+    }));
+    expect(review.available).toBe(true);
+    expect(review.assessments?.[0].failureBounds?.map(bound => bound.evidenceReferences)).toEqual([[factory], [factory], [factory]]);
+  });
+
+  it('cites the file when the agent adds line numbers to a real path', async () => {
+    // Live mod-search shape: bound and action citations carried line ranges; assessment citations did not.
+    const tenant = 'src/main/java/org/folio/search/service/system/SearchTenantService.java';
+    const retry = 'src/main/java/org/folio/search/configuration/RetryTemplateConfiguration.java';
+    await commit(tenant, 'class SearchTenantService {}');
+    await commit(retry, 'class RetryTemplateConfiguration {}');
+    const records = bounds('unverified', tenant);
+    records[1].evidenceReferences = [`${tenant}:146-149`];
+    records[2].evidenceReferences = [`${retry}:38-40,86-91`, tenant];
+    const review = await reviewS010WithAgent(repo, analysis(), fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: [tenant],
+      assessments: [{ technologyId: 'search', type: 'evidence_gap', summary: 'Retries are bounded; the deadline is not.',
+        evidenceReferences: [tenant], failureBounds: records }],
+      reviewerActions: [{ action: 'Find the effective search deadline.', evidenceReferences: [`${retry}:62-83`] }]
+    }));
+    expect(review.available).toBe(true);
+    expect(review.assessments?.[0].failureBounds?.map(bound => bound.evidenceReferences)).toEqual([[tenant], [tenant], [retry, tenant]]);
+    expect(review.reviewerActions?.[0].evidenceReferences).toEqual([retry]);
+  });
+
+  it.each([
+    ['missing-phase', undefined],
+    ['duplicate-phase', undefined],
+    ['unknown-citation', 'invalid failureBounds fields or citations'],
+    ['unknown-line-range-citation', 'invalid failureBounds fields or citations'],
+    // Live mod-search shape: the role was given as not_applicable for a phase that does not use the dependency.
+    ['not-applicable-requirement', 'invalid failureBounds fields or citations'],
+    ['generated-citation', 'requires repository evidence'],
+    ['generated-and-unknown-citation', 'requires repository evidence'],
+    ['omitted-dependency', undefined]
+  ])('rejects %s in decision-bearing records', async (mode, error) => {
     await commit('src/client.ts', 'export const deadlineMs = 2500;');
     const records = bounds('established');
     if (mode === 'missing-phase') records.pop();
     if (mode === 'duplicate-phase') records[2].phase = 'startup';
     if (mode === 'unknown-citation') records[2].evidenceReferences = ['missing.ts'];
+    if (mode === 'unknown-line-range-citation') records[1].evidenceReferences = ['missing.ts:146-149'];
+    if (mode === 'not-applicable-requirement') (records[1] as { requirement: string }).requirement = 'not_applicable';
     if (mode === 'generated-citation') records[2].evidenceReferences = ['.criterion-agent/S010/deterministic-summary.json'];
+    if (mode === 'generated-and-unknown-citation') records[2].evidenceReferences = ['.criterion-agent/S010/deterministic-summary.json', 'missing.ts'];
     const result = await reviewS010WithAgent(repo, analysis(), fakeConfig({
       recommendation: 'likely_sufficient', assessments: [{ technologyId: mode === 'omitted-dependency' ? 'discovered:other' : 'search',
         type: 'aligned_fact', summary: 'Bounded.', evidenceReferences: ['src/client.ts'], failureBounds: records }]
     }));
     expect(result.available).toBe(false);
+    if (error) expect(result.errors.join('\n')).toContain(error);
+  });
+
+  it('gives the agent valid JSON when the analysis is larger than the summary budget', async () => {
+    await commit('src/client.ts', 'export const client = 1;');
+    const large = analysis();
+    large.evidence.scenarios = Array.from({ length: 400 }, (_, index) => ({
+      ...large.evidence.scenarios[0], id: `client-${index}:src/Client${index}.java/runtime-unavailable`, dependencyId: `client-${index}`,
+      rationale: 'The tool could not confirm that calls through the client have a time limit and error handling.'.repeat(3),
+      sourceReferences: Array.from({ length: 20 }, (_unused, line) => ({ path: `src/Client${index}.java`, line: line + 1, detail: 'Uses an HTTP, Kafka or S3 client' }))
+    }));
+    large.findings = large.evidence.scenarios.map(scenario => ({
+      ...large.findings[0], id: scenario.id, dependencyId: scenario.dependencyId, rationale: scenario.rationale!, evidence: scenario.sourceReferences
+    }));
+
+    const request = await buildS010AgentReviewRequest(repo, large);
+    const content = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content;
+    const summary = JSON.parse(content);
+
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(48 * 1024);
+    expect(summary.scenarios.length + summary.omittedScenarios).toBe(400);
+    expect(summary.scenarios[0].sourceReferences).toHaveLength(5);
+    expect(summary.scenarios[0].omittedSourceReferences).toBe(15);
+  });
+
+  it('asks for one assessment covering all FOLIO interfaces', async () => {
+    await commit('package.json', '{}');
+    const ui = analysis();
+    ui.evidence.scenarios = ['users', 'circulation', 'notes'].map(id => ({
+      ...ui.evidence.scenarios[0], id: `folio-interface:${id}/runtime-unavailable`, dependencyId: `folio-interface:${id}`,
+      sourceReferences: [{ path: 'package.json', detail: 'Lists the interfaces the UI needs' }]
+    }));
+    const assessment = (technologyId: string) => ({ technologyId, type: 'evidence_gap', summary: 'Unverified.',
+      evidenceReferences: ['package.json'], failureBounds: bounds('unverified', 'package.json') });
+    const action = [{ action: 'Check the UI without the users module.', evidenceReferences: ['package.json'] }];
+
+    const request = await buildS010AgentReviewRequest(repo, ui);
+    const candidates = JSON.parse(request.files.find(file => file.repoRelativePath.endsWith('candidate-dependencies.json'))!.content);
+    const together = await reviewS010WithAgent(repo, ui, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: ['package.json'], assessments: [assessment('folio-interfaces')], reviewerActions: action
+    }));
+    const separately = await reviewS010WithAgent(repo, ui, fakeConfig({
+      recommendation: 'needs_reviewer_judgment', evidenceReferences: ['package.json'],
+      assessments: ['users', 'circulation', 'notes'].map(id => assessment(`folio-interface:${id}`)), reviewerActions: action
+    }));
+
+    expect(candidates).toEqual({ candidateDependencyIds: ['folio-interfaces'] });
+    expect(request.instructions).toContain('technologyId folio-interfaces');
+    // Backend modules have no such candidate; told about it, the agent filed FOLIO module calls under it.
+    expect((await buildS010AgentReviewRequest(repo, analysis())).instructions).not.toContain('folio-interfaces');
+    expect(together.available).toBe(true);
+    expect(separately.available).toBe(false);
+  });
+
+  it('keeps the summary within its budget when a repository-made name is huge', async () => {
+    await commit('src/client.ts', 'export const client = 1;');
+    const huge = analysis();
+    const name = `${'Q'.repeat(60_000)}_URL`;
+    huge.summary = `S010 manual: The tool found services the module depends on (${name})`;
+    huge.evidence.diagnostics = huge.diagnostics = Array.from({ length: 60 }, () => ({
+      code: 'unsupported-runtime-pattern', message: 'x'.repeat(5_000), material: true, path: `src/${'p'.repeat(5_000)}.java`
+    }));
+
+    const request = await buildS010AgentReviewRequest(repo, huge);
+    const content = request.files.find(file => file.repoRelativePath.endsWith('deterministic-summary.json'))!.content;
+
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(48 * 1024);
+    expect(JSON.parse(content).omittedDiagnostics).toBe(40);
   });
 
   async function commit(relativePath: string, content: string): Promise<void> {

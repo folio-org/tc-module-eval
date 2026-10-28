@@ -7,9 +7,6 @@
 
 import { CriterionResult, EvaluationStatus } from './types';
 
-/**
- * Individual criterion definition
- */
 export interface CriterionDefinition {
   id: string;
   description: string;
@@ -153,61 +150,32 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'S011',
     description: 'Passes Sonarqube security checks',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Accessibility requirements',
-      languageReasons: {
-        javascript: 'Sonarqube security configuration'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S012',
     description: 'Uses officially supported build tools',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Internationalization requirements',
-      languageReasons: {
-        javascript: 'Build tools (npm/yarn)'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S013',
     description: '80%+ unit test coverage',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Configuration management',
-      languageReasons: {
-        javascript: 'Unit test coverage (Jest/Istanbul)'
-      }
-    }
+    languages: ['java', 'javascript']
   },
   {
     id: 'S014',
     description: 'Assigned to one application descriptor',
     section: 'Shared/Common',
-    languages: ['java', 'javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Monitoring and logging'
-    }
+    languages: ['java', 'javascript']
   },
 
   {
     id: 'B001',
     description: 'Compliant Module Descriptor',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'API design and RESTful principles'
-    }
+    languages: ['java']
   },
   {
     id: 'B002',
@@ -364,31 +332,19 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F001',
     description: 'API interface requirements in package.json',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'API interface requirements in package.json'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F002',
     description: 'E2E tests in supported technology',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'E2E tests in supported technology (Cypress, BigTest, etc.)'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F003',
     description: 'i18n support via react-intl',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Internationalization support via react-intl'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F004',
@@ -404,11 +360,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F005',
     description: 'Use specified Stripes version',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Use of specified Stripes framework version'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F006',
@@ -455,34 +407,6 @@ type CriteriaIdsForSection<
     : Result
   : Result;
 
-type CriteriaIdsForLanguage<
-  Catalog extends readonly { id: string; languages: readonly CriterionLanguage[] }[],
-  Language extends CriterionLanguage,
-  Result extends readonly string[] = readonly []
-> = Catalog extends readonly [infer Head, ...infer Tail]
-  ? Head extends { id: string; languages: readonly CriterionLanguage[] }
-    ? Tail extends readonly { id: string; languages: readonly CriterionLanguage[] }[]
-      ? Language extends Head['languages'][number]
-        ? CriteriaIdsForLanguage<Tail, Language, readonly [...Result, Head['id']]>
-        : CriteriaIdsForLanguage<Tail, Language, Result>
-      : Result
-    : Result
-  : Result;
-
-type CriteriaIdsForCatalog<
-  Catalog extends readonly { id: string }[],
-  Result extends readonly string[] = readonly []
-> = Catalog extends readonly [infer Head, ...infer Tail]
-  ? Head extends { id: string }
-    ? Tail extends readonly { id: string }[]
-      ? CriteriaIdsForCatalog<Tail, readonly [...Result, Head['id']]>
-      : Result
-    : Result
-  : Result;
-
-type JavaCriteria = CriteriaIdsForLanguage<typeof ACCEPTANCE_CRITERION_CATALOG, 'java'>;
-type AllCriteria = CriteriaIdsForCatalog<typeof ACCEPTANCE_CRITERION_CATALOG>;
-
 /**
  * Build the canonical, ordered list of criterion IDs for a section.
  *
@@ -500,73 +424,14 @@ function criteriaIdsForSection<S extends CriterionSection>(
     .map(criterion => criterion.id) as CriteriaIdsForSection<typeof ACCEPTANCE_CRITERION_CATALOG, S>;
 }
 
-/**
- * Administrative criteria
- */
 export const ADMINISTRATIVE_CRITERIA = criteriaIdsForSection('Administrative');
 
-/**
- * Shared/Common criteria - apply to all FOLIO modules
- */
 export const SHARED_CRITERIA = criteriaIdsForSection('Shared/Common');
 
-/**
- * Backend criteria - specific to backend/server-side modules
- */
 export const BACKEND_CRITERIA = criteriaIdsForSection('Backend');
 
-/**
- * Frontend criteria - specific to frontend/UI modules
- */
 export const FRONTEND_CRITERIA = criteriaIdsForSection('Frontend');
 
-/**
- * Complete definitions of all criteria with descriptions
- */
-export const CRITERIA_DEFINITIONS: Record<string, CriterionDefinition> =
-  ACCEPTANCE_CRITERION_CATALOG.reduce<Record<string, CriterionDefinition>>((definitions, criterion) => {
-    definitions[criterion.id] = {
-      id: criterion.id,
-      description: criterion.description,
-      section: criterion.section
-    };
-    return definitions;
-  }, {});
-
-/**
- * All Java module criteria (combines administrative, shared, and backend)
- */
-export const JAVA_CRITERIA: JavaCriteria = [
-  ...ADMINISTRATIVE_CRITERIA,
-  ...SHARED_CRITERIA,
-  ...BACKEND_CRITERIA
-];
-
-/**
- * All available criteria across all module types
- */
-export const ALL_CRITERIA: AllCriteria = [
-  ...ADMINISTRATIVE_CRITERIA,
-  ...SHARED_CRITERIA,
-  ...BACKEND_CRITERIA,
-  ...FRONTEND_CRITERIA
-];
-
-/**
- * Criteria organized by section for easy lookup
- */
-export const CRITERIA_BY_SECTION = {
-  administrative: ADMINISTRATIVE_CRITERIA,
-  shared: SHARED_CRITERIA,
-  backend: BACKEND_CRITERIA,
-  frontend: FRONTEND_CRITERIA
-} as const;
-
-/**
- * Get all criteria IDs for a specific language/module type
- * @param language The programming language or module type
- * @returns Array of criterion IDs applicable to that language
- */
 export function getCriteriaForLanguage(language: string): readonly string[] {
   switch (language.toLowerCase()) {
     case 'java':
@@ -583,18 +448,12 @@ export function getCriteriaForLanguage(language: string): readonly string[] {
   }
 }
 
-/**
- * Get all criteria IDs in canonical order for a catalog language.
- */
 export function getCriteriaForCatalogLanguage(language: CriterionLanguage): readonly string[] {
   return (ACCEPTANCE_CRITERION_CATALOG as readonly AcceptanceCriterionDefinition[])
     .filter(criterion => criterion.languages.includes(language))
     .map(criterion => criterion.id);
 }
 
-/**
- * Get all criteria IDs for a section and language in canonical order.
- */
 export function getCriteriaForSection(
   section: CriterionSection,
   language: CriterionLanguage
@@ -604,47 +463,6 @@ export function getCriteriaForSection(
     .map(criterion => criterion.id);
 }
 
-/**
- * Check if a criterion ID is valid
- * @param criterionId The criterion ID to validate
- * @returns true if the criterion ID exists
- */
-export function isValidCriterionId(criterionId: string): criterionId is CriterionId {
-  return ALL_CRITERIA.includes(criterionId as CriterionId);
-}
-
-/**
- * Get the section name for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The section name or 'unknown' if not found
- */
-export function getSectionForCriterion(criterionId: string): string {
-  const definition = CRITERIA_DEFINITIONS[criterionId];
-  return definition ? definition.section : 'Unknown';
-}
-
-/**
- * Get the description for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The description or 'Unknown criterion' if not found
- */
-export function getDescriptionForCriterion(criterionId: string): string {
-  const definition = CRITERIA_DEFINITIONS[criterionId];
-  return definition ? definition.description : 'Unknown criterion';
-}
-
-/**
- * Get the full definition for a given criterion ID
- * @param criterionId The criterion ID
- * @returns The criterion definition or undefined if not found
- */
-export function getCriterionDefinition(criterionId: string): CriterionDefinition | undefined {
-  return CRITERIA_DEFINITIONS[criterionId];
-}
-
-/**
- * Get the catalog entry for a criterion ID.
- */
 export function getAcceptanceCriterionDefinition(criterionId: string): AcceptanceCriterion | undefined {
   return ACCEPTANCE_CRITERION_CATALOG.find(criterion => criterion.id === criterionId);
 }

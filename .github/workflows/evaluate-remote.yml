@@ -42,6 +42,21 @@ on:
         required: false
         type: string
         default: "8.30.0"
+      allow_remote_lookups:
+        description: "Allow read-only lookups of SonarCloud, folio-org/platform-lsp and FAR (needed for S011 and S014)"
+        required: false
+        type: boolean
+        default: false
+      application:
+        description: "Application named in the evaluation's Jira task, e.g. app-search (S014)"
+        required: false
+        type: string
+        default: ""
+      platform_ref:
+        description: "folio-org/platform-lsp branch, tag or commit for S014 (empty means snapshot)"
+        required: false
+        type: string
+        default: ""
       # OpenCode advisory review is local/trusted CLI-only for now. The manual
       # remote workflow delegates to the deterministic reusable workflow.
 
@@ -59,3 +74,6 @@ jobs:
       java_version: ${{ inputs.java_version }}
       node_version: ${{ inputs.node_version }}
       gitleaks_version: ${{ inputs.gitleaks_version }}
+      allow_remote_lookups: ${{ inputs.allow_remote_lookups }}
+      application: ${{ inputs.application }}
+      platform_ref: ${{ inputs.platform_ref }}

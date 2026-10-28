@@ -56,6 +56,6 @@ describe('S010 shared evaluator integration', () => {
     execFileSync('git', ['commit', '-qm', 'fixture'], { cwd: repo });
     const result = await new TestEvaluator('javascript').evaluateCriterion('S010', repo);
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.details).toContain('Runtime kind: node');
+    expect(result.details).toContain('  - Code type: Node.js (not supported)');
   });
 });

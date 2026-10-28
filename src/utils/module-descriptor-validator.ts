@@ -4,12 +4,14 @@ import {
   okapiModuleDescriptorRootSchema,
   okapiModuleDescriptorSchemas
 } from '../schemas/okapi/module-descriptor';
+import { errorMessage } from './type-guards';
 
 export interface ModuleDescriptorValidationError {
   instancePath: string;
   schemaPath: string;
   keyword: string;
   message: string;
+  params: Record<string, unknown>;
 }
 
 export interface ModuleDescriptorValidationResult {
@@ -45,7 +47,7 @@ export function validateModuleDescriptorJson(content: string): ModuleDescriptorV
       valid: false,
       schemaBaseline: OKAPI_MODULE_DESCRIPTOR_SCHEMA_BASELINE,
       errors: [],
-      parseError: error instanceof Error ? error.message : String(error)
+      parseError: errorMessage(error)
     };
   }
 
@@ -58,7 +60,8 @@ export function validateModuleDescriptorJson(content: string): ModuleDescriptorV
       instancePath: error.instancePath || '',
       schemaPath: error.schemaPath,
       keyword: error.keyword,
-      message: error.message ?? 'schema validation failed'
+      message: error.message ?? 'schema validation failed',
+      params: error.params
     }))
   };
 }

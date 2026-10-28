@@ -36,10 +36,11 @@ yarn global add .
 ## Verification
 
 Use `yarn test:unit --runInBand` and `yarn build` for routine verification.
+Run the full suite (`yarn jest --runInBand`) before every push.
 Bare `yarn test` (or `npm test`) includes network integration tests that clone
-external repositories and enable their build commands with `allowLocalCommands: true`.
-Run the full suite or `yarn test:integration` only when those target builds are
-explicitly authorized; the evaluator's safe CLI defaults do not protect this suite.
+external repositories and enable their build commands with `allowLocalCommands: true`,
+so run the full suite in an isolated environment such as the devcontainer;
+the evaluator's safe CLI defaults do not protect this suite.
 
 ## Architecture
 
@@ -81,6 +82,8 @@ Filter with: `--criteria S001,S002,B005`
 
 **JSON**: Machine-readable format with complete evaluation data
 
+Reports are not redacted, except that the evaluator's own credentials are masked by value (`src/utils/redaction.ts`). If you add an environment variable that holds a credential, add its name to `SECRET_ENV_NAMES` there; register other credentials with `addEvaluatorSecretValues`.
+
 ## Configuration
 
 License policy files in `config/`:
@@ -99,6 +102,8 @@ folio-eval evaluate <repo-url> --criteria S001,S002,B005
 folio-eval evaluate <repo-url> --output ./my-reports
 folio-eval evaluate <repo-url> --json-only
 folio-eval evaluate <repo-url> --no-cleanup
+folio-eval evaluate <repo-url> --allow-remote-lookups --application app-search [--platform-ref snapshot]
+folio-eval evaluate <repo-url> --existing-module
 
 # Other
 folio-eval list-languages

@@ -13,11 +13,14 @@ import {
   normalizeCriterionAgentAdvisoryPayload,
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
-import { redactSensitiveText } from './redaction';
+import { redactEvaluatorSecrets } from './redaction';
 import { decodeOpenCodeOutput, openCodeEventTrace, OpenCodeOutput, parseJsonObject } from './opencode-output';
+import { errorMessage } from './type-guards';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
-const OPENCODE_RUN_MAX_OUTPUT_BYTES = 1024 * 1024;
+// Tool events dominate the review run's output and the answer comes last. Keep
+// the newest output so large modules still produce a review.
+const OPENCODE_RUN_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 export async function runOpenCodeAgentReview(
   request: CriterionAgentReviewRequest,
@@ -30,7 +33,7 @@ export async function runOpenCodeAgentReview(
     criterionId: request.criterionId,
     evidenceReferences: [],
     warnings: [],
-    errors: [redactSensitiveText(error)],
+    errors: [redactEvaluatorSecrets(error)],
     metadata: openCodeMetadata(config, workspace)
   });
 
@@ -97,7 +100,7 @@ export async function runOpenCodeAgentReview(
   try {
     invocation = materializeOpenCodeInvocation(workspace, config);
   } catch (error) {
-    return baseUnavailable(`Unable to materialize OpenCode invocation: ${error instanceof Error ? error.message : String(error)}`);
+    return baseUnavailable(`Unable to materialize OpenCode invocation: ${errorMessage(error)}`);
   }
   const configDebug = await runStage('debug-config', {
     command: 'opencode',
@@ -158,15 +161,20 @@ export async function runOpenCodeAgentReview(
     env: invocation.env,
     timeoutMs: config.timeoutMs,
     stdoutFormat: 'opencode-json',
-    maxOutputBytes: OPENCODE_RUN_MAX_OUTPUT_BYTES
+    maxOutputBytes: OPENCODE_RUN_MAX_OUTPUT_BYTES,
+    keepStdoutTail: true
   });
 
-  const decoded = decodeOpenCodeOutput(run.stdout);
-  if (run.status !== 'success' || run.stdoutTruncated) {
+  const cut = run.stdoutTruncated === true;
+  const decoded = decodeOpenCodeOutput(run.stdout, cut);
+  if (run.status !== 'success' || (cut && !decoded.payload)) {
     return baseUnavailable(commandFailure('run', run, config, decoded));
   }
 
   const result = normalizeOpenCodeResult(decoded, request, workspace, config);
+  if (cut) {
+    result.warnings.push(`OpenCode run output exceeded the ${OPENCODE_RUN_MAX_OUTPUT_BYTES}-byte capture limit (stdout ${run.stdoutBytes ?? 'unknown'} bytes); earlier output was dropped and the review was read from the end of the output`);
+  }
   if (!result.available) {
     result.errors.push(commandContext('run', run, config));
     if (decoded.diagnostic) result.errors.push(`OpenCode decode: ${decoded.diagnostic}`);
@@ -176,14 +184,16 @@ export async function runOpenCodeAgentReview(
 }
 
 function commandContext(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig): string {
-  return redactSensitiveText(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
+  return redactEvaluatorSecrets(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
 }
 
 function commandFailure(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig, decoded?: OpenCodeOutput): string {
   const reason = run.status === 'success' ? 'capture truncated' : run.status;
   const provider = decoded?.providerError;
   const detail = provider ? [provider.name, provider.statusCode, provider.message].filter(value => value !== undefined).join(': ')
-    : redactSensitiveText(run.errorMessage ?? '', 500);
+    : decoded?.diagnostic === 'final assistant message start not captured'
+      ? 'kept the end of the output, but it did not contain the whole final answer'
+      : redactEvaluatorSecrets(run.errorMessage ?? '', 500);
   return `${commandContext(stage, run, config)}; ${reason}${run.stdoutTruncated && run.status !== 'success' ? '; capture truncated' : ''}${detail ? `; ${detail}` : ''}`;
 }
 

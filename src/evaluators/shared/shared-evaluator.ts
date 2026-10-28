@@ -3,7 +3,6 @@ import {
   CriterionResult,
   EvaluationRun,
   EvaluationStatus,
-  ModuleDescriptorArtifact,
   ModuleKindResult
 } from '../../types';
 import { CriterionLanguage } from '../../criteria-definitions';
@@ -11,10 +10,15 @@ import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { LicenseUtils } from '../../utils/license-utils';
 import { evaluateS003ThirdPartyLicenses } from '../../utils/license-compliance-evaluator';
 import { produceModuleDescriptorArtifact } from '../../utils/artifacts/module-descriptor-artifact';
-import { createEvaluationRun } from '../../utils/evaluation-run';
 import { validateModuleDescriptorJson } from '../../utils/module-descriptor-validator';
+import {
+  s002ArtifactFailureResult,
+  s002MissingPathResult,
+  s002ReadFailureResult,
+  s002ValidationResult
+} from '../../utils/s002-module-descriptor-report';
 import { analyzeS004Documentation, formatS004Evidence } from '../../utils/s004-installation-documentation';
-import { classifyModuleKind } from '../../utils/module-kind';
+import { getModuleKind } from '../../utils/module-kind';
 import { reviewS004WithAgent } from '../../utils/s004-agent-review';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import {
@@ -30,10 +34,8 @@ import {
 } from '../../utils/s006-sensitive-information';
 import { reviewS006WithAgent } from '../../utils/s006-agent-review';
 import { loadS007Policy } from '../../utils/s007-policy';
-import { collectS007TechnologyEvidence } from '../../utils/s007-technology-evidence';
-import { enrichS007WithMavenEffectivePom } from '../../utils/s007-maven-effective-evidence';
-import { evaluateS007 } from '../../utils/s007-evaluator';
-import { buildS007CriterionDetails, renderS007HumanDetails } from '../../utils/s007-report-details';
+import { getS007Analysis } from '../../utils/s007-evaluator';
+import { renderS007HumanDetails } from '../../utils/s007-report-details';
 import { reviewS007WithAgent } from '../../utils/s007-agent-review';
 import { loadAcceptanceLedger } from '../../utils/acceptance-ledger';
 import { loadS008Catalog } from '../../utils/s008-catalog';
@@ -44,7 +46,17 @@ import { evaluateS009, renderS009HumanDetails } from '../../utils/s009-evaluator
 import { collectS010Evidence } from '../../utils/s010-evidence';
 import { evaluateS010 } from '../../utils/s010-evaluator';
 import { renderS010HumanDetails } from '../../utils/s010-report-details';
+import { collectBuildTestEvidence } from '../../utils/build-test-evidence';
+import { loadFolioSharedWorkflows } from '../../utils/folio-shared-workflows';
+import { evaluateS012 } from '../../utils/s012-evaluator';
+import { renderS012HumanDetails } from '../../utils/s012-report-details';
+import { analyzeS013, renderS013HumanDetails } from '../../utils/s013-evaluator';
+import { reportText } from '../../utils/report-text';
+import { analyzeS011, renderS011HumanDetails } from '../../utils/s011-evaluator';
+import { hasS011AgentReviewMaterial, reviewS011WithAgent } from '../../utils/s011-agent-review';
+import { analyzeS014, renderS014HumanDetails } from '../../utils/s014-evaluator';
 import { hasS010AgentReviewMaterial, reviewS010WithAgent } from '../../utils/s010-agent-review';
+import { errorMessage } from '../../utils/type-guards';
 
 /**
  * Abstract base class for Shared/Common criteria (S001-S014). Handled criterion
@@ -65,7 +77,11 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       S007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS007(repoPath, evaluationRun),
       S008: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS008(repoPath, evaluationRun),
       S009: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS009(repoPath, evaluationRun),
-      S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun)
+      S010: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS010(repoPath, evaluationRun),
+      S011: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS011(repoPath, evaluationRun),
+      S012: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS012(repoPath, evaluationRun),
+      S013: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS013(repoPath, evaluationRun),
+      S014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateS014(repoPath, evaluationRun)
     });
   }
 
@@ -78,75 +94,31 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS002(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S002']
-    });
+    const run = this.runFor(repoPath, 'S002', evaluationRun);
     const artifact = await run.getOrCreateArtifact('moduleDescriptor', () => produceModuleDescriptorArtifact(repoPath, run));
 
     if (artifact.status !== 'produced' && artifact.status !== 'discovered') {
-      return this.artifactFailureResult(artifact);
+      return s002ArtifactFailureResult(artifact);
     }
 
     if (!artifact.absolutePath || !artifact.descriptorPath) {
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.FAIL,
-        evidence: 'Module descriptor artifact did not include a selected descriptor path',
-        details: this.formatArtifactDetails(artifact)
-      };
+      return s002MissingPathResult(artifact);
     }
 
     let descriptorContent: string;
     try {
       descriptorContent = fs.readFileSync(artifact.absolutePath, 'utf-8');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.FAIL,
-        evidence: `Unable to read module descriptor ${artifact.descriptorPath}`,
-        details: `${this.formatArtifactDetails(artifact)}\n\nRead error: ${message}`
-      };
+      return s002ReadFailureResult(artifact, errorMessage(error));
     }
 
-    const validation = validateModuleDescriptorJson(descriptorContent);
-    const evidence = validation.valid
-      ? `Module descriptor ${artifact.descriptorPath} validates against Okapi schema baseline ${validation.schemaBaseline}`
-      : `Module descriptor ${artifact.descriptorPath} does not validate against Okapi schema baseline ${validation.schemaBaseline}`;
-
-    if (validation.valid) {
-      return {
-        criterionId: 'S002',
-        status: EvaluationStatus.PASS,
-        evidence,
-        details: this.formatArtifactDetails(artifact)
-      };
-    }
-
-    const validationDetails = validation.parseError
-      ? `Parse error: ${validation.parseError}`
-      : validation.errors
-          .map(error => `${error.instancePath || '/'} ${error.keyword} ${error.message} (${error.schemaPath})`)
-          .join('\n');
-
-    return {
-      criterionId: 'S002',
-      status: EvaluationStatus.FAIL,
-      evidence,
-      details: `${this.formatArtifactDetails(artifact)}\n\nValidation errors:\n${validationDetails}`
-    };
+    return s002ValidationResult(artifact, validateModuleDescriptorJson(descriptorContent));
   }
 
   private async evaluateS004(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S004']
-    });
+    const run = this.runFor(repoPath, 'S004', evaluationRun);
 
-    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    const moduleKind = await getModuleKind(run, repoPath);
     if (moduleKind.kind === 'library') {
       return {
         criterionId: 'S004',
@@ -181,13 +153,9 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS005(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S005']
-    });
+    const run = this.runFor(repoPath, 'S005', evaluationRun);
 
-    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    const moduleKind = await getModuleKind(run, repoPath);
     if (moduleKind.kind === 'library') {
       return {
         criterionId: 'S005',
@@ -204,7 +172,8 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     analysis.warnings.push(...moduleKind.warnings);
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S005',
-      status: analysis.classification.status,
+      // A complete form that fails only because it is misnamed or misplaced still gets advisory review.
+      status: analysis.nearMatchStatus ?? analysis.classification.status,
       hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS005WithAgent(repoPath, analysis, config, commandRunner)
@@ -225,11 +194,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS006(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-        repositoryPath: repoPath,
-        language: this.language,
-        criteriaFilter: ['S006']
-      });
+    const run = this.runFor(repoPath, 'S006', evaluationRun);
 
     const analysis = await analyzeS006SensitiveInformation(repoPath, {
       commandRunner: run.commandRunner
@@ -251,30 +216,20 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
       status: analysis.classification.status,
       evidence: rendered.evidence,
       details: rendered.details,
-      criterionDetails: buildS006CriterionDetails(analysis),
+      criterionDetails: buildS006CriterionDetails(analysis, agentReview),
       agentReview
     };
   }
 
   private async evaluateS007(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S007']
-    });
-    const [policyLoad, evidence] = await Promise.all([
-      loadS007Policy(),
-      run.getOrCreateArtifact('s007TechnologyEvidence', async () => {
-        const staticEvidence = await collectS007TechnologyEvidence(repoPath, this.language);
-        return this.language === 'java' && run.commandRunner
-          ? enrichS007WithMavenEffectivePom(repoPath, staticEvidence, run, run.commandRunner)
-          : staticEvidence;
-      })
-    ]);
-    const analysis = evaluateS007(policyLoad, evidence, this.language);
+    const run = this.runFor(repoPath, 'S007', evaluationRun);
+    const shared = await getS007Analysis(run, repoPath);
+    const { policyLoad } = shared;
+    // A copy: the review note below belongs to this result, not to the analysis the run caches for S007 and F005.
+    const analysis = { ...shared.analysis };
     const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
       criterionId: 'S007',
-      status: analysis.status as EvaluationStatus,
+      status: analysis.status,
       hasReviewMaterial: true,
       evaluationRun: run,
       review: (config, commandRunner) => reviewS007WithAgent(
@@ -291,21 +246,17 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
     return {
       criterionId: 'S007',
-      status: analysis.status as EvaluationStatus,
+      status: analysis.status,
       evidence: analysis.summary,
       details: renderS007HumanDetails(analysis, agentReview),
-      criterionDetails: buildS007CriterionDetails(analysis),
+      criterionDetails: analysis,
       agentReview
     };
   }
 
   private async evaluateS008(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S008']
-    });
-    const moduleKind = await run.getOrCreateArtifact('moduleKind', () => Promise.resolve(classifyModuleKind(repoPath)));
+    const run = this.runFor(repoPath, 'S008', evaluationRun);
+    const moduleKind = await getModuleKind(run, repoPath);
     const applicabilityResolved = moduleKind.kind === 'library' || moduleKind.kind === 'ambiguous';
     const declarations = applicabilityResolved
       ? { declarations: [], diagnostics: [], sourcePaths: [], fileHashes: {}, complete: true }
@@ -327,11 +278,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS009(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S009']
-    });
+    const run = this.runFor(repoPath, 'S009', evaluationRun);
     const evidence = await run.getOrCreateArtifact('s009DependencyEvidence', () =>
       collectS009DependencyEvidence(repoPath)
     );
@@ -349,11 +296,7 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
   }
 
   private async evaluateS010(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
-    const run = evaluationRun ?? createEvaluationRun({
-      repositoryPath: repoPath,
-      language: this.language,
-      criteriaFilter: ['S010']
-    });
+    const run = this.runFor(repoPath, 'S010', evaluationRun);
     const evidence = await run.getOrCreateArtifact('s010ThirdPartyEvidence', () =>
       collectS010Evidence(repoPath, this.language)
     );
@@ -376,41 +319,78 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
     };
   }
 
-  private artifactFailureResult(artifact: ModuleDescriptorArtifact): CriterionResult {
-    const uncertainStatuses = new Set<ModuleDescriptorArtifact['status']>([
-      'ambiguous-candidates',
-      'unsafe-to-run',
-      'command-failed'
+  // Static and offline: reads build and workflow files only, so it runs the same in safe mode.
+  private async evaluateS012(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'S012', evaluationRun);
+    const [policyLoad, tableLoad, evidence] = await Promise.all([
+      loadS007Policy(),
+      loadFolioSharedWorkflows(),
+      run.getOrCreateArtifact('buildTestEvidence', () => collectBuildTestEvidence(repoPath))
     ]);
-
+    // The artifact also carries S013's test declarations; S012 neither uses nor reports them.
+    const { testTechnologies: _technologies, testDiagnostics: _diagnostics, testComplete: _complete, ...buildEvidence } = evidence;
+    const analysis = evaluateS012(policyLoad, tableLoad, buildEvidence, this.language);
     return {
-      criterionId: 'S002',
-      status: uncertainStatuses.has(artifact.status) ? EvaluationStatus.MANUAL : EvaluationStatus.FAIL,
-      evidence: `Module descriptor artifact stage returned ${artifact.status}`,
-      details: this.formatArtifactDetails(artifact)
+      criterionId: 'S012',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS012HumanDetails(analysis),
+      criterionDetails: analysis
     };
   }
 
-  private formatArtifactDetails(artifact: ModuleDescriptorArtifact): string {
-    const lines = [
-      `Artifact status: ${artifact.status}`,
-      artifact.strategy ? `Strategy: ${artifact.strategy}` : undefined,
-      artifact.descriptorPath ? `Descriptor path: ${artifact.descriptorPath}` : undefined,
-      artifact.command ? `Command: ${artifact.command.command} ${artifact.command.args.join(' ')} (${artifact.command.status})` : undefined,
-      artifact.command ? `Command execution environment: ${artifact.command.commandExecutionEnvironment}` : undefined,
-      artifact.warnings.length ? `Warnings:\n${artifact.warnings.map(warning => `  - ${warning}`).join('\n')}` : undefined,
-      artifact.errors.length ? `Errors:\n${artifact.errors.map(error => `  - ${error}`).join('\n')}` : undefined
-    ];
+  private async evaluateS011(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'S011', evaluationRun);
+    const analysis = await analyzeS011(repoPath, run);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'S011',
+      status: analysis.status,
+      hasReviewMaterial: hasS011AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewS011WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    return {
+      criterionId: 'S011',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS011HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
+    };
+  }
 
-    return lines.filter((line): line is string => Boolean(line)).join('\n');
+  // Coverage from SonarCloud (with --allow-remote-lookups) and test technologies from build files; no tests are run.
+  private async evaluateS013(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'S013', evaluationRun);
+    const analysis = await analyzeS013(repoPath, run, this.language);
+    return {
+      criterionId: 'S013',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS013HumanDetails(analysis),
+      criterionDetails: analysis
+    };
+  }
+
+  private async evaluateS014(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'S014', evaluationRun);
+    const analysis = await analyzeS014(repoPath, run);
+    return {
+      criterionId: 'S014',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderS014HumanDetails(analysis),
+      criterionDetails: analysis
+    };
   }
 
   private formatModuleKindDetails(heading: string, moduleKind: ModuleKindResult): string {
     return [
       heading,
       'Module-kind evidence:',
-      ...moduleKind.evidence.map(evidence => `  - ${evidence}`),
-      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${warning}`)] : [])
+      ...moduleKind.evidence.map(evidence => `  - ${reportText(evidence)}`),
+      ...(moduleKind.warnings.length ? ['Warnings:', ...moduleKind.warnings.map(warning => `  - ${reportText(warning)}`)] : [])
     ].join('\n');
   }
 }

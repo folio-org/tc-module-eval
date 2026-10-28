@@ -11,7 +11,9 @@ import {
   gatherS005PersonalDataEvidence,
   MAX_SIGNALS_PER_CATEGORY_SOURCE_CLASS,
   MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE,
-  parseS005PersonalDataDisclosureMarkdown
+  normalizeS005ChecklistCategories,
+  parseS005PersonalDataDisclosureMarkdown,
+  S005_SOURCE_CLASS_TAGS
 } from '../utils/s005-personal-data-disclosure';
 
 function createTempRepo(): string {
@@ -90,6 +92,35 @@ Version: 1.0
     expect(result.metadata.templateIdentity).toBe('older-or-custom');
     expect(result.completion.completed).toBe(true);
     expect(result.checkedCategories).toEqual(['no_personal_data']);
+  });
+
+  // Rows copied from the current official template (as used by folio-org/mod-search and mod-users).
+  it.each([
+    ['This module does not store any PD.', ['no_personal_data']],
+    ['This module does not process any PD.', ['no_personal_data']],
+    ['This module provides custom fields.', ['custom_fields']],
+    ['This module stores fields with free-form text (tags, notes, descriptions, etc.)', ['free_form_notes']],
+    ['This module caches PD', ['cache']],
+    ['This module logs PD', ['logging']],
+    ['Log level ERROR includes PD', ['logging']],
+    ['This module transmits PD (including queues, additional databases, etc.)', ['transmission']],
+    ['Financial account information', ['financial_information']],
+    ['First name', ['name']],
+    ['Date of birth', ['birth_date']],
+    ['Address', ['address']],
+    ['Location information', ['address']],
+    ['Geolocation data', ['address']],
+    ['Phone number(s)', ['phone']],
+    ['Pseudonym / Alias / Nickname', ['name']],
+    ['Username / User Identifier (UUID)', ['username', 'user_identifier']],
+    ['Email address', ['email']],
+    ['Financial information / Fees or Fines', ['financial_information']],
+    ['Circulation transaction(s)', ['circulation_transactions']],
+    ['IP address / MAC address', ['ip_or_mac_address']],
+    ['Photographs of users (profile picture)', ['profile_picture']],
+    ['External System Id', ['user_identifier']]
+  ])('maps official template row "%s" to its category', (label, expected) => {
+    expect(normalizeS005ChecklistCategories(label)).toEqual(expected);
   });
 
   it('normalizes combined identifiers without changing row-based completion or precedence', () => {
@@ -231,6 +262,22 @@ describe('S005 personal data disclosure artifact discovery', () => {
         reason: 'root-near-match'
       }
     ]);
+  });
+
+  it.each([
+    ['PERSONAL_DATA_DISCOSURE.md', 'PERSONAL_DATA_DISCOSURE.md (missing "L" in "DISCLOSURE")'],
+    ['PERSONAL_DATA_DISCLOSURES.md', 'PERSONAL_DATA_DISCLOSURES.md (extra "S" in "DISCLOSURE")'],
+    ['PERSONAL_DATA_DISCL0SURE.md', 'PERSONAL_DATA_DISCL0SURE.md ("0" instead of "O" in "DISCLOSURE")'],
+    ['personal_data_disclosure.md', 'personal_data_disclosure.md (wrong letter case)'],
+    ['personal_data_discosure.md', 'personal_data_discosure.md (missing "L" in "DISCLOSURE", and wrong letter case)'],
+    ['docs/PERSONAL_DATA_DISCLOSURE.md', 'docs/PERSONAL_DATA_DISCLOSURE.md (in docs/ instead of the repository root)']
+  ])('names how near match %s differs from the required file in the fail reason', (fileName, description) => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, fileName, '# Personal Data Disclosure');
+
+    const result = analyzeS005PersonalDataDisclosure(repoPath);
+
+    expect(result.classification.reason).toContain(`Near match found: ${description}.`);
   });
 
   it('selects the correct top-level file even when additional similar files exist', () => {
@@ -383,12 +430,10 @@ describe('S005 personal data disclosure artifact discovery', () => {
     const parsed = parseS005PersonalDataDisclosureMarkdown(discovery.artifact?.content ?? '');
 
     expect(discovery.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('truncated')
+      expect.stringContaining('bytes of the disclosure form were read')
     ]));
     expect(parsed.checklistItems.length).toBeLessThanOrEqual(500);
-    expect(parsed.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('checklist item cap')
-    ]));
+    expect(parsed.warnings.filter(warning => warning.includes('checklist items in the form were read'))).toHaveLength(1);
   });
 });
 
@@ -672,8 +717,8 @@ jobs:
       'generated-reports/schemas/user.json'
     ]));
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining(`category "email" and source class "direct_contract"`),
-      expect.stringContaining(`truncated src/main/java/org/folio/LargeUser.java to ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes per file`)
+      expect.stringContaining('more were found for Email addresses (schema)'),
+      expect.stringContaining(`Only the first ${MAX_S005_EVIDENCE_TEXT_BYTES_PER_FILE} bytes of src/main/java/org/folio/LargeUser.java were scanned`)
     ]));
   });
 
@@ -691,7 +736,7 @@ jobs:
 
     expect(result.scannedFiles.length).toBeLessThanOrEqual(200);
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('file scan cap')
+      expect.stringContaining('relevant files were scanned; the rest of the code was not checked')
     ]));
   });
 
@@ -734,7 +779,7 @@ jobs:
 
     expect(result.scannedFiles.length).toBeLessThan(30);
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('byte total text cap')
+      expect.stringContaining('bytes in total; the remaining files were not checked')
     ]));
   });
 
@@ -747,7 +792,7 @@ jobs:
     const result = gatherS005PersonalDataEvidence(repoPath);
 
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('traversal cap')
+      expect.stringContaining('files and folders; the rest of the repository was not checked')
     ]));
   });
 
@@ -1171,6 +1216,12 @@ Last Reviewed: 2026-09-24
     expect(lines).toContain('  - warning 8');
     expect(lines).toContain('  - ... 2 more');
     expect(lines).not.toContain('    - ... 2 more');
+  });
+
+  it('tags evidence rows with single words, which the HTML report shows as tag chips', () => {
+    for (const tag of Object.values(S005_SOURCE_CLASS_TAGS)) {
+      expect(tag).toMatch(/^[\w/-]+$/);
+    }
   });
 });
 

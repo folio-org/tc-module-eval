@@ -1,25 +1,18 @@
-/**
- * Tests for npm-dependency-parser
- */
-
 import * as fs from 'fs';
 import { Stats } from 'fs';
 
-// Mock fs
 jest.mock('fs');
 
-// Now import the module under test
 import { getNpmDependencies, hasNpmProject } from '../utils/parsers/npm-dependency-parser';
-import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun } from '../types';
+import { checkLicenseCompliance } from '../utils/license-compliance';
+import { CommandExecutionRequest, CommandExecutionResult, CommandRunner, Dependency, EvaluationRun, LicenseIssueType } from '../types';
 import { setLogger, resetLogger, NoopLogger } from '../utils/logger';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
-// Constants for mock Stats defaults
 const DEFAULT_MOCK_SIZE = 0;
 const DEFAULT_MOCK_DATE = new Date();
 
-// Helper to create a proper Stats mock
 function createMockStats(isDirectory: boolean = true): Partial<Stats> {
   return {
     isDirectory: jest.fn().mockReturnValue(isDirectory),
@@ -62,6 +55,7 @@ class FakeRunner implements CommandRunner {
       durationMs: result.durationMs ?? 1,
       stdout: result.stdout ?? '',
       stderr: result.stderr ?? '',
+      stdoutTruncated: result.stdoutTruncated,
       errorMessage: result.errorMessage,
       sanitized: true
     };
@@ -74,7 +68,6 @@ describe('npm-dependency-parser', () => {
     setLogger(new NoopLogger());
     jest.clearAllMocks();
 
-    // Reset fs mocks to clean state
     (mockFs.existsSync as jest.Mock).mockReset();
     (mockFs.statSync as jest.Mock).mockReset();
     (mockFs.writeFileSync as jest.Mock).mockReset();
@@ -130,7 +123,6 @@ describe('npm-dependency-parser', () => {
         }
       });
 
-      // Mock validateRepoPath with implementation-based logic
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         // Repo path exists, but .npmrc doesn't (so it will be created)
         if (filePath === '/test/repo') return true;
@@ -169,10 +161,50 @@ describe('npm-dependency-parser', () => {
       const lodash = result.dependencies.find(d => d.name === 'lodash');
       expect(lodash).toBeDefined();
       expect(lodash?.version).toBe('4.17.21');
-      // SPDX expression should be split
       expect(lodash?.licenses).toEqual(['MIT', 'Apache-2.0']);
 
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('should pass an SPDX AND expression only when every license in it passes', async () => {
+      // Expected outcomes follow SPDX: AND binds tighter than OR, and parentheses group.
+      const expected: Record<string, LicenseIssueType | 'pass'> = {
+        'MIT AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        'MIT AND Apache-2.0': 'pass',
+        'MIT AND Zlib': 'pass',
+        'MIT AND Unlisted-1.0': LicenseIssueType.UNKNOWN_LICENSE,
+        'MPL-2.0 AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(MIT OR Apache-2.0) AND BSD-3-Clause': 'pass',
+        '(MIT OR Apache-2.0) AND GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(GPL-3.0 OR MIT) AND (Apache-2.0 OR GPL-3.0)': 'pass',
+        'MIT OR GPL-3.0 AND BSD-3-Clause': 'pass',
+        'MIT OR Apache-2.0 AND GPL-3.0': 'pass',
+        'GPL-3.0 AND MIT OR GPL-3.0': LicenseIssueType.CATEGORY_X_VIOLATION,
+        '(MIT OR Apache-2.0': LicenseIssueType.PARSER_ERROR,
+        // 2^8 alternatives when multiplied out, too many to expand
+        [Array(8).fill('(MIT OR ISC)').join(' AND ')]: LicenseIssueType.PARSER_ERROR
+      };
+      const expressions = Object.keys(expected);
+      const licenseCheckerOutput = JSON.stringify(Object.fromEntries(expressions.map((licenses, index) =>
+        [`pkg-${index}@1.0.0`, { licenses, path: `/test/node_modules/pkg-${index}` }]
+      )));
+      (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => !filePath.includes('.npmrc'));
+      (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
+      // The compliance check reads the license policy from config/.
+      (mockFs.readFileSync as jest.Mock).mockImplementation(jest.requireActual('fs').readFileSync);
+      const runner = new FakeRunner([
+        { status: 'success' },
+        { status: 'success', stdout: licenseCheckerOutput }
+      ]);
+
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
+      const compliance = checkLicenseCompliance(result.dependencies, '');
+
+      const outcomes = Object.fromEntries(expressions.map((expression, index) => [
+        expression,
+        compliance.issues.find(issue => issue.dependency.name === `pkg-${index}`)?.issueType ?? 'pass'
+      ]));
+      expect(outcomes).toEqual(expected);
     });
 
     it('should handle invalid repository path', async () => {
@@ -202,7 +234,7 @@ describe('npm-dependency-parser', () => {
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain('Failed to extract npm dependencies');
+      expect(result.errors[0].message).toContain('npm could not list the dependencies');
     });
 
     it('should handle license-checker failure', async () => {
@@ -223,6 +255,26 @@ describe('npm-dependency-parser', () => {
 
       expect(result.dependencies).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
+    });
+
+    it.each([
+      ['malformed JSON', { stdout: '{"express@4.18.2": {"licenses": "MIT"' }, 'npm could not list the dependencies: license-checker output could not be read as JSON: '],
+      ['a JSON array instead of an object', { stdout: '[{"licenses": "MIT"}]' }, 'npm could not list the dependencies: license-checker output is an array, not the expected object that lists each package'],
+      ['a package entry that is not an object', { stdout: '{"express@4.18.2": null}' }, 'npm could not list the dependencies: license-checker output has an entry for express@4.18.2 that is not a set of package details'],
+      ['an object whose keys are not packages', { stdout: '{"error": {"code": "E404"}}' }, 'npm could not list the dependencies: license-checker output lists "error", which is not a package name followed by @ and a version'],
+      // Parseable on its own, so only the truncation flag shows that packages are missing.
+      ['truncated output', { stdout: '{"express@4.18.2": {"licenses": "MIT"}}', stdoutTruncated: true }, 'npm could not list the dependencies: license-checker output was longer than 10 MB and was cut off, so the dependency list is incomplete'],
+      ['empty output', { stdout: '' }, 'npm could not list the dependencies: license-checker printed nothing, so there is no dependency list to read']
+    ])('should report an extraction error, not an empty dependency list, for %s', async (_case, checkerResult, message) => {
+      (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => !filePath.includes('.npmrc'));
+      (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
+      const runner = new FakeRunner([{ status: 'success' }, { status: 'success', ...checkerResult }]);
+
+      const result = await getNpmDependencies('/test/repo', undefined, runner);
+
+      expect(result.dependencies).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toMatchObject({ source: 'npm-parser', message: expect.stringContaining(message) });
     });
 
     it('should handle packages with array licenses', async () => {
@@ -318,10 +370,9 @@ describe('npm-dependency-parser', () => {
         }
       });
 
-      // Mock .npmrc already exists
       (mockFs.existsSync as jest.Mock).mockImplementation((filePath: string) => {
         if (filePath === '/test/repo') return true;
-        if (filePath.includes('.npmrc')) return true; // .npmrc exists
+        if (filePath.includes('.npmrc')) return true;
         return true;
       });
       (mockFs.statSync as jest.Mock).mockReturnValue(createMockStats(true));
@@ -334,7 +385,6 @@ describe('npm-dependency-parser', () => {
 
       const result = await getNpmDependencies('/test/repo', undefined, runner);
 
-      // Verify writeFileSync was NOT called (existing .npmrc was respected)
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
       expect(result.dependencies).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
@@ -359,7 +409,7 @@ describe('npm-dependency-parser', () => {
       expect(result.dependencies).toHaveLength(0);
       expect(result.warnings).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain('Failed to extract npm dependencies');
+      expect(result.errors[0].message).toContain('npm could not list the dependencies');
       expect(result.errors[0].message).toContain('license-checker command not found');
     });
 

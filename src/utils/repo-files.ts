@@ -1,5 +1,7 @@
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { errorMessage } from './type-guards';
 
 const DEFAULT_SKIPPED_REPO_DIRS: ReadonlySet<string> = new Set(['node_modules', '.git']);
 
@@ -67,19 +69,7 @@ export function readJsonFile(filePath: string, warnings?: string[]): Record<stri
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   } catch (error) {
-    warnings?.push(`Unable to parse ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
-    return undefined;
-  }
-}
-
-export function readTextFile(filePath: string, warnings?: string[]): string | undefined {
-  if (!fs.existsSync(filePath)) {
-    return undefined;
-  }
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (error) {
-    warnings?.push(`Unable to read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
+    warnings?.push(`Unable to parse ${path.basename(filePath)}: ${errorMessage(error)}`);
     return undefined;
   }
 }
@@ -116,6 +106,21 @@ export function isBinaryBuffer(buffer: Buffer): boolean {
 
 export function relativePosixPath(repoPath: string, candidatePath: string): string {
   return path.relative(repoPath, candidatePath).split(path.sep).join('/');
+}
+
+/** Whether `candidatePath` is below `rootPath`, compared as written (symbolic links are not resolved). The root itself is not inside. */
+export function isPathInside(rootPath: string, candidatePath: string): boolean {
+  const relative = path.relative(rootPath, candidatePath);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+export function isMissingFileError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
+
+/** "sha256:<hex>" of the content; a string is hashed as UTF-8. */
+export function sha256Digest(content: string | Buffer): string {
+  return `sha256:${createHash('sha256').update(content).digest('hex')}`;
 }
 
 export function walkDirectories(
