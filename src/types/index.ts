@@ -211,6 +211,7 @@ export * from './s014-application-assignment';
 export * from './remote-evidence';
 export * from './frontend-checklist';
 export * from './f001-consumed-apis';
+export * from './f002-e2e-tests';
 export * from './f003-internationalization';
 export * from './f005-stripes-version';
 export * from './backend-evidence';

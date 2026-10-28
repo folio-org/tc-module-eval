@@ -23,6 +23,15 @@ export interface FolioSharedWorkflow {
   sonar?: boolean;
   sonarSources?: string[];
   sonarExclusions?: string[];
+  /** The test jobs a caller turns on with a boolean input, each running a command input. */
+  testJobs?: FolioSharedWorkflowTestJob[];
+}
+
+export interface FolioSharedWorkflowTestJob {
+  enabledInput: string;
+  enabledByDefault: boolean;
+  commandInput: string;
+  defaultCommand: string;
 }
 
 export interface FolioSharedWorkflowTable {

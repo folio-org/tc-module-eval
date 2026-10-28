@@ -47,7 +47,21 @@
         "docker": { "type": "boolean" },
         "sonar": { "type": "boolean" },
         "sonarSources": { "$ref": "#/definitions/patterns" },
-        "sonarExclusions": { "$ref": "#/definitions/patterns" }
+        "sonarExclusions": { "$ref": "#/definitions/patterns" },
+        "testJobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["enabledInput", "enabledByDefault", "commandInput", "defaultCommand"],
+            "properties": {
+              "enabledInput": { "type": "string", "minLength": 1 },
+              "enabledByDefault": { "type": "boolean" },
+              "commandInput": { "type": "string", "minLength": 1 },
+              "defaultCommand": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       },
       "allOf": [
         { "if": { "properties": { "buildTool": { "const": "maven" } } }, "then": { "required": ["maven"] } },
