@@ -115,8 +115,8 @@ function matchesAny(dependencyName: string, entries: Array<{ name: string; match
 }
 
 /**
- * Whether the dependency is listed in license-dual-licensed.json, so that the licenses its Maven
- * POM lists are a choice rather than licenses that all apply.
+ * Whether the dependency (groupId:artifactId) is listed in license-dual-licensed.json, so that the
+ * licenses reported for it are a choice rather than licenses that all apply.
  */
 export function isDualLicensed(dependencyName: string): boolean {
   if (dualLicensed === null) {
