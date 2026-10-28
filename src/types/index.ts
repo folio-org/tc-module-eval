@@ -133,7 +133,7 @@ export interface EvaluationRunArtifacts {
   agentReviewSnapshot?: import('../utils/committed-source').CommittedSourceSnapshot;
   /** The committed production source, package.json and English translations the F criteria read. */
   frontendSource?: import('../utils/frontend-source').FrontendSource;
-  /** Every request a UI package's production code sends to the backend, for F001 (and S010 later). */
+  /** Every request a UI package's production code sends to the backend, for F001. */
   uiRequestSites?: import('./f001-consumed-apis').UiRequestSites;
   /** The B criteria's shared evidence: repository kind, descriptor template, framework and storage. */
   backendEvidence?: import('./backend-evidence').BackendEvidence;

@@ -31,7 +31,6 @@ describe('F001 agent review', () => {
   });
   afterEach(() => fs.rmSync(repoPath, { recursive: true, force: true }));
 
-  // F001-C2#1 is the request to {}/entries, F001-C3#1 the circulation path that is not in the index.
   const dynamic = (fields: Partial<CriterionAgentAssessment> = {}): CriterionAgentAssessment => ({
     technologyId: 'F001-C2#1', type: 'substantive_concern', summary: 'moduleName is "settings", so this reaches `settings`, which is not declared.',
     evidenceReferences: ['src/Requests.js'], coverageDisposition: 'investigated', ...fields

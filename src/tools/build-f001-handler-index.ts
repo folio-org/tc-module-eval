@@ -5,12 +5,14 @@ import { Command } from 'commander';
 import { F001HandlerIndex, S008Catalog } from '../types';
 import { parseFarApplication, PlatformParseDiagnostic } from '../utils/platform-applications';
 import { sha256Digest } from '../utils/repo-files';
+import { unique } from '../utils/report-text';
 import { errorMessage, isRecord } from '../utils/type-guards';
 import { ensureTrailingSlash, fetchJson, FetchOptions, mapLimit, stableStringify, validateBaseUrl } from './acquire-s008-catalog';
 
 const DEFAULT_CATALOG = path.resolve(__dirname, '../../config/s008-catalog-official.json');
 const DEFAULT_OUTPUT = path.resolve(__dirname, '../../config/f001-handler-index.json');
 const DEFAULT_FAR_URL = 'https://far.ci.folio.org';
+const FAR_SOURCE = 'FAR:';
 
 export interface BuildF001HandlerIndexOptions {
   catalogPath?: string;
@@ -39,11 +41,9 @@ export async function buildF001HandlerIndex(options: BuildF001HandlerIndexOption
   };
 
   // Each provider names its sources: `FAR:<application id>` (several joined by "; ") or a descriptor URL.
-  const sourcesOf = (source: string) => source.split('; ');
-  const applicationIds = [...new Set(catalog.providers.flatMap(provider => sourcesOf(provider.source))
-    .filter(source => source.startsWith('FAR:')).map(source => source.slice(4)))].sort();
-  const descriptorUrls = [...new Set(catalog.providers.flatMap(provider => sourcesOf(provider.source))
-    .filter(source => !source.startsWith('FAR:')))].sort();
+  const sources = unique(catalog.providers.flatMap(provider => provider.source.split('; '))).sort();
+  const applicationIds = sources.filter(source => source.startsWith(FAR_SOURCE)).map(source => source.slice(FAR_SOURCE.length));
+  const descriptorUrls = sources.filter(source => !source.startsWith(FAR_SOURCE));
 
   const descriptors = new Map<string, Record<string, unknown>[]>();
   const add = (descriptor: unknown) => {
@@ -69,7 +69,6 @@ export async function buildF001HandlerIndex(options: BuildF001HandlerIndexOption
   });
 
   const providers = catalog.providers.map(provider => {
-    // The same descriptor bytes S008's importer hashed: sorted keys, two-space indent, trailing newline.
     const descriptor = (descriptors.get(provider.moduleId) ?? [])
       .find(candidate => sha256Digest(stableStringify(candidate)) === provider.descriptorHash);
     if (!descriptor) {
@@ -92,23 +91,23 @@ export async function buildF001HandlerIndex(options: BuildF001HandlerIndexOption
   };
 }
 
-// Interfaces a UI can call: handlers with a path pattern, without system interfaces (_tenant, _timer, ...).
 function providedInterfaces(descriptor: Record<string, unknown>, moduleId: string): F001HandlerIndex['providers'][number]['interfaces'] {
   const provides = Array.isArray(descriptor.provides) ? descriptor.provides.filter(isRecord) : [];
   return provides.flatMap(provided => {
     const id = String(provided.id);
     const interfaceType = typeof provided.interfaceType === 'string' ? provided.interfaceType : undefined;
     if (id.startsWith('_') || interfaceType === 'system') return [];
-    const handlers = (Array.isArray(provided.handlers) ? provided.handlers.filter(isRecord) : [])
-      .filter(handler => {
-        // Okapi's legacy prefix `path` would need its own matching; no descriptor of the release uses it.
-        if (typeof handler.pathPattern !== 'string' && handler.path !== undefined) throw new Error(`${moduleId} provides ${id} with a handler that has a path but no pathPattern.`);
-        return typeof handler.pathPattern === 'string';
-      })
-      .map(handler => ({
-        methods: (Array.isArray(handler.methods) ? handler.methods.filter((method): method is string => typeof method === 'string') : []).sort(),
-        pathPattern: handler.pathPattern as string
-      }));
+    const handlers = (Array.isArray(provided.handlers) ? provided.handlers.filter(isRecord) : []).flatMap(handler => {
+      if (typeof handler.pathPattern === 'string') {
+        return [{
+          methods: (Array.isArray(handler.methods) ? handler.methods.filter((method): method is string => typeof method === 'string') : []).sort(),
+          pathPattern: handler.pathPattern
+        }];
+      }
+      // Okapi's legacy prefix `path` would need its own matching; no descriptor of the release uses it.
+      if (handler.path !== undefined) throw new Error(`${moduleId} provides ${id} with a handler that has a path but no pathPattern.`);
+      return [];
+    });
     return handlers.length ? [{ id, version: String(provided.version), ...(interfaceType ? { interfaceType } : {}), handlers }] : [];
   }).sort((a, b) => `${a.id}\0${a.version}`.localeCompare(`${b.id}\0${b.version}`));
 }

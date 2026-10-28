@@ -53,7 +53,7 @@ export interface UiRequestSite {
   unresolved?: string;
 }
 
-/** The `uiRequestSites` run artifact: every request site in production code, for F001 now and S010 later. */
+/** The `uiRequestSites` run artifact: every request site in production code. */
 export interface UiRequestSites {
   sites: UiRequestSite[];
   /** False when production source could not all be read or parsed. */

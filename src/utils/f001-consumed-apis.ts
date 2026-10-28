@@ -19,13 +19,13 @@ import { FrontendSource, lineOf } from './frontend-source';
 import { DEFAULT_S008_CATALOG_PATHS } from './s008-catalog';
 import { sha256Digest } from './repo-files';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
+import { escapeRegExp } from './regexp';
 import { errorMessage, isRecord } from './type-guards';
 
-export const DEFAULT_F001_HANDLER_INDEX_PATH = path.resolve(__dirname, '../../config/f001-handler-index.json');
+const DEFAULT_F001_HANDLER_INDEX_PATH = path.resolve(__dirname, '../../config/f001-handler-index.json');
 const SHOWN_SITES = 20;
 const SHOWN_SITES_PER_INTERFACE = 3;
 
-/** One handler pattern of the index, compiled for matching. */
 export interface F001Pattern {
   interfaceId: string;
   pathPattern: string;
@@ -89,9 +89,9 @@ export function compilePatterns(index: F001HandlerIndex): F001Pattern[] {
 function compilePattern(interfaceId: string, pathPattern: string, methods: string[]): F001Pattern {
   const segments = pathPattern.replace(/^\//, '').split('/');
   const segmentRegex = (segment: string, loose: boolean) => {
-    const exact = segment.split(/(\{[^}]*\}|\*)/).map(piece => piece === '*' ? '.*' : /^\{[^}]*\}$/.test(piece) ? '[^/]+' : escapeRegex(piece)).join('');
+    const exact = segment.split(/(\{[^}]*\}|\*)/).map(piece => piece === '*' ? '.*' : isParam(piece) ? '[^/]+' : escapeRegExp(piece)).join('');
     // A run-time segment could be any fixed text, including text a wildcard segment such as `settings*` accepts.
-    return loose && !/^\{[^}]*\}$/.test(segment) ? `(?:${exact}|${DYNAMIC})` : exact;
+    return loose && !isParam(segment) ? `(?:${exact}|${DYNAMIC})` : exact;
   };
   const build = (loose: boolean) => new RegExp(`^${segments.map(segment => segmentRegex(segment, loose)).join('/')}$`);
   return {
@@ -102,10 +102,14 @@ function compilePattern(interfaceId: string, pathPattern: string, methods: strin
     loose: build(true),
     specificity: [
       segments.filter(segment => !/[{*]/.test(segment)).length,
-      segments.filter(segment => /^\{[^}]*\}$/.test(segment)).length,
+      segments.filter(isParam).length,
       -(pathPattern.match(/\*/g) ?? []).length
     ]
   };
+}
+
+function isParam(segment: string): boolean {
+  return /^\{[^}]*\}$/.test(segment);
 }
 
 /**
@@ -125,7 +129,7 @@ export function mapRequestPath(requestPath: string, openEnd: boolean, patterns: 
   }
   const bestInterfaces = unique(best.map(pattern => pattern.interfaceId)).sort();
   if (openEnd) {
-    const prefix = new RegExp(`^/${requestPath.split('/').map(segment => segment === '{}' ? '[^/]+' : escapeRegex(segment)).join('/')}`);
+    const prefix = new RegExp(`^/${requestPath.split('/').map(segment => segment === '{}' ? '[^/]+' : escapeRegExp(segment)).join('/')}`);
     const continuations = unique(patterns.filter(pattern => prefix.test(pattern.pathPattern)).map(pattern => pattern.interfaceId));
     const candidates = unique([...bestInterfaces, ...continuations]).sort();
     if (candidates.length === 1) return { outcome: 'interface', interfaces: candidates, ...(best[0] ? { pathPattern: best[0].pathPattern } : {}) };
@@ -145,12 +149,8 @@ function compareSpecificity(left: number[], right: number[]): number {
   return 0;
 }
 
-function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /** Requests to Okapi's own `_/` endpoints go to the gateway, not to a module interface. */
-export function isGatewayPath(requestPath: string | undefined): boolean {
+function isGatewayPath(requestPath: string | undefined): boolean {
   return !!requestPath && requestPath.startsWith('_/');
 }
 
@@ -163,7 +163,7 @@ export interface F001Input {
 
 /**
  * F001 (every consumed API is declared in okapiInterfaces or optionalOkapiInterfaces). Fail when a request maps to
- * exactly one interface package.json declares in neither list (Q1), for modules and libraries alike; pass when every
+ * exactly one interface package.json declares in neither list, for modules and libraries alike; pass when every
  * request maps to a declared interface; manual otherwise: requests the tool cannot read or map, paths not in the
  * handler index, ambiguous matches, an index that did not load, unreadable declarations or source. A proven
  * violation still fails.
@@ -188,7 +188,6 @@ export function evaluateF001({ source, sites, declarations, index }: F001Input):
     return [...byId.entries()].map(([id, sitesOfId]) => ({ id, sites: sitesOfId })).sort((a, b) => a.id.localeCompare(b.id));
   };
   const undeclared = uses(id => !declared.has(id) && !diagnosed.has(id));
-  // A declaration map that could not be read at all (not one entry of it) might declare anything, so nothing is proven.
   const declarationsKnown = declarations.diagnostics.every(diagnostic => !diagnostic.material || declaredIdOf(diagnostic.path).length > 0);
   const declaredAndUsed = uses(id => declared.has(id) || diagnosed.has(id));
   const used = new Set(declaredAndUsed.map(use => use.id));
@@ -240,7 +239,6 @@ export function evaluateF001({ source, sites, declarations, index }: F001Input):
   return { ...base, status, summary, checklist: frontendChecklist(status, checklistItems(base, incomplete)) };
 }
 
-// `package.json#stripes.okapiInterfaces.<id>` or `package.json#/stripes/okapiInterfaces/<id>`, as collectFrontend reports.
 function declaredIdOf(diagnosticPath: string | undefined): string[] {
   const match = diagnosticPath && /^package\.json#\/?stripes[./](?:optionalOkapiInterfaces|okapiInterfaces)[./](.+)$/.exec(diagnosticPath);
   return match ? [match[1]] : [];
@@ -260,7 +258,6 @@ function libraryHooks(source: FrontendSource): F001Analysis['libraryHooks'] {
   }));
 }
 
-/** A request as a reviewer reads it: `POST circulation/loans/{}` or the expression when the path is unknown. */
 export function siteLabel(site: UiRequestSite): string {
   const target = site.requestPath !== undefined ? `${site.requestPath}${site.openEnd ? '…' : ''}` : site.expression;
   return `${site.method ? `${site.method} ` : ''}${target}`;
@@ -300,9 +297,7 @@ function checklistItems(analysis: Pick<F001Analysis, 'undeclared' | 'unresolvedS
     });
   }
   if (analysis.notInIndexSites.length) {
-    // One obligation per path, at its first use; every use is a starting point.
-    const firstUses = unique(analysis.notInIndexSites.map(site => site.requestPath!))
-      .map(requestPath => analysis.notInIndexSites.find(site => site.requestPath === requestPath)!);
+    const firstUses = firstBy(analysis.notInIndexSites, site => site.requestPath!);
     items.push({
       id: 'F001-C3',
       title: 'Each path not in the handler index belongs to an interface the module declares.',
@@ -313,8 +308,7 @@ function checklistItems(analysis: Pick<F001Analysis, 'undeclared' | 'unresolvedS
     });
   }
   if (analysis.libraryHooks.length) {
-    const firstUses = unique(analysis.libraryHooks.map(hook => `${hook.from}\0${hook.name}`))
-      .map(key => analysis.libraryHooks.find(hook => `${hook.from}\0${hook.name}` === key)!);
+    const firstUses = firstBy(analysis.libraryHooks, hook => `${hook.from}\0${hook.name}`);
     items.push({
       id: 'F001-C4',
       title: 'Requests made through shared-library hooks go to declared interfaces.',
@@ -325,6 +319,12 @@ function checklistItems(analysis: Pick<F001Analysis, 'undeclared' | 'unresolvedS
     });
   }
   return numberObligations(items);
+}
+
+function firstBy<T>(items: T[], key: (item: T) => string): T[] {
+  const first = new Map<string, T>();
+  for (const item of items) if (!first.has(key(item))) first.set(key(item), item);
+  return [...first.values()];
 }
 
 export function renderF001HumanDetails(analysis: F001Analysis, agentReview?: CriterionAgentReviewResult): string {

@@ -199,7 +199,6 @@ describe('F001 consumed interfaces', () => {
     expect(loaded.index.providers.map(provider => [provider.moduleId, provider.descriptorHash]).sort())
       .toEqual(catalog.providers.map(provider => [provider.moduleId, provider.descriptorHash]).sort());
     expect(loaded.index.baseline.platformCommit).toBe(catalog.baseline.platformCommit);
-    // Added to the catalog by hand from app-requests-ecs; its handlers come from the same descriptor.
     const bff = loaded.index.providers.find(provider => provider.moduleId === 'mod-circulation-bff-1.2.3');
     expect(bff?.interfaces.map(provided => provided.id)).toContain('circulation-bff-loans');
     expect(loaded.patterns.some(pattern => pattern.interfaceId.startsWith('_'))).toBe(false);

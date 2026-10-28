@@ -3,29 +3,22 @@ import { posix } from 'path';
 import { EvaluationRun, UiRequestSite, UiRequestSiteKind, UiRequestSites } from '../types';
 import { FrontendSource, FrontendSourceFile, getFrontendSource, lineOf } from './frontend-source';
 
-/** The run's request sites, read once from the frontend source and shared by F001 and, later, S010. */
 export function getUiRequestSites(run: EvaluationRun, repoPath: string): Promise<UiRequestSites> {
   return run.getOrCreateArtifact('uiRequestSites', async () => extractUiRequestSites(await getFrontendSource(run, repoPath)));
 }
 
 const KY_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head']);
 const MANIFEST_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-// Constants are followed through at most this many declarations, imports and re-exports.
+const KY_INSTANCE_NAMES = new Set(['ky', 'okapiKy']);
 const MAX_DEPTH = 8;
-// A segment the code fills in at run time, and one whose value comes from somewhere the tool cannot read.
 const DYNAMIC = '\u0001';
 const UNRESOLVED = '\u0002';
 
-/**
- * Part of a path value: fixed text, or something only known at run time. `unresolved` says why a value that is
- * probably part of the path (an imported constant) could not be read; `okapiUrl` marks the Okapi URL prefix of a fetch.
- */
 type Part = string | { dynamic: true; unresolved?: string; okapiUrl?: true };
 
 type Resolved =
   | { kind: 'value'; node: ts.Expression; file: FrontendSourceFile }
   | { kind: 'function'; node: ts.FunctionLikeDeclaration; file: FrontendSourceFile }
-  /** A namespace import (`import * as api from './api'`): property access looks inside the module. */
   | { kind: 'module'; file: FrontendSourceFile }
   | { kind: 'dynamic' }
   | { kind: 'unresolved'; reason: string };
@@ -49,7 +42,6 @@ class PathResolver {
   sitesOf(file: FrontendSourceFile): UiRequestSite[] {
     const sites: UiRequestSite[] = [];
     const add = (node: ts.Node, kind: UiRequestSiteKind, method: string | undefined, expression: ts.Expression | undefined, prefix: Part[] = [], hops = 0): void => {
-      // `id ? \`${API}/${id}\` : API` sends one of two requests; a null or undefined branch sends none.
       const value = expression && hops <= MAX_DEPTH ? unwrap(expression) : undefined;
       if (value && ts.isConditionalExpression(value)) {
         for (const branch of [value.whenTrue, value.whenFalse]) {
@@ -76,7 +68,6 @@ class PathResolver {
         ...(built.openEnd ? { openEnd: true } : {}), ...(built.unresolved ? { unresolved: built.unresolved } : {}) });
     };
     const visit = (node: ts.Node): void => {
-      // A manifest resource is a property of the manifest: `items: { type: 'okapi', path: ... }`.
       if (ts.isObjectLiteralExpression(node) && ts.isPropertyAssignment(node.parent) && isOkapiResource(node)) {
         const path = property(node, 'path');
         const overrides = MANIFEST_METHODS.flatMap(method => {
@@ -109,7 +100,6 @@ class PathResolver {
     return sites;
   }
 
-  /** The prefix of the ky instance an expression is, or undefined when it is not one. */
   private kyPrefix(expression: ts.Expression, file: FrontendSourceFile, depth: number): Part[] | undefined {
     const node = unwrap(expression);
     if (depth > MAX_DEPTH) return undefined;
@@ -130,11 +120,9 @@ class PathResolver {
       const prefix = this.kyPrefix(declaration.node.initializer, file, depth + 1);
       if (prefix) return prefix;
     }
-    // By convention a ky instance is called ky, whether it comes from useOkapiKy, a hook of the module or a parameter.
-    return ['ky', 'okapiKy'].includes(node.text) ? [] : undefined;
+    return KY_INSTANCE_NAMES.has(node.text) ? [] : undefined;
   }
 
-  // A stripes-connect path given as a function, inline or as a constant.
   private functionOf(node: ts.Expression, file: FrontendSourceFile): ts.FunctionLikeDeclaration | undefined {
     if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return node;
     const resolved = ts.isIdentifier(node) ? this.resolveIdentifier(node, file, 0) : undefined;
@@ -169,10 +157,8 @@ class PathResolver {
       return value ? this.evaluate(value, object.file, depth + 1) : [dynamic];
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      // A function from a package (useMemo, encodeURIComponent, a library helper) returns a run-time value.
       const callee = this.resolveIdentifier(node.expression, file, depth);
-      const body = callee.kind === 'function' ? returnedExpression(callee.node) : undefined;
-      // Inside the function its parameters resolve to run-time values.
+      const body = callee.kind === 'function' ? soleReturnedExpression(callee.node) : undefined;
       return body && callee.kind === 'function' ? this.evaluate(body, callee.file, depth + 1) : [dynamic];
     }
     return [dynamic];
@@ -200,7 +186,6 @@ class PathResolver {
     return this.exported(target, declaration.name, depth + 1);
   }
 
-  /** What a module exports under a name, following `export { x } from` and `export * from` inside the source. */
   private exported(file: FrontendSourceFile, name: string, depth: number): Resolved {
     if (depth > MAX_DEPTH) return { kind: 'unresolved', reason: `${name} is re-exported too many times` };
     for (const statement of file.sourceFile.statements) {
@@ -245,15 +230,12 @@ class PathResolver {
         if (declaration) return this.resolveIdentifier(declaration.name as ts.Identifier, file, depth);
       }
       if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return { kind: 'function', node: statement, file };
-      if (ts.isImportDeclaration(statement) && importedName(statement, name)) {
-        const identifier = importBinding(statement, name)!;
-        return this.resolveIdentifier(identifier, file, depth);
-      }
+      const identifier = ts.isImportDeclaration(statement) ? importBinding(statement, name) : undefined;
+      if (identifier) return this.resolveIdentifier(identifier, file, depth);
     }
     return { kind: 'unresolved', reason: `${name} is not declared in ${file.path}` };
   }
 
-  /** The production file a relative import names, or why it cannot be followed. */
   private module(file: FrontendSourceFile, specifier: string): FrontendSourceFile | string {
     if (!specifier.startsWith('.')) return `it is imported from ${specifier}`;
     const base = posix.normalize(posix.join(posix.dirname(file.path), specifier));
@@ -272,7 +254,6 @@ type Declaration =
   | { kind: 'import'; specifier: string; name: string }
   | { kind: 'other' };
 
-/** The declaration an identifier refers to, looked up through its enclosing scopes; undefined for globals. */
 function findDeclaration(identifier: ts.Identifier): Declaration | undefined {
   const name = identifier.text;
   for (let scope: ts.Node | undefined = identifier.parent; scope; scope = scope.parent) {
@@ -302,7 +283,6 @@ function findDeclaration(identifier: ts.Identifier): Declaration | undefined {
   return undefined;
 }
 
-// The exported name a local import binding stands for: `default`, `*` for a namespace, or the named export.
 function importedName(statement: ts.ImportDeclaration, local: string): string | undefined {
   const clause = statement.importClause;
   if (!clause) return undefined;
@@ -320,7 +300,7 @@ function importBinding(statement: ts.ImportDeclaration, local: string): ts.Ident
   const clause = statement.importClause;
   if (clause?.name?.text === local) return clause.name;
   const bindings = clause?.namedBindings;
-  if (bindings && ts.isNamespaceImport(bindings)) return bindings.name;
+  if (bindings && ts.isNamespaceImport(bindings)) return bindings.name.text === local ? bindings.name : undefined;
   return bindings && ts.isNamedImports(bindings) ? bindings.elements.find(item => item.name.text === local)?.name : undefined;
 }
 
@@ -346,7 +326,6 @@ function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
   return ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some(modifier => modifier.kind === kind);
 }
 
-// Every value a function returns, from return statements outside its nested functions.
 function returnedExpressions(fn: ts.FunctionLikeDeclaration): ts.Expression[] {
   if (!fn.body) return [];
   if (!ts.isBlock(fn.body)) return [fn.body];
@@ -359,8 +338,7 @@ function returnedExpressions(fn: ts.FunctionLikeDeclaration): ts.Expression[] {
   return values;
 }
 
-// The expression a function returns when that is all it does: `id => \`users/${id}\`` or `{ return 'x'; }`.
-function returnedExpression(fn: ts.FunctionLikeDeclaration): ts.Expression | undefined {
+function soleReturnedExpression(fn: ts.FunctionLikeDeclaration): ts.Expression | undefined {
   if (!fn.body) return undefined;
   if (!ts.isBlock(fn.body)) return fn.body;
   const [statement] = fn.body.statements;
@@ -404,7 +382,7 @@ function optionMethod(options: ts.Expression | undefined): string | undefined {
  * segment each (`{}`), the query string and the Okapi URL prefix are dropped, and absolute URLs to other hosts are
  * not FOLIO requests (`external`).
  */
-export function requestPath(parts: Part[]): { requestPath?: string; openEnd?: boolean; unresolved?: string; external?: boolean } {
+function requestPath(parts: Part[]): { requestPath?: string; openEnd?: boolean; unresolved?: string; external?: boolean } {
   const reasons: string[] = [];
   let text = '';
   parts.forEach((part, index) => {

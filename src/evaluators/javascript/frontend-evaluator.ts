@@ -41,7 +41,6 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewF001WithAgent(repoPath, analysis, index.loaded ? index.patterns : [], config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    // The agent never sees a fail; the reviewer confirms each undeclared interface (F001-C1).
     else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
       analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the reviewer confirms each undeclared interface (F001-C1)';
     }

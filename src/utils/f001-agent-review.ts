@@ -30,7 +30,7 @@ export async function reviewF001WithAgent(
 /**
  * F001's review: resolve each unresolved request and identify the interface of each path not in the handler index,
  * with the index's patterns that share a first path segment as reference; report missed requests as
- * `discovered:interface:<n>`. A substantive_concern must name, in backticks, an interface id the module does not declare.
+ * `discovered:interface:<n>`.
  */
 export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Analysis, patterns: F001Pattern[]): CriterionAgentReviewRequest {
   const declared = new Set([...analysis.declared.required, ...analysis.declared.optional]);
@@ -51,7 +51,6 @@ export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Anal
       'A substantive_concern must name, in its summary and in backticks, the interface id it believes is undeclared, such as `service-points`: as in handler-patterns.json when the interface is there, otherwise as the backend module\'s descriptor names it.',
       'Report requests to backend interfaces the checklist does not list, that go to an undeclared interface, as discovered:interface:<n>, citing the source file.'
     ],
-    // Interfaces newer than the index's release are not in it, so any id-shaped name the module does not declare counts.
     validateCriterion: review => {
       const unnamed = (review.assessments ?? []).find(assessment => assessment.type === 'substantive_concern'
         && ![...assessment.summary.matchAll(/`([a-z][a-z0-9._-]*)`/g)].some(match => !declared.has(match[1])));
@@ -79,21 +78,19 @@ export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Anal
   });
 }
 
-// The index's patterns that share a first segment with a request the agent is asked about, cut to fit 48 KB.
 function handlerPatterns(analysis: F001Analysis, patterns: F001Pattern[]): string {
   const sites = [...analysis.unresolvedSites, ...analysis.notInIndexSites];
   const segments = [...new Set(sites.map(site => site.requestPath?.split('/')[0]).filter((segment): segment is string => !!segment && segment !== '{}'))].sort();
   // `patron-block${query}` may continue its only segment: patron-block-limits and patron-block-conditions both start with it.
   const openSegments = new Set(sites.filter(site => site.openEnd && !site.requestPath!.includes('/')).map(site => site.requestPath!));
+  const bySegment = segments.map(segment => [segment, patterns.filter(pattern => openSegments.has(segment)
+    ? pattern.pathPattern.startsWith(`/${segment}`) : pattern.pathPattern.split('/')[1] === segment)] as const);
   const render = (maxPerSegment: number) => JSON.stringify({
     platform: analysis.index.descriptorVersion,
-    bySegment: Object.fromEntries(segments.map(segment => {
-      const matching = patterns.filter(pattern => openSegments.has(segment) ? pattern.pathPattern.startsWith(`/${segment}`) : pattern.pathPattern.split('/')[1] === segment);
-      return [segment, {
-        patterns: matching.slice(0, maxPerSegment).map(pattern => ({ interface: pattern.interfaceId, methods: pattern.methods, pathPattern: pattern.pathPattern })),
-        ...(matching.length > maxPerSegment ? { omitted: matching.length - maxPerSegment } : {})
-      }];
-    }))
+    bySegment: Object.fromEntries(bySegment.map(([segment, matching]) => [segment, {
+      patterns: matching.slice(0, maxPerSegment).map(pattern => ({ interface: pattern.interfaceId, methods: pattern.methods, pathPattern: pattern.pathPattern })),
+      ...(matching.length > maxPerSegment ? { omitted: matching.length - maxPerSegment } : {})
+    }]))
   }, null, 2);
   for (let entries = 1_000; entries >= 1; entries = Math.floor(entries / 2)) {
     const text = render(entries);

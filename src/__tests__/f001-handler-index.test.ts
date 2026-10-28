@@ -18,7 +18,6 @@ describe('F001 handler index build', () => {
       { id: 'alpha-events', version: '1.0' }
     ]
   };
-  // A provider added by hand from outside the platform's applications, like mod-circulation-bff.
   const extra = { id: 'mod-b-2.0.0', provides: [{ id: 'beta', version: '2.0', handlers: [{ methods: ['GET'], pathPattern: '/beta*' }] }] };
   let server: http.Server;
   let base: string;
