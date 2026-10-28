@@ -3,6 +3,8 @@ import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import { hasF001AgentReviewMaterial, reviewF001WithAgent } from '../../utils/f001-agent-review';
 import { evaluateF001, loadF001HandlerIndex, renderF001HumanDetails } from '../../utils/f001-consumed-apis';
+import { hasF002AgentReviewMaterial, reviewF002WithAgent } from '../../utils/f002-agent-review';
+import { analyzeF002, renderF002HumanDetails } from '../../utils/f002-e2e-tests';
 import { hasF003AgentReviewMaterial, reviewF003WithAgent } from '../../utils/f003-agent-review';
 import { evaluateF003, renderF003HumanDetails } from '../../utils/f003-internationalization';
 import { evaluateF005, renderF005HumanDetails } from '../../utils/f005-stripes-version';
@@ -13,13 +15,14 @@ import { collectFrontend } from '../../utils/s008-interface-declarations';
 import { getUiRequestSites } from '../../utils/ui-request-sites';
 
 /**
- * Evaluator for Frontend criteria (F001-F007). F001, F003 and F005 have automated logic; the others fall back to the
- * catalog-defined default result.
+ * Evaluator for Frontend criteria (F001-F007). F001, F002, F003 and F005 have automated logic; the others fall back to
+ * the catalog-defined default result.
  */
 export class FrontendEvaluator extends CatalogSectionEvaluator {
   constructor() {
     super('Frontend', 'javascript', {
       F001: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF001(repoPath, evaluationRun),
+      F002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF002(repoPath, evaluationRun),
       F003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF003(repoPath, evaluationRun),
       F005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF005(repoPath, evaluationRun)
     });
@@ -49,6 +52,30 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       status: analysis.status,
       evidence: analysis.summary,
       details: renderF001HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
+    };
+  }
+
+  private async evaluateF002(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'F002', evaluationRun);
+    const analysis = await analyzeF002(repoPath);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'F002',
+      status: analysis.status,
+      hasReviewMaterial: hasF002AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewF002WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
+      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results';
+    }
+    return {
+      criterionId: 'F002',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderF002HumanDetails(analysis, agentReview),
       criterionDetails: analysis,
       agentReview
     };

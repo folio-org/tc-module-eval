@@ -338,11 +338,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F002',
     description: 'E2E tests in supported technology',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'E2E tests in supported technology (Cypress, BigTest, etc.)'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F003',

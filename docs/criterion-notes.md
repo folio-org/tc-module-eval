@@ -347,6 +347,30 @@ Checklist items, shown for fail and manual: **F001-C1** (reviewer only) each int
 
 F001 has agent review, which runs by default for a manual result when agent review is enabled (Q6), so it never sees a fail. See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
+## F002 End-to-End Tests
+
+F002 checks "if E2E tests are provided, they use a supported technology". The officially supported technologies page lists one entry for UI integration and end-to-end testing, "Cypress 12.0, pending verification" (section `frontend-integration-testing`, which F002 selects by its id, minimum 12.0.0, provisional). F002 detects the tooling itself, from the committed tree, in safe mode: `package.json` dependencies and scripts, `yarn.lock`, configuration files at the repository root, test directories, and what CI runs (`.github/workflows/*.yml` and the `Jenkinsfile`; `Jenkinsfile.*` variants are inactive, as for S012). S013's test evidence is not used: it reads only dependencies, from the working tree.
+
+| Tool | Seen from | Kind |
+| --- | --- | --- |
+| Cypress | `cypress` dependency, `cypress.config.*` or `cypress.json`, `cypress/`, `cypress run\|open`, the `cypress-io/github-action` step | supported |
+| Playwright, WebdriverIO, Nightwatch, TestCafe, Puppeteer, Nightmare | `@playwright/test`, `webdriverio` or `@wdio/cli`, `nightwatch`, `testcafe`, `jest-puppeteer`, `nightmare` dependencies; their configuration files (`playwright.config.*`, `wdio*.conf.*`, `nightwatch.conf.*`, `.testcaferc*`, `jest-puppeteer.config.*`); `playwright test`, and `wdio`, `nightwatch` or `testcafe` run as a command (at the start, after `&&`, `;` or `|`, or after `npx`, `yarn`, `pnpm` or `exec`; a word in a path or an `echo` does not count), `stripes test nightmare` | end-to-end framework not on the page |
+| Karma, BigTest | `karma` and `karma-*` dependencies, `karma.conf.*`, `karma start` or `stripes test karma` (stripes-cli runs Karma itself); `@bigtest/*` dependencies, `test/bigtest/` | browser tests that may be component or end-to-end tests |
+| unrecognized | a `test/e2e/` directory with none of the above (with exactly one of them, it counts as that one's suite) | end-to-end tests of unknown framework |
+
+`tests/` counts like `test/`. A bare `puppeteer` or `playwright` dependency does not count: Karma setups use Puppeteer to download Chrome. Jest and React Testing Library are unit tests (S013), never end-to-end tests.
+
+**CI.** Each workflow step's `run` lines (shell comments skipped) and each `Jenkinsfile` line outside `//` and `/* */` comments are read for the commands above, following the `package.json` scripts they call (`yarn test`, `npm run e2e`, scripts calling scripts). A job that uses FOLIO's shared `ui.yml` at the ref `config/folio-shared-workflows.json` records (`v1`) runs its test jobs as the table records them: `jest-test-command` unless `jest-enabled` is `false`, and `bigtest-test-command` unless `bigtest-enabled` is left out or `false`, both `yarn test` by default; an expression such as `${{ inputs.e2e }}` counts as enabled. FOLIO's Jenkins `buildNPM` with `runTest` set (`'yes'`, `true`, …, as `buildNPM` accepts) runs `yarn test`. A tool only CI runs still counts.
+
+- `not_applicable`: none of the tools above. FOLIO's end-to-end tests for UI modules live in stripes-testing.
+- `fail`: an end-to-end framework not on the page, whatever else the repository has (a proven violation fails).
+- `pass`: Cypress is the only tool, at 12.0 or later: the version `yarn.lock` resolves for the `package.json` range, or, without one, a range whose every version is 12.0 or later (the comparison S007 uses). The page marks Cypress "pending verification", which S007 treats as manual; F002 passes it (decision Q3) and says so in the report.
+- `manual`: Cypress below 12.0, with a range that allows versions below it, or of unknown version (no `cypress` dependency); Karma, BigTest or an unrecognized `test/e2e/`, alone or with Cypress; the Cypress policy entry could not be read; or a file that could show a tool (`package.json`, a workflow, the `Jenkinsfile`, the tree listing) could not be read, which also stops a pass or not applicable. A `yarn.lock` that cannot be read only hides Cypress's resolved version.
+
+Checklist items, shown for fail and manual: **F002-C1** each browser test suite found is a component test, or an end-to-end test in a supported framework (one obligation per tool found, at its configuration file, else the first file it was seen in); **F002-C2** CI runs end-to-end tests only with a supported framework (starting points: the CI lines found, or the CI files read).
+
+F002 has agent review, which runs by default for a manual result when agent review is enabled (Q6), so it never sees a fail. See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+
 ## F003 Internationalization
 
 F003 checks "i18n support via react-intl": the package renders its user-visible text through react-intl from `translations/<namespace>/en.json`, a JSON object of English texts. Everything comes from the committed tree: production source (`src/`, `lib/` and root-level `.js`/`.jsx`/`.ts`/`.tsx` files, without tests, stories, examples, fixtures and mocks), `package.json` and the `en.json` files. Source is at most 2,000 files with the default size limits; `package.json` and `en.json` are read separately, so a large source tree cannot crowd them out. JSX is parsed with the TypeScript parser, so comments never count as text.

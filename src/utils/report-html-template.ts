@@ -24,6 +24,7 @@ const CRITERION_TITLES: Record<string, string> = {
   S013: 'Unit test coverage and technologies',
   S014: 'Application assignment',
   F001: 'Consumed interfaces declared',
+  F002: 'End-to-end tests',
   F003: 'Internationalization',
   F005: 'Stripes version',
   B001: 'Module descriptor template'

@@ -63,6 +63,10 @@
         "jest.config.*",
         "**/*.css",
         "**/*.json"
+      ],
+      "testJobs": [
+        { "enabledInput": "jest-enabled", "enabledByDefault": true, "commandInput": "jest-test-command", "defaultCommand": "yarn test" },
+        { "enabledInput": "bigtest-enabled", "enabledByDefault": false, "commandInput": "bigtest-test-command", "defaultCommand": "yarn test" }
       ]
     }
   }

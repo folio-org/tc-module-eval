@@ -109,6 +109,17 @@ one undeclared interface fails it, for modules and libraries alike; requests the
 `manual`, with a checklist for the reviewer and, when agent review is enabled, the agent's results. See
 [Criterion Notes](docs/criterion-notes.md#f001-consumed-interfaces-declared).
 
+### F002 End-to-End Tests
+
+F002 checks that a UI package's end-to-end tests, if it has any, use the supported technology: Cypress
+12.0 or later, which the officially supported technologies page lists as pending verification. It finds
+the tools from the committed `package.json`, `yarn.lock`, configuration files, test directories and what
+CI runs (GitHub workflows, including FOLIO's shared `ui.yml` test jobs, and the `Jenkinsfile`). Without
+browser test tooling it is not applicable; another end-to-end framework, such as Playwright, fails it;
+Karma or BigTest suites, which may be component tests, and Cypress below 12.0 are left `manual`, with a
+checklist for the reviewer and, when agent review is enabled, the agent's results. See
+[Criterion Notes](docs/criterion-notes.md#f002-end-to-end-tests).
+
 ### F003 Internationalization
 
 F003 checks that a UI package renders its text through react-intl from an English translation file,
