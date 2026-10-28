@@ -32,7 +32,7 @@ program
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
-  .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B004, B005 and B006, once implemented, relax some new-module rules for it')
+  .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, and B004 and B005, once implemented, relax some new-module rules for it')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
@@ -117,11 +117,11 @@ program
     console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Shared/Common criteria S001-S014, B001 (Java), and F001-F003 and F005 (JavaScript) - IMPLEMENTED');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001 and B006 (Java), and F001-F003 and F005 (JavaScript) - IMPLEMENTED');
     console.log('   ⚠️  A001 - MANUAL REVIEW by design');
-    console.log('   ⚠️  B002-B016 (Java) and F004, F006-F007 (JavaScript) - NOT IMPLEMENTED (return MANUAL)');
-    console.log('   📝 19 of the 38 criteria always return MANUAL (16 of 31 for Java, 4 of 22 for JavaScript);');
-    console.log('      S001-S014, B001, F001-F003 and F005 return MANUAL when the evidence is inconclusive\n');
+    console.log('   ⚠️  B002-B005, B007-B016 (Java) and F004, F006-F007 (JavaScript) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 18 of the 38 criteria always return MANUAL (15 of 31 for Java, 4 of 22 for JavaScript);');
+    console.log('      S001-S014, B001, B006, F001-F003 and F005 return MANUAL when the evidence is inconclusive\n');
     
     console.log('📝 Usage Examples:');
     console.log('   # Evaluate a repository');

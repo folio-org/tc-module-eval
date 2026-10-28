@@ -109,3 +109,116 @@ export interface B001Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }
+
+/** One operation an API spec documents: a method on a path. */
+export interface BackendApiOperation {
+  /** Upper case, such as `GET`. */
+  method: string;
+  /**
+   * The full path, with parameters such as `{id}` as written: prefixed by its parent resources in RAML, by `basePath`
+   * in Swagger 2.0, and by the path of a server URL in OpenAPI 3 (one operation per distinct server path). RAML
+   * `baseUri` is not applied: RMB modules set it to a placeholder such as `http://github.com/org/folio/mod-users`.
+   */
+  path: string;
+  /** The file that defines the operation, which is not the spec's root file when a `$ref` or `!include` leads there. */
+  file: string;
+  /** OpenAPI only. */
+  tags?: string[];
+  /** OpenAPI only. */
+  operationId?: string;
+}
+
+/**
+ * Part of a spec the tool could not read, so it may document more operations than `operations` lists: the methods of
+ * `apiPath`, or of any path when `apiPath` is absent (an unreadable root file or `paths` object).
+ */
+export interface BackendApiSpecGap {
+  file: string;
+  apiPath?: string;
+  /** The `$ref` or `!include` target that could not be followed. */
+  reference?: string;
+  message: string;
+}
+
+export interface BackendApiSpec {
+  /** The root file: a JSON or YAML file with a top-level `openapi` or `swagger` key, or a RAML file without a fragment type. */
+  file: string;
+  /** `openapi` covers Swagger 2.0 too. */
+  format: 'openapi' | 'raml';
+  /** The `openapi` or `swagger` value, or the RAML version; absent when the file could not be parsed. */
+  version?: string;
+  operations: BackendApiOperation[];
+  gaps: BackendApiSpecGap[];
+}
+
+/**
+ * The API specs in the committed source backendEvidence reads (run artifact `backendApiSpecs`). OpenAPI `$ref`s are
+ * followed inside that snapshot as far as the paths and their operations; schemas and parameters are not resolved.
+ * RAML resource types are read from included files, or for FOLIO's shared `raml-util` submodule, which is not
+ * committed, from the methods its resource types define.
+ */
+export interface BackendApiSpecs {
+  specs: BackendApiSpec[];
+  /** Spec sources the build names that the tool could not read: git submodules, which the committed source skips. */
+  unreadSources: BackendApiSpecGap[];
+}
+
+/**
+ * Where B006 found an endpoint:
+ * - `openapi`: in an OpenAPI or Swagger spec;
+ * - `raml`: only in a RAML spec;
+ * - `library`: not in the repository's specs, and served by a library whose own spec documents it;
+ * - `partial`: documented only for fixed values of a path parameter, such as `/erm/jobs/packageImport` for
+ *   `/erm/jobs/{type}`;
+ * - `unconfirmed`: not found, but part of a spec, or the source, could not be read;
+ * - `undocumented`: in no spec.
+ */
+export type B006Documentation = 'openapi' | 'raml' | 'library' | 'partial' | 'unconfirmed' | 'undocumented';
+
+/** A method on a path the module serves: from a descriptor handler, or for an edge module a router route. */
+export interface B006Endpoint {
+  method: string;
+  path: string;
+  /** The provided interface, for a descriptor handler. */
+  interfaceId?: string;
+  /** The source file and line, for a router route. */
+  file?: string;
+  line?: number;
+  documentation: B006Documentation;
+  /** The spec files that document it (`openapi`, `raml`, `partial`), or whose gaps may (`unconfirmed`). */
+  specFiles: string[];
+  /** The library that serves it (`library`). */
+  library?: string;
+}
+
+/**
+ * What B006 decided from:
+ * - `library`, `no-descriptor`: the repository kind, or a descriptor template B001 could not read;
+ * - `no-endpoints`: a module whose descriptor provides only system interfaces;
+ * - `no-routes`: an edge module whose router routes were not found;
+ * - `endpoints-checked`: each endpoint looked up in the specs.
+ */
+export type B006Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'no-routes' | 'endpoints-checked';
+
+export interface B006Analysis {
+  criterionId: 'B006';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B006Basis;
+  kind: BackendRepositoryKind;
+  framework: BackendEvidence['framework'];
+  existingModule: boolean;
+  /** RAML counts as documentation only for an RMB module in an existing-module evaluation. */
+  ramlAccepted: boolean;
+  /** Where the endpoints come from: the descriptor template, or an edge module's router routes. */
+  endpointSource?: string;
+  endpoints: B006Endpoint[];
+  specs: Array<Pick<BackendApiSpec, 'file' | 'format' | 'version'> & { operationCount: number }>;
+  gaps: BackendApiSpecGap[];
+  /** Router route calls whose path is not a literal or a constant in the same file (edge modules). */
+  unreadRoutes: Array<{ file: string; line: number }>;
+  /** All such calls; `unreadRoutes` lists the first 100. */
+  unreadRouteCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}

@@ -221,11 +221,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B006',
     description: 'OpenAPI documentation for endpoints',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Caching strategy'
-    }
+    languages: ['java']
   },
   {
     id: 'B007',
