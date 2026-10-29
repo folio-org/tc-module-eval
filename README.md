@@ -138,6 +138,16 @@ and `--criteria F005` works on its own. A Stripes library that does not depend o
 such as stripes-components, is left to the reviewer with a checklist item. See
 [Criterion Notes](docs/criterion-notes.md#f005-stripes-version).
 
+### F006 UI Layouts and Patterns
+
+F006 checks that a UI package follows existing FOLIO UI layouts, patterns and norms. That needs a
+reviewer, so it is always `manual` (and not applicable to a package that renders no user interface). It
+lists what a reviewer starts from: the Stripes layout and pattern components used, forms and whether they
+ask before discarding unsaved changes (`navigationCheck`), confirmation modals, raw HTML controls, hex
+colors in CSS, settings pages and external links (never fetched). When agent review is enabled, the agent
+checks the checklist items against a pinned copy of the stripes-components UX guidelines in
+`config/f006-ux-guidelines/`. See [Criterion Notes](docs/criterion-notes.md#f006-ui-layouts-and-patterns).
+
 ### B001 Module Descriptor Template
 
 B001 checks that a backend or edge module commits a module descriptor template that matches the Okapi

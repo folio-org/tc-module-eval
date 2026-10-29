@@ -27,6 +27,7 @@ const CRITERION_TITLES: Record<string, string> = {
   F002: 'End-to-end tests',
   F003: 'Internationalization',
   F005: 'Stripes version',
+  F006: 'UI layouts and patterns',
   B001: 'Module descriptor template',
   B003: 'Endpoint implementations',
   B006: 'API documentation'

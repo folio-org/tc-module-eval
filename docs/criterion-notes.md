@@ -384,7 +384,7 @@ F002 has agent review, which runs by default for a manual result when agent revi
 
 F003 checks "i18n support via react-intl": the package renders its user-visible text through react-intl from `translations/<namespace>/en.json`, a JSON object of English texts. Everything comes from the committed tree: production source (`src/`, `lib/` and root-level `.js`/`.jsx`/`.ts`/`.tsx` files, without tests, stories, examples, fixtures and mocks), `package.json` and the `en.json` files. Source is at most 2,000 files with the default size limits; `package.json` and `en.json` are read separately, so a large source tree cannot crowd them out. JSX is parsed with the TypeScript parser, so comments never count as text.
 
-- `not_applicable`: the package renders no user interface (Q10): its production code renders no HTML element, no JSX text and no literal text prop (`label="Save"`), and it has no `translations/` directory. JSX that only renders components it is given, such as stripes-connect's `<Wrapped {...props} />`, does not count. F004, F006 and F007 will use the same check.
+- `not_applicable`: the package renders no user interface (Q10): its production code renders no HTML element, no JSX text and no literal text prop (`label="Save"`), and it has no `translations/` directory. JSX that only renders components it is given, such as stripes-connect's `<Wrapped {...props} />`, does not count. F006 uses the same check, and F004 and F007 will.
 - `fail`: react-intl is not in `dependencies` or `peerDependencies`, or no production file imports it; or there is no `en.json` for the namespace, or it is not valid JSON or not a JSON object.
 - `manual`: literal message ids of the namespace missing from `en.json` (Q4), each counted once however often it is used; hard-coded text; texts in `en.json` that are empty, not strings, or not valid ICU messages (`@formatjs/icu-messageformat-parser`, as react-intl parses them); an unclear namespace; or source that could not be read or parsed.
 - `pass`: none of the above.
@@ -406,6 +406,27 @@ F005 checks that the module uses the Stripes version on the officially supported
 F005 has no agent review: nothing in the repository can settle what it leaves to the reviewer.
 
 Like every F criterion, the report has up to three layers: what the tool found and the status it decided; a checklist for the reviewer, whose items have stable IDs such as `F005-C1`, are phrased as the desired state and list where to start (`criterionDetails.checklist`; empty for pass and not applicable); and, for criteria with agent review, the agent's results attached to the checklist items they address.
+
+## F006 UI Layouts and Patterns
+
+F006 checks that the package follows existing FOLIO UI layouts, patterns and norms. Most of that is judgment, so F006 is `not_applicable` when the package renders no user interface (the check F003 uses) and otherwise always `manual`; it never passes or fails. It reads the committed production source F003 reads, plus the component CSS under `src/` and `lib/` (without stories and examples, at most 2,000 files), in safe mode.
+
+What the tool lists for the reviewer:
+
+- **Stripes components**: JSX uses of known layout, search and filter, action and menu, confirmation, form control and settings components (`Paneset`, `Pane`, `Layer`, `SearchAndSort`, `FilterGroups`, `PaneMenu`, `ConfirmationModal`, `Button`, `Settings`, …) imported from `@folio/stripes/components`, `@folio/stripes/smart-components`, `@folio/stripes-components` or `@folio/stripes-smart-components`, including aliased and namespace imports. In stripes-components and stripes-smart-components themselves, their own components imported from inside the package count too.
+- **Forms**: calls of `stripesFinalForm` (`@folio/stripes/final-form` or `@folio/stripes-final-form`) and `stripesForm` (`@folio/stripes/form` or `@folio/stripes-form`), whatever the local name, with their `navigationCheck` option: `true`, `false`, not set, or an expression the tool cannot read (options passed as a variable, a spread after the option or, without it, anywhere in the options). Both default to `false`, so a form without it does not ask before discarding unsaved changes; "not set" is listed apart from `false` but is a starting point all the same. Forms built directly with react-final-form or redux-form are not listed.
+- **Raw HTML controls**: `<button>`, `<select>`, `<textarea>` and `<input>` where a Stripes component exists (an input `type` written as a string, also inside `{}`: text-like inputs, checkboxes, radio buttons, date and time inputs, and submit buttons; not file, range, color or hidden inputs). `<option>` is not a control. In `@folio/stripes-components`, which implements the Stripes controls, HTML controls are not counted.
+- **Hex colors** of 3, 4, 6 or 8 digits in CSS declaration values (`color: #333`, `--accent: #abcdef80`) and at-rules such as `@value brand: #123`, not in comments, strings or `#id` selectors. In stripes-components, which defines the Stripes color variables, their definitions (`--name: #fff`) are not counted.
+- **The app**: `stripes.actsAs`, `route` and `home` from `package.json`, and settings pages (object literals with a literal `route`, a `label` and a `component`, as the Stripes `Settings` component takes them).
+- **External links**: `http` and `https` URLs in JSX (attribute values, text, and strings inside JSX expressions) and in each committed `translations/<namespace>/en.json`; XML namespace URIs are left out. They are never fetched.
+
+Unreadable or unparsable source is listed and the summary says so; the result is `manual` either way.
+
+Checklist items, all phrased as the desired state: **F006-C1** screens use the standard pane layout; **F006-C2** search and filter screens follow the SearchAndSort and filter pane patterns; **F006-C3** every form asks before discarding unsaved changes (starting points: the forms whose `navigationCheck` is not `true`); **F006-C4** destructive actions ask for confirmation with standard wording; **F006-C5** actions, buttons and menus follow the action menu and button guidelines; **F006-C6** Stripes components and color variables are used instead of raw HTML controls and hard-coded colors; **F006-C7** (reviewer only) state is kept when navigating between apps and back, or the user is told it will be lost; **F006-C8** settings pages follow the settings layout; **F006-C9** (reviewer only) each documentation link shown in the UI is publicly accessible.
+
+**UX guidelines.** `config/f006-ux-guidelines/` holds a pinned copy of stripes-components' `guides/ux-guidelines` (the source of ux.folio.org): `layout/`, `forms/`, `navigation/`, `actions/` (confirmation wording, buttons and action language), `feedback/ConfirmationModalPattern.mdx` and `data-display/MultiColumnListGuidelines.mdx`, about 78 KB (Q9, plus the button and results-list pages that F006-C2, C5 and C6 are measured against). `source.json` records the repository, commit and commit date, and lists the files; the report shows the commit. To refresh it, copy the same files from a newer stripes-components commit and update `source.json`.
+
+F006 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
 ## B001 Module Descriptor Template
 
