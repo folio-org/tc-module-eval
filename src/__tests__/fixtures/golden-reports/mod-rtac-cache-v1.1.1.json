@@ -2217,9 +2217,179 @@
     },
     {
       "criterionId": "B003",
-      "status": "manual",
-      "evidence": "Error handling and validation - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B003 pass: All 8 endpoints in the module descriptor are in the API spec, and a committed class implements the interface openapi-generator generates from the OpenAPI spec for each.",
+      "details": "Framework: Spring Boot\nEndpoints: 8 methods and paths from handlers in descriptors/ModuleDescriptor-template.json, without system interfaces\nImplementations: committed classes that implement the interface openapi-generator generates for each OpenAPI tag, as a build file sets useTags (for example, NotesApi for the tag notes) and declare the operation's method, as its default method answers 501 (skipDefaultInterface is not set), or routes registered in the source (Vert.x router, RouteRegistration, Spring mapping annotations, Grails URL mappings)\nRoutes found in the source: 0\nImplemented: 8 by classes implementing generated interfaces",
+      "criterionDetails": {
+        "criterionId": "B003",
+        "kind": "backend-module",
+        "framework": {
+          "name": "spring",
+          "evidence": [
+            "@SpringBootApplication in src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "folio-spring-base in pom.xml"
+          ]
+        },
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/rtac-cache/{id}",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/batch",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/search/{instanceId}",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/prewarm",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/prewarm/{id}",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/prewarm",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/invalidate",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/invalidate-all",
+            "interfaceId": "rtac-cache",
+            "implementation": "interface",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ],
+            "generatedInterfaces": [
+              "RtacApi"
+            ],
+            "implementedBy": [
+              {
+                "file": "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+                "line": 36
+              }
+            ]
+          }
+        ],
+        "routeCount": 0,
+        "unreadRoutes": [],
+        "unreadRouteCount": 0,
+        "gaps": [],
+        "sourceDiagnostics": [],
+        "endpointSource": "handlers in descriptors/ModuleDescriptor-template.json, without system interfaces",
+        "implementationSource": "committed classes that implement the interface openapi-generator generates for each OpenAPI tag, as a build file sets useTags (for example, NotesApi for the tag notes) and declare the operation's method, as its default method answers 501 (skipDefaultInterface is not set), or routes registered in the source (Vert.x router, RouteRegistration, Spring mapping annotations, Grails URL mappings)",
+        "status": "pass",
+        "basis": "endpoints-checked",
+        "summary": "B003 pass: All 8 endpoints in the module descriptor are in the API spec, and a committed class implements the interface openapi-generator generates from the OpenAPI spec for each.",
+        "checklist": {
+          "items": []
+        }
+      }
     },
     {
       "criterionId": "B004",

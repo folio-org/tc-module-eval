@@ -10,49 +10,15 @@ import {
   FrontendChecklistItem
 } from '../types';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
-import { SOURCE_FILE } from './backend-evidence';
-import { providedInterfaces } from './descriptor-handlers';
+import { descriptorEndpoints, EndpointMatcher, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, uniqueEndpoints } from './backend-endpoints';
+import { routerRoutes } from './backend-routes';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
-import { escapeRegExp } from './regexp';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 
 const MAX_ROWS = 20;
 
-/** Libraries that serve endpoints for the module; the library's own spec documents them. */
-const ENDPOINT_LIBRARIES = [
-  // https://github.com/folio-org/folio-custom-fields/tree/master/ramls
-  { artifactId: 'folio-custom-fields', path: /^\/custom-fields(?:\/|$)/ }
-];
-
-// Vert.x Router calls: route(HttpMethod.GET, path), get(path), post(path), ..., or route(path) for every method.
-const ROUTE_START = /\b\w*[Rr]outer\s*\.\s*(?:route|get|post|put|delete|patch|head|options)\s*\(/g;
-// Tried at each ROUTE_START; the argument is bounded, so a file of unclosed calls is not scanned to its end from each.
-const ROUTE_CALL = /\w*[Rr]outer\s*\.\s*(route|get|post|put|delete|patch|head|options)\s*\(([^;]{0,1000}?)\)\s*[.;]/y;
-const MAX_UNREAD_ROUTES = 100;
-const STRING_CONSTANT = /\bString\s+(\w+)\s*=\s*"((?:[^"\\\n]|\\.)*)"\s*;/g;
 // Served for Okapi and B014, not part of the module's API.
 const HEALTH_ROUTE = '/admin/health';
-
-type Route = Omit<B006Endpoint, 'documentation' | 'specFiles'>;
-
-interface EndpointMatcher {
-  endpoint: Route;
-  /** The normalized path's segments, or for a path with Okapi's `*`, a matcher of normalized spec paths. */
-  segments: string[];
-  wildcard?: (specPath: string) => boolean;
-}
-
-interface TrieNode {
-  literal: Map<string, TrieNode>;
-  param?: TrieNode;
-  /** Method → spec files, for the operations that end here. */
-  files: Map<string, Set<string>>;
-}
-
-interface SpecIndex {
-  root: TrieNode;
-  operations: Array<{ method: string; path: string; file: string }>;
-}
 
 /**
  * B006 (all API endpoints documented in OpenAPI) looks up every endpoint the module serves in the repository's API
@@ -80,12 +46,14 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
     return result(EvaluationStatus.NOT_APPLICABLE, 'library', 'The repository is a shared library, which serves no endpoints of its own.', []);
   }
 
-  let matchers: EndpointMatcher[];
+  let matchers: EndpointMatcher<Omit<B006Endpoint, 'documentation' | 'specFiles'>>[];
   let unreadRoutes: B006Analysis['unreadRoutes'] = [];
   let unreadRouteCount = 0;
   let endpointSource: string;
   if (kind === 'edge-module') {
-    ({ matchers, unreadRoutes, unreadRouteCount } = routeMatchers(evidence));
+    const scan = routerRoutes(evidence.snapshot.files);
+    ({ unreadRoutes, unreadRouteCount } = scan);
+    matchers = uniqueEndpoints(scan.routes.filter(route => route.path !== HEALTH_ROUTE)).map(endpointMatcher);
     endpointSource = 'router routes in src/main';
     if (!matchers.length) {
       return result(EvaluationStatus.MANUAL, 'no-routes',
@@ -99,7 +67,7 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
         `${kind === 'ambiguous' ? 'No module descriptor template was found' : 'The module descriptor template could not be read'}, so the module's endpoints are not known (see B001).`,
         [unchecked([])]);
     }
-    matchers = descriptorMatchers(template.descriptor);
+    matchers = descriptorEndpoints(template.descriptor).map(endpointMatcher);
     endpointSource = `handlers in ${template.path}, without system interfaces`;
     if (!matchers.length) {
       return result(EvaluationStatus.NOT_APPLICABLE, 'no-endpoints',
@@ -107,11 +75,7 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
     }
   }
 
-  const libraries = ENDPOINT_LIBRARIES.flatMap(library => {
-    const buildFile = evidence.snapshot.files.find(file => /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/.test(file.path)
-      && new RegExp(`\\b${escapeRegExp(library.artifactId)}\\b`).test(file.content));
-    return buildFile ? [{ ...library, buildFile: buildFile.path }] : [];
-  });
+  const libraries = endpointLibraries(evidence);
   const openapiIndex = specIndex(apiSpecs.specs.filter(spec => spec.format === 'openapi'));
   const ramlIndex = specIndex(apiSpecs.specs.filter(spec => spec.format === 'raml'));
   const endpoints = matchers.map((matcher): B006Endpoint => {
@@ -120,9 +84,9 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
     const mayDocument = (format: BackendApiSpec['format']) => apiSpecs.specs.filter(spec => spec.format === format
       && spec.gaps.some(gap => gap.apiPath === undefined || gapCovers(matcher, gap.apiPath))).map(spec => spec.file);
 
-    const openapi = lookup(openapiIndex, matcher);
+    const openapi = specLookup(openapiIndex, matcher);
     if (openapi.documented.length) return found('openapi', openapi.documented);
-    const raml = lookup(ramlIndex, matcher);
+    const raml = specLookup(ramlIndex, matcher);
     if (raml.documented.length && ramlAccepted) return found('raml', raml.documented);
     const library = libraries.find(candidate => candidate.path.test(matcher.endpoint.path));
     if (library) return found('library', [], library.artifactId);
@@ -270,176 +234,12 @@ function endpointOrigin(endpoint: B006Endpoint): string {
   return endpoint.file ? ` (${reportPath(endpoint.file)}:${endpoint.line})` : '';
 }
 
-function descriptorMatchers(descriptor: unknown): EndpointMatcher[] {
-  const endpoints = providedInterfaces(descriptor).flatMap(provided => provided.handlers.flatMap(handler => {
-    // Okapi matches a legacy `path` as a prefix.
-    const pathPattern = handler.pathPattern ?? (typeof handler.path === 'string' ? `${handler.path}*` : undefined);
-    return pathPattern ? handler.methods.map(method => ({ method: method.toUpperCase(), path: pathPattern, interfaceId: provided.id })) : [];
-  }));
-  return uniqueEndpoints(endpoints).map(endpointMatcher);
+function specIndex(specs: BackendApiSpec[]) {
+  return pathIndex(specs.flatMap(spec => spec.operations.map(operation => ({ method: operation.method, path: operation.path, file: spec.file }))));
 }
 
-function routeMatchers(evidence: BackendEvidence): { matchers: EndpointMatcher[]; unreadRoutes: B006Analysis['unreadRoutes']; unreadRouteCount: number } {
-  const routes: Route[] = [];
-  const unreadRoutes: B006Analysis['unreadRoutes'] = [];
-  let unreadRouteCount = 0;
-  for (const file of evidence.snapshot.files.filter(candidate => SOURCE_FILE.test(candidate.path))) {
-    const constants = new Map([...file.content.matchAll(STRING_CONSTANT)].map(([, name, value]) => [name, value]));
-    const unread = (line: number) => {
-      if (++unreadRouteCount <= MAX_UNREAD_ROUTES) unreadRoutes.push({ file: file.path, line });
-    };
-    let line = 1;
-    let counted = 0;
-    let readUntil = 0;
-    for (const start of file.content.matchAll(ROUTE_START)) {
-      if (start.index! < readUntil) continue;
-      for (; counted < start.index!; counted++) if (file.content.charCodeAt(counted) === 10) line++;
-      ROUTE_CALL.lastIndex = start.index!;
-      const match = ROUTE_CALL.exec(file.content);
-      if (!match) {
-        unread(line);
-        continue;
-      }
-      readUntil = ROUTE_CALL.lastIndex;
-      const call = match[1];
-      const argument = match[2].trim();
-      if (!argument) continue;
-      const method = /^HttpMethod\s*\.\s*([A-Z]+)\s*,\s*([\s\S]*)$/.exec(argument);
-      const target = method ? method[2] : argument;
-      const literal = /^"((?:[^"\\]|\\.)*)"$/.exec(target)?.[1] ?? (/^[A-Za-z_][\w.]*$/.test(target) ? constants.get(target.split('.').pop()!) : undefined);
-      if (literal === undefined) {
-        unread(line);
-        continue;
-      }
-      const routePath = literal.replace(/:(\w+)/g, '{$1}');
-      if (!routePath.startsWith('/') || routePath === HEALTH_ROUTE) continue;
-      routes.push({ method: method?.[1] ?? (call === 'route' ? '*' : call.toUpperCase()), path: routePath, file: file.path, line });
-    }
-  }
-  return { matchers: uniqueEndpoints(routes).map(endpointMatcher), unreadRoutes, unreadRouteCount };
-}
-
-function uniqueEndpoints<T extends { method: string; path: string }>(endpoints: T[]): T[] {
-  const seen = new Set<string>();
-  return endpoints.filter(endpoint => {
-    const key = `${endpoint.method} ${endpoint.path}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-// Parameters match whatever their names: `{id}` and `{noteId}` are both `{}`.
-function normalize(apiPath: string): string {
-  return apiPath.replace(/\{[^{}/]*\}/g, '{}').replace(/(.)\/+$/, '$1');
-}
-
-function endpointMatcher(endpoint: Route): EndpointMatcher {
-  const segments = normalize(endpoint.path).split('/');
-  return endpoint.path.includes('*') ? { endpoint, segments, wildcard: wildcardMatcher(endpoint.path) } : { endpoint, segments };
-}
-
-function specIndex(specs: BackendApiSpec[]): SpecIndex {
-  const node = (): TrieNode => ({ literal: new Map(), files: new Map() });
-  const root = node();
-  const operations: SpecIndex['operations'] = [];
-  for (const spec of specs) {
-    for (const operation of spec.operations) {
-      const specPath = normalize(operation.path);
-      let current = root;
-      for (const segment of specPath.split('/')) {
-        if (segment === '{}') {
-          current = current.param ??= node();
-        } else {
-          const child = current.literal.get(segment) ?? node();
-          current.literal.set(segment, child);
-          current = child;
-        }
-      }
-      const files = current.files.get(operation.method) ?? new Set<string>();
-      current.files.set(operation.method, files.add(spec.file));
-      operations.push({ method: operation.method, path: specPath, file: spec.file });
-    }
-  }
-  return { root, operations };
-}
-
-/**
- * The spec files that document an endpoint, and, when none does, those that document its path only with fixed values
- * where the endpoint has a parameter (`/erm/jobs/packageImport` for `/erm/jobs/{type}`). A spec parameter documents
- * any value of its segment. A wildcard endpoint is documented by any spec path it covers. Each lookup visits each
- * index node at most once.
- */
-function lookup(index: SpecIndex, matcher: EndpointMatcher): { documented: string[]; partial: string[] } {
-  const { method } = matcher.endpoint;
-  const methodMatches = (candidate: string) => method === '*' || candidate === method;
-  if (matcher.wildcard) {
-    return { documented: unique(index.operations.filter(operation => methodMatches(operation.method) && matcher.wildcard!(operation.path)).map(operation => operation.file)), partial: [] };
-  }
-  const segments = matcher.segments;
-  const collect = (node: TrieNode, position: number, fixedValues: boolean, found: Set<string>): Set<string> => {
-    if (position === segments.length) {
-      for (const [candidate, files] of node.files) if (methodMatches(candidate)) files.forEach(file => found.add(file));
-      return found;
-    }
-    if (node.param) collect(node.param, position + 1, fixedValues, found);
-    if (segments[position] !== '{}') {
-      const child = node.literal.get(segments[position]);
-      if (child) collect(child, position + 1, fixedValues, found);
-    } else if (fixedValues) {
-      for (const child of node.literal.values()) collect(child, position + 1, fixedValues, found);
-    }
-    return found;
-  };
-  const documented = [...collect(index.root, 0, false, new Set())];
-  return { documented, partial: documented.length ? [] : [...collect(index.root, 0, true, new Set())] };
-}
-
-// A gap's path may document the endpoint when the two could be the same path.
-function gapCovers(matcher: EndpointMatcher, apiPath: string): boolean {
-  const specPath = normalize(apiPath);
-  if (matcher.wildcard) return matcher.wildcard(specPath);
-  const specSegments = specPath.split('/');
-  return specSegments.length === matcher.segments.length
-    && specSegments.every((segment, index) => segment === matcher.segments[index] || segment === '{}' || matcher.segments[index] === '{}');
-}
-
-/**
- * Okapi's `*` matches any text, slashes included, and `{name}` one or more characters other than `/`. Matches a
- * normalized spec path in time proportional to the pattern's length times the path's, without backtracking.
- */
-function wildcardMatcher(pattern: string): (specPath: string) => boolean {
-  const tokens = pattern.split(/(\*|\{[^{}/]*\})/).flatMap((part): Array<'*' | '{}' | { character: string }> =>
-    part === '*' ? ['*'] : /^\{.*\}$/.test(part) ? ['{}'] : [...part].map(character => ({ character })));
-  const literalPrefix = pattern.split(/[*{]/)[0];
-  return specPath => {
-    if (!specPath.startsWith(literalPrefix)) return false;
-    let reachable = new Uint8Array(specPath.length + 1);
-    let next = new Uint8Array(specPath.length + 1);
-    reachable[0] = 1;
-    for (const token of tokens) {
-      next.fill(0);
-      if (token === '*') {
-        for (let position = 0, open = false; position <= specPath.length; position++) {
-          open ||= reachable[position] === 1;
-          if (open) next[position] = 1;
-        }
-      } else if (token === '{}') {
-        for (let position = 1, open = false; position <= specPath.length; position++) {
-          if (specPath[position - 1] === '/') {
-            open = false;
-            continue;
-          }
-          open ||= reachable[position - 1] === 1;
-          if (open) next[position] = 1;
-        }
-      } else {
-        for (let position = 0; position < specPath.length; position++) {
-          if (reachable[position] && specPath[position] === token.character) next[position + 1] = 1;
-        }
-      }
-      [reachable, next] = [next, reachable];
-    }
-    return reachable[specPath.length] === 1;
-  };
+/** The spec files that document an endpoint, and, when none does, those that document its path only with fixed values. */
+function specLookup(index: ReturnType<typeof specIndex>, matcher: EndpointMatcher): { documented: string[]; partial: string[] } {
+  const { documented, partial } = lookup(index, matcher);
+  return { documented: unique(documented.map(operation => operation.file)), partial: unique(partial.map(operation => operation.file)) };
 }

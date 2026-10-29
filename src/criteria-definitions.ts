@@ -191,11 +191,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B003',
     description: 'Implement all endpoints in Module Descriptor',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Error handling and validation'
-    }
+    languages: ['java']
   },
   {
     id: 'B004',
