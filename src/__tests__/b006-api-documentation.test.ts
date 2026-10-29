@@ -365,6 +365,37 @@ describe('B006 API documentation', () => {
     ]);
   });
 
+  it('ignores router routes in line and block comments', async () => {
+    const root = repository({
+      'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}</dependencies>`),
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}-1.0.0", "provides": []}',
+      'src/main/java/org/folio/edge/example/MainVerticle.java': [
+        'public class MainVerticle extends EdgeVerticleHttp {',
+        '  public Router defineRoutes() {',
+        '    // router.post("/example/legacy").handler(handler::post);',
+        '    router.get("/example/accounts").handler(handler::get); // router.put(paths.accountPath())',
+        '    /* router.delete("/example/accounts/:id").handler(handler::delete);',
+        '       router.route(HttpMethod.PATCH, paths.accountPath()).handler(handler::patch); */',
+        '    router.get("/example/accounts/:id").handler(handler::getById);',
+        '  }',
+        '}'
+      ].join('\n'),
+      'src/main/resources/swagger.api/edge-example.yaml': 'openapi: 3.0.0\npaths:\n  /example/accounts:\n    get: {}\n  /example/accounts/{id}:\n    get: {}\n'
+    });
+
+    const { result } = await b006(root);
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.details?.split('\n')).toEqual([
+      'Evaluated as: a new module (the default)',
+      'Framework: edge module; RAML does not count as documentation',
+      'Endpoints: 2 methods and paths from router routes in src/main',
+      'API specs:',
+      '  - src/main/resources/swagger.api/edge-example.yaml — OpenAPI 3.0.0, 2 operations',
+      'Documented: 2 in OpenAPI'
+    ]);
+  });
+
   it.each([
     ['a shared library', { 'pom.xml': pom('folio-spring-base') }, EvaluationStatus.NOT_APPLICABLE, 'library'],
     ['a repository that is neither a module nor a known library', { 'pom.xml': pom('mod-example') }, EvaluationStatus.MANUAL, 'no-descriptor'],
