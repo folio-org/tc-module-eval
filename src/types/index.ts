@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -137,6 +137,8 @@ export interface EvaluationRunArtifacts {
   uiRequestSites?: import('./f001-consumed-apis').UiRequestSites;
   /** The B criteria's shared evidence: repository kind, descriptor template, framework and storage. */
   backendEvidence?: import('./backend-evidence').BackendEvidence;
+  /** The API specs in backendEvidence's snapshot, for B006 and B003. */
+  backendApiSpecs?: import('./backend-evidence').BackendApiSpecs;
 }
 
 export interface EvaluationRun {

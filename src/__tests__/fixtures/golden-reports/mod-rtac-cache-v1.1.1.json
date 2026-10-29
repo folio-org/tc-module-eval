@@ -2235,9 +2235,115 @@
     },
     {
       "criterionId": "B006",
-      "status": "manual",
-      "evidence": "Caching strategy - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B006 pass: All 8 endpoints in the module descriptor are documented in OpenAPI (src/main/resources/swagger.api/mod-rtac-cache.yaml).",
+      "details": "Evaluated as: a new module (the default)\nFramework: Spring Boot; RAML does not count as documentation\nEndpoints: 8 methods and paths from handlers in descriptors/ModuleDescriptor-template.json, without system interfaces\nAPI specs:\n  - src/main/resources/swagger.api/mod-rtac-cache.yaml — OpenAPI 3.0.3, 8 operations\nDocumented: 8 in OpenAPI",
+      "criterionDetails": {
+        "criterionId": "B006",
+        "kind": "backend-module",
+        "framework": {
+          "name": "spring",
+          "evidence": [
+            "@SpringBootApplication in src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "folio-spring-base in pom.xml"
+          ]
+        },
+        "existingModule": false,
+        "ramlAccepted": false,
+        "specs": [
+          {
+            "file": "src/main/resources/swagger.api/mod-rtac-cache.yaml",
+            "format": "openapi",
+            "version": "3.0.3",
+            "operationCount": 8
+          }
+        ],
+        "gaps": [],
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/rtac-cache/{id}",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/batch",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/search/{instanceId}",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/prewarm",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "GET",
+            "path": "/rtac-cache/prewarm/{id}",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/prewarm",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/invalidate",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          },
+          {
+            "method": "POST",
+            "path": "/rtac-cache/invalidate-all",
+            "interfaceId": "rtac-cache",
+            "documentation": "openapi",
+            "specFiles": [
+              "src/main/resources/swagger.api/mod-rtac-cache.yaml"
+            ]
+          }
+        ],
+        "unreadRoutes": [],
+        "unreadRouteCount": 0,
+        "sourceDiagnostics": [],
+        "endpointSource": "handlers in descriptors/ModuleDescriptor-template.json, without system interfaces",
+        "status": "pass",
+        "basis": "endpoints-checked",
+        "summary": "B006 pass: All 8 endpoints in the module descriptor are documented in OpenAPI (src/main/resources/swagger.api/mod-rtac-cache.yaml).",
+        "checklist": {
+          "items": []
+        }
+      }
     },
     {
       "criterionId": "B007",

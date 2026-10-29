@@ -148,6 +148,15 @@ reviewer. `--existing-module` marks the evaluation of an existing module rather 
 B criteria relax some new-module rules for it. See
 [Criterion Notes](docs/criterion-notes.md#b001-module-descriptor-template).
 
+### B006 API Documentation
+
+B006 checks that every endpoint in the module descriptor (for an edge module, every router route) is
+documented in an OpenAPI spec in the repository. It follows `$ref`s inside the repository, matches
+methods and paths with any parameter names, and fails on an undocumented endpoint or on RAML in a new
+module; with `--existing-module`, an RMB module may keep RAML. Endpoints served by a library, such as
+custom fields, and specs it cannot fully read leave it to the reviewer. See
+[Criterion Notes](docs/criterion-notes.md#b006-api-documentation).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.

@@ -24,7 +24,7 @@ const KIND_LABELS: Record<BackendRepositoryKind, string> = {
   ambiguous: 'not a known module or library'
 };
 
-const FRAMEWORK_LABELS: Record<BackendEvidence['framework']['name'], string> = {
+export const FRAMEWORK_LABELS: Record<BackendEvidence['framework']['name'], string> = {
   rmb: 'RAML Module Builder (RMB)',
   spring: 'Spring Boot',
   vertx: 'Vert.x',

@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { Command } from 'commander';
 import { F001HandlerIndex, S008Catalog } from '../types';
+import { providedInterfaces } from '../utils/descriptor-handlers';
 import { parseFarApplication, PlatformParseDiagnostic } from '../utils/platform-applications';
 import { sha256Digest } from '../utils/repo-files';
 import { unique } from '../utils/report-text';
@@ -76,7 +77,7 @@ export async function buildF001HandlerIndex(options: BuildF001HandlerIndexOption
         ? `The descriptor of ${provider.moduleId} from ${provider.source} does not match the catalog's hash ${provider.descriptorHash}.`
         : `No descriptor of ${provider.moduleId} was found in ${provider.source}.`);
     }
-    return { moduleId: provider.moduleId, descriptorHash: provider.descriptorHash, interfaces: providedInterfaces(descriptor, provider.moduleId) };
+    return { moduleId: provider.moduleId, descriptorHash: provider.descriptorHash, interfaces: indexedInterfaces(descriptor, provider.moduleId) };
   });
 
   return {
@@ -91,24 +92,15 @@ export async function buildF001HandlerIndex(options: BuildF001HandlerIndexOption
   };
 }
 
-function providedInterfaces(descriptor: Record<string, unknown>, moduleId: string): F001HandlerIndex['providers'][number]['interfaces'] {
-  const provides = Array.isArray(descriptor.provides) ? descriptor.provides.filter(isRecord) : [];
-  return provides.flatMap(provided => {
-    const id = String(provided.id);
-    const interfaceType = typeof provided.interfaceType === 'string' ? provided.interfaceType : undefined;
-    if (id.startsWith('_') || interfaceType === 'system') return [];
-    const handlers = (Array.isArray(provided.handlers) ? provided.handlers.filter(isRecord) : []).flatMap(handler => {
-      if (typeof handler.pathPattern === 'string') {
-        return [{
-          methods: (Array.isArray(handler.methods) ? handler.methods.filter((method): method is string => typeof method === 'string') : []).sort(),
-          pathPattern: handler.pathPattern
-        }];
-      }
+function indexedInterfaces(descriptor: Record<string, unknown>, moduleId: string): F001HandlerIndex['providers'][number]['interfaces'] {
+  return providedInterfaces(descriptor).flatMap(({ id, version, interfaceType, handlers: all }) => {
+    const handlers = all.flatMap(handler => {
+      if (handler.pathPattern !== undefined) return [{ methods: [...handler.methods].sort(), pathPattern: handler.pathPattern }];
       // Okapi's legacy prefix `path` would need its own matching; no descriptor of the release uses it.
       if (handler.path !== undefined) throw new Error(`${moduleId} provides ${id} with a handler that has a path but no pathPattern.`);
       return [];
     });
-    return handlers.length ? [{ id, version: String(provided.version), ...(interfaceType ? { interfaceType } : {}), handlers }] : [];
+    return handlers.length ? [{ id, version, ...(interfaceType ? { interfaceType } : {}), handlers }] : [];
   }).sort((a, b) => `${a.id}\0${a.version}`.localeCompare(`${b.id}\0${b.version}`));
 }
 

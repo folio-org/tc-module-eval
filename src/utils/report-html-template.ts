@@ -27,7 +27,8 @@ const CRITERION_TITLES: Record<string, string> = {
   F002: 'End-to-end tests',
   F003: 'Internationalization',
   F005: 'Stripes version',
-  B001: 'Module descriptor template'
+  B001: 'Module descriptor template',
+  B006: 'API documentation'
 };
 
 function escapeHtml(text: string): string {

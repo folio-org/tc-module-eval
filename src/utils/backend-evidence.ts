@@ -240,7 +240,7 @@ async function buildProperties(templatePath: string, files: Map<string, Committe
   return resolve;
 }
 
-const SOURCE_FILE = /(?:^|\/)src\/main\/(?:java|groovy|kotlin)\/.+\.(?:java|groovy|kt)$/;
+export const SOURCE_FILE = /(?:^|\/)src\/main\/(?:java|groovy|kotlin)\/.+\.(?:java|groovy|kt)$/;
 
 function detectFramework(kind: BackendRepositoryKind, files: CommittedSourceFile[]): BackendEvidence['framework'] {
   const result = (name: BackendFramework, evidence: string[]) => ({ name, evidence });
