@@ -275,13 +275,19 @@ describe('F002 end-to-end tests', () => {
     });
 
     it.each([
-      ['a review that leaves out the CI obligation', [karma(), bigtest]],
-      ['an investigated suite that does not cite its own file', [karma({ evidenceReferences: ['lib/Button/tests/Button-test.js'] }), bigtest, ci]]
-    ])('rejects %s', async (_name, assessments) => {
+      ['an unanswered CI obligation as having no agent result', [karma(), bigtest], 'F002-C2', ['    - No agent result']],
+      ['an investigated suite that does not cite its own file as dropped', [karma({ evidenceReferences: ['lib/Button/tests/Button-test.js'] }), bigtest, ci], 'F002-C1',
+        ['    - Agent result dropped — Karma: It is marked as investigated directly but does not cite the file it is about.',
+          '    - Agent: Supported by evidence — BigTest: The interactors drive mounted components only.']]
+    ])('keeps the rest of the review and shows %s', async (_name, assessments, itemId, rows) => {
       const result = await evaluateWith(fakeConfig({ assessments, reviewerActions: [action] }));
+      const lines = (result.details ?? '').split('\n');
+      const item = lines.findIndex(line => line.startsWith(`  - ${itemId} `));
+      const next = lines.findIndex((line, index) => index > item && !line.startsWith('    '));
 
-      expect(result.agentReview?.available).toBe(false);
-      expect(result.details).toContain('Agent review:\n  - Not applied: ');
+      expect(result.agentReview?.available).toBe(true);
+      expect(result.agentReview?.assessments).toHaveLength(2);
+      expect(lines.slice(item + 1, next).filter(line => /^ {4}- (?!Start with:)/.test(line))).toEqual(rows);
     });
 
     it('never reviews a fail, and says so', async () => {

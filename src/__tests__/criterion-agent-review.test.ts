@@ -317,6 +317,24 @@ describe('criterion agent review', () => {
     expect(result.errors.join(' ')).not.toContain('missing.md');
   });
 
+  it('rejects every malformed entry by default, with at most 16 record errors, and drops them one by one only when asked', () => {
+    const payload = { recommendation: 'likely_sufficient', confidence: 'high', summary: 'S.', rationale: 'R.', evidenceReferences: ['README.md'],
+      assessments: Array.from({ length: 10 }, () => 'x'), reviewerActions: Array.from({ length: 10 }, () => ({ action: 'A.', evidenceReferences: ['missing.md'] })) };
+
+    expect(normalizeCriterionAgentAdvisoryPayload(payload, ['README.md']).errors).toEqual([
+      ...Array.from({ length: 10 }, (_, index) => `Assessment ${index + 1}: expected an object.`),
+      ...Array.from({ length: 6 }, (_, index) => `Reviewer action ${index + 1}: missing nonblank action or source-manifest citation.`),
+      'Invalid or uncited assessments; the complete review was rejected.',
+      'Invalid or uncited reviewer action; actions may not be silently dropped.'
+    ]);
+    const dropped = normalizeCriterionAgentAdvisoryPayload(payload, ['README.md'], true);
+    expect(dropped.errors).toEqual([]);
+    expect(dropped.droppedItems).toEqual([
+      ...Array.from({ length: 10 }, () => ({ kind: 'assessment', reason: 'It is not a JSON object.' })),
+      ...Array.from({ length: 10 }, () => ({ kind: 'reviewer_action', reason: 'It has no text or cites no repository file.' }))
+    ]);
+  });
+
   it.each([
     [undefined, 'no candidate evidence was available for agent review'],
     ['F004 agent review needs runtime evidence (--ui-runtime-url)', 'F004 agent review needs runtime evidence (--ui-runtime-url)']

@@ -405,7 +405,7 @@ F005 checks that the module uses the Stripes version on the officially supported
 
 F005 has no agent review: nothing in the repository can settle what it leaves to the reviewer.
 
-Like every F criterion, the report has up to three layers: what the tool found and the status it decided; a checklist for the reviewer, whose items have stable IDs such as `F005-C1`, are phrased as the desired state and list where to start (`criterionDetails.checklist`; empty for pass and not applicable); and, for criteria with agent review, the agent's results attached to the checklist items they address.
+Like every F criterion, the report has up to three layers: what the tool found and the status it decided; a checklist for the reviewer, whose items have stable IDs such as `F005-C1`, are phrased as the desired state and list where to start (`criterionDetails.checklist`; empty for pass and not applicable); and, for criteria with agent review, the agent's results attached to the checklist items they address, with the reason for each result that was dropped.
 
 ## F006 UI Layouts and Patterns
 

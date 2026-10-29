@@ -3,8 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   CommandRunner,
+  CriterionAgentAssessment,
+  CriterionAgentDroppedItem,
   CriterionAgentFailureBound,
   CriterionAgentReviewConfig,
+  CriterionAgentReviewerAction,
   CriterionAgentReviewResult,
   EvaluationRun,
   EvaluationStatus
@@ -53,6 +56,8 @@ export interface CriterionAgentReviewRequest {
   defaultTimeoutMs?: number;
   /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
   coverageGapIds?: string[];
+  /** Drop an invalid or uncited assessment or reviewer action on its own, recording why, instead of rejecting the review. */
+  dropInvalidItems?: boolean;
   schemaDescription: string;
 }
 
@@ -259,15 +264,28 @@ function validateRepositoryCitations(
   availableSourcePaths: ReadonlySet<string>
 ): CriterionAgentReviewResult {
   if (!request.repositoryBrowsing || !review.available) return review;
-  const references = [review.evidenceReferences, ...(review.assessments ?? []).filter(item => !(request.coverageGapIds?.includes(item.technologyId)
+  const cited = (citations: string[]) => citations.some(citation => availableSourcePaths.has(citation));
+  const citedAssessment = (item: CriterionAgentAssessment) => ((request.coverageGapIds?.includes(item.technologyId)
       && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
-      && item.evidenceReferences.includes(S006_FINDING_SUMMARY_PATH))).map(item => item.evidenceReferences),
-    ...(review.assessments ?? []).flatMap(item => (item.failureBounds ?? []).map(bound => bound.evidenceReferences)),
-    ...(review.reviewerActions ?? []).map(item => item.evidenceReferences)];
-  if (references.some(citations => !citations.some(citation => availableSourcePaths.has(citation)))) {
+      && item.evidenceReferences.includes(S006_FINDING_SUMMARY_PATH)) || cited(item.evidenceReferences))
+    && (item.failureBounds ?? []).every(bound => cited(bound.evidenceReferences));
+  const citedAction = (item: CriterionAgentReviewerAction) => cited(item.evidenceReferences);
+  const assessments = review.assessments ?? [];
+  const actions = review.reviewerActions ?? [];
+  if (!cited(review.evidenceReferences) || (!request.dropInvalidItems && (!assessments.every(citedAssessment) || !actions.every(citedAction)))) {
     return { ...review, available: false, errors: [...review.errors, 'Agent review requires repository evidence for the review and every assessment and action; generated context alone is not evidence.'] };
   }
-  return review;
+  const reason = 'It cites only generated context, not a repository file.';
+  const dropped: CriterionAgentDroppedItem[] = [
+    ...assessments.filter(item => !citedAssessment(item)).map(item => ({ kind: 'assessment' as const, technologyId: item.technologyId, reason })),
+    ...actions.filter(item => !citedAction(item)).map(() => ({ kind: 'reviewer_action' as const, reason }))
+  ];
+  return dropped.length ? {
+    ...review,
+    assessments: review.assessments?.filter(citedAssessment),
+    reviewerActions: review.reviewerActions?.filter(citedAction),
+    droppedItems: [...review.droppedItems ?? [], ...dropped]
+  } : review;
 }
 
 export function prepareCriterionReviewWorkspace(request: PreparedCriterionAgentReviewRequest): PreparedCriterionReviewWorkspace {
@@ -412,7 +430,8 @@ function normalizeFakeCriterionReviewResult(
 ): CriterionAgentReviewResult {
   const normalized = normalizeCriterionAgentAdvisoryPayload(
     rawResult as unknown as Record<string, unknown>,
-    request.files.map(file => file.repoRelativePath)
+    request.files.map(file => file.repoRelativePath),
+    request.dropInvalidItems
   );
   const warnings = [
     ...stringArray(rawResult.warnings).map(warning => redactEvaluatorSecrets(warning)),
@@ -460,6 +479,7 @@ function normalizeFakeCriterionReviewResult(
     evidenceReferences: normalized.evidenceReferences,
     assessments: normalized.assessments,
     reviewerActions: normalized.reviewerActions,
+    ...(normalized.droppedItems.length ? { droppedItems: normalized.droppedItems } : {}),
     metadata,
     warnings,
     errors
@@ -474,19 +494,35 @@ export interface NormalizedCriterionAgentAdvisoryPayload {
   evidenceReferences: string[];
   assessments?: CriterionAgentReviewResult['assessments'];
   reviewerActions?: CriterionAgentReviewResult['reviewerActions'];
+  droppedItems: CriterionAgentDroppedItem[];
   warnings: string[];
   errors: string[];
 }
 
+const DROP_REASONS = {
+  'expected an object': 'It is not a JSON object.',
+  'invalid coverageDisposition': 'Its coverage judgment is not one the evaluator accepts.',
+  'invalid failureBounds fields or citations': 'Its failure bounds are incomplete or cite no repository file.',
+  'no evidenceReferences match the source manifest': 'It cites no repository file.',
+  'missing technologyId, valid type, or nonblank summary': 'It has no ID, no recognised result type or no summary.',
+  'missing nonblank action or source-manifest citation': 'It has no text or cites no repository file.'
+} as const;
+
 export function normalizeCriterionAgentAdvisoryPayload(
   payload: Record<string, unknown>,
-  manifestEntries: string[]
+  manifestEntries: string[],
+  dropInvalidItems = false
 ): NormalizedCriterionAgentAdvisoryPayload {
   const rawEvidenceReferences = Array.isArray(payload.evidenceReferences) ? payload.evidenceReferences : [];
   const evidenceReferences = normalizeAdvisoryEvidenceReferences(rawEvidenceReferences, manifestEntries);
   const errors: string[] = [];
-  const assessments = normalizeAssessments(payload.assessments, manifestEntries, errors);
-  const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries, errors);
+  const droppedItems: CriterionAgentDroppedItem[] = [];
+  const reject = (kind: CriterionAgentDroppedItem['kind']): RejectItem => (index, reason, technologyId) => {
+    if (dropInvalidItems) droppedItems.push({ kind, ...(technologyId !== undefined ? { technologyId } : {}), reason: DROP_REASONS[reason] });
+    else if (errors.length < 16) errors.push(`${kind === 'assessment' ? 'Assessment' : 'Reviewer action'} ${index + 1}: ${reason}.`);
+  };
+  const assessments = normalizeAssessments(payload.assessments, manifestEntries, reject('assessment'));
+  const reviewerActions = normalizeReviewerActions(payload.reviewerActions, manifestEntries, reject('reviewer_action'));
   const recommendation = parseAdvisoryRecommendation(payload.recommendation);
   const confidence = parseAdvisoryConfidence(payload.confidence);
   const summary = typeof payload.summary === 'string' ? redactEvaluatorSecrets(payload.summary).trim() : undefined;
@@ -497,10 +533,10 @@ export function normalizeCriterionAgentAdvisoryPayload(
   if (!rationale) errors.push('rationale must be a nonblank string');
   if (!Array.isArray(payload.evidenceReferences)) errors.push('evidenceReferences must be an array');
   else if (!evidenceReferences.length) errors.push('evidenceReferences must include a manifest entry');
-  if (payload.assessments !== undefined && (!Array.isArray(payload.assessments) || assessments?.length !== payload.assessments.length)) {
+  if (payload.assessments !== undefined && (!Array.isArray(payload.assessments) || (!dropInvalidItems && assessments?.length !== payload.assessments.length))) {
     errors.push('Invalid or uncited assessments; the complete review was rejected.');
   }
-  if (payload.reviewerActions !== undefined && (!Array.isArray(payload.reviewerActions) || reviewerActions?.length !== payload.reviewerActions.length)) {
+  if (payload.reviewerActions !== undefined && (!Array.isArray(payload.reviewerActions) || (!dropInvalidItems && reviewerActions?.length !== payload.reviewerActions.length))) {
     errors.push('Invalid or uncited reviewer action; actions may not be silently dropped.');
   }
   return {
@@ -512,6 +548,7 @@ export function normalizeCriterionAgentAdvisoryPayload(
     errors,
     assessments,
     reviewerActions,
+    droppedItems,
     warnings: [
       // Merged duplicates and line numbers on a listed path are not dropped citations.
       ...(rawEvidenceReferences.some(reference => !normalizeAdvisoryEvidenceReferences([reference], manifestEntries).length)
@@ -521,16 +558,19 @@ export function normalizeCriterionAgentAdvisoryPayload(
   };
 }
 
+type RejectItem = (index: number, reason: keyof typeof DROP_REASONS, technologyId?: string) => void;
+
 function normalizeAssessments(
   value: unknown,
   manifestEntries: string[],
-  errors: string[]
+  rejectItem: RejectItem
 ): CriterionAgentReviewResult['assessments'] | undefined {
   if (!Array.isArray(value)) return undefined;
   const validTypes = new Set(['aligned_fact', 'substantive_concern', 'analyzer_limitation', 'evidence_gap', 'policy_question']);
   return value.flatMap((entry, index) => {
-    const reject = (reason: string): [] => {
-      if (errors.length < 16) errors.push(`Assessment ${index + 1}: ${reason}.`);
+    const technologyId = isRecord(entry) && typeof entry.technologyId === 'string' ? entry.technologyId : undefined;
+    const reject = (reason: keyof typeof DROP_REASONS): [] => {
+      rejectItem(index, reason, technologyId);
       return [];
     };
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return reject('expected an object');
@@ -587,12 +627,12 @@ function normalizeFailureBounds(value: unknown, manifestEntries: string[]): Crit
 function normalizeReviewerActions(
   value: unknown,
   manifestEntries: string[],
-  errors: string[]
+  rejectItem: RejectItem
 ): CriterionAgentReviewResult['reviewerActions'] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.flatMap((entry, index) => {
-    const reject = (reason: string): [] => {
-      if (errors.length < 16) errors.push(`Reviewer action ${index + 1}: ${reason}.`);
+    const reject = (reason: keyof typeof DROP_REASONS): [] => {
+      rejectItem(index, reason);
       return [];
     };
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return reject('expected an object');

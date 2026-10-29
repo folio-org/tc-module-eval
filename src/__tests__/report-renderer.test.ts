@@ -344,6 +344,12 @@ describe('EvaluationReportRenderer', () => {
     expect(one).not.toMatch(/\b1 (?:criteria|findings|checks|sources)\b/);
     const two = text(review(2));
     expect(two).toMatch(/What to verify 2 checks /);
+    const dropped = (count: number) => renderedText(new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{
+      criterionId: 'F003', status: EvaluationStatus.MANUAL, evidence: 'Manual', criterionDetails: { checklist: { items: [] } },
+      agentReview: { ...review(1), criterionId: 'F003', assessments: [],
+        droppedItems: Array.from({ length: count }, () => ({ kind: 'reviewer_action' as const, reason: 'It cites no repository file.' })) } }] }));
+    expect(dropped(1)).toMatch(/Dropped from this review 1 item A reviewer action/);
+    expect(dropped(2)).toMatch(/Dropped from this review 2 items A reviewer action/);
     expect(two).toMatch(/Sources 2 sources /);
   });
 

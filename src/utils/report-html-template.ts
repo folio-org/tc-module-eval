@@ -437,11 +437,13 @@ export function createHtmlReport(result: EvaluationResult): string {
       }
       if (agentIndex >= 0) {
         tree[agentIndex].children.forEach(function (group) {
-          if (!/^(Findings|What to verify):?$/.test(group.text)) return;
+          if (!/^(Findings|What to verify|Dropped from this review):?$/.test(group.text)) return;
           group.openByDefault = true;
           group.unit = /^Findings/.test(group.text)
             ? (group.children.length === 1 ? 'finding' : 'findings')
-            : (group.children.length === 1 ? 'check' : 'checks');
+            : /^Dropped/.test(group.text)
+              ? (group.children.length === 1 ? 'item' : 'items')
+              : (group.children.length === 1 ? 'check' : 'checks');
           group.children.forEach(function (finding) {
             finding.hideCount = true;
             finding.children.forEach(function (detail) {

@@ -63,17 +63,15 @@ export function buildF006AgentReviewRequest(repoPath: string, analysis: F006Anal
       'When the module has nothing an item is about (no search screen, no settings), use aligned_fact with coverageDisposition immaterial, and cite package.json or the file that shows it: every assessment cites at least one repository file.',
       `A substantive_concern must name, in its summary, the guideline file it is measured against, such as ${guidelineNames.includes('ConfirmationModalPattern') ? 'ConfirmationModalPattern' : guidelineNames[0]}.mdx. `
         + 'The guidelines have no page on colors, so an F006-C6 concern about a hard-coded color may instead name the Stripes color variable to use, such as --color-text.',
-      'Before you answer, check every substantive_concern: its summary must contain the name of a guideline file ending in .mdx (or, for an F006-C6 color, a --variable name). The review is rejected otherwise.',
+      'Before you answer, check every substantive_concern: its summary must contain the name of a guideline file ending in .mdx (or, for an F006-C6 color, a --variable name). A concern without one is dropped.',
       'F006-C7 (state kept when navigating between apps) and F006-C9 (documentation links are publicly accessible) are for the reviewer only and are not in checklist.json. Do not fetch any link.'
     ],
-    validateCriterion: review => {
-      const unnamed = (review.assessments ?? []).find(assessment => assessment.type === 'substantive_concern'
-        && !guidelineNames.some(name => assessment.summary.includes(name))
-        && !assessment.evidenceReferences.some(reference => guidelinePaths.has(reference))
-        && !(assessment.technologyId.startsWith('F006-C6#') && CSS_VARIABLE.test(assessment.summary)));
-      return unnamed ? `F006 substantive_concern ${unnamed.technologyId} must name the guideline file it is measured against`
-        + `${unnamed.technologyId.startsWith('F006-C6#') ? ', or the Stripes color variable to use' : ''}.` : undefined;
-    },
+    criterionRule: assessment => assessment.type === 'substantive_concern'
+      && !guidelineNames.some(name => assessment.summary.includes(name))
+      && !assessment.evidenceReferences.some(reference => guidelinePaths.has(reference))
+      && !(assessment.technologyId.startsWith('F006-C6#') && CSS_VARIABLE.test(assessment.summary))
+      ? `The potential problem does not name the guideline file it is measured against${assessment.technologyId.startsWith('F006-C6#') ? ', or the Stripes color variable to use' : ''}.`
+      : undefined,
     evidenceSummary: maxEntries => {
       const list = <T>(items: T[]) => ({ items: items.slice(0, maxEntries), ...(items.length > maxEntries ? { omitted: items.length - maxEntries } : {}) });
       return {

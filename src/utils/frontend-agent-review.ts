@@ -1,4 +1,6 @@
 import {
+  CriterionAgentAssessment,
+  CriterionAgentDroppedItem,
   CriterionAgentReviewResult,
   FrontendChecklist,
   FrontendChecklistItem,
@@ -72,8 +74,8 @@ export interface FrontendAgentReviewOptions {
   browseScope: string;
   /** Criterion reference material for the agent, under `.criterion-agent/<ID>/`. */
   extraFiles?: Array<{ name: string; content: string }>;
-  /** The criterion's own validation rule, applied after the shared ones. */
-  validateCriterion?: (review: CriterionAgentReviewResult) => string | undefined;
+  /** The criterion's own rule for one assessment, applied after the shared ones: why to drop it, or undefined to keep it. */
+  criterionRule?: (assessment: CriterionAgentAssessment) => string | undefined;
 }
 
 /**
@@ -141,8 +143,11 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
       repoRelativePath: `.criterion-agent/${criterionId}/response-shape.json`,
       content: JSON.stringify(responseShape, null, 2)
     }, ...(options.extraFiles ?? []).map(file => ({ repoRelativePath: `.criterion-agent/${criterionId}/${file.name}`, content: file.content }))],
-    validateReview: (review, availableSourcePaths) => validateFrontendReview(criterionId, checklist, discoveredKinds, review, availableSourcePaths)
-      ?? options.validateCriterion?.(review),
+    dropInvalidItems: true,
+    validateReview: (review, availableSourcePaths) => {
+      applyFrontendReviewRules(checklist, discoveredKinds, options.criterionRule, review, availableSourcePaths);
+      return undefined;
+    },
     schemaDescription: 'JSON object with recommendation enum, confidence enum, nonblank summary and rationale, nonempty evidenceReferences string[] of repository paths, assessments[] (one object per obligation ID in checklist.json, plus discovered ones: technologyId, type, summary, evidenceReferences string[], coverageDisposition investigated|immaterial|unresolved), and reviewerActions[] of { action, evidenceReferences string[] }. See response-shape.json for a complete example.'
   };
 }
@@ -159,56 +164,65 @@ function boundedSummary(render: (maxListEntries: number) => unknown): string {
 const UNRESOLVED_TYPES = new Set(['substantive_concern', 'evidence_gap', 'policy_question']);
 
 /**
- * The F00x validation contract, all or nothing: one assessment with a coverage disposition per given obligation,
- * only allowed discovered IDs, investigated subjects cite their own path, subjects outside the browse scope stay
- * unresolved, and the recommendation agrees with the assessments, the reviewer actions and withheld obligations.
- * Citations of repository paths are checked before this by the shared runner.
+ * The F00x review rules, applied to an accepted review in place: an assessment that breaks one is dropped on its own,
+ * with the reason, and a recommendation the kept assessments do not support becomes needs_reviewer_judgment.
  */
-export function validateFrontendReview(
-  criterionId: string,
+function applyFrontendReviewRules(
   checklist: FrontendChecklist,
   discoveredKinds: string[],
+  criterionRule: FrontendAgentReviewOptions['criterionRule'],
   review: CriterionAgentReviewResult,
   availableSourcePaths: ReadonlySet<string>
-): string | undefined {
-  const assessments = review.assessments ?? [];
-  const obligations = givenObligations(checklist);
+): void {
+  const obligations = new Map(givenObligations(checklist).map(obligation => [obligation.id, obligation]));
   const discovered = new RegExp(`^discovered:(?:${discoveredKinds.join('|') || '(?!)'}):[1-9]\\d*$`);
-  const isDiscovered = (id: string) => discovered.test(id);
-  if (obligations.some(obligation => assessments.filter(assessment => assessment.technologyId === obligation.id).length !== 1)
-    || new Set(assessments.map(assessment => assessment.technologyId)).size !== assessments.length
-    || assessments.some(assessment => !obligations.some(obligation => obligation.id === assessment.technologyId) && !isDiscovered(assessment.technologyId))) {
-    return `${criterionId} requires exactly one assessment for every obligation in checklist.json, and no other IDs except `
-      + `${discoveredKinds.length ? discoveredKinds.map(kind => `discovered:${kind}:<n>`).join(' or ') : 'none'}.`;
-  }
-  if (assessments.some(assessment => !assessment.coverageDisposition)) {
-    return `${criterionId} requires a coverageDisposition on every assessment.`;
-  }
-  for (const obligation of obligations.filter(item => item.path)) {
-    const assessment = assessments.find(item => item.technologyId === obligation.id)!;
-    if (!availableSourcePaths.has(obligation.path!) && assessment.coverageDisposition !== 'unresolved') {
-      return `${criterionId} obligation ${obligation.id} is about a file outside the review snapshot, so it must stay unresolved.`;
+  const counts = new Map<string, number>();
+  const ids = [...(review.assessments ?? []).map(assessment => assessment.technologyId),
+    ...(review.droppedItems ?? []).flatMap(item => item.kind === 'assessment' && item.technologyId !== undefined ? [item.technologyId] : [])];
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const dropReason = (assessment: CriterionAgentAssessment): string | undefined => {
+    const obligation = obligations.get(assessment.technologyId);
+    const isDiscovered = discovered.test(assessment.technologyId);
+    const disposition = assessment.coverageDisposition;
+    if (!obligation && !isDiscovered) return 'It answers nothing the agent was asked to check.';
+    if (counts.get(assessment.technologyId)! > 1) return `The agent returned ${counts.get(assessment.technologyId)} results for it, so none is used.`;
+    if (!disposition) return 'It gives no coverage judgment.';
+    if (obligation?.path && !availableSourcePaths.has(obligation.path) && disposition !== 'unresolved') {
+      return 'Its file was not available to the agent, so it must stay open.';
     }
-    if (assessment.coverageDisposition === 'investigated' && !assessment.evidenceReferences.includes(obligation.path!)) {
-      return `${criterionId} obligation ${obligation.id} is marked investigated but does not cite its own file.`;
+    if (obligation?.path && disposition === 'investigated' && !assessment.evidenceReferences.includes(obligation.path)) {
+      return 'It is marked as investigated directly but does not cite the file it is about.';
     }
+    if (assessment.type === 'aligned_fact' && disposition === 'unresolved') return 'It says the desired state holds but leaves it open.';
+    if (assessment.type === 'evidence_gap' && disposition === 'investigated') return 'It says the evidence is missing but is marked as investigated directly.';
+    if (isDiscovered && !['substantive_concern', 'evidence_gap'].includes(assessment.type)) {
+      return 'A finding beyond the checklist must be a potential problem or need verification.';
+    }
+    return criterionRule?.(assessment);
+  };
+  const reasons = (review.assessments ?? []).map(dropReason);
+  const dropped: CriterionAgentDroppedItem[] = [];
+  (review.assessments ?? []).forEach((assessment, index) => {
+    const reason = reasons[index];
+    if (reason && !dropped.some(item => item.technologyId === assessment.technologyId && item.reason === reason)) {
+      dropped.push({ kind: 'assessment', technologyId: assessment.technologyId, reason });
+    }
+  });
+  const kept = (review.assessments ?? []).filter((_assessment, index) => !reasons[index]);
+  if (review.assessments) review.assessments = kept;
+  if (dropped.length) review.droppedItems = [...review.droppedItems ?? [], ...dropped];
+
+  const withheld = withheldCount(checklist);
+  const replaceReason = review.recommendation === 'likely_sufficient'
+    ? withheld ? `${withheld} checklist ${withheld === 1 ? 'subject was' : 'subjects were'} not given to it`
+      : review.droppedItems?.some(item => item.kind === 'assessment') ? 'some of its results were dropped'
+        : [...obligations.keys()].some(id => !kept.some(assessment => assessment.technologyId === id)) ? 'it returned no result for some checklist subjects'
+          : kept.some(assessment => UNRESOLVED_TYPES.has(assessment.type) || assessment.coverageDisposition === 'unresolved')
+            ? 'its results include an open question or a problem' : undefined
+    : review.recommendation === 'likely_insufficient' && !kept.some(assessment => assessment.type === 'substantive_concern')
+      ? 'none of its kept results is a potential problem' : undefined;
+  if (replaceReason) {
+    review.replacedRecommendation = { recommendation: review.recommendation!, reason: replaceReason };
+    review.recommendation = 'needs_reviewer_judgment';
   }
-  if (assessments.some(assessment => (assessment.type === 'aligned_fact' && assessment.coverageDisposition === 'unresolved')
-    || (assessment.type === 'evidence_gap' && assessment.coverageDisposition === 'investigated'))) {
-    return `${criterionId} does not accept an unresolved aligned_fact or an investigated evidence_gap.`;
-  }
-  if (assessments.some(assessment => isDiscovered(assessment.technologyId) && !['substantive_concern', 'evidence_gap'].includes(assessment.type))) {
-    return `${criterionId} discovered assessments must be substantive_concern or evidence_gap.`;
-  }
-  if (review.recommendation === 'likely_sufficient' && (withheldCount(checklist) > 0
-    || assessments.some(assessment => UNRESOLVED_TYPES.has(assessment.type) || assessment.coverageDisposition === 'unresolved'))) {
-    return `${criterionId} likely_sufficient conflicts with an open assessment, a discovered problem or obligations not given to the agent.`;
-  }
-  if (review.recommendation === 'likely_insufficient' && !assessments.some(assessment => assessment.type === 'substantive_concern')) {
-    return `${criterionId} likely_insufficient requires a cited substantive_concern.`;
-  }
-  if (review.recommendation === 'needs_reviewer_judgment' && !review.reviewerActions?.length) {
-    return `${criterionId} needs_reviewer_judgment requires a cited reviewer action.`;
-  }
-  return undefined;
 }

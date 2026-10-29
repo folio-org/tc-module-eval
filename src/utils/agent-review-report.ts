@@ -10,6 +10,12 @@ export const ASSESSMENT_LABELS = {
   policy_question: ['TC interpretation needed', 'A Technical Council interpretation is needed to decide how the criterion applies.']
 } as const;
 
+export const RECOMMENDATION_LABELS = {
+  likely_sufficient: 'Likely sufficient',
+  likely_insufficient: 'Likely insufficient',
+  needs_reviewer_judgment: 'Reviewer judgment needed'
+} as const;
+
 export const COVERAGE_LABELS = {
   investigated: 'Investigated directly',
   immaterial: 'Not material to this scoped decision',
@@ -32,14 +38,9 @@ export function renderAgentReviewLines(
   review: CriterionAgentReviewResult,
   subjectNames: Record<string, string> = {}
 ): string[] {
-  const recommendations = {
-    likely_sufficient: 'Likely sufficient',
-    likely_insufficient: 'Likely insufficient',
-    needs_reviewer_judgment: 'Reviewer judgment needed'
-  };
   const lines = [
     'Agent review (advisory):',
-    `  - Recommendation: ${review.recommendation ? recommendations[review.recommendation] : 'Unavailable'}`,
+    `  - Recommendation: ${review.recommendation ? RECOMMENDATION_LABELS[review.recommendation] : 'Unavailable'}`,
     `  - Confidence: ${review.confidence}`,
     `  - Summary: ${prose(review.summary)}`,
     `  - Rationale: ${prose(review.rationale)}`
