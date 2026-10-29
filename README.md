@@ -148,6 +148,16 @@ reviewer. `--existing-module` marks the evaluation of an existing module rather 
 B criteria relax some new-module rules for it. See
 [Criterion Notes](docs/criterion-notes.md#b001-module-descriptor-template).
 
+### B003 Endpoint Implementations
+
+B003 checks that every endpoint in the module descriptor has an implementation. For RMB and Spring
+modules, whose resource interfaces the build generates from the API spec, an endpoint must be in the
+spec and a committed class must implement the interface named after its RAML resource or OpenAPI tag;
+any module's endpoint is also implemented by a route in the source (Vert.x router, Spring mapping
+annotations, Grails URL mappings). It fails when an RMB or Spring endpoint is in no spec and no route,
+and leaves missing implementing classes, wildcard handlers, library endpoints and unreadable evidence
+to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b003-endpoint-implementations).
+
 ### B006 API Documentation
 
 B006 checks that every endpoint in the module descriptor (for an edge module, every router route) is

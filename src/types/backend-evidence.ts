@@ -122,6 +122,11 @@ export interface BackendApiOperation {
   path: string;
   /** The file that defines the operation, which is not the spec's root file when a `$ref` or `!include` leads there. */
   file: string;
+  /**
+   * The resource as the spec writes it, which code generators name interfaces after: the RAML top-level resource the
+   * operation is under (`/loan-storage`), or the OpenAPI path without a server path or `basePath`.
+   */
+  resource: string;
   /** OpenAPI only. */
   tags?: string[];
   /** OpenAPI only. */
@@ -219,6 +224,66 @@ export interface B006Analysis {
   unreadRoutes: Array<{ file: string; line: number }>;
   /** All such calls; `unreadRoutes` lists the first 100. */
   unreadRouteCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}
+
+/**
+ * How B003 found an endpoint's implementation:
+ * - `interface`: in an API spec, and a committed class implements the interface the build generates for it;
+ * - `route`: a route the source registers serves it;
+ * - `no-implementing-class`: in an API spec, but no committed class implements the interface the build generates;
+ * - `wildcard`: a handler path with Okapi's `*`, whose paths the tool cannot list;
+ * - `library`: served by a library;
+ * - `partial`: found only for fixed values of a path parameter, such as `/erm/jobs/packageImport` for `/erm/jobs/{type}`;
+ * - `unconfirmed`: not found, but part of a spec, a route or the source could not be read;
+ * - `not-found`: no implementation found; `specFiles` lists the specs that have it.
+ */
+export type B003Implementation = 'interface' | 'route' | 'no-implementing-class' | 'wildcard' | 'library' | 'partial' | 'unconfirmed' | 'not-found';
+
+/** A provided endpoint: a descriptor handler's method and path, or for an edge module also an operation of its API spec. */
+export interface B003Endpoint {
+  method: string;
+  path: string;
+  /** The provided interface, for a descriptor handler. */
+  interfaceId?: string;
+  implementation: B003Implementation;
+  /** The spec files that have the endpoint, have it for fixed values (`partial`), or whose gaps may (`unconfirmed`). */
+  specFiles: string[];
+  /** The interfaces the build generates for it (`interface`, `no-implementing-class`). */
+  generatedInterfaces?: string[];
+  /** The committed classes that implement a generated interface (`interface`), or the routes that serve it (`route`, `partial`). */
+  implementedBy?: Array<{ file: string; line: number }>;
+  /** The library that serves it (`library`). */
+  library?: string;
+}
+
+/**
+ * What B003 decided from:
+ * - `library`, `no-descriptor`: the repository kind, or a descriptor template B001 could not read;
+ * - `no-endpoints`: a module whose descriptor provides only system interfaces, or an edge module that declares no endpoints;
+ * - `endpoints-checked`: each endpoint looked up in the specs and routes.
+ */
+export type B003Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'endpoints-checked';
+
+export interface B003Analysis {
+  criterionId: 'B003';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B003Basis;
+  kind: BackendRepositoryKind;
+  framework: BackendEvidence['framework'];
+  /** Where the endpoints come from. */
+  endpointSource?: string;
+  /** How the tool finds an endpoint's implementation for this framework. */
+  implementationSource?: string;
+  endpoints: B003Endpoint[];
+  /** Routes the source registers (Vert.x router, RouteRegistration, Spring mapping annotations, Grails URL mappings). */
+  routeCount: number;
+  /** Route registrations whose path or method the tool could not read: the first 100 of `unreadRouteCount`. */
+  unreadRoutes: Array<{ file: string; line: number }>;
+  unreadRouteCount: number;
+  gaps: BackendApiSpecGap[];
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }

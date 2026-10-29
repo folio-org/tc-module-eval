@@ -147,7 +147,7 @@ function openApiSpec(file: string, document: Record<string, unknown>, version: s
     for (const [apiPath, item] of Object.entries(value)) {
       if (!apiPath.startsWith('/')) continue;
       // A method defined at several hops of a $ref chain counts once, as the first definition.
-      const defined = new Map<string, Omit<BackendApiOperation, 'path'>>();
+      const defined = new Map<string, Omit<BackendApiOperation, 'path' | 'resource'>>();
       const gap = follow({ file: pathsFile, pointer: `${pointer}/${apiPath.replace(/~/g, '~0').replace(/\//g, '~1')}`, value: item }, load, node => {
         if (!isRecord(node.value)) return;
         for (const method of METHODS) {
@@ -162,7 +162,7 @@ function openApiSpec(file: string, document: Record<string, unknown>, version: s
         gaps.push({ file, message: `It has more than ${MAX_OPERATIONS} operations; the rest were not read` });
         break;
       }
-      for (const prefix of prefixes) for (const operation of defined.values()) operations.push({ ...operation, path: prefix + apiPath });
+      for (const prefix of prefixes) for (const operation of defined.values()) operations.push({ ...operation, path: prefix + apiPath, resource: apiPath });
       if (gap) gaps.push(...prefixes.map(prefix => ({ file: pathsFile, apiPath: prefix + apiPath, ...gap })));
     }
   }
@@ -255,7 +255,7 @@ function ramlSpec(file: string, version: string, load: Load): BackendApiSpec {
   const ancestors = new Set<unknown>();
   let resources = 0;
   let truncated = false;
-  const walk = (node: Record<string, unknown>, nodeFile: string, prefix: string, depth: number) => {
+  const walk = (node: Record<string, unknown>, nodeFile: string, prefix: string, depth: number, topResource?: string) => {
     for (const [key, raw] of Object.entries(node)) {
       if (!key.startsWith('/') || truncated) continue;
       if (++resources > MAX_RAML_RESOURCES || operations.length > MAX_OPERATIONS) {
@@ -289,8 +289,8 @@ function ramlSpec(file: string, version: string, load: Load): BackendApiSpec {
         if (Array.isArray(fromType)) fromType.forEach(method => methods.add(method));
         else gaps.push({ file: resourceFile, apiPath, reference: fromType.reference ?? typeName, message: fromType.message });
       }
-      for (const method of methods) operations.push({ method: method.toUpperCase(), path: apiPath, file: resourceFile });
-      walk(resource, resourceFile, apiPath, depth + 1);
+      for (const method of methods) operations.push({ method: method.toUpperCase(), path: apiPath, file: resourceFile, resource: topResource ?? key });
+      walk(resource, resourceFile, apiPath, depth + 1, topResource ?? key);
       ancestors.delete(resource);
     }
   };
