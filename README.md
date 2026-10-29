@@ -261,6 +261,7 @@ All inputs are optional:
 | `allow_remote_lookups` | Allow read-only lookups of SonarCloud, platform-lsp and FAR, needed for S011, S013 and S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
 | `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
 | `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
+| `existing_module` | Evaluate an existing module rather than a new one (passes `--existing-module`) | `false` |
 
 #### Outputs
 

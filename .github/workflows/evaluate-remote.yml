@@ -57,6 +57,11 @@ on:
         required: false
         type: string
         default: ""
+      existing_module:
+        description: "Evaluate an existing module rather than a new one"
+        required: false
+        type: boolean
+        default: false
       # OpenCode advisory review is local/trusted CLI-only for now. The manual
       # remote workflow delegates to the deterministic reusable workflow.
 
@@ -77,3 +82,4 @@ jobs:
       allow_remote_lookups: ${{ inputs.allow_remote_lookups }}
       application: ${{ inputs.application }}
       platform_ref: ${{ inputs.platform_ref }}
+      existing_module: ${{ inputs.existing_module }}
