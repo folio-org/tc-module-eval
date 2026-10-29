@@ -75,10 +75,18 @@ class RouteCollector {
   }
 }
 
-/** Vert.x router routes in `src/main` sources, with a path literal or a string constant in the same file. */
+/** Vert.x router routes in `src/main` sources, read with comments removed, with a path literal or a string constant in the same file. */
 export function routerRoutes(files: SourceText[]): RouteScan {
+  return vertxRoutes(commentFreeSources(files));
+}
+
+function commentFreeSources(files: SourceText[]): SourceText[] {
+  return files.filter(file => SOURCE_FILE.test(file.path)).map(file => ({ path: file.path, content: withoutComments(file.content) }));
+}
+
+function vertxRoutes(sources: SourceText[]): RouteScan {
   const collector = new RouteCollector();
-  for (const file of files.filter(candidate => SOURCE_FILE.test(candidate.path))) {
+  for (const file of sources) {
     const constants = stringConstants(file.content);
     const lineAt = lineCounter(file.content);
     let readUntil = 0;
@@ -115,8 +123,8 @@ export function routerRoutes(files: SourceText[]): RouteScan {
  * Grails URL mappings.
  */
 export function sourceRoutes(files: SourceText[]): RouteScan {
-  const sources = files.filter(file => SOURCE_FILE.test(file.path)).map(file => ({ path: file.path, content: withoutComments(file.content) }));
-  const router = routerRoutes(sources.filter(file => !/\bclass\s+RouteRegistration\b/.test(file.content)));
+  const sources = commentFreeSources(files);
+  const router = vertxRoutes(sources.filter(file => !/\bclass\s+RouteRegistration\b/.test(file.content)));
   const collector = new RouteCollector();
   router.unreadRoutes.forEach(route => collector.unread(route.file, route.line));
   collector.unreadRouteCount = router.unreadRouteCount;
