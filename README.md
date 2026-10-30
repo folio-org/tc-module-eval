@@ -222,6 +222,15 @@ permission fits its endpoint; the report lists endpoints without a permission, `
 permissions and permission names that depart from the naming guidelines. Agent review runs by default
 for its manual results. See [Criterion Notes](docs/criterion-notes.md#b007-endpoint-permissions).
 
+### B012 Dependencies Declared in README
+
+B012 checks that `README.md` names the infrastructure the module uses, as B016 detects it from direct
+dependencies, configuration and storage evidence, using S003's whole-name README matching with
+synonyms such as Postgres and MinIO. It fails when a required infrastructure is not named, and leaves
+optional or configuration-only infrastructure and unreadable files to the reviewer. External services
+and Kafka topics of other modules are checklist items and never fail it. See
+[Criterion Notes](docs/criterion-notes.md#b012-dependencies-declared-in-readme).
+
 ### B014 Health Check Endpoint
 
 B014 checks that the module serves `GET /admin/health`, without starting the module or calling the

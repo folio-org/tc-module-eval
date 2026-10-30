@@ -265,11 +265,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B012',
     description: 'Dependencies declared in README',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Environment configuration'
-    }
+    languages: ['java']
   },
   {
     id: 'B013',

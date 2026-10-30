@@ -600,3 +600,33 @@ export interface B016Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }
+
+/** An infrastructure B016 found, and the name README.md uses for it, such as `Postgres` for PostgreSQL. */
+export type B012Infrastructure = BackendInfrastructure & { namedAs?: string };
+
+/**
+ * What B012 decided from:
+ * - `readme-checked`: README.md, read, against the infrastructure found;
+ * - `no-readme`: no README.md at the repository root;
+ * - `readme-unreadable`: a README.md the tool could not read;
+ * - `source-incomplete`: no README.md among the files read, when the committed source was not read completely.
+ */
+export type B012Basis = 'readme-checked' | 'no-readme' | 'readme-unreadable' | 'source-incomplete';
+
+export interface B012Analysis {
+  criterionId: 'B012';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B012Basis;
+  kind: BackendRepositoryKind;
+  /** The root README.md files read, in any case (`README.MD`). */
+  readmePaths: string[];
+  /** The root README.md files the tool could not read. */
+  unreadableReadmePaths: string[];
+  infrastructure: B012Infrastructure[];
+  /** Build and configuration files B016's detection could not read, and committed source the tool could not read. */
+  diagnostics: Array<{ path?: string; line?: number; message: string }>;
+  checklist: FrontendChecklist;
+  /** Why agent review was not applied, when it was not. */
+  agentReviewUnavailableReason?: string;
+}

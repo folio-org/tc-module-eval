@@ -59,9 +59,15 @@ function isDocumentedInReadme(dependency: Dependency, readmeContent: string): bo
   }
 
   const names = new Set([dependency.name, dependency.name.split(':').pop()!].filter(isNonEmptyString));
-  return [...names].some(name =>
-    new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-]|\\.\\w)`, 'i').test(readmeContent)
-  );
+  return [...names].some(name => isNamedInReadme(name, readmeContent));
+}
+
+/**
+ * Whether the README names `name` as a whole name, case-insensitively: not as part of a longer word, dotted or
+ * hyphenated name (`rhino.engine` and `rhino-tools` do not name `rhino`).
+ */
+export function isNamedInReadme(name: string, readmeContent: string): boolean {
+  return new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-]|\\.\\w)`, 'i').test(readmeContent);
 }
 
 function evaluateLicense(license: string, dependency: Dependency, readmeContent: string): LicenseEvaluation {
