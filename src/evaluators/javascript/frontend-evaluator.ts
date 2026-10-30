@@ -7,20 +7,22 @@ import { hasF002AgentReviewMaterial, reviewF002WithAgent } from '../../utils/f00
 import { analyzeF002, renderF002HumanDetails } from '../../utils/f002-e2e-tests';
 import { hasF003AgentReviewMaterial, reviewF003WithAgent } from '../../utils/f003-agent-review';
 import { evaluateF003, renderF003HumanDetails } from '../../utils/f003-internationalization';
+import { hasF004AgentReviewMaterial, reviewF004WithAgent } from '../../utils/f004-agent-review';
+import { evaluateF004, F004_GUIDES_DIRECTORY, F004Input, f004NotRunReason, readF004Files, renderF004HumanDetails } from '../../utils/f004-accessibility';
 import { evaluateF005, renderF005HumanDetails } from '../../utils/f005-stripes-version';
 import { hasF006AgentReviewMaterial, reviewF006WithAgent } from '../../utils/f006-agent-review';
 import { evaluateF006, F006Input, loadF006Guidelines, readF006Css, renderF006HumanDetails } from '../../utils/f006-ui-patterns';
 import { evaluateF007, F007Input, loadF007BrowserApis, readF007Browserslist, renderF007HumanDetails } from '../../utils/f007-latest-chrome';
-import { getFrontendSource } from '../../utils/frontend-source';
+import { frontendUiPresence, getFrontendSource } from '../../utils/frontend-source';
 import { getModuleKind } from '../../utils/module-kind';
 import { getS007Analysis } from '../../utils/s007-evaluator';
 import { collectFrontend } from '../../utils/s008-interface-declarations';
 import { errorMessage } from '../../utils/type-guards';
 import { getUiRequestSites } from '../../utils/ui-request-sites';
+import { getUiRuntimeEvidence, NO_RUNTIME_EVIDENCE } from '../../utils/ui-runtime-probe';
 
 /**
- * Evaluator for Frontend criteria (F001-F007). F001, F002, F003, F005, F006 and F007 have automated logic; F004 falls back to
- * the catalog-defined default result.
+ * Evaluator for Frontend criteria (F001-F007), each with automated logic.
  */
 export class FrontendEvaluator extends CatalogSectionEvaluator {
   constructor() {
@@ -28,6 +30,7 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       F001: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF001(repoPath, evaluationRun),
       F002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF002(repoPath, evaluationRun),
       F003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF003(repoPath, evaluationRun),
+      F004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF004(repoPath, evaluationRun),
       F005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF005(repoPath, evaluationRun),
       F006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF006(repoPath, evaluationRun),
       F007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF007(repoPath, evaluationRun)
@@ -103,6 +106,36 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       status: analysis.status,
       evidence: analysis.summary,
       details: renderF003HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
+    };
+  }
+
+  private async evaluateF004(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'F004', evaluationRun);
+    const [source, files] = await Promise.all([getFrontendSource(run, repoPath), readF004Files(repoPath)]);
+    const runtime = frontendUiPresence(source).rendersUi ? await getUiRuntimeEvidence(run, source) : { ...NO_RUNTIME_EVIDENCE };
+    let guides: F004Input['guides'];
+    try {
+      guides = loadF006Guidelines(F004_GUIDES_DIRECTORY);
+    } catch (error) {
+      guides = { problem: `the accessibility guide snapshot could not be read: ${errorMessage(error)}` };
+    }
+    const analysis = evaluateF004({ source, files, runtime, guides });
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'F004',
+      status: analysis.status,
+      hasReviewMaterial: hasF004AgentReviewMaterial(analysis),
+      notRunReason: f004NotRunReason(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewF004WithAgent(repoPath, analysis, guides, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    return {
+      criterionId: 'F004',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderF004HumanDetails(analysis, agentReview),
       criterionDetails: analysis,
       agentReview
     };

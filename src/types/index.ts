@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs' | 'uiRuntimeEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -139,6 +139,7 @@ export interface EvaluationRunArtifacts {
   backendEvidence?: import('./backend-evidence').BackendEvidence;
   /** The API specs in backendEvidence's snapshot, for B006 and B003. */
   backendApiSpecs?: import('./backend-evidence').BackendApiSpecs;
+  uiRuntimeEvidence?: import('./ui-runtime-evidence').UiRuntimeEvidence;
 }
 
 export interface EvaluationRun {
@@ -164,6 +165,7 @@ export interface EvaluationRun {
   s014PlatformRef?: string;
   /** Evaluate an existing module rather than a new one (--existing-module), which relaxes some new-module rules. */
   existingModule: boolean;
+  uiRuntime?: import('./ui-runtime-evidence').UiRuntimeProbe;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -196,6 +198,8 @@ export interface EvaluationConfig {
   s014PlatformRef?: string;
   /** Evaluate an existing module rather than a new one (--existing-module). */
   existingModule?: boolean;
+  uiRuntime?: import('../utils/ui-runtime-probe').UiRuntimeOptions;
+  uiRuntimeProbe?: import('./ui-runtime-evidence').UiRuntimeProbe;
 }
 
 export * from './s004-installation-documentation';
@@ -216,8 +220,10 @@ export * from './f001-consumed-apis';
 export * from './f002-e2e-tests';
 export * from './f003-internationalization';
 export * from './f005-stripes-version';
+export * from './f004-accessibility';
 export * from './f006-ui-patterns';
 export * from './f007-latest-chrome';
+export * from './ui-runtime-evidence';
 export * from './backend-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';

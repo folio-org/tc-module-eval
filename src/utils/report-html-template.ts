@@ -26,6 +26,7 @@ const CRITERION_TITLES: Record<string, string> = {
   F001: 'Consumed interfaces declared',
   F002: 'End-to-end tests',
   F003: 'Internationalization',
+  F004: 'WCAG 2.1 AA accessibility',
   F005: 'Stripes version',
   F006: 'UI layouts and patterns',
   F007: 'Works in the latest Chrome',

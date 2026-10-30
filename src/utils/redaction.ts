@@ -1,7 +1,7 @@
 // Evaluated repositories are open source, so their content, command output and agent output are reported as
-// they are. Only the evaluator's own credentials, the values of the variables it uses for remote lookups and
-// agent review and the keys in a trusted OpenCode auth store, are masked.
-const SECRET_ENV_NAMES = new Set(['OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'SONAR_TOKEN', 'GITHUB_TOKEN']);
+// they are. Only the evaluator's own credentials, the values of the variables it uses for remote lookups,
+// agent review and the runtime UI probe, and the keys in a trusted OpenCode auth store, are masked.
+const SECRET_ENV_NAMES = new Set(['OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'SONAR_TOKEN', 'GITHUB_TOKEN', 'FOLIO_UI_USERNAME', 'FOLIO_UI_PASSWORD']);
 // Masking a short value such as "1" or "true" would rewrite ordinary text without protecting anything.
 const MIN_SECRET_LENGTH = 8;
 

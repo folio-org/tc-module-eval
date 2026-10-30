@@ -33,7 +33,7 @@ When this flag is used, reports record where commands ran: `github-actions` in G
 
 Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
-Evaluated repositories are open source, so reports show repository text, command output, and agent advice as written. Only the evaluator's own credentials are masked: the values of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SONAR_TOKEN`, `GITHUB_TOKEN`, and any variable passed to OpenCode with `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` become `[REDACTED_<VARIABLE>]` in all output, and the keys in an OpenCode auth store become `[REDACTED_AUTH_STORE]`. See [Output masking](docs/agent-review.md#output-masking).
+Evaluated repositories are open source, so reports show repository text, command output, and agent advice as written. Only the evaluator's own credentials are masked: the values of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SONAR_TOKEN`, `GITHUB_TOKEN`, `FOLIO_UI_USERNAME`, `FOLIO_UI_PASSWORD`, and any variable passed to OpenCode with `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` become `[REDACTED_<VARIABLE>]` in all output, and the keys in an OpenCode auth store become `[REDACTED_AUTH_STORE]`. See [Output masking](docs/agent-review.md#output-masking).
 
 ### S007 Officially Supported Technologies
 
@@ -130,6 +130,22 @@ with a checklist for the reviewer and, when agent review is enabled, the agent's
 package that renders no user interface, such as stripes-connect, is not applicable. See
 [Criterion Notes](docs/criterion-notes.md#f003-internationalization).
 
+### F004 WCAG 2.1 AA Accessibility
+
+F004 checks that a UI package meets WCAG 2.1 AA as measured by a current major version of axe DevTools.
+The repository alone cannot show that, so F004 is always `manual` (and not applicable to a package that
+renders no user interface). It lists what a reviewer starts from: test files that use axe, whether the lint
+configuration uses `@folio/eslint-config-stripes`, `jsx-a11y` rules disabled in code or configuration,
+`<img>` without `alt`, click handlers on non-interactive elements and hard-coded `aria-label` text. See
+[Criterion Notes](docs/criterion-notes.md#f004-wcag-21-aa-accessibility).
+
+With `--ui-runtime-url` and `--ui-runtime-login-origin`, and a test account in `FOLIO_UI_USERNAME` and
+`FOLIO_UI_PASSWORD`, F004 also visits the module's pages on a running FOLIO UI and runs axe-core there; the
+agent review, when enabled, then maps each violation to the code. Point it at a test or reference
+environment, such as the Eureka snapshot, never a production system: the page text goes to the model
+provider. The probe never builds or serves the evaluated commit, so it measures the version deployed there. See
+[Runtime UI probe](docs/criterion-notes.md#runtime-ui-probe).
+
 ### F005 Stripes Version
 
 F005 checks that a UI module uses the Stripes version on the officially supported technologies
@@ -209,7 +225,7 @@ the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-thi
 
 ### Remote Lookups
 
-Evaluation is offline by default. S011 (SonarQube findings) and S013 (test coverage) need to read
+Evaluation is offline by default, apart from the optional runtime UI probe of F004. S011 (SonarQube findings) and S013 (test coverage) need to read
 SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platform) needs to read
 `folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in:
 
@@ -385,6 +401,11 @@ folio-eval evaluate <repo-url> --criteria S001,S002,B005
 
 # Custom output directory or format
 folio-eval evaluate <repo-url> --output ./my-reports --json-only
+
+# Measure a UI module's pages on a test environment with axe-core (F004)
+FOLIO_UI_USERNAME=<test user> FOLIO_UI_PASSWORD=<password> folio-eval evaluate https://github.com/folio-org/ui-users \
+  --criteria F004 --ui-runtime-url https://folio-etesting-snapshot-diku.ci.folio.org \
+  --ui-runtime-login-origin https://folio-etesting-snapshot-keycloak.ci.folio.org --ui-runtime-chrome /path/to/chrome
 
 # List supported languages
 folio-eval list-languages

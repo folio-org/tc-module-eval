@@ -75,7 +75,11 @@ export async function buildS006AgentReviewRequest(
   return {
     criterionId: 'S006',
     repositoryPath: repoPath,
-    coverageGapIds: obligations.filter(item => item.id.startsWith('gap:')).map(item => item.id),
+    generatedEvidencePaths: [{
+      path: S006_FINDING_SUMMARY_PATH,
+      technologyIds: obligations.filter(item => item.id.startsWith('gap:')).map(item => item.id),
+      accepts: assessment => assessment.coverageDisposition === 'unresolved' && assessment.type === 'evidence_gap'
+    }],
     instructions: [
       'Evaluate whether committed sensitive or environment-specific information needs reviewer attention. Investigate surrounding source, configuration, CI, documentation, fixtures, and usage paths, including files absent from the scanner findings. Distinguish production usage from examples, synthetic fixtures, and local defaults using cited context.',
       'Scan coverage uncertainty is not itself proof of a leaked secret. Report exclusions and unresolved usage honestly; do not claim the repository is secret-free.',

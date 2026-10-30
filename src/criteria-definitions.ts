@@ -338,11 +338,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F004',
     description: 'WCAG 2.1 AA compliance',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'WCAG 2.1 AA accessibility compliance'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F005',
