@@ -1,4 +1,5 @@
 import type { EvaluationStatus, ModuleKindResult } from './index';
+import type { S007PolicyDiagnostic, S007RuleStrength } from './s007-officially-supported-technologies';
 import type { FrontendChecklist } from './frontend-checklist';
 import type { CommittedSourceDiagnostic, CommittedSourceSnapshot } from '../utils/committed-source';
 
@@ -566,4 +567,36 @@ export interface BackendInfrastructureEvidence {
   diagnostics: Array<{ path: string; line?: number; message: string }>;
   /** backendEvidence's material snapshot diagnostics: when present, infrastructure may have been missed. */
   sourceDiagnostics: CommittedSourceDiagnostic[];
+}
+
+/** A detected infrastructure and the Officially Supported Technologies entry it is listed under, if any. */
+export interface B016Technology {
+  id: BackendInfrastructureId;
+  name: string;
+  usage: BackendInfrastructure['usage'];
+  listedAs?: { id: string; displayName: string; sourceStatement: string; strength: S007RuleStrength; section: string };
+  signals: BackendInfrastructureSignal[];
+}
+
+/**
+ * What B016 decided from:
+ * - `policy-unreadable`: the committed policy could not be loaded;
+ * - `no-build-file`: no `pom.xml` or `build.gradle`, so the dependencies are unknown;
+ * - `infrastructure-checked`: the detected infrastructure against the policy's infrastructure sections.
+ */
+export type B016Basis = 'policy-unreadable' | 'no-build-file' | 'infrastructure-checked';
+
+export interface B016Analysis {
+  criterionId: 'B016';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B016Basis;
+  kind: BackendRepositoryKind;
+  policy?: { exportDate?: string; sections: string[] };
+  policyDiagnostics: S007PolicyDiagnostic[];
+  technologies: B016Technology[];
+  buildFiles: string[];
+  diagnostics: BackendInfrastructureEvidence['diagnostics'];
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
 }

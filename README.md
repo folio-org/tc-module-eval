@@ -231,6 +231,17 @@ Spring Boot or Grails application) serves health at `/admin/health`, or when the
 or disable health, in the default configuration or in any profile, and modules with no such mechanism are
 left to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
 
+### B016 Supported Infrastructure
+
+B016 checks that the infrastructure a backend module, edge module or library uses is on the
+infrastructure sections of the committed Officially Supported Technologies list
+(`config/officially-supported-technologies.json`, the file S007 reads). It finds infrastructure from
+direct production dependencies in `pom.xml` and `build.gradle` (transitive dependencies are not visible
+without a build), storage evidence (PostgreSQL), configuration keys and environment variable prefixes.
+It fails when the module requires an infrastructure that is not on the list, and leaves optional
+backends that are not on the list, such as edge-common's HashiCorp Vault and AWS SSM secure stores, to
+the reviewer. See [Criterion Notes](docs/criterion-notes.md#b016-supported-infrastructure).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.

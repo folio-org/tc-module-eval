@@ -2849,9 +2849,110 @@
     },
     {
       "criterionId": "B016",
-      "status": "manual",
-      "evidence": "Integration testing - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B016 pass: Every infrastructure found is on the Officially Supported Technologies list: PostgreSQL and Apache Kafka.",
+      "details": "Officially Supported Technologies: exported 2026-07-14, sections infrastructure and fast-moving-infrastructure\nChecked: direct production dependencies in 1 build file (pom.xml), storage evidence, configuration keys and environment variables. Transitive dependencies are not visible without running the build, and server versions are not checked.\nOn the list:\n  - PostgreSQL — \"PostgreSQL 16\" (required)\n    - pom.xml — dependency org.postgresql:postgresql\n    - storage evidence: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml\n    - storage evidence: Datasource configured in src/main/resources/application.yml\n    - src/main/resources/application.yml — configuration spring.datasource.url (jdbc:postgresql)\n    - descriptors/ModuleDescriptor-template.json — environment variables DB_HOST, DB_PORT, DB_USERNAME, and 5 more\n    - ... 1 more\n  - Apache Kafka — \"Kafka 4.2 with matching MSK where possible\" (required)\n    - pom.xml — dependency org.springframework.boot:spring-boot-starter-kafka\n    - src/main/resources/application.yml — configuration spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more\n    - descriptors/ModuleDescriptor-template.json — environment variables KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more\n    - src/main/resources/application.yml — environment variables KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more",
+      "criterionDetails": {
+        "criterionId": "B016",
+        "kind": "backend-module",
+        "policy": {
+          "exportDate": "2026-07-14",
+          "sections": [
+            "infrastructure",
+            "fast-moving-infrastructure"
+          ]
+        },
+        "policyDiagnostics": [],
+        "technologies": [
+          {
+            "id": "postgresql",
+            "name": "PostgreSQL",
+            "usage": "required",
+            "listedAs": {
+              "id": "postgresql",
+              "displayName": "PostgreSQL",
+              "sourceStatement": "PostgreSQL 16",
+              "strength": "normative",
+              "section": "infrastructure"
+            },
+            "signals": [
+              {
+                "kind": "dependency",
+                "detail": "org.postgresql:postgresql",
+                "path": "pom.xml"
+              },
+              {
+                "kind": "storage",
+                "detail": "Liquibase changelog src/main/resources/db/changelog/changelog-master.xml"
+              },
+              {
+                "kind": "storage",
+                "detail": "Datasource configured in src/main/resources/application.yml"
+              },
+              {
+                "kind": "configuration",
+                "detail": "spring.datasource.url (jdbc:postgresql)",
+                "path": "src/main/resources/application.yml"
+              },
+              {
+                "kind": "environment",
+                "detail": "DB_HOST, DB_PORT, DB_USERNAME, and 5 more",
+                "path": "descriptors/ModuleDescriptor-template.json"
+              },
+              {
+                "kind": "environment",
+                "detail": "DB_USERNAME, DB_PASSWORD, DB_HOST, and 2 more",
+                "path": "src/main/resources/application.yml"
+              }
+            ]
+          },
+          {
+            "id": "kafka",
+            "name": "Apache Kafka",
+            "usage": "required",
+            "listedAs": {
+              "id": "kafka",
+              "displayName": "Apache Kafka",
+              "sourceStatement": "Kafka 4.2 with matching MSK where possible",
+              "strength": "normative",
+              "section": "infrastructure"
+            },
+            "signals": [
+              {
+                "kind": "dependency",
+                "detail": "org.springframework.boot:spring-boot-starter-kafka",
+                "path": "pom.xml"
+              },
+              {
+                "kind": "configuration",
+                "detail": "spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more",
+                "path": "src/main/resources/application.yml"
+              },
+              {
+                "kind": "environment",
+                "detail": "KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more",
+                "path": "descriptors/ModuleDescriptor-template.json"
+              },
+              {
+                "kind": "environment",
+                "detail": "KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more",
+                "path": "src/main/resources/application.yml"
+              }
+            ]
+          }
+        ],
+        "buildFiles": [
+          "pom.xml"
+        ],
+        "diagnostics": [],
+        "sourceDiagnostics": [],
+        "status": "pass",
+        "basis": "infrastructure-checked",
+        "summary": "B016 pass: Every infrastructure found is on the Officially Supported Technologies list: PostgreSQL and Apache Kafka.",
+        "checklist": {
+          "items": []
+        }
+      }
     }
   ]
 }
