@@ -2,26 +2,28 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
+  CriterionAgentReviewResult,
   EvaluationStatus,
   F007Analysis,
   F007BrowserApi,
   F007BrowserslistOverride,
   F007Polyfill,
-  F007UserAgentRead
+  F007UserAgentRead,
+  UiRuntimeEvidence,
+  UiRuntimePage
 } from '../types';
 import { CommittedSourceSnapshot, readCommittedSource } from './committed-source';
-import { frontendChecklist, frontendReviewLines, SHOWN_STARTING_POINTS } from './frontend-checklist';
-import { numberObligations } from './frontend-agent-review';
+import { FRONTEND_AGENT_OBLIGATION_LIMIT, frontendChecklist, frontendReviewLines, SHOWN_STARTING_POINTS } from './frontend-checklist';
+import { FRONTEND_BROWSE_SCOPE, numberObligations } from './frontend-agent-review';
 import { FrontendSource, FrontendSourceFile, frontendUiPresence, lineOf, RENDERS_NO_UI } from './frontend-source';
 import { count, overflowLine, reportPath, reportText } from './report-text';
 import { isRecord } from './type-guards';
+import { consoleErrorCount, failedRequestCount, runtimeCollected, runtimeEvidenceLines } from './ui-runtime-report';
 
 const DEFAULT_API_LIST_PATH = path.resolve(__dirname, '../../config/f007-browser-apis.json');
 const BROWSERSLIST_FILES = new Set(['.browserslistrc', 'browserslist']);
 const SHIPPED_DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies'];
 const WRITTEN_QUERIES_LIMIT = 200;
-
-const AGENT_REVIEW_NOT_RUN = 'F007 agent review needs runtime evidence from a running FOLIO instance, and the evaluator collects none';
 
 type RemovedApiForm = 'global' | 'member' | 'event';
 
@@ -88,15 +90,16 @@ export interface F007Input {
   source: FrontendSource;
   browserslistFiles: CommittedSourceSnapshot;
   apiList: F007BrowserApiList | { problem: string };
+  runtime: UiRuntimeEvidence;
 }
 
 /**
  * F007 (works in the latest Chrome): not applicable when the package renders no UI (Q10), otherwise always manual,
  * since only a browser can show it. Layer 1 lists the browser-specific code a reviewer starts from: reads of
  * navigator properties that identify the browser, vendor-prefixed APIs and APIs Chrome removed (from the pinned
- * list), a browserslist override and the polyfills the package ships.
+ * list), a browserslist override and the polyfills the package ships, and the runtime evidence when collected.
  */
-export function evaluateF007({ source, browserslistFiles, apiList }: F007Input): F007Analysis {
+export function evaluateF007({ source, browserslistFiles, apiList, runtime }: F007Input): F007Analysis {
   const presence = frontendUiPresence(source);
   const manifest = packageManifest(source.packageJson);
   const list = 'problem' in apiList ? undefined : apiList;
@@ -111,6 +114,7 @@ export function evaluateF007({ source, browserslistFiles, apiList }: F007Input):
     rendersUi: presence.rendersUi,
     uiFileCount: presence.uiFiles.length,
     productionFileCount: source.files.length,
+    ...(manifest.version !== undefined ? { packageVersion: manifest.version } : {}),
     app: manifest.app,
     userAgentReads: scans.flatMap(scan => scan.userAgentReads),
     browserApis: scans.flatMap(scan => scan.browserApis),
@@ -120,8 +124,10 @@ export function evaluateF007({ source, browserslistFiles, apiList }: F007Input):
     apiList: list
       ? { loaded: true, retrievedAt: list.retrievedAt, removedApiCount: list.removedFromChrome.length }
       : { loaded: false, removedApiCount: 0, problem: listProblem },
+    runtime,
     parseErrorFiles,
     sourceDiagnostics: [...source.diagnostics, ...browserslistFiles.diagnostics],
+    agentBrowseScope: '',
     checklist: { items: [] }
   };
   if (!presence.rendersUi) {
@@ -131,9 +137,14 @@ export function evaluateF007({ source, browserslistFiles, apiList }: F007Input):
   return {
     ...analysis,
     summary: summaryText(analysis, incomplete),
-    agentReviewUnavailableReason: AGENT_REVIEW_NOT_RUN,
+    agentBrowseScope: [FRONTEND_BROWSE_SCOPE, ...f007BrowsePaths(analysis)].join(', '),
     checklist: frontendChecklist(EvaluationStatus.MANUAL, checklistItems(analysis, manifest.appStartingPoints))
   };
+}
+
+/** The browserslist files the agent may read besides the shared F00x scope. */
+export function f007BrowsePaths(analysis: F007Analysis): string[] {
+  return analysis.browserslist.map(override => override.path).filter(file => file !== 'package.json');
 }
 
 function summaryText(analysis: F007Analysis, incomplete: boolean): string {
@@ -146,16 +157,62 @@ function summaryText(analysis: F007Analysis, incomplete: boolean): string {
   ];
   return `F007 manual: Whether the module works in the latest Chrome must be checked in the browser. The tool found ${findings.join('; ')}.`
     + (analysis.apiList.loaded ? '' : ' The pinned browser API list could not be read, so browser-specific APIs and polyfills were not checked.')
+    + runtimeSummary(analysis.runtime)
     + (incomplete ? ' Not all source files could be read.' : '');
 }
 
+function runtimeSummary(runtime: UiRuntimeEvidence): string {
+  if (!runtimeCollected(runtime)) return '';
+  const pages = runtime.pages.filter(page => page.axe);
+  const loaded = pages.map(page => reportText(page.path));
+  const errors = consoleErrorCount(pages);
+  const failed = failedRequestCount(pages);
+  return ` On the running UI (${reportText(runtime.uiOrigin ?? '')}), Chrome ${reportText(runtime.browserVersion ?? 'of an unknown version')} loaded `
+    + `${loaded.length > 1 ? `${loaded.slice(0, -1).join(', ')} and ${loaded[loaded.length - 1]}` : loaded[0]}: `
+    + `${errors ? count(errors, 'console error') : 'no console errors'}, ${failed ? count(failed, 'failed request') : 'no failed requests'}.`;
+}
+
+function pageCounts(page: UiRuntimePage): string {
+  return `${count(consoleErrorCount([page]), 'console error')}, ${count(failedRequestCount([page]), 'failed request')}`;
+}
+
+function consoleErrorSubjects(runtime: UiRuntimeEvidence): Array<{ subject: string }> {
+  const pagesByMessage = new Map<string, string[]>();
+  for (const page of runtime.pages) {
+    for (const message of page.consoleErrors) {
+      const key = message.replace(/\s+/g, ' ').trim();
+      const pages = pagesByMessage.get(key) ?? [];
+      if (!pages.includes(page.path)) pages.push(page.path);
+      pagesByMessage.set(key, pages);
+    }
+  }
+  return [...pagesByMessage].map(([message, pages]) => ({ subject: `${pages.join(', ')}: ${message}` }));
+}
+
+function shareObligationLimit(items: ReturnType<typeof numberObligations>): ReturnType<typeof numberObligations> {
+  const [consoleItem, codeItem] = items;
+  const consoleGiven = Math.min(consoleItem.obligations.length,
+    Math.max(Math.ceil(FRONTEND_AGENT_OBLIGATION_LIMIT / 2), FRONTEND_AGENT_OBLIGATION_LIMIT - codeItem.obligations.length));
+  const given = [consoleGiven, FRONTEND_AGENT_OBLIGATION_LIMIT - consoleGiven];
+  items.forEach((item, index) => item.obligations.forEach((obligation, position) => {
+    if (position < given[index]) delete obligation.withheld;
+    else obligation.withheld = true;
+  }));
+  return items;
+}
+
 function checklistItems(analysis: F007Analysis, appStartingPoints: AppStartingPoint[]): ReturnType<typeof numberObligations> {
-  return numberObligations([
+  const runtime = analysis.runtime;
+  const signals = signalRows(analysis);
+  return shareObligationLimit(numberObligations([
     { id: 'F007-C1', title: 'The module\'s main screens load in the latest Chrome without console errors caused by the module.',
-      startingPoints: appStartingPoints, reviewerOnly: false, obligations: [], subjects: [] },
+      startingPoints: [...appStartingPoints, ...runtime.pages.map(page => ({ path: page.path,
+        note: page.problem ? `not loaded on the running UI: ${page.problem}` : `on the running UI: ${pageCounts(page)}` }))],
+      reviewerOnly: false, obligations: [], subjects: consoleErrorSubjects(runtime) },
     { id: 'F007-C2', title: 'No code path depends on another browser or a removed Chrome API.',
-      startingPoints: signalRows(analysis), reviewerOnly: false, obligations: [], subjects: [] }
-  ]);
+      startingPoints: signals.map(({ name: _name, ...row }) => row), reviewerOnly: false, obligations: [],
+      subjects: signals.map(row => ({ subject: `${row.path}${row.line ? `:${row.line}` : ''} ${row.name}`, path: row.path, ...(row.line ? { line: row.line } : {}) })) }
+  ]));
 }
 
 interface SignalRow {
@@ -164,12 +221,12 @@ interface SignalRow {
   note: string;
 }
 
-function signalRows(analysis: F007Analysis): SignalRow[] {
+function signalRows(analysis: F007Analysis): Array<SignalRow & { name: string }> {
   return [
-    ...analysis.userAgentReads.map(read => ({ path: read.path, line: read.line, note: `navigator.${read.property} identifies the browser` })),
-    ...analysis.browserApis.map(api => ({ path: api.path, line: api.line, note: `${api.name}${api.featureDetected ? ', feature-detected' : ''}; ${api.note}` })),
-    ...analysis.browserslist.map(override => ({ path: override.path, ...(override.line ? { line: override.line } : {}), note: `browserslist ${override.queries}` })),
-    ...analysis.polyfills.map(polyfill => ({ path: polyfill.path, line: polyfill.line,
+    ...analysis.userAgentReads.map(read => ({ path: read.path, line: read.line, name: `navigator.${read.property}`, note: `navigator.${read.property} identifies the browser` })),
+    ...analysis.browserApis.map(api => ({ path: api.path, line: api.line, name: api.name, note: `${api.name}${api.featureDetected ? ', feature-detected' : ''}; ${api.note}` })),
+    ...analysis.browserslist.map(override => ({ path: override.path, ...(override.line ? { line: override.line } : {}), name: 'browserslist', note: `browserslist ${override.queries}` })),
+    ...analysis.polyfills.map(polyfill => ({ path: polyfill.path, line: polyfill.line, name: polyfill.name,
       note: `${polyfill.via === 'dependency' ? 'polyfill package' : 'polyfill import'} ${polyfill.name}` }))
   ];
 }
@@ -449,6 +506,7 @@ type AppStartingPoint = { path: string; line: number; note: string };
 
 interface PackageManifest {
   parseError: boolean;
+  version?: string;
   app: F007Analysis['app'];
   appStartingPoints: AppStartingPoint[];
   browserslist: F007BrowserslistOverride[];
@@ -471,6 +529,8 @@ function readPackageManifest(json: ts.JsonSourceFile, manifest: PackageManifest)
   const root = json.statements[0]?.expression;
   if (!root || !ts.isObjectLiteralExpression(root)) return { ...manifest, parseError: true };
   const at = (node: ts.Node) => lineOf(json, node.getStart(json));
+  const version = jsonProperty(root, 'version')?.initializer;
+  if (version && ts.isStringLiteral(version)) manifest.version = version.text;
   const browserslist = jsonProperty(root, 'browserslist');
   if (browserslist) manifest.browserslist.push({ path: 'package.json', line: at(browserslist), queries: jsonQueries(browserslist.initializer, json) });
   for (const field of SHIPPED_DEPENDENCY_FIELDS) {
@@ -525,7 +585,7 @@ function shortened(queries: string): string {
   return queries.length > WRITTEN_QUERIES_LIMIT ? `${queries.slice(0, WRITTEN_QUERIES_LIMIT - 3)}...` : queries || '(empty)';
 }
 
-export function renderF007HumanDetails(analysis: F007Analysis): string {
+export function renderF007HumanDetails(analysis: F007Analysis, agentReview?: CriterionAgentReviewResult): string {
   if (analysis.status === EvaluationStatus.NOT_APPLICABLE) {
     return [
       'What the tool found:',
@@ -563,13 +623,18 @@ export function renderF007HumanDetails(analysis: F007Analysis): string {
     `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root (tests, stories and examples excluded); `
       + `${count(analysis.uiFileCount, 'file')} ${analysis.uiFileCount === 1 ? 'renders' : 'render'} HTML elements or text`,
     `  - Browser API list: ${list.loaded ? `config/f007-browser-apis.json, retrieved ${list.retrievedAt}, ${count(list.removedApiCount, 'removed API')}`
-      : reportText(list.problem ?? 'not loaded')}`
+      : reportText(list.problem ?? 'not loaded')}`,
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    ...runtimeEvidenceLines(analysis.runtime, analysis.packageVersion, {
+      notConfigured: '--ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
+      pageResult: page => `${pageCounts(page)}${page.source === 'about' ? '; read for the deployed version' : ''}`
+    })
   ];
   const unread = [...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(file => `  - ${reportPath(file)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
   lines.push('What to do:', '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; '
     + 'F007 is always decided by a reviewer.');
-  lines.push(...frontendReviewLines(analysis.checklist, undefined, analysis.agentReviewUnavailableReason));
+  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

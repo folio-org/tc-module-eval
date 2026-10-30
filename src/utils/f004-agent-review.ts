@@ -1,11 +1,12 @@
 import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, F004Analysis } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
-import { f004BrowsePaths, F004Input, runtimeCollected } from './f004-accessibility';
+import { f004BrowsePaths, F004Input } from './f004-accessibility';
 import { F006Guidelines } from './f006-ui-patterns';
 import { boundedSummary, buildFrontendAgentReviewRequest, frontendBrowseInclude, givenObligations } from './frontend-agent-review';
 import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
 import { AXE_TAGS } from './ui-runtime-probe';
+import { runtimeCollected } from './ui-runtime-report';
 
 export const F004_AXE_RESULTS_PATH = '.criterion-agent/F004/axe-results.json';
 const GUIDES_DIRECTORY = '.criterion-agent/F004/accessibility-guides';

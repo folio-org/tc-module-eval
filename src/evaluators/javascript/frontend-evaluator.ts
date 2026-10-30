@@ -8,10 +8,11 @@ import { analyzeF002, renderF002HumanDetails } from '../../utils/f002-e2e-tests'
 import { hasF003AgentReviewMaterial, reviewF003WithAgent } from '../../utils/f003-agent-review';
 import { evaluateF003, renderF003HumanDetails } from '../../utils/f003-internationalization';
 import { hasF004AgentReviewMaterial, reviewF004WithAgent } from '../../utils/f004-agent-review';
-import { evaluateF004, F004_GUIDES_DIRECTORY, F004Input, f004NotRunReason, readF004Files, renderF004HumanDetails } from '../../utils/f004-accessibility';
+import { evaluateF004, F004_GUIDES_DIRECTORY, F004Input, readF004Files, renderF004HumanDetails } from '../../utils/f004-accessibility';
 import { evaluateF005, renderF005HumanDetails } from '../../utils/f005-stripes-version';
 import { hasF006AgentReviewMaterial, reviewF006WithAgent } from '../../utils/f006-agent-review';
 import { evaluateF006, F006Input, loadF006Guidelines, readF006Css, renderF006HumanDetails } from '../../utils/f006-ui-patterns';
+import { hasF007AgentReviewMaterial, reviewF007WithAgent } from '../../utils/f007-agent-review';
 import { evaluateF007, F007Input, loadF007BrowserApis, readF007Browserslist, renderF007HumanDetails } from '../../utils/f007-latest-chrome';
 import { frontendUiPresence, getFrontendSource } from '../../utils/frontend-source';
 import { getModuleKind } from '../../utils/module-kind';
@@ -20,6 +21,7 @@ import { collectFrontend } from '../../utils/s008-interface-declarations';
 import { errorMessage } from '../../utils/type-guards';
 import { getUiRequestSites } from '../../utils/ui-request-sites';
 import { getUiRuntimeEvidence, NO_RUNTIME_EVIDENCE } from '../../utils/ui-runtime-probe';
+import { runtimeNotRunReason } from '../../utils/ui-runtime-report';
 
 /**
  * Evaluator for Frontend criteria (F001-F007), each with automated logic.
@@ -126,7 +128,7 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       criterionId: 'F004',
       status: analysis.status,
       hasReviewMaterial: hasF004AgentReviewMaterial(analysis),
-      notRunReason: f004NotRunReason(analysis),
+      notRunReason: runtimeNotRunReason('F004', analysis.runtime),
       evaluationRun: run,
       review: (config, commandRunner) => reviewF004WithAgent(repoPath, analysis, guides, config, commandRunner)
     });
@@ -191,13 +193,24 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
     } catch (error) {
       apiList = { problem: `the browser API list could not be read: ${errorMessage(error)}` };
     }
-    const analysis = evaluateF007({ source, browserslistFiles, apiList });
+    const runtime = frontendUiPresence(source).rendersUi ? await getUiRuntimeEvidence(run, source) : { ...NO_RUNTIME_EVIDENCE };
+    const analysis = evaluateF007({ source, browserslistFiles, apiList, runtime });
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'F007',
+      status: analysis.status,
+      hasReviewMaterial: hasF007AgentReviewMaterial(analysis),
+      notRunReason: runtimeNotRunReason('F007', analysis.runtime),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewF007WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
     return {
       criterionId: 'F007',
       status: analysis.status,
       evidence: analysis.summary,
-      details: renderF007HumanDetails(analysis),
-      criterionDetails: analysis
+      details: renderF007HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 }

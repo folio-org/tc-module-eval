@@ -8,6 +8,7 @@ import { CriterionAgentReviewConfig, CriterionResult, EvaluationStatus, F007Anal
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { evaluateF007, loadF007BrowserApis, renderF007HumanDetails } from '../utils/f007-latest-chrome';
 import { FrontendSource } from '../utils/frontend-source';
+import { NO_RUNTIME_EVIDENCE } from '../utils/ui-runtime-probe';
 import { expectLinearTime } from './helpers/linear-time';
 
 describe('F007 works in the latest Chrome', () => {
@@ -178,6 +179,8 @@ describe('F007 works in the latest Chrome', () => {
       '    - src/setup.js:1 — whatwg-fetch (import)',
       '  - Production source: 3 files in src/, lib/ and the repository root (tests, stories and examples excluded); 1 file renders HTML elements or text',
       '  - Browser API list: config/f007-browser-apis.json, retrieved 2026-10-30, 13 removed APIs',
+      'Runtime evidence:',
+      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'What to do:',
       '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; F007 is always decided by a reviewer.',
       'Checklist for the reviewer:',
@@ -210,12 +213,17 @@ describe('F007 works in the latest Chrome', () => {
       '      - src/Legacy.js:12 — unload; the unload event; removed in Chrome 155 (no longer fires by default)',
       '      - ... 10 more',
       'Agent review:',
-      '  - Not applied: F007 agent review needs runtime evidence from a running FOLIO instance, and the evaluator collects none'
+      '  - Not applied: F007 agent review needs runtime evidence from a running FOLIO UI (--ui-runtime-url and --ui-runtime-login-origin), and none was given'
     ].join('\n'));
-    expect(analysis.checklist.items.map(item => [item.id, item.reviewerOnly, item.startingPoints.length, item.obligations])).toEqual([
-      ['F007-C1', false, 3, [{ id: 'F007-C1#1' }]],
-      ['F007-C2', false, 30, [{ id: 'F007-C2#1' }]]
+    const obligations = analysis.checklist.items.flatMap(item => item.obligations);
+    expect(analysis.checklist.items.map(item => [item.id, item.reviewerOnly, item.startingPoints.length, item.obligations.length])).toEqual([
+      ['F007-C1', false, 3, 1],
+      ['F007-C2', false, 30, 30]
     ]);
+    expect(obligations.slice(0, 2)).toEqual([{ id: 'F007-C1#1' },
+      { id: 'F007-C2#1', subject: 'src/Browser.js:5 navigator.userAgent', path: 'src/Browser.js', line: 5 }]);
+    expect(obligations.filter(obligation => obligation.withheld).map(obligation => obligation.subject ?? obligation.id)).toEqual(['.browserslistrc browserslist',
+      'package.json:16 core-js', 'package.json:17 resize-observer-polyfill', 'src/Browser.js:2 core-js/stable', 'src/Browser.js:3 ./polyfills/closest', 'src/setup.js:1 whatwg-fetch']);
   });
 
   it('gives the runtime evidence reason, not "no candidate evidence", when agent review is enabled for F007', async () => {
@@ -246,7 +254,7 @@ describe('F007 works in the latest Chrome', () => {
       '      - package.json:1 — route /example',
       '  - F007-C2 No code path depends on another browser or a removed Chrome API.',
       'Agent review:',
-      '  - Not applied: F007 agent review needs runtime evidence from a running FOLIO instance, and the evaluator collects none'
+      '  - Not applied: F007 agent review needs runtime evidence from a running FOLIO UI (--ui-runtime-url and --ui-runtime-login-origin), and none was given'
     ]);
   });
 
@@ -325,7 +333,8 @@ describe('F007 works in the latest Chrome', () => {
     const analysis = evaluateF007({
       source: sourceOf({ 'src/Page.js': 'export default () => <p>{navigator.userAgent}</p>;\n' }, '{ "browserslist": "defaults" }'),
       browserslistFiles: { revision: 'HEAD', files: [], diagnostics: [], complete: true },
-      apiList: { problem: 'the browser API list could not be read: missing' }
+      apiList: { problem: 'the browser API list could not be read: missing' },
+      runtime: { ...NO_RUNTIME_EVIDENCE }
     });
 
     expect(analysis.status).toBe(EvaluationStatus.MANUAL);
@@ -339,15 +348,15 @@ describe('F007 works in the latest Chrome', () => {
       '    - package.json:1 — defaults',
       '  - Production source: 1 file in src/, lib/ and the repository root (tests, stories and examples excluded); 1 file renders HTML elements or text',
       '  - Browser API list: the browser API list could not be read: missing',
+      'Runtime evidence:',
+      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'What to do:',
       '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; F007 is always decided by a reviewer.',
       'Checklist for the reviewer:',
       '  - F007-C1 The module\'s main screens load in the latest Chrome without console errors caused by the module.',
       '  - F007-C2 No code path depends on another browser or a removed Chrome API.',
       '    - Start with:',
-      '      - package.json:1 — browserslist defaults',
-      'Agent review:',
-      '  - Not applied: F007 agent review needs runtime evidence from a running FOLIO instance, and the evaluator collects none'
+      '      - package.json:1 — browserslist defaults'
     ].join('\n'));
   });
 
@@ -371,7 +380,8 @@ describe('F007 works in the latest Chrome', () => {
     const run = (input: { source: FrontendSource; browserslist: string }) => Promise.resolve(evaluateF007({
       source: input.source,
       browserslistFiles: { revision: 'HEAD', files: [{ path: '.browserslistrc', oid: '', size: input.browserslist.length, content: input.browserslist }], diagnostics: [], complete: true },
-      apiList: list
+      apiList: list,
+      runtime: { ...NO_RUNTIME_EVIDENCE }
     }));
     // Nesting the parser can still read: parentheses, negations and && chains around feature tests.
     const nested = (size: number) => [
