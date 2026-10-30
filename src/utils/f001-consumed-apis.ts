@@ -86,7 +86,7 @@ export function compilePatterns(index: F001HandlerIndex): F001Pattern[] {
 }
 
 // Okapi path patterns: `{name}` is one segment, `*` any text including slashes.
-function compilePattern(interfaceId: string, pathPattern: string, methods: string[]): F001Pattern {
+export function compilePattern(interfaceId: string, pathPattern: string, methods: string[]): F001Pattern {
   const segments = pathPattern.replace(/^\//, '').split('/');
   const segmentRegex = (segment: string, loose: boolean) => {
     const exact = segment.split(/(\{[^}]*\}|\*)/).map(piece => piece === '*' ? '.*' : isParam(piece) ? '[^/]+' : escapeRegExp(piece)).join('');

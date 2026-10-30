@@ -181,11 +181,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B002',
     description: 'API interface requirements in module descriptor',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Database design and schema management'
-    }
+    languages: ['java']
   },
   {
     id: 'B003',
