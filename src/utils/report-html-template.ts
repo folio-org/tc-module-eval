@@ -32,6 +32,7 @@ const CRITERION_TITLES: Record<string, string> = {
   F006: 'UI layouts and patterns',
   F007: 'Works in the latest Chrome',
   B001: 'Module descriptor template',
+  B002: 'Consumed interfaces declared',
   B003: 'Endpoint implementations',
   B004: 'Environment variables',
   B005: 'Interface naming',

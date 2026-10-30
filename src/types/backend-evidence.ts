@@ -2,6 +2,7 @@ import type { EvaluationStatus, ModuleKindResult } from './index';
 import type { S007PolicyDiagnostic, S007RuleStrength } from './s007-officially-supported-technologies';
 import type { FrontendChecklist } from './frontend-checklist';
 import type { CommittedSourceDiagnostic, CommittedSourceSnapshot } from '../utils/committed-source';
+import type { F001Analysis, F001SiteOutcome } from './f001-consumed-apis';
 
 /**
  * What the B criteria evaluate the repository as:
@@ -742,4 +743,91 @@ export interface B004Analysis {
   checklist: FrontendChecklist;
   /** Why the agent review was not applied, when agent review is enabled. */
   agentReviewUnavailableReason?: string;
+}
+
+/**
+ * How B002 found an outbound request:
+ * - `spring-client`: a method of a Spring HTTP interface client (`@HttpExchange`, or `@FeignClient` with mapping
+ *   annotations), its path joined to the type's;
+ * - `code`: a path built in Java or Groovy code, from string literals and string constants.
+ */
+export type BackendRequestSiteKind = 'spring-client' | 'code';
+
+/**
+ * A place in production code that sends a request to the FOLIO backend. `requestPath` is the path without query
+ * string or leading slash, where every segment the code fills in at run time is `{}`. Without `requestPath`, the path
+ * could not be read and `unresolved` says why.
+ */
+export interface BackendRequestSite {
+  path: string;
+  line: number;
+  kind: BackendRequestSiteKind;
+  /** The HTTP method, for a Spring client method. */
+  method?: string;
+  /** The path expression as written, on one line. */
+  expression: string;
+  requestPath?: string;
+  /** The code appends something unknown to the last segment, such as a query string. */
+  openEnd?: boolean;
+  unresolved?: string;
+}
+
+/** What a request site maps to in the F001 handler index, as for F001. */
+export interface B002MappedSite extends BackendRequestSite {
+  outcome: F001SiteOutcome;
+  /** The interface for `interface`; the candidates for `ambiguous` and `dynamic`. */
+  interfaces: string[];
+  /** The handler pattern that matched, for `interface`. */
+  pathPattern?: string;
+}
+
+export interface B002InterfaceUse {
+  id: string;
+  sites: B002MappedSite[];
+}
+
+/**
+ * What B002 decided from:
+ * - `library`, `no-descriptor`: the repository kind, or a descriptor template B001 could not read;
+ * - `requests-checked`: each request site mapped to an interface and looked up in requires and optional.
+ */
+export type B002Basis = 'library' | 'no-descriptor' | 'requests-checked';
+
+export interface B002Analysis {
+  criterionId: 'B002';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B002Basis;
+  kind: BackendRepositoryKind;
+  templatePath?: string;
+  index: F001Analysis['index'];
+  /** Interface ids in the template's requires and optional. */
+  declared: { required: string[]; optional: string[] };
+  /** JSON pointers of requires or optional entries whose interface id is not known: not an object, no string id, or an undefined build placeholder. */
+  unreadDeclarations: string[];
+  /**
+   * S008's declared interfaces, which S008 reads from the generated descriptor when S002 built one, and the ids found
+   * in only one of the two sets; information only.
+   */
+  s008?: { sourcePaths: string[]; onlyInS008: string[]; onlyInTemplate: string[]; unusableEntryCount: number };
+  /** Production Java and Groovy files read for requests. */
+  productionFileCount: number;
+  /** Requests counted: every request site except those to Okapi's own `_/` endpoints and to the module's own paths. */
+  siteCount: number;
+  gatewaySiteCount: number;
+  /** Requests to paths the module's own descriptor handlers or routes serve. */
+  ownSiteCount: number;
+  undeclared: B002InterfaceUse[];
+  declaredAndUsed: B002InterfaceUse[];
+  /** Declared interfaces no request site maps to; information only. */
+  declaredNotSeen: string[];
+  unresolvedSites: B002MappedSite[];
+  notInIndexSites: B002MappedSite[];
+  /** Dependencies on FOLIO libraries that send requests of their own, out of the tool's sight. */
+  libraries: Array<{ artifactId: string; path: string }>;
+  /** Kotlin source under src/main, which the tool does not read. */
+  kotlinFiles: string[];
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  agentReviewUnavailableReason?: string;
+  checklist: FrontendChecklist;
 }

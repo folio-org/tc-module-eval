@@ -42,7 +42,7 @@ export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Anal
     discoveredKinds: ['interface'],
     browseInclude: frontendBrowseInclude(),
     browseScope: analysis.agentBrowseScope,
-    extraFiles: [{ name: 'handler-patterns.json', content: handlerPatterns(analysis, patterns) }],
+    extraFiles: [{ name: 'handler-patterns.json', content: handlerPatterns(analysis.index.descriptorVersion, [...analysis.unresolvedSites, ...analysis.notInIndexSites], patterns) }],
     criterionInstructions: [
       `package.json declares ${declared.size ? [...declared].sort().join(', ') : 'no interfaces'}. An interface is declared when it is a key of stripes.okapiInterfaces or stripes.optionalOkapiInterfaces; the version does not matter here.`,
       'handler-patterns.json lists, for the first path segment of each request in checklist.json, the interfaces of the platform release that serve paths starting with it, with their path patterns ({name} is one segment, * any text).',
@@ -76,15 +76,18 @@ export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Anal
   });
 }
 
-function handlerPatterns(analysis: F001Analysis, patterns: F001Pattern[]): string {
-  const sites = [...analysis.unresolvedSites, ...analysis.notInIndexSites];
+/**
+ * `handler-patterns.json`: for the first path segment of each request, the platform's interfaces and patterns that
+ * start with it, cut to 48 KB.
+ */
+export function handlerPatterns(platform: string | undefined, sites: Array<{ requestPath?: string; openEnd?: boolean }>, patterns: F001Pattern[]): string {
   const segments = [...new Set(sites.map(site => site.requestPath?.split('/')[0]).filter((segment): segment is string => !!segment && segment !== '{}'))].sort();
   // `patron-block${query}` may continue its only segment: patron-block-limits and patron-block-conditions both start with it.
   const openSegments = new Set(sites.filter(site => site.openEnd && !site.requestPath!.includes('/')).map(site => site.requestPath!));
   const bySegment = segments.map(segment => [segment, patterns.filter(pattern => openSegments.has(segment)
     ? pattern.pathPattern.startsWith(`/${segment}`) : pattern.pathPattern.split('/')[1] === segment)] as const);
   const render = (maxPerSegment: number) => JSON.stringify({
-    platform: analysis.index.descriptorVersion,
+    platform,
     bySegment: Object.fromEntries(bySegment.map(([segment, matching]) => [segment, {
       patterns: matching.slice(0, maxPerSegment).map(pattern => ({ interface: pattern.interfaceId, methods: pattern.methods, pathPattern: pattern.pathPattern })),
       ...(matching.length > maxPerSegment ? { omitted: matching.length - maxPerSegment } : {})

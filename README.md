@@ -184,6 +184,18 @@ reviewer. `--existing-module` marks the evaluation of an existing module rather 
 B criteria relax some new-module rules for it. See
 [Criterion Notes](docs/criterion-notes.md#b001-module-descriptor-template).
 
+### B002 Consumed Interfaces Declared
+
+B002 checks that every interface a backend or edge module calls is declared in the module descriptor
+template's `requires` or `optional`. It reads the outbound requests in the committed production source
+(Spring `@HttpExchange` and Feign clients, and paths built in Java or Groovy code from string literals,
+constants and the Okapi URL) and maps them to interfaces through the same offline handler index as F001.
+An undeclared interface is left to the reviewer, not failed, because the call may never run; so are
+requests the tool cannot map, paths not in the index, Kotlin source and FOLIO libraries that send requests
+of their own. Requests to the module's own descriptor paths do not count, and shared libraries are not
+applicable. See
+[Criterion Notes](docs/criterion-notes.md#b002-consumed-interfaces-declared).
+
 ### B003 Endpoint Implementations
 
 B003 checks that every endpoint in the module descriptor has an implementation. For RMB and Spring

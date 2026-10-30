@@ -2212,8 +2212,416 @@
     {
       "criterionId": "B002",
       "status": "manual",
-      "evidence": "Database design and schema management - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B002 manual: The module sends requests to 1 interface its descriptor declares in neither requires nor optional: search-facets (GET /search/instances/facets at src/main/java/org/folio/rtaccache/client/SearchClient.java:15). Also, the module uses folio-spring-system-user, which sends requests of its own the tool does not see. This is not a fail: a reviewer must check that each request is made, and if so declare its interface.",
+      "details": "What the tool found:\n  - Requests: 17 requests in production code (Spring HTTP clients 17, paths in code 0); 17 mapped to an interface\n  - Declared interfaces: 14 in requires and 2 in optional of descriptors/ModuleDescriptor-template.json\n  - Declared and used: bound-with-parts-storage, circulation, consortia, consortium-search, holdings-note-types, holdings-storage, instance-storage, item-storage, loan-storage, loan-types, location-units, locations, material-types, orders-storage.pieces, settings, user-tenants\n  - Handler index: interface paths of R1-2026.27 (platform-lsp 0a70fd2), 413 interfaces\n  - Production source: 77 Java or Groovy files under src/main and grails-app\nUsed but not declared:\n  - search-facets:\n    - src/main/java/org/folio/rtaccache/client/SearchClient.java:15 — requests GET /search/instances/facets\nWhat to do:\n  - Add each interface under \"Used but not declared\" to requires, or to optional when the module works without it, unless the code that sends the request never runs.\nChecklist for the reviewer:\n  - B002-C1 Each interface under \"Used but not declared\" is called from code that runs, and is declared in requires, or in optional when the module works without it.\n    - Start with:\n      - src/main/java/org/folio/rtaccache/client/SearchClient.java:15 — search-facets: GET /search/instances/facets\n  - B002-C3 Requests made through FOLIO libraries go to interfaces the descriptor declares.\n    - Start with:\n      - pom.xml — folio-spring-system-user sends requests of its own\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B002",
+        "kind": "backend-module",
+        "index": {
+          "loaded": true,
+          "descriptorVersion": "R1-2026.27",
+          "platformCommit": "0a70fd26e87f5e8cfb3e6b2bbff07c9610865ec5",
+          "interfaceCount": 413
+        },
+        "declared": {
+          "required": [
+            "bound-with-parts-storage",
+            "circulation",
+            "holdings-note-types",
+            "holdings-storage",
+            "instance-storage",
+            "item-storage",
+            "loan-storage",
+            "loan-types",
+            "location-units",
+            "locations",
+            "material-types",
+            "orders-storage.pieces",
+            "settings",
+            "user-tenants"
+          ],
+          "optional": [
+            "consortia",
+            "consortium-search"
+          ]
+        },
+        "unreadDeclarations": [],
+        "productionFileCount": 77,
+        "siteCount": 17,
+        "gatewaySiteCount": 0,
+        "ownSiteCount": 0,
+        "undeclared": [
+          {
+            "id": "search-facets",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"search/instances/facets\")",
+                "requestPath": "search/instances/facets",
+                "line": 15,
+                "outcome": "interface",
+                "interfaces": [
+                  "search-facets"
+                ],
+                "pathPattern": "/search/{recordType}/facets"
+              }
+            ]
+          }
+        ],
+        "declaredAndUsed": [
+          {
+            "id": "bound-with-parts-storage",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"inventory-storage/bound-with-parts\")",
+                "requestPath": "inventory-storage/bound-with-parts",
+                "line": 32,
+                "outcome": "interface",
+                "interfaces": [
+                  "bound-with-parts-storage"
+                ],
+                "pathPattern": "/inventory-storage/bound-with-parts"
+              }
+            ]
+          },
+          {
+            "id": "circulation",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/CirculationClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"circulation/requests\")",
+                "requestPath": "circulation/requests",
+                "line": 16,
+                "outcome": "interface",
+                "interfaces": [
+                  "circulation"
+                ],
+                "pathPattern": "/circulation/requests"
+              }
+            ]
+          },
+          {
+            "id": "consortia",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/ConsortiaClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"consortia/{consortiaId}/tenants\")",
+                "requestPath": "consortia/{}/tenants",
+                "line": 12,
+                "outcome": "interface",
+                "interfaces": [
+                  "consortia"
+                ],
+                "pathPattern": "/consortia/{consortiumId}/tenants"
+              }
+            ]
+          },
+          {
+            "id": "consortium-search",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+                "kind": "spring-client",
+                "method": "POST",
+                "expression": "@PostExchange(\"search/consortium/batch/holdings\")",
+                "requestPath": "search/consortium/batch/holdings",
+                "line": 18,
+                "outcome": "interface",
+                "interfaces": [
+                  "consortium-search"
+                ],
+                "pathPattern": "/search/consortium/batch/holdings"
+              }
+            ]
+          },
+          {
+            "id": "holdings-note-types",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"holdings-note-types\")",
+                "requestPath": "holdings-note-types",
+                "line": 41,
+                "outcome": "interface",
+                "interfaces": [
+                  "holdings-note-types"
+                ],
+                "pathPattern": "/holdings-note-types"
+              }
+            ]
+          },
+          {
+            "id": "holdings-storage",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "POST",
+                "expression": "@PostExchange(\"holdings-storage/holdings/retrieve\")",
+                "requestPath": "holdings-storage/holdings/retrieve",
+                "line": 26,
+                "outcome": "interface",
+                "interfaces": [
+                  "holdings-storage"
+                ],
+                "pathPattern": "/holdings-storage/holdings/retrieve"
+              }
+            ]
+          },
+          {
+            "id": "instance-storage",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"instance-storage/instances\")",
+                "requestPath": "instance-storage/instances",
+                "line": 23,
+                "outcome": "interface",
+                "interfaces": [
+                  "instance-storage"
+                ],
+                "pathPattern": "/instance-storage/instances"
+              }
+            ]
+          },
+          {
+            "id": "item-storage",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "POST",
+                "expression": "@PostExchange(\"item-storage/items/retrieve\")",
+                "requestPath": "item-storage/items/retrieve",
+                "line": 29,
+                "outcome": "interface",
+                "interfaces": [
+                  "item-storage"
+                ],
+                "pathPattern": "/item-storage/items/retrieve"
+              }
+            ]
+          },
+          {
+            "id": "loan-storage",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/CirculationClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"loan-storage/loans\")",
+                "requestPath": "loan-storage/loans",
+                "line": 13,
+                "outcome": "interface",
+                "interfaces": [
+                  "loan-storage"
+                ],
+                "pathPattern": "/loan-storage/loans"
+              }
+            ]
+          },
+          {
+            "id": "loan-types",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"loan-types\")",
+                "requestPath": "loan-types",
+                "line": 44,
+                "outcome": "interface",
+                "interfaces": [
+                  "loan-types"
+                ],
+                "pathPattern": "/loan-types"
+              }
+            ]
+          },
+          {
+            "id": "location-units",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"location-units/libraries\")",
+                "requestPath": "location-units/libraries",
+                "line": 38,
+                "outcome": "interface",
+                "interfaces": [
+                  "location-units"
+                ],
+                "pathPattern": "/location-units/libraries"
+              }
+            ]
+          },
+          {
+            "id": "locations",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"locations\")",
+                "requestPath": "locations",
+                "line": 35,
+                "outcome": "interface",
+                "interfaces": [
+                  "locations"
+                ],
+                "pathPattern": "/locations"
+              }
+            ]
+          },
+          {
+            "id": "material-types",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/InventoryClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"material-types\")",
+                "requestPath": "material-types",
+                "line": 47,
+                "outcome": "interface",
+                "interfaces": [
+                  "material-types"
+                ],
+                "pathPattern": "/material-types"
+              }
+            ]
+          },
+          {
+            "id": "orders-storage.pieces",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/OrdersClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"orders-storage/pieces\")",
+                "requestPath": "orders-storage/pieces",
+                "line": 12,
+                "outcome": "interface",
+                "interfaces": [
+                  "orders-storage.pieces"
+                ],
+                "pathPattern": "/orders-storage/pieces"
+              }
+            ]
+          },
+          {
+            "id": "settings",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/SettingsClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"settings/entries\")",
+                "requestPath": "settings/entries",
+                "line": 12,
+                "outcome": "interface",
+                "interfaces": [
+                  "settings"
+                ],
+                "pathPattern": "/settings/entries"
+              }
+            ]
+          },
+          {
+            "id": "user-tenants",
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/client/UserClient.java",
+                "kind": "spring-client",
+                "method": "GET",
+                "expression": "@GetExchange(\"user-tenants\")",
+                "requestPath": "user-tenants",
+                "line": 10,
+                "outcome": "interface",
+                "interfaces": [
+                  "user-tenants"
+                ],
+                "pathPattern": "/user-tenants"
+              }
+            ]
+          }
+        ],
+        "declaredNotSeen": [],
+        "unresolvedSites": [],
+        "notInIndexSites": [],
+        "libraries": [
+          {
+            "artifactId": "folio-spring-system-user",
+            "path": "pom.xml"
+          }
+        ],
+        "kotlinFiles": [],
+        "sourceDiagnostics": [],
+        "templatePath": "descriptors/ModuleDescriptor-template.json",
+        "s008": {
+          "sourcePaths": [
+            "target/ModuleDescriptor.json"
+          ],
+          "onlyInS008": [],
+          "onlyInTemplate": [],
+          "unusableEntryCount": 0
+        },
+        "status": "manual",
+        "basis": "requests-checked",
+        "summary": "B002 manual: The module sends requests to 1 interface its descriptor declares in neither requires nor optional: search-facets (GET /search/instances/facets at src/main/java/org/folio/rtaccache/client/SearchClient.java:15). Also, the module uses folio-spring-system-user, which sends requests of its own the tool does not see. This is not a fail: a reviewer must check that each request is made, and if so declare its interface.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B002-C1",
+              "title": "Each interface under \"Used but not declared\" is called from code that runs, and is declared in requires, or in optional when the module works without it.",
+              "startingPoints": [
+                {
+                  "path": "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+                  "line": 15,
+                  "note": "search-facets: GET /search/instances/facets"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B002-C1#1",
+                  "subject": "interface search-facets",
+                  "path": "src/main/java/org/folio/rtaccache/client/SearchClient.java",
+                  "line": 15,
+                  "flag": "manual"
+                }
+              ]
+            },
+            {
+              "id": "B002-C3",
+              "title": "Requests made through FOLIO libraries go to interfaces the descriptor declares.",
+              "startingPoints": [
+                {
+                  "path": "pom.xml",
+                  "note": "folio-spring-system-user sends requests of its own"
+                }
+              ],
+              "reviewerOnly": true,
+              "obligations": []
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B003",
