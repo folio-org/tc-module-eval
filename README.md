@@ -141,7 +141,7 @@ configuration uses `@folio/eslint-config-stripes`, `jsx-a11y` rules disabled in 
 
 With `--ui-runtime-url` and `--ui-runtime-login-origin`, and a test account in `FOLIO_UI_USERNAME` and
 `FOLIO_UI_PASSWORD`, F004 also visits the module's pages on a running FOLIO UI and runs axe-core there; the
-agent review, when enabled, then maps each violation to the code. Point it at a test or reference
+agent review, when enabled, then maps each violation to the code. F007 uses the same visit for console errors. Point it at a test or reference
 environment, such as the Eureka snapshot, never a production system: the page text goes to the model
 provider. The probe never builds or serves the evaluated commit, so it measures the version deployed there. See
 [Runtime UI probe](docs/criterion-notes.md#runtime-ui-probe).
@@ -171,8 +171,10 @@ F007 checks that a UI package works in the latest Chrome. Only a browser can sho
 code a reviewer starts from, each with file and line: reads of navigator properties that identify the
 browser (`navigator.userAgent`, `navigator.vendor`, …), vendor-prefixed APIs and APIs Chrome has removed,
 from the pinned and sourced list in `config/f007-browser-apis.json`, a `browserslist` override and the
-polyfills the package ships. F007 has no agent review: it needs runtime evidence from a running instance,
-which the evaluator does not collect. See [Criterion Notes](docs/criterion-notes.md#f007-works-in-the-latest-chrome).
+polyfills the package ships. With the runtime UI probe (see F004), it also lists the console errors and
+failed requests of the module's pages on a running FOLIO UI and the Chrome version used, and the agent review,
+when enabled, explains each console error from the code and reviews the flagged code; without runtime evidence
+it does not run. See [Criterion Notes](docs/criterion-notes.md#f007-works-in-the-latest-chrome).
 
 ### B001 Module Descriptor Template
 
@@ -314,7 +316,7 @@ the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-thi
 
 ### Remote Lookups
 
-Evaluation is offline by default, apart from the optional runtime UI probe of F004. S011 (SonarQube findings) and S013 (test coverage) need to read
+Evaluation is offline by default, apart from the optional runtime UI probe of F004 and F007. S011 (SonarQube findings) and S013 (test coverage) need to read
 SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platform) needs to read
 `folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in. B009 (API tests) also
 reads `folio-org/folio-integration-tests` when you do:

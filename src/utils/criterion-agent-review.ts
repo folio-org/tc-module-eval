@@ -92,9 +92,9 @@ export interface OptionalCriterionAgentReviewResult {
 }
 
 /**
- * The criteria with agent review, including F007, whose report says why its review does not run yet. Enabling agent
- * review runs it for each of them, unless --criterion-agent-criteria lists others, which replaces the defaults for the
- * whole run; an `optInOnly` criterion reviews only when that list names it.
+ * The criteria with agent review. Enabling agent review runs it for each of them, unless --criterion-agent-criteria
+ * lists others, which replaces the defaults for the whole run; an `optInOnly` criterion reviews only when that list
+ * names it.
  */
 export const AGENT_REVIEW_CRITERIA: ReadonlyMap<string, { optInOnly: boolean }> = new Map([
   ...['S004', 'S005', 'S006', 'S007', 'S010', 'S011', 'F001', 'F002', 'F003', 'F004', 'F006', 'F007',

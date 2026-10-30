@@ -33,7 +33,7 @@ program
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014), and folio-org/folio-integration-tests (B009)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
-  .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
+  .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core and F007 checks for console errors; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
   .option('--ui-runtime-login-origin <origin>', 'Origin of that UI\'s login page (Keycloak); the test account is typed only into a page there')
   .option('--ui-runtime-chrome <path>', 'Chrome or Chromium executable for --ui-runtime-url (default: the installed Google Chrome)')
   .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, B005 leaves interface naming violations to the reviewer, and B004 leaves environment variable documentation gaps to the reviewer')

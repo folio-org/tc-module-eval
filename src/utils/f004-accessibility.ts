@@ -19,6 +19,7 @@ import { FrontendSource, frontendUiPresence, lineOf, RENDERS_NO_UI } from './fro
 import { count, reportPath, reportText } from './report-text';
 import { isRecord } from './type-guards';
 import { AXE_TAGS, UiRuntimeTargets, uiRuntimeTargets } from './ui-runtime-probe';
+import { runtimeCollected, runtimeEvidenceLines } from './ui-runtime-report';
 
 export const F004_GUIDES_DIRECTORY = path.resolve(__dirname, '../../config/f004-accessibility-guides');
 
@@ -106,10 +107,6 @@ export function evaluateF004({ source, files, runtime, guides }: F004Input): F00
 
 export function f004BrowsePaths(analysis: F004Analysis): string[] {
   return [...analysis.axeTests.files, ...analysis.lint.configFiles.filter(file => file !== 'package.json')];
-}
-
-export function runtimeCollected(runtime: UiRuntimeEvidence): boolean {
-  return runtime.pages.some(page => page.axe);
 }
 
 function summaryText(analysis: F004Analysis, incomplete: boolean): string {
@@ -223,12 +220,6 @@ function parseJson(text: string | undefined): Record<string, unknown> | undefine
   }
 }
 
-export function f004NotRunReason(analysis: F004Analysis): string {
-  return analysis.runtime.outcome === 'not-configured'
-    ? 'F004 agent review needs runtime evidence from a running FOLIO UI (--ui-runtime-url and --ui-runtime-login-origin), and none was given'
-    : 'F004 agent review needs runtime evidence, and the probe of the running UI collected none (see "Runtime evidence")';
-}
-
 export function renderF004HumanDetails(analysis: F004Analysis, agentReview?: CriterionAgentReviewResult): string {
   if (analysis.status === EvaluationStatus.NOT_APPLICABLE) {
     return [
@@ -268,39 +259,10 @@ export function renderF004HumanDetails(analysis: F004Analysis, agentReview?: Cri
   return lines.join('\n');
 }
 
-const SKIPPED_SOURCES: Record<string, string> = { route: 'stripes.route', home: 'stripes.home', settings: 'settings', about: 'about page' };
-
 function runtimeLines(analysis: F004Analysis): string[] {
-  const runtime = analysis.runtime;
-  if (runtime.outcome === 'not-configured') {
-    return ['Runtime evidence:', '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin measure a running FOLIO UI with axe-core'];
-  }
-  if (runtime.outcome === 'not-run') {
-    return ['Runtime evidence:', `  - Not collected: ${reportText(runtime.problem ?? 'the probe did not run')}`];
-  }
-  const consoleErrors = runtime.pages.flatMap(page => page.consoleErrors);
-  const consolePages = runtime.pages.filter(page => page.consoleErrors.length).length;
-  const consoleCut = runtime.pages.reduce((total, page) => total + page.consoleErrorsCut, 0);
-  const failed = runtime.pages.flatMap(page => page.failedRequests);
-  const failedCut = runtime.pages.reduce((total, page) => total + page.failedRequestsCut, 0);
-  const blocked = runtime.blockedRequests;
-  const deployed = runtime.deployedModule;
-  return [
-    'Runtime evidence (informational):',
-    `  - UI ${reportText(runtime.uiOrigin ?? '')}, login ${reportText(runtime.loginOrigin ?? '')}, API ${reportText(runtime.apiOrigin ?? 'not found')}; `
-      + `Chrome ${reportText(runtime.browserVersion ?? 'unknown')}, axe-core ${reportText(runtime.axeVersion ?? 'unknown')} (${AXE_TAGS.join(', ')}); `
-      + `took ${Math.round((runtime.durationMs ?? 0) / 1000)} s`,
-    `  - Deployed module: ${deployed ? `${reportText(deployed.id)} ${reportText(deployed.version)} on /settings/about` : 'version not found on /settings/about'}`
-      + `; package.json of this commit: ${reportText(analysis.packageVersion ?? 'no version')}`,
-    ...runtime.pages.map(page => `  - ${reportText(page.path)}${page.finalUrl ? ` (ended on ${reportText(page.finalUrl)})` : ''}: ${page.problem
-      ? reportText(page.problem) : page.axe ? page.axe.violations.length ? reportText(violationList(page)) : 'no violations' : 'read for the deployed version'}`),
-    ...runtime.skippedPaths.map(skipped => `  - ${reportText(skipped.path)} (${SKIPPED_SOURCES[skipped.source]}): not visited — ${reportText(skipped.reason)}`),
-    `  - Console errors: ${consoleErrors.length + consoleCut ? `${consoleErrors.length + consoleCut} on ${count(consolePages, 'page')}; first: `
-      + consoleErrors.slice(0, 3).map(message => `"${reportText(message.replace(/\s+/g, ' ').slice(0, 160))}"`).join('; ') : 'none'}`,
-    `  - Failed requests: ${failed.length + failedCut ? `${failed.length + failedCut}; first: ${failed.slice(0, 3).map(request =>
-      `${request.status ? `HTTP ${request.status}` : reportText(request.reason ?? 'failed')} ${reportText(request.method)} ${reportText(request.url.slice(0, 160))}`).join('; ')}` : 'none'}`,
-    `  - Blocked requests: ${blocked.length + runtime.blockedRequestsCut ? `${blocked.length + runtime.blockedRequestsCut}; first: ${blocked.slice(0, 3).map(request =>
-      `${reportText(request.method)} ${reportText(request.url.slice(0, 160))} (${reportText(request.reason ?? '')})`).join('; ')}` : 'none'}`,
-    ...(runtime.outcome === 'stopped' ? [`  - Stopped: ${reportText(runtime.problem ?? '')}`] : [])
-  ];
+  return runtimeEvidenceLines(analysis.runtime, analysis.packageVersion, {
+    notConfigured: '--ui-runtime-url and --ui-runtime-login-origin measure a running FOLIO UI with axe-core',
+    tools: `, axe-core ${reportText(analysis.runtime.axeVersion ?? 'unknown')} (${AXE_TAGS.join(', ')})`,
+    pageResult: page => page.axe ? page.axe.violations.length ? reportText(violationList(page)) : 'no violations' : 'read for the deployed version'
+  });
 }

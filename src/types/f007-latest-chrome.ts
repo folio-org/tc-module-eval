@@ -1,5 +1,6 @@
 import type { EvaluationStatus } from './index';
 import type { FrontendChecklist } from './frontend-checklist';
+import type { UiRuntimeEvidence } from './ui-runtime-evidence';
 import type { CommittedSourceDiagnostic } from '../utils/committed-source';
 
 /** A read of a navigator property that identifies the browser (`navigator.userAgent`), not a test that it exists. */
@@ -46,6 +47,7 @@ export interface F007Analysis {
   rendersUi: boolean;
   uiFileCount: number;
   productionFileCount: number;
+  packageVersion?: string;
   app: {
     route?: string;
     home?: string;
@@ -62,8 +64,10 @@ export interface F007Analysis {
     removedApiCount: number;
     problem?: string;
   };
+  runtime: UiRuntimeEvidence;
   parseErrorFiles: string[];
   sourceDiagnostics: CommittedSourceDiagnostic[];
+  agentBrowseScope: string;
   agentReviewUnavailableReason?: string;
   checklist: FrontendChecklist;
 }
