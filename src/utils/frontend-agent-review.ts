@@ -76,6 +76,7 @@ export interface FrontendAgentReviewOptions {
   extraFiles?: Array<{ name: string; content: string }>;
   /** The criterion's own rule for one assessment, applied after the shared ones: why to drop it, or undefined to keep it. */
   criterionRule?: (assessment: CriterionAgentAssessment) => string | undefined;
+  generatedEvidencePaths?: CriterionAgentReviewRequest['generatedEvidencePaths'];
 }
 
 /**
@@ -109,6 +110,7 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
     repositoryPath: options.repositoryPath,
     browseInclude: options.browseInclude,
     defaultTimeoutMs: FRONTEND_AGENT_TIMEOUT_MS,
+    ...(options.generatedEvidencePaths ? { generatedEvidencePaths: options.generatedEvidencePaths } : {}),
     instructions: [
       `Act as an advisory reviewer for ${options.criterionTitle}.`,
       `You may browse only: ${options.browseScope}.`,
@@ -153,7 +155,7 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
 }
 
 // Lists are cut to fewer entries until the JSON fits, rather than cutting the JSON text.
-function boundedSummary(render: (maxListEntries: number) => unknown): string {
+export function boundedSummary(render: (maxListEntries: number) => unknown): string {
   for (let entries = 1_000; entries >= 1; entries = Math.floor(entries / 2)) {
     const text = JSON.stringify(render(entries), null, 2);
     if (Buffer.byteLength(text) <= EVIDENCE_SUMMARY_BYTES) return text;

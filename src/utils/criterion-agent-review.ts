@@ -25,7 +25,7 @@ const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
 /** A technologyId the agent adds for something the analyzer missed: discovered:<normalized-id>. */
 export const DISCOVERED_TECHNOLOGY_ID = /^discovered:[a-z0-9][a-z0-9._-]*$/;
 
-/** S006's generated scanner summary; the only generated file an unresolved coverage-gap assessment may cite. */
+/** S006's generated scanner summary, which an unresolved coverage-gap assessment may cite. */
 export const S006_FINDING_SUMMARY_PATH = '.criterion-agent/S006/finding-summary.json';
 
 export interface CriterionAgentReviewFile {
@@ -54,8 +54,8 @@ export interface CriterionAgentReviewRequest {
   browseInclude?: (repoRelativePath: string) => boolean;
   /** Timeout for each OpenCode command when the run sets none (--criterion-agent-timeout-ms). */
   defaultTimeoutMs?: number;
-  /** Trusted S006 scanner gaps; unresolved coverage claims may cite scanner diagnostics. */
-  coverageGapIds?: string[];
+  /** Generated files an assessment of one of the listed obligations may cite in place of a repository file, when `accepts` allows it. */
+  generatedEvidencePaths?: Array<{ path: string; technologyIds: string[]; accepts?: (assessment: CriterionAgentAssessment) => boolean }>;
   /** Drop an invalid or uncited assessment or reviewer action on its own, recording why, instead of rejecting the review. */
   dropInvalidItems?: boolean;
   schemaDescription: string;
@@ -265,9 +265,9 @@ function validateRepositoryCitations(
 ): CriterionAgentReviewResult {
   if (!request.repositoryBrowsing || !review.available) return review;
   const cited = (citations: string[]) => citations.some(citation => availableSourcePaths.has(citation));
-  const citedAssessment = (item: CriterionAgentAssessment) => ((request.coverageGapIds?.includes(item.technologyId)
-      && item.coverageDisposition === 'unresolved' && item.type === 'evidence_gap'
-      && item.evidenceReferences.includes(S006_FINDING_SUMMARY_PATH)) || cited(item.evidenceReferences))
+  const citedGenerated = (item: CriterionAgentAssessment) => (request.generatedEvidencePaths ?? []).some(generated =>
+    generated.technologyIds.includes(item.technologyId) && item.evidenceReferences.includes(generated.path) && (generated.accepts?.(item) ?? true));
+  const citedAssessment = (item: CriterionAgentAssessment) => (citedGenerated(item) || cited(item.evidenceReferences))
     && (item.failureBounds ?? []).every(bound => cited(bound.evidenceReferences));
   const citedAction = (item: CriterionAgentReviewerAction) => cited(item.evidenceReferences);
   const assessments = review.assessments ?? [];

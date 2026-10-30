@@ -8,6 +8,7 @@ import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
 import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
 import { errorMessage } from './utils/type-guards';
 import { redactEvaluatorSecrets } from './utils/redaction';
+import { parseUiRuntimeOrigin } from './utils/ui-runtime-probe';
 
 const program = new Command();
 
@@ -32,6 +33,9 @@ program
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
+  .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
+  .option('--ui-runtime-login-origin <origin>', 'Origin of that UI\'s login page (Keycloak); the test account is typed only into a page there')
+  .option('--ui-runtime-chrome <path>', 'Chrome or Chromium executable for --ui-runtime-url (default: the installed Google Chrome)')
   .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, B005 leaves interface naming violations to the reviewer, and B004, once implemented, relaxes some new-module rules for it')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
@@ -63,6 +67,9 @@ program
       }
       if (options.existingModule) {
         console.log('🏷️  Evaluating as an existing module');
+      }
+      if (config.uiRuntime) {
+        console.log(`🖥️  Runtime UI probe: ${config.uiRuntime.url} (login ${config.uiRuntime.loginOrigin})`);
       }
       if (options.allowLocalCommands) {
         console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
@@ -117,12 +124,12 @@ program
     console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003, B005 and B006 (Java), and F001-F003 and F005-F007 (JavaScript) - IMPLEMENTED');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003, B005 and B006 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
     console.log('   ⚠️  A001 - MANUAL REVIEW by design');
-    console.log('   ⚠️  B002, B004, B007-B016 (Java) and F004 (JavaScript) - NOT IMPLEMENTED (return MANUAL)');
-    console.log('   📝 14 of the 38 criteria always return MANUAL (13 of 31 for Java, 2 of 22 for JavaScript);');
+    console.log('   ⚠️  B002, B004, B007-B016 (Java) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 13 of the 38 criteria always return MANUAL (13 of 31 for Java, 1 of 22 for JavaScript);');
     console.log('      S001-S014, B001, B003, B005, B006, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
-    console.log('      and F006 and F007 whenever the package renders a user interface\n');
+    console.log('      and F004, F006 and F007 whenever the package renders a user interface\n');
     
     console.log('📝 Usage Examples:');
     console.log('   # Evaluate a repository');
@@ -174,6 +181,9 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
   if (!isValidPlatformRef(options.platformRef)) {
     throw new Error('Invalid --platform-ref. Use a platform-lsp branch, tag or commit such as snapshot or R1-2026.');
   }
+  if (Boolean(options.uiRuntimeUrl) !== Boolean(options.uiRuntimeLoginOrigin)) {
+    throw new Error('Use --ui-runtime-url and --ui-runtime-login-origin together.');
+  }
   return {
     tempDir: options.tempDir,
     outputDir: options.output,
@@ -187,7 +197,14 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     allowRemoteLookups: options.allowRemoteLookups === true,
     s014Application: options.application,
     s014PlatformRef: options.platformRef,
-    existingModule: options.existingModule === true
+    existingModule: options.existingModule === true,
+    ...(options.uiRuntimeUrl ? {
+      uiRuntime: {
+        url: parseUiRuntimeOrigin(options.uiRuntimeUrl, '--ui-runtime-url'),
+        loginOrigin: parseUiRuntimeOrigin(options.uiRuntimeLoginOrigin, '--ui-runtime-login-origin'),
+        ...(options.uiRuntimeChrome ? { chromePath: options.uiRuntimeChrome } : {})
+      }
+    } : {})
   };
 }
 
