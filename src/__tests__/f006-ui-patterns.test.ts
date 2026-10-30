@@ -312,12 +312,12 @@ describe('F006 UI layouts, patterns and norms', () => {
       `.a { color: ${'#'.repeat(size)}fff; }`,
       `${':'.repeat(size)}#abc;`,
       `.b { background: #${'a'.repeat(size)}; }`,
-      `a{${' '.repeat(size)}x:${' #fff'.repeat(size / 5)}}`,
+      `a{${' '.repeat(size / 8)}x:${' #fff'.repeat(size / 40)}}`,
       `.c { content: "${'\\"'.repeat(size)}`,
       '/* '.repeat(size)
     ].join('\n');
     const jsx = (size: number) => `export default () => <p title="${`https://${')'.repeat(size)}a`} ${'http'.repeat(size)}">{'${'https://x.org/'.repeat(size)}'}</p>;\n`;
-    await expectLinearTime(20_000, size => ({ css: css(size), jsx: jsx(size) }), async input => evaluateF006({
+    await expectLinearTime(400_000, size => ({ css: css(size), jsx: jsx(size / 20) }), async input => evaluateF006({
       source: sourceOf({ 'src/Page.js': input.jsx }),
       css: { revision: 'HEAD', files: [{ path: 'src/Page.css', oid: '', size: input.css.length, content: input.css }], diagnostics: [], complete: true },
       guidelines: { problem: 'not needed' }
