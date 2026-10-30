@@ -358,11 +358,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F006',
     description: 'Follow existing UI layouts/patterns',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Adherence to existing FOLIO UI layouts and patterns'
-    }
+    languages: ['javascript']
   },
   {
     id: 'F007',

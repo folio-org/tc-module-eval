@@ -6,7 +6,7 @@ import {
 } from '../types';
 import { CriterionAgentReviewRequest } from './criterion-agent-review';
 import { FRONTEND_AGENT_OBLIGATION_LIMIT, SHOWN_STARTING_POINTS } from './frontend-checklist';
-import { isProductionSourcePath } from './frontend-source';
+import { isComponentCssPath, isProductionSourcePath } from './frontend-source';
 
 /** F00x reviews wait for the model longer than the shared 120 s default; ui-checkin's S010 review took 158 s. */
 export const FRONTEND_AGENT_TIMEOUT_MS = 420_000;
@@ -53,8 +53,7 @@ export const FRONTEND_BROWSE_SCOPE = 'source files under src/, lib/ and at the r
  * without stories, guides or other locales; plus the criterion's own paths.
  */
 export function frontendBrowseInclude(extraPaths: string[] = []): (path: string) => boolean {
-  return path => path === 'package.json' || extraPaths.includes(path) || isProductionSourcePath(path)
-    || (/^(?:src|lib)\/.*\.css$/.test(path) && !/(?:^|\/)(?:stories|examples)\//.test(path));
+  return path => path === 'package.json' || extraPaths.includes(path) || isProductionSourcePath(path) || isComponentCssPath(path);
 }
 
 export interface FrontendAgentReviewOptions {

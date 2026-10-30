@@ -12,6 +12,11 @@ export function isProductionSourcePath(path: string): boolean {
   return SOURCE_EXTENSION.test(path) && (/^(?:src|lib)\//.test(path) || !path.includes('/')) && !NOT_PRODUCTION.test(path);
 }
 
+/** Component CSS of a UI package: `.css` files under `src/` and `lib/`, without stories and examples. */
+export function isComponentCssPath(path: string): boolean {
+  return /^(?:src|lib)\/.*\.css$/.test(path) && !/(?:^|\/)(?:stories|examples)\//.test(path);
+}
+
 export interface FrontendSourceFile {
   path: string;
   content: string;
