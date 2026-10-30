@@ -250,6 +250,18 @@ permission fits its endpoint; the report lists endpoints without a permission, `
 permissions and permission names that depart from the naming guidelines. Agent review runs by default
 for its manual results. See [Criterion Notes](docs/criterion-notes.md#b007-endpoint-permissions).
 
+### B008 Reference Data
+
+B008 checks that a module that stores data ships reference data for its controlled vocabularies:
+collection endpoints named like `*-types`, `*-statuses`, `*-reasons` or `*-categories`, endpoints that
+reference-data folders name, and Grails refdata categories. It passes when each has values loaded at
+tenant initialization, from `ref-data/` or `reference-data/` folders that an RMB `TenantLoading` for the
+`loadReference` key loads, from Liquibase inserts into the vocabulary's table, or from Grails
+`@Defaults`. It is not applicable to libraries and to modules without storage, and leaves everything
+else, including modules with no vocabulary the tool recognises, to the reviewer. Its agent review runs
+only when `--criterion-agent-criteria` lists B008. See
+[Criterion Notes](docs/criterion-notes.md#b008-reference-data).
+
 ### B009 API Tests
 
 B009 checks that API tests, where a module has them, use Karate, the framework the officially supported

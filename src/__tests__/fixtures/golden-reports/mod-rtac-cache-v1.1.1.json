@@ -4649,8 +4649,58 @@
     {
       "criterionId": "B008",
       "status": "manual",
-      "evidence": "Microservice architecture compliance - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B008 manual: The tool found no controlled vocabulary: no collection endpoint in descriptors/ModuleDescriptor-template.json is named like one (*-types, *-statuses, *-reasons, *-categories) or is named by reference data. A reviewer must decide whether the module has controlled vocabularies that need a value after tenant initialization.",
+      "details": "Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml; Datasource configured in src/main/resources/application.yml\nChecklist for the reviewer:\n  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.\n    - Start with:\n      - descriptors/ModuleDescriptor-template.json — the endpoints the module provides\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B008",
+        "kind": "backend-module",
+        "framework": {
+          "name": "spring",
+          "evidence": [
+            "@SpringBootApplication in src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "folio-spring-base in pom.xml"
+          ]
+        },
+        "storage": {
+          "present": true,
+          "evidence": [
+            "Liquibase changelog src/main/resources/db/changelog/changelog-master.xml",
+            "Datasource configured in src/main/resources/application.yml"
+          ]
+        },
+        "loaders": [],
+        "referenceDataFolders": [],
+        "liquibaseInserts": [],
+        "vocabularies": [],
+        "unreadLoadPaths": [],
+        "unreadLoadPathCount": 0,
+        "sourceDiagnostics": [],
+        "templatePath": "descriptors/ModuleDescriptor-template.json",
+        "status": "manual",
+        "basis": "no-vocabularies",
+        "summary": "B008 manual: The tool found no controlled vocabulary: no collection endpoint in descriptors/ModuleDescriptor-template.json is named like one (*-types, *-statuses, *-reasons, *-categories) or is named by reference data. A reviewer must decide whether the module has controlled vocabularies that need a value after tenant initialization.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B008-C1",
+              "title": "Each controlled vocabulary the module needs at least one value for has one after tenant initialization.",
+              "startingPoints": [
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "note": "the endpoints the module provides"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B008-C1#1"
+                }
+              ]
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B009",

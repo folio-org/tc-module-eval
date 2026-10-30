@@ -217,11 +217,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B008',
     description: 'Provide reference data',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Microservice architecture compliance'
-    }
+    languages: ['java']
   },
   {
     id: 'B009',
