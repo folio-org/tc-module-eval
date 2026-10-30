@@ -36,6 +36,7 @@
       "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java",
       "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
       "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+      "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
       "src/main/java/org/folio/rtaccache/service/RtacCacheGenerationService.java",
       "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
       "src/main/java/org/folio/rtaccache/service/RtacHoldingMappingService.java",
@@ -5210,8 +5211,193 @@
     {
       "criterionId": "B015",
       "status": "manual",
-      "evidence": "Resource management - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B015 manual: No HTTP sessions found. 8 in-memory caches or maps and 1 scheduled job may hold state on one instance or run on every instance. A reviewer must check them.",
+      "details": "What the tool found:\n  - Source read: 77 Java, Groovy or Kotlin files in src/main and grails-app, without comments\n  - HTTP sessions: none found\n  - Local file writes: none found\n  - In-memory caches and maps: 8 in 2 files\n  - Scheduled jobs: 1 in 1 file\nWhat to do:\n  - Check each item below for a deployment of several instances behind a load balancer without session affinity; B015 is always decided by a reviewer.\nChecklist for the reviewer:\n  - B015-C1 No request depends on session affinity: no HTTP session state, and no sticky routing.\n  - B015-C2 No data is kept only on one instance's local disk; temporary files are removed in the same request or job.\n  - B015-C3 In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.\n    - Start with:\n      - src/main/java/org/folio/rtaccache/service/ConsortiaService.java:26 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/ConsortiaService.java:35 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/ConsortiaService.java:48 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java:28 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java:44 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java:60 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java:76 — @Cacheable method (Spring cache)\n      - src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java:92 — @Cacheable method (Spring cache)\n  - B015-C4 Scheduled work runs once across instances, or is safe to run on every instance.\n    - Start with:\n      - src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java:21 — @Scheduled\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B015",
+        "status": "manual",
+        "summary": "B015 manual: No HTTP sessions found. 8 in-memory caches or maps and 1 scheduled job may hold state on one instance or run on every instance. A reviewer must check them.",
+        "kind": "backend-module",
+        "sourceFileCount": 77,
+        "counts": {
+          "session": 0,
+          "file-write": 0,
+          "in-memory-state": 8,
+          "scheduler": 1
+        },
+        "fileCounts": {
+          "session": 0,
+          "file-write": 0,
+          "in-memory-state": 2,
+          "scheduler": 1
+        },
+        "signals": [
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+            "line": 26,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+            "line": 35,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+            "line": 48,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+            "line": 28,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+            "line": 44,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+            "line": 60,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+            "line": 76,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "in-memory-state",
+            "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+            "line": 92,
+            "what": "@Cacheable method (Spring cache)"
+          },
+          {
+            "kind": "scheduler",
+            "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+            "line": 21,
+            "what": "@Scheduled"
+          }
+        ],
+        "sourceDiagnostics": [],
+        "agentBrowseScope": "Java, Groovy and Kotlin sources and resources under src/main/ in any module folder (no reference or sample data), grails-app/, descriptors/ and the descriptor template, ramls/ (no raml-util), pom.xml and build.gradle files, and README, ENV_VARS.md, Dockerfile and docker-compose files at the root",
+        "checklist": {
+          "items": [
+            {
+              "id": "B015-C1",
+              "title": "No request depends on session affinity: no HTTP session state, and no sticky routing.",
+              "startingPoints": [],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B015-C1#1"
+                }
+              ]
+            },
+            {
+              "id": "B015-C2",
+              "title": "No data is kept only on one instance's local disk; temporary files are removed in the same request or job.",
+              "startingPoints": [],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B015-C2#1"
+                }
+              ]
+            },
+            {
+              "id": "B015-C3",
+              "title": "In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.",
+              "startingPoints": [
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "line": 26,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "line": 35,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "line": 48,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 28,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 44,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 60,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 76,
+                  "note": "@Cacheable method (Spring cache)"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 92,
+                  "note": "@Cacheable method (Spring cache)"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B015-C3#1",
+                  "subject": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "line": 26
+                },
+                {
+                  "id": "B015-C3#2",
+                  "subject": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "path": "src/main/java/org/folio/rtaccache/service/InventoryReferenceDataService.java",
+                  "line": 28
+                }
+              ]
+            },
+            {
+              "id": "B015-C4",
+              "title": "Scheduled work runs once across instances, or is safe to run on every instance.",
+              "startingPoints": [
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                  "line": 21,
+                  "note": "@Scheduled"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B015-C4#1",
+                  "subject": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                  "line": 21
+                }
+              ]
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B016",

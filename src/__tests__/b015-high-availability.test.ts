@@ -158,25 +158,77 @@ describe('B015 high availability', () => {
     expect(library.analysis.checklist.items.map(item => item.obligations)).toEqual([[{ id: 'B015-C1#1' }], [{ id: 'B015-C2#1' }], [{ id: 'B015-C3#1' }], [{ id: 'B015-C4#1' }]]);
   });
 
-  it('says when the source was not read completely, and when it lists only the first sites', async () => {
-    const { result } = await b015(springModule({
+  it('counts every site and file past the per-kind listing limit, and reports only unread source files', async () => {
+    const { result, analysis } = await b015(springModule({
       'src/main/resources/logo.bin': Buffer.from([0, 1, 2, 0]),
-      [`${JAVA}/Many.java`]: Array.from({ length: 1_001 }, (_, index) => `@Scheduled(fixedDelay = ${index}) void job${index}() {}`).join('\n')
+      [`${JAVA}/Broken.java`]: Buffer.from([0, 1, 2, 0]),
+      [`${JAVA}/A.java`]: Array.from({ length: 251 }, (_, index) => `@Cacheable("c${index}") String c${index}() { return ""; }`).join('\n'),
+      [`${JAVA}/B.java`]: 'class B {\n  @Scheduled(fixedDelay = 1) void b() {}\n}',
+      [`${JAVA}/C.java`]: 'class C {\n  @Scheduled(fixedDelay = 1) void c() {}\n  @Cacheable("x") String x() { return ""; }\n}'
     }));
 
-    expect(result.evidence).toBe('B015 manual: No HTTP sessions found. 1001 scheduled jobs may hold state on one instance or run on every instance. A reviewer must check them. '
+    expect(result.evidence).toBe('B015 manual: No HTTP sessions found. 252 in-memory caches or maps and 2 scheduled jobs may hold state on one instance or run on every instance. A reviewer must check them. '
       + 'The committed source was not read completely, so the tool may have missed some.');
     expect(result.details?.split('\n').slice(0, 10)).toEqual([
       'What the tool found:',
-      '  - Source read: 1 Java, Groovy or Kotlin file in src/main and grails-app, without comments',
+      '  - Source read: 3 Java, Groovy or Kotlin files in src/main and grails-app, without comments',
       '  - HTTP sessions: none found',
       '  - Local file writes: none found',
-      '  - In-memory caches and maps: none found',
-      '  - Scheduled jobs: 1001 in 1 file',
-      '  - Listed: the first 1000 of 1001 sites',
+      '  - In-memory caches and maps: 252 in 2 files',
+      '  - Scheduled jobs: 2 in 2 files',
+      '  - Listed: the first 250 sites of each kind, 252 of 254',
       'What the tool could not read:',
-      '  - src/main/resources/logo.bin — Skipped binary committed content',
+      `  - ${JAVA}/Broken.java — Skipped binary committed content`,
       'What to do:'
+    ]);
+    expect(analysis.checklist.items.map(item => [item.id, item.startingPoints.length, item.obligations.map(obligation => `${obligation.subject}:${obligation.line}`)])).toEqual([
+      ['B015-C1', 0, ['undefined:undefined']],
+      ['B015-C2', 0, ['undefined:undefined']],
+      ['B015-C3', 250, [`${JAVA}/A.java:1`, `${JAVA}/C.java:3`]],
+      ['B015-C4', 2, [`${JAVA}/B.java:2`, `${JAVA}/C.java:2`]]
+    ]);
+  });
+
+  it('ends Groovy and Kotlin statements at line breaks and ignores string contents', async () => {
+    const { analysis } = await b015(repository({
+      'service/build.gradle': '',
+      'service/src/main/okapi/ModuleDescriptor-template.json': descriptor,
+      'service/grails-app/services/RunService.groovy': [
+        'class RunService {',
+        '  def grailsApplication',
+        '  private static Map running = new ConcurrentHashMap()',
+        '  def plain = Caffeine.newBuilder()',
+        '    .maximumSize(10)',
+        '    .build()',
+        '  def timed = Caffeine.newBuilder()',
+        '    .expireAfterWrite(1, MINUTES).build()',
+        '  def log() { println "HttpSession ${new ConcurrentHashMap()}" }',
+        '  @SchedulerLock(name = "a", lockAtMostFor = "${lock.max}")',
+        '  @Scheduled(cron = "${job.cron}")',
+        '  def locked() {}',
+        '}'
+      ].join('\n'),
+      'service/src/main/kotlin/org/folio/Jobs.kt': [
+        'class Jobs {',
+        '  @SchedulerLock(name = "a")',
+        '  @Scheduled(fixedDelay = 1)',
+        '  fun a() = run()',
+        '  @SchedulerLock(name = "c") fun c() = run()',
+        '  @Scheduled(fixedDelay = 2)',
+        '  fun b() = run()',
+        '}'
+      ].join('\n'),
+      'src/main/java/org/folio/Holder.java': '@SuppressWarnings({"unchecked"}) private static final Map<String, Object> M = new ConcurrentHashMap<>();'
+    }));
+
+    expect(analysis.signals).toEqual([
+      { kind: 'in-memory-state', path: 'service/grails-app/services/RunService.groovy', line: 3, what: 'static ConcurrentHashMap field' },
+      { kind: 'in-memory-state', path: 'service/grails-app/services/RunService.groovy', line: 4, what: 'Caffeine cache without expiry' },
+      { kind: 'in-memory-state', path: 'service/grails-app/services/RunService.groovy', line: 7, what: 'Caffeine cache with expiry' },
+      { kind: 'scheduler', path: 'service/grails-app/services/RunService.groovy', line: 11, what: '@Scheduled with a ShedLock @SchedulerLock' },
+      { kind: 'scheduler', path: 'service/src/main/kotlin/org/folio/Jobs.kt', line: 3, what: '@Scheduled with a ShedLock @SchedulerLock' },
+      { kind: 'scheduler', path: 'service/src/main/kotlin/org/folio/Jobs.kt', line: 6, what: '@Scheduled' },
+      { kind: 'in-memory-state', path: 'src/main/java/org/folio/Holder.java', line: 1, what: 'static ConcurrentHashMap field' }
     ]);
   });
 
@@ -186,10 +238,13 @@ describe('B015 high availability', () => {
     ['concurrent maps without a statement start', (size: number) => 'x new ConcurrentHashMap '.repeat(size), 4_000],
     ['cache builders without a semicolon', (size: number) => 'Caffeine.newBuilder() .maximumSize(1) '.repeat(size), 6_000],
     ['schedules near locks', (size: number) => '@SchedulerLock @Scheduled '.repeat(size), 4_000],
-    ['field annotations before a map', (size: number) => `${'@A(x) '.repeat(size)}private Map m = new ConcurrentHashMap<>();`, 4_000]
+    ['field annotations before a map', (size: number) => `${'@A(x) '.repeat(size)}private Map m = new ConcurrentHashMap<>();`, 4_000],
+    ['edge-common builders without the import', (size: number) => 'new Builder<String>() '.repeat(size), 4_000],
+    ['annotation-like Groovy lines', (size: number) => `${'@a(x) '.repeat(size)}x\n${'@a '.repeat(size)}(\n`, 4_000],
+    ['unclosed strings and line breaks', (size: number) => '"a\n\'b\n"""c '.repeat(size), 4_000]
   ])('scans %s in linear time', async (_name, content, size) => {
     const prepare = async (n: number) => {
-      const root = springModule({ [`${JAVA}/Big.java`]: content(n) });
+      const root = springModule({ [`${JAVA}/Big.java`]: content(n), [`${JAVA}/Big.groovy`]: content(n) });
       return getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root);
     };
     const analysis = await expectLinearTime(size, prepare, async evidence => evaluateB015(evidence));

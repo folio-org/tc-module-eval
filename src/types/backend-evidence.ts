@@ -1108,8 +1108,10 @@ export interface B015Analysis {
   kind: BackendRepositoryKind;
   /** The Java, Groovy and Kotlin files read in `src/main` and `grails-app`. */
   sourceFileCount: number;
-  /** Every signal found, by kind; `signals` lists the first 1,000. */
+  /** Every signal found, by kind; `signals` lists the first 250 of each kind. */
   counts: Record<B015SignalKind, number>;
+  /** The files with signals, by kind. */
+  fileCounts: Record<B015SignalKind, number>;
   signals: B015Signal[];
   sourceDiagnostics: CommittedSourceDiagnostic[];
   agentBrowseScope: string;

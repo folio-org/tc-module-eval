@@ -12,7 +12,8 @@ const JAVA = 'src/main/java/org/folio/example';
 const JOBS = `${JAVA}/Jobs.java`;
 const CACHES = `${JAVA}/Caches.java`;
 
-const fixture = () => repository({
+const fixture = (extra: Record<string, string> = {}) => repository({
+  ...extra,
   'pom.xml': pom('mod-example'),
   'descriptors/ModuleDescriptor-template.json': JSON.stringify({ id: 'mod-example-1.0.0', provides: [] }),
   [JOBS]: 'class Jobs {\n  @Scheduled(cron = "0 0 * * * *")\n  void notices() {}\n}',
@@ -54,7 +55,7 @@ function rowsFrom(details: string | undefined, heading: string): string[] {
 
 describe('B015 agent review', () => {
   it('gives the agent one obligation per file with sites, or the whole item, within the backend browse scope', async () => {
-    const root = fixture();
+    const root = fixture({ [`${JAVA}/Other.java`]: 'class Other {\n\n  static Map<String, String> names = new ConcurrentHashMap<>();\n}' });
     const analysis: B015Analysis = evaluateB015(await getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root));
     const request = buildB015AgentReviewRequest(root, analysis);
     const prepared = (await prepareCriterionAgentReviewEvidence(request)).request;
@@ -67,10 +68,26 @@ describe('B015 agent review', () => {
     expect(checklist.items.map((item: { id: string; obligations: unknown[] }) => [item.id, item.obligations])).toEqual([
       ['B015-C1', [{ id: 'B015-C1#1' }]],
       ['B015-C2', [{ id: 'B015-C2#1' }]],
-      ['B015-C3', [{ id: 'B015-C3#1', subject: CACHES, path: CACHES, line: 2 }]],
+      ['B015-C3', [{ id: 'B015-C3#1', subject: CACHES, path: CACHES, line: 2 }, { id: 'B015-C3#2', subject: `${JAVA}/Other.java`, path: `${JAVA}/Other.java`, line: 3 }]],
       ['B015-C4', [{ id: 'B015-C4#1', subject: JOBS, path: JOBS, line: 2 }]]
     ]);
-    expect(prepared.instructions).toContain('Report a site of the same four kinds that checklist.json does not list as discovered:site:<n>, citing its file.');
+    const summary = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/B015/evidence-summary.json')!.content);
+    expect(summary.sitesByObligation).toEqual({
+      'B015-C3#1': { path: CACHES, sites: [{ line: 2, what: 'ConcurrentHashMap field' }] },
+      'B015-C3#2': { path: `${JAVA}/Other.java`, sites: [{ line: 3, what: 'static ConcurrentHashMap field' }] },
+      'B015-C4#1': { path: JOBS, sites: [{ line: 2, what: '@Scheduled' }] }
+    });
+    expect(prepared.instructions).toContain('Report a site of the same four kinds that neither checklist.json nor evidence-summary.json lists as discovered:site:<n>, citing its file.');
+  });
+
+  it('tells the agent when a file\'s sites are past the listing limit', async () => {
+    const root = fixture({ [`${JAVA}/A.java`]: Array.from({ length: 251 }, (_, index) => `@Cacheable("c${index}") String c${index}() { return ""; }`).join('\n') });
+    const analysis = evaluateB015(await getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root));
+    const prepared = (await prepareCriterionAgentReviewEvidence(buildB015AgentReviewRequest(root, analysis))).request;
+    const summary = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/B015/evidence-summary.json')!.content);
+
+    expect(summary.sitesByObligation['B015-C3#2']).toEqual({ path: CACHES, sites: [], sitesPastTheListingLimit: 'not listed; read the whole file' });
+    expect(summary.sitesByObligation['B015-C4#1']).toEqual({ path: JOBS, sites: [{ line: 2, what: '@Scheduled' }] });
   });
 
   it('attaches an accepted review to the checklist items, lists discovered sites in the review, and keeps the status', async () => {
@@ -158,10 +175,36 @@ describe('B015 agent review', () => {
       { kind: 'assessment', technologyId: 'discovered:site:1', reason: 'A finding beyond the checklist must be a potential problem or need verification.' },
       { kind: 'assessment', technologyId: 'B015-C5#1', reason: 'It answers nothing the agent was asked to check.' }
     ]);
-    const lines = (result.details ?? '').split('\n');
-    expect(lines.find(line => line.startsWith('  - Recommendation: '))).toBe('  - Recommendation: Reviewer judgment needed — the agent recommended "Likely sufficient", but some of its results were dropped.');
-    expect(lines.slice(lines.indexOf('  - B015-C3 In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.') + 3).slice(0, 1))
-      .toEqual([`    - Agent result dropped — ${CACHES}: It is marked as investigated directly but does not cite the file it is about.`]);
+    expect(rowsFrom(result.details, '  - B015-C2 No data is kept only on one instance\'s local disk; temporary files are removed in the same request or job.')).toEqual([
+      '  - B015-C2 No data is kept only on one instance\'s local disk; temporary files are removed in the same request or job.',
+      '    - Agent result dropped: It says the desired state holds but leaves it open.',
+      '  - B015-C3 In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.',
+      '    - Start with:',
+      `      - ${CACHES}:2 — ConcurrentHashMap field`,
+      `    - Agent result dropped — ${CACHES}: It is marked as investigated directly but does not cite the file it is about.`,
+      '  - B015-C4 Scheduled work runs once across instances, or is safe to run on every instance.',
+      '    - Start with:',
+      `      - ${JOBS}:2 — @Scheduled`,
+      `    - Agent: Potential problem — ${JOBS}: Every instance sends the daily notices, so patrons get them twice with two instances (lines 2-3).`,
+      '      - Sources:',
+      `        - ${JOBS}`,
+      '      - Coverage judgment: Investigated directly',
+      'Agent review (advisory):',
+      '  - Recommendation: Reviewer judgment needed — the agent recommended "Likely sufficient", but some of its results were dropped.',
+      '  - Confidence: medium',
+      '  - Summary: Two sites keep work on one instance.',
+      `  - Rationale: Read ${JOBS} and ${CACHES}.`,
+      '  - What to verify:',
+      '    - Check whether the notice job is meant to run on one instance only.',
+      '      - Sources:',
+      `        - ${JOBS}`,
+      '  - Dropped from this review:',
+      '    - A result for discovered:site:1: A finding beyond the checklist must be a potential problem or need verification.',
+      '    - A result for B015-C5#1: It answers nothing the agent was asked to check.',
+      '  - Sources:',
+      `    - ${JOBS}`,
+      '  - Advisory only; the criterion status is unchanged.'
+    ]);
   });
 
   it('does not run when the criteria list names other criteria', async () => {

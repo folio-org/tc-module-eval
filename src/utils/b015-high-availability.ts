@@ -7,7 +7,7 @@ import { frontendChecklist, frontendReviewLines } from './frontend-checklist';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { count, listText, reportPath, reportText } from './report-text';
 
-const MAX_SIGNALS = 1_000;
+const MAX_SIGNALS_PER_KIND = 250;
 const GRAILS_SOURCE = /(?:^|\/)grails-app\/.+\.groovy$/;
 const IMPORT_LINE = /^[ \t]*(?:import|package)\b[^\n]*/gm;
 const STATEMENT_LOOKBACK = 500;
@@ -16,11 +16,16 @@ const LEADING_ANNOTATIONS = /^\s*(?:@[\w.]+(?:\s*\([^()]*\))?\s*)*/;
 const FIELD_MODIFIER = /^(?:private|protected|public|static)\b/;
 const EXPIRY = /\b(?:expireAfter(?:Write|Access)?|refreshAfterWrite|withTTL)\s*\(/;
 const EDGE_COMMON_CACHE = /\borg\.folio\.edge\.core\.cache\b/;
+const LINE_BREAK_STATEMENTS = /\.(?:groovy|kt)$/;
+const CONTINUES_BEFORE = new Set([...'=,([+-*/.:?&|!']);
+const CONTINUES_AFTER = new Set([...'.?:)]']);
+const ANNOTATION_LINE = /^\s*@[\w.]+(?:\s*\([^()]*\))?(?:\s+@[\w.]+(?:\s*\([^()]*\))?)*\s*$/;
 
 interface SignalPattern {
   kind: B015SignalKind;
   pattern: RegExp;
-  what: (match: RegExpMatchArray, source: string, original: string) => string | undefined;
+  /** `bounds` is the source with statement ends as `;` and string contents blanked, at the same offsets. */
+  what: (match: RegExpMatchArray, bounds: string, edgeCommon: boolean) => string | undefined;
 }
 
 const PATTERNS: SignalPattern[] = [
@@ -48,7 +53,7 @@ const PATTERNS: SignalPattern[] = [
   {
     kind: 'in-memory-state',
     pattern: /\bnew\s+(?:Cache\s*\.\s*)?Builder\s*</g,
-    what: (match, source, original) => EDGE_COMMON_CACHE.test(original) ? builderNote('edge-common cache', match, source) : undefined
+    what: (match, bounds, edgeCommon) => edgeCommon ? builderNote('edge-common cache', match, bounds) : undefined
   },
   { kind: 'in-memory-state', pattern: /\bgetLocal(?:Async)?Map\s*\(/g, what: () => 'Vert.x local map' },
   {
@@ -73,18 +78,26 @@ const PATTERNS: SignalPattern[] = [
 
 const KIND_ORDER: B015SignalKind[] = ['session', 'file-write', 'in-memory-state', 'scheduler'];
 
+/** The kind of site each checklist item is about. */
+export const B015_ITEM_KINDS: Record<string, B015SignalKind> = { 'B015-C1': 'session', 'B015-C2': 'file-write', 'B015-C3': 'in-memory-state', 'B015-C4': 'scheduler' };
+
 /** B015 (high availability) is always manual: it lists the sites that may keep state on one instance or run on every instance. */
 export function evaluateB015(evidence: BackendEvidence): B015Analysis {
   const sources = evidence.snapshot.files.filter(file => SOURCE_FILE.test(file.path) || GRAILS_SOURCE.test(file.path));
   const counts: Record<B015SignalKind, number> = { session: 0, 'file-write': 0, 'in-memory-state': 0, scheduler: 0 };
+  const listed: Record<B015SignalKind, number> = { session: 0, 'file-write': 0, 'in-memory-state': 0, scheduler: 0 };
+  const firstInFile: Record<B015SignalKind, Map<string, B015Signal>> = { session: new Map(), 'file-write': new Map(), 'in-memory-state': new Map(), scheduler: new Map() };
   const signals: B015Signal[] = [];
   for (const file of sources) {
     for (const signal of fileSignals(file)) {
       counts[signal.kind]++;
-      if (signals.length < MAX_SIGNALS) signals.push(signal);
+      if (!firstInFile[signal.kind].has(signal.path)) firstInFile[signal.kind].set(signal.path, signal);
+      if (listed[signal.kind]++ < MAX_SIGNALS_PER_KIND) signals.push(signal);
     }
   }
-  const sourceDiagnostics = evidence.snapshot.diagnostics.filter(diagnostic => diagnostic.material);
+  const fileCounts = Object.fromEntries(KIND_ORDER.map(kind => [kind, firstInFile[kind].size])) as Record<B015SignalKind, number>;
+  const sourceDiagnostics = evidence.snapshot.diagnostics.filter(diagnostic => diagnostic.material
+    && (!diagnostic.path || SOURCE_FILE.test(diagnostic.path) || GRAILS_SOURCE.test(diagnostic.path)));
   const total = KIND_ORDER.reduce((sum, kind) => sum + counts[kind], 0);
   const found = [
     counts.session ? count(counts.session, 'HTTP session use') : undefined,
@@ -106,17 +119,17 @@ export function evaluateB015(evidence: BackendEvidence): B015Analysis {
     kind: evidence.kind,
     sourceFileCount: sources.length,
     counts,
+    fileCounts,
     signals,
     sourceDiagnostics,
     agentBrowseScope: backendBrowse().scope,
-    checklist: frontendChecklist(status, checklistItems(signals))
+    checklist: frontendChecklist(status, checklistItems(signals, firstInFile))
   };
 }
 
 export function renderB015HumanDetails(analysis: B015Analysis, agentReview?: CriterionAgentReviewResult): string {
-  const files = (kind: B015SignalKind) => new Set(analysis.signals.filter(signal => signal.kind === kind).map(signal => signal.path)).size;
   const row = (label: string, kind: B015SignalKind) =>
-    `  - ${label}: ${analysis.counts[kind] ? `${analysis.counts[kind]} in ${count(files(kind), 'file')}` : 'none found'}`;
+    `  - ${label}: ${analysis.counts[kind] ? `${analysis.counts[kind]} in ${count(analysis.fileCounts[kind], 'file')}` : 'none found'}`;
   const total = KIND_ORDER.reduce((sum, kind) => sum + analysis.counts[kind], 0);
   const lines = [
     'What the tool found:',
@@ -125,7 +138,7 @@ export function renderB015HumanDetails(analysis: B015Analysis, agentReview?: Cri
     row('Local file writes', 'file-write'),
     row('In-memory caches and maps', 'in-memory-state'),
     row('Scheduled jobs', 'scheduler'),
-    ...(total > analysis.signals.length ? [`  - Listed: the first ${analysis.signals.length} of ${total} sites`] : []),
+    ...(total > analysis.signals.length ? [`  - Listed: the first ${MAX_SIGNALS_PER_KIND} sites of each kind, ${analysis.signals.length} of ${total}`] : []),
     ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
   ];
   if (analysis.sourceDiagnostics.length) {
@@ -138,11 +151,13 @@ export function renderB015HumanDetails(analysis: B015Analysis, agentReview?: Cri
 }
 
 function fileSignals(file: CommittedSourceFile): B015Signal[] {
-  const source = withoutComments(file.content).replace(IMPORT_LINE, line => ' '.repeat(line.length));
+  const source = withoutStringContents(withoutComments(file.content).replace(IMPORT_LINE, line => ' '.repeat(line.length)));
+  const bounds = withoutBracesInParentheses(LINE_BREAK_STATEMENTS.test(file.path) ? withLineBreakStatementEnds(source) : source);
+  const edgeCommon = EDGE_COMMON_CACHE.test(file.content);
   const found: Array<{ index: number; kind: B015SignalKind; what: string }> = [];
   for (const { kind, pattern, what } of PATTERNS) {
     for (const match of source.matchAll(pattern)) {
-      const text = what(match, source, file.content);
+      const text = what(match, bounds, edgeCommon);
       if (text !== undefined) found.push({ index: match.index!, kind, what: text });
     }
   }
@@ -158,6 +173,67 @@ function fileSignals(file: CommittedSourceFile): B015Signal[] {
     signals.push({ kind, path: file.path, line, what });
   }
   return signals;
+}
+
+function withoutStringContents(source: string): string {
+  const parts: string[] = [];
+  let kept = 0;
+  let index = 0;
+  while (index < source.length) {
+    const quote = source.startsWith('"""', index) || source.startsWith("'''", index) ? source.slice(index, index + 3)
+      : source[index] === '"' || source[index] === "'" ? source[index] : undefined;
+    if (!quote) {
+      index++;
+      continue;
+    }
+    const start = index + quote.length;
+    let end = start;
+    if (quote.length === 3) {
+      const close = source.indexOf(quote, start);
+      end = close < 0 ? source.length : close;
+    } else {
+      while (end < source.length && source[end] !== quote && source[end] !== '\n') end += source[end] === '\\' ? 2 : 1;
+      end = Math.min(end, source.length);
+    }
+    parts.push(source.slice(kept, start), source.slice(start, end).replace(/[^\n]/g, ' '));
+    kept = end;
+    index = end < source.length && source[end] !== '\n' ? end + quote.length : end;
+  }
+  parts.push(source.slice(kept));
+  return parts.join('');
+}
+
+/** Array braces in annotation arguments, such as `@SuppressWarnings({"unchecked"})`, do not end a statement. */
+function withoutBracesInParentheses(source: string): string {
+  let depth = 0;
+  return source.replace(/[(){}]/g, character => {
+    if (character === '(') depth++;
+    else if (character === ')') depth = Math.max(0, depth - 1);
+    else if (depth > 0) return ' ';
+    return character;
+  });
+}
+
+/** Groovy and Kotlin end a statement at a line break, unless the expression continues across it or the line is only annotations. */
+function withLineBreakStatementEnds(source: string): string {
+  const characters = source.split('');
+  let previous = '';
+  let annotations = false;
+  let pending: number[] = [];
+  let offset = 0;
+  for (const line of source.split('\n')) {
+    const first = line.search(/\S/);
+    if (first >= 0) {
+      if (pending.length && !annotations && !CONTINUES_BEFORE.has(previous) && !CONTINUES_AFTER.has(line[first])) for (const at of pending) characters[at] = ';';
+      pending = [];
+      annotations = ANNOTATION_LINE.test(line);
+      previous = line.trimEnd().slice(-1);
+    }
+    offset += line.length;
+    if (offset < source.length) pending.push(offset);
+    offset++;
+  }
+  return characters.join('');
 }
 
 function builderNote(name: string, match: RegExpMatchArray, source: string): string {
@@ -186,24 +262,23 @@ function declaration(source: string, index: number): string {
   return source.slice(statementStart(source, index) ?? index, end);
 }
 
-function checklistItems(signals: B015Signal[]) {
-  const item = (id: string, title: string, kind: B015SignalKind): FrontendChecklistItemDraft => {
+function checklistItems(signals: B015Signal[], firstInFile: Record<B015SignalKind, Map<string, B015Signal>>) {
+  const item = (id: string, title: string): FrontendChecklistItemDraft => {
+    const kind = B015_ITEM_KINDS[id];
     const sites = signals.filter(signal => signal.kind === kind);
-    const firstByFile = new Map<string, B015Signal>();
-    for (const site of sites) if (!firstByFile.has(site.path)) firstByFile.set(site.path, site);
     return {
       id,
       title,
       startingPoints: sites.map(site => ({ path: site.path, line: site.line, note: site.what })),
       reviewerOnly: false,
       obligations: [],
-      subjects: [...firstByFile.values()].map(site => ({ subject: site.path, path: site.path, line: site.line }))
+      subjects: [...firstInFile[kind].values()].map(site => ({ subject: site.path, path: site.path, line: site.line }))
     };
   };
   return numberBackendObligations([
-    item('B015-C1', 'No request depends on session affinity: no HTTP session state, and no sticky routing.', 'session'),
-    item('B015-C2', 'No data is kept only on one instance\'s local disk; temporary files are removed in the same request or job.', 'file-write'),
-    item('B015-C3', 'In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.', 'in-memory-state'),
-    item('B015-C4', 'Scheduled work runs once across instances, or is safe to run on every instance.', 'scheduler')
+    item('B015-C1', 'No request depends on session affinity: no HTTP session state, and no sticky routing.'),
+    item('B015-C2', 'No data is kept only on one instance\'s local disk; temporary files are removed in the same request or job.'),
+    item('B015-C3', 'In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.'),
+    item('B015-C4', 'Scheduled work runs once across instances, or is safe to run on every instance.')
   ]);
 }
