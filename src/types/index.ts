@@ -249,9 +249,21 @@ export interface CriterionAgentReviewResult {
   evidenceReferences: string[];
   assessments?: CriterionAgentAssessment[];
   reviewerActions?: CriterionAgentReviewerAction[];
+  /** Assessments and reviewer actions left out of an accepted review, for criteria that drop invalid items one by one. */
+  droppedItems?: CriterionAgentDroppedItem[];
+  /** The agent's own recommendation when it disagreed with the kept assessments and was replaced. */
+  replacedRecommendation?: { recommendation: CriterionAgentRecommendation; reason: string };
   metadata?: CriterionAgentReviewMetadata;
   warnings: string[];
   errors: string[];
+}
+
+export interface CriterionAgentDroppedItem {
+  kind: 'assessment' | 'reviewer_action';
+  /** The assessment's technologyId, when it had one. */
+  technologyId?: string;
+  /** Why it was dropped, in plain English. */
+  reason: string;
 }
 
 export interface CriterionAgentAssessment {

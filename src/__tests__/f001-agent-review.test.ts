@@ -83,14 +83,26 @@ describe('F001 agent review', () => {
   });
 
   it.each([
-    ['a concern that names only a declared interface', [dynamic({ summary: 'This reaches `users` or `configuration`.' }), notInIndex()]],
-    ['a concern that names an interface without backticks', [dynamic({ summary: 'This reaches settings, which is not declared.' }), notInIndex()]],
+    ['a concern that names only a declared interface', [dynamic({ summary: 'This reaches `users` or `configuration`.' }), notInIndex()],
+      ['    - Agent result dropped — GET {}/entries: The potential problem does not name, in backticks, an interface that package.json does not declare.'], []],
+    ['a concern that names an interface without backticks', [dynamic({ summary: 'This reaches settings, which is not declared.' }), notInIndex()],
+      ['    - Agent result dropped — GET {}/entries: The potential problem does not name, in backticks, an interface that package.json does not declare.'], []],
     ['a discovered concern that names no interface', [dynamic(), notInIndex(), { technologyId: 'discovered:interface:1', type: 'substantive_concern' as const,
-      summary: 'Another request goes to an undeclared interface.', evidenceReferences: ['src/Requests.js'], coverageDisposition: 'investigated' as const }]]
-  ])('rejects %s', async (_name, assessments) => {
+      summary: 'Another request goes to an undeclared interface.', evidenceReferences: ['src/Requests.js'], coverageDisposition: 'investigated' as const }],
+    ['    - Agent: Potential problem — GET {}/entries: moduleName is "settings", so this reaches `settings`, which is not declared.',
+      '      - Sources:', '        - src/Requests.js', '      - Coverage judgment: Investigated directly'],
+    ['  - Dropped from this review:',
+      '    - A result for discovered:interface:1: The potential problem does not name, in backticks, an interface that package.json does not declare.']]
+  ])('drops %s and keeps the rest of the review', async (_name, assessments, c2Rows, droppedRows) => {
     const result = await evaluateWith(fakeConfig({ assessments, reviewerActions: [action] }));
-    expect(result.agentReview?.available).toBe(false);
-    expect(result.agentReview?.errors.join(' ')).toMatch(/F001 substantive_concern (F001-C2#1|discovered:interface:1) must name, in backticks, the undeclared interface id/);
+    const lines = (result.details ?? '').split('\n');
+    const c2 = lines.indexOf('  - F001-C2 Each unresolved request goes to an interface the module declares.');
+    const dropped = lines.indexOf('  - Dropped from this review:');
+
+    expect(result.agentReview?.available).toBe(true);
+    expect(result.agentReview?.assessments?.map(assessment => assessment.technologyId)).toContain('F001-C3#1');
+    expect(lines.slice(c2 + 3, c2 + 3 + c2Rows.length + 1)).toEqual([...c2Rows, '  - F001-C3 Each path not in the handler index belongs to an interface the module declares.']);
+    expect(dropped < 0 ? [] : lines.slice(dropped, lines.indexOf('  - Sources:'))).toEqual(droppedRows);
   });
 
   it('never reviews a fail, and says so when agent review is enabled', async () => {

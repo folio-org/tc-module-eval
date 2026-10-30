@@ -51,11 +51,9 @@ export function buildF001AgentReviewRequest(repoPath: string, analysis: F001Anal
       'A substantive_concern must name, in its summary and in backticks, the interface id it believes is undeclared, such as `service-points`: as in handler-patterns.json when the interface is there, otherwise as the backend module\'s descriptor names it.',
       'Report requests to backend interfaces the checklist does not list, that go to an undeclared interface, as discovered:interface:<n>, citing the source file.'
     ],
-    validateCriterion: review => {
-      const unnamed = (review.assessments ?? []).find(assessment => assessment.type === 'substantive_concern'
-        && ![...assessment.summary.matchAll(/`([a-z][a-z0-9._-]*)`/g)].some(match => !declared.has(match[1])));
-      return unnamed ? `F001 substantive_concern ${unnamed.technologyId} must name, in backticks, the undeclared interface id it believes the request reaches.` : undefined;
-    },
+    criterionRule: assessment => assessment.type === 'substantive_concern'
+      && ![...assessment.summary.matchAll(/`([a-z][a-z0-9._-]*)`/g)].some(match => !declared.has(match[1]))
+      ? 'The potential problem does not name, in backticks, an interface that package.json does not declare.' : undefined,
     evidenceSummary: maxEntries => {
       const list = <T>(items: T[]) => ({ items: items.slice(0, maxEntries), ...(items.length > maxEntries ? { omitted: items.length - maxEntries } : {}) });
       const site = (item: F001Analysis['unresolvedSites'][number]) => ({

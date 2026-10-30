@@ -488,7 +488,7 @@ function normalizeOpenCodeResult(
     };
   }
 
-  const normalized = normalizeCriterionAgentAdvisoryPayload(parsed, workspace.manifestEntries);
+  const normalized = normalizeCriterionAgentAdvisoryPayload(parsed, workspace.manifestEntries, request.dropInvalidItems);
 
   if (normalized.errors.length) {
     return {
@@ -511,6 +511,7 @@ function normalizeOpenCodeResult(
     evidenceReferences: normalized.evidenceReferences,
     assessments: normalized.assessments,
     reviewerActions: normalized.reviewerActions,
+    ...(normalized.droppedItems.length ? { droppedItems: normalized.droppedItems } : {}),
     metadata: openCodeMetadata(config, workspace),
     warnings: normalized.warnings,
     errors: []

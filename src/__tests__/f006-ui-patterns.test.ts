@@ -196,7 +196,7 @@ describe('F006 UI layouts, patterns and norms', () => {
       ['F006-C5', false, ['F006-C5#1']],
       ['F006-C6', false, ['F006-C6#1']],
       ['F006-C7', true, []],
-      ['F006-C8', false, ['F006-C8#1']],
+      ['F006-C8', true, []],
       ['F006-C9', true, []]
     ]);
     expect(analysis.checklist.items[2].obligations[1]).toEqual({

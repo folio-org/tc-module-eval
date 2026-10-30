@@ -5,7 +5,7 @@ import {
   FrontendChecklist,
   FrontendChecklistItem
 } from '../types';
-import { ASSESSMENT_LABELS, COVERAGE_LABELS, prose, renderAgentReviewLines } from './agent-review-report';
+import { ASSESSMENT_LABELS, COVERAGE_LABELS, prose, RECOMMENDATION_LABELS, renderAgentReviewLines } from './agent-review-report';
 import { overflowLine, reportPath, reportText } from './report-text';
 
 /** The most obligations one F00x agent review is given; the rest are listed as not given to the agent. */
@@ -30,7 +30,8 @@ export function frontendChecklistOf(criterionId: string, criterionDetails: unkno
 
 /**
  * The checklist as report rows. With an accepted agent review, each item lists the agent's result for each of its
- * obligations, or says the item is checked by the reviewer only or the obligation was not given to the agent.
+ * obligations and why any result for it was dropped, or says the item is checked by the reviewer only, the obligation
+ * was not given to the agent, or the agent returned no result for it.
  */
 export function renderFrontendChecklistLines(checklist: FrontendChecklist, review?: CriterionAgentReviewResult): string[] {
   if (checklist.items.length === 0) return [];
@@ -49,15 +50,16 @@ export function renderFrontendChecklistLines(checklist: FrontendChecklist, revie
       continue;
     }
     for (const obligation of item.obligations) {
-      const assessment = assessments.find(candidate => candidate.technologyId === obligation.id);
       const subject = obligation.subject ? reportText(obligation.subject) : undefined;
-      if (assessment) {
-        lines.push(...assessmentLines(subject, assessment));
-      } else {
-        // An accepted review answers every obligation it was given, so a missing one was withheld, or is a defect.
-        const reason = obligation.withheld ? `Not given to the agent (limit of ${FRONTEND_AGENT_OBLIGATION_LIMIT})` : 'No agent result';
-        lines.push(`    - ${reason}${subject ? `: ${subject}` : ''}`);
+      if (obligation.withheld) {
+        lines.push(`    - Not given to the agent (limit of ${FRONTEND_AGENT_OBLIGATION_LIMIT})${subject ? `: ${subject}` : ''}`);
+        continue;
       }
+      const kept = assessments.filter(candidate => candidate.technologyId === obligation.id);
+      const dropped = (review?.droppedItems ?? []).filter(candidate => candidate.kind === 'assessment' && candidate.technologyId === obligation.id);
+      lines.push(...kept.flatMap(assessment => assessmentLines(subject, assessment)),
+        ...dropped.map(item => `    - Agent result dropped${subject ? ` — ${subject}` : ''}: ${reportText(item.reason)}`));
+      if (!kept.length && !dropped.length) lines.push(`    - No agent result${subject ? `: ${subject}` : ''}`);
     }
   }
   return lines;
@@ -78,8 +80,9 @@ const DISCOVERED_KIND_NAMES: Record<string, string> = {
 };
 
 /**
- * An accepted review's own section: the findings that answer no checklist obligation, such as `discovered:` ones,
- * then the recommendation, summary and reviewer actions.
+ * An accepted review's own section: the recommendation (and the agent's own, when it was replaced), summary, the
+ * findings that answer no checklist obligation, such as `discovered:` ones, reviewer actions, then the dropped items
+ * that belong to no obligation given to the agent, before the review's sources.
  */
 export function renderFrontendAgentReviewLines(checklist: FrontendChecklist, review: CriterionAgentReviewResult): string[] {
   const unattached = unattachedAssessments(checklist, review);
@@ -87,7 +90,19 @@ export function renderFrontendAgentReviewLines(checklist: FrontendChecklist, rev
     const match = /^discovered:([a-z]+):(\d+)$/.exec(assessment.technologyId);
     return match && DISCOVERED_KIND_NAMES[match[1]] ? [[`${match[1]}:${match[2]}`, `${DISCOVERED_KIND_NAMES[match[1]]} (${match[2]})`]] : [];
   }));
-  return [...renderAgentReviewLines({ ...review, assessments: unattached }, names), '  - Advisory only; the criterion status is unchanged.'];
+  const lines = renderAgentReviewLines({ ...review, assessments: unattached }, names);
+  const replaced = review.replacedRecommendation;
+  const recommendation = lines.findIndex(line => line.startsWith('  - Recommendation: '));
+  if (replaced) lines[recommendation] += ` — the agent recommended "${RECOMMENDATION_LABELS[replaced.recommendation]}", but ${reportText(replaced.reason)}.`;
+  const given = new Set(checklist.items.filter(item => !item.reviewerOnly)
+    .flatMap(item => item.obligations.filter(obligation => !obligation.withheld).map(obligation => obligation.id)));
+  const dropped = (review.droppedItems ?? []).filter(item => item.kind === 'reviewer_action' || !given.has(item.technologyId ?? ''));
+  if (dropped.length) {
+    const sources = lines.indexOf('  - Sources:');
+    lines.splice(sources < 0 ? lines.length : sources, 0, '  - Dropped from this review:', ...dropped.map(item => `    - ${item.kind === 'reviewer_action'
+      ? 'A reviewer action' : !item.technologyId ? 'A result without an ID' : `A result for ${reportText(item.technologyId)}`}: ${reportText(item.reason)}`));
+  }
+  return [...lines, '  - Advisory only; the criterion status is unchanged.'];
 }
 
 /**

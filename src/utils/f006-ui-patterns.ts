@@ -198,7 +198,7 @@ function checklistItems(analysis: F006Analysis): ReturnType<typeof numberObligat
     item('F006-C8', 'Settings pages follow the settings layout.', [
       ...componentStarts('settings'),
       ...analysis.settingsPages.map(page => ({ path: page.path, line: page.line, note: `settings page ${page.route}` }))
-    ]),
+    ], true),
     item('F006-C9', 'Each documentation link shown in the UI is publicly accessible.',
       analysis.links.map(link => ({ path: link.path, ...(link.line ? { line: link.line } : {}), note: link.key ? `${link.key}: ${link.url}` : link.url })), true)
   ]);
