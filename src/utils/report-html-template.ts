@@ -33,6 +33,7 @@ const CRITERION_TITLES: Record<string, string> = {
   F007: 'Works in the latest Chrome',
   B001: 'Module descriptor template',
   B003: 'Endpoint implementations',
+  B004: 'Environment variables',
   B005: 'Interface naming',
   B006: 'API documentation',
   B007: 'Endpoint permissions',

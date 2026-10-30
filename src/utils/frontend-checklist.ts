@@ -72,13 +72,14 @@ export function unattachedAssessments(checklist: FrontendChecklist, review: Crit
   return (review.assessments ?? []).filter(assessment => !obligationIds.has(assessment.technologyId));
 }
 
-// What an agent may report beyond the checklist, as discovered:<kind>:<n> (F001, F003 and B012).
+// What an agent may report beyond the checklist, as discovered:<kind>:<n> (F001, F003, B004 and B012).
 const DISCOVERED_KIND_NAMES: Record<string, string> = {
   text: 'Hard-coded text found by the agent',
   id: 'Missing message id found by the agent',
   interface: 'Request found by the agent',
   service: 'External service found by the agent',
-  topic: 'Kafka topic found by the agent'
+  topic: 'Kafka topic found by the agent',
+  env: 'Environment variable found by the agent'
 };
 
 /**

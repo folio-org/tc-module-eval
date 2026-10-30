@@ -2,6 +2,8 @@ import { CriterionResult, EvaluationRun, EvaluationStatus } from '../../types';
 import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { evaluateB001, renderB001HumanDetails } from '../../utils/b001-descriptor-template';
 import { evaluateB003, renderB003HumanDetails } from '../../utils/b003-endpoint-implementations';
+import { hasB004AgentReviewMaterial, reviewB004WithAgent } from '../../utils/b004-agent-review';
+import { B004Policy, evaluateB004, loadB004Policy, renderB004HumanDetails } from '../../utils/b004-env-variables';
 import { evaluateB005, renderB005HumanDetails } from '../../utils/b005-interface-naming';
 import { evaluateB006, renderB006HumanDetails } from '../../utils/b006-api-documentation';
 import { b007Implementations, hasB007AgentReviewMaterial, reviewB007WithAgent } from '../../utils/b007-agent-review';
@@ -15,9 +17,10 @@ import { getBackendEvidence } from '../../utils/backend-evidence';
 import { getBackendInfrastructure } from '../../utils/backend-infrastructure';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import { loadS007Policy } from '../../utils/s007-policy';
+import { errorMessage } from '../../utils/type-guards';
 
 /**
- * Evaluator for Backend criteria (B001-B016). B001, B003, B005, B006, B007, B012, B014 and B016 have automated logic; the others fall back to the
+ * Evaluator for Backend criteria (B001-B016). B001, B003-B007, B012, B014 and B016 have automated logic; the others fall back to the
  * catalog-defined default result.
  */
 export class BackendEvaluator extends CatalogSectionEvaluator {
@@ -25,6 +28,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
     super('Backend', 'java', {
       B001: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB001(repoPath, evaluationRun),
       B003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB003(repoPath, evaluationRun),
+      B004: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB004(repoPath, evaluationRun),
       B005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB005(repoPath, evaluationRun),
       B006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB006(repoPath, evaluationRun),
       B007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB007(repoPath, evaluationRun),
@@ -56,6 +60,37 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       evidence: analysis.summary,
       details: renderB003HumanDetails(analysis),
       criterionDetails: analysis
+    };
+  }
+
+  private async evaluateB004(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'B004', evaluationRun);
+    let policy: B004Policy | { problem: string };
+    try {
+      policy = loadB004Policy();
+    } catch (error) {
+      policy = { problem: `the policy snapshot could not be read: ${errorMessage(error)}` };
+    }
+    const analysis = evaluateB004(await getBackendEvidence(run, repoPath), run.existingModule, policy);
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'B004',
+      status: analysis.status,
+      hasReviewMaterial: hasB004AgentReviewMaterial(analysis),
+      notRunReason: 'no variable, read or log statement on the checklist needs the agent\'s judgment',
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewB004WithAgent(repoPath, analysis, 'problem' in policy ? undefined : policy, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
+      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the failures above are what the tool found on its own';
+    }
+    return {
+      criterionId: 'B004',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderB004HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 

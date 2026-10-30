@@ -2393,9 +2393,1507 @@
     },
     {
       "criterionId": "B004",
-      "status": "manual",
-      "evidence": "Authentication and authorization - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "fail",
+      "evidence": "B004 fail: ENV_VARS.md or a README table documents 24 of the 28 environment variables the module uses; 4 are not: JAVA_OPTIONS, DB_QUERYTIMEOUT, DB_CHARSET, and DB_MAXPOOLSIZE. 24 documented variables are in a table with no Required or Description column (policy section 3.2). The descriptor template has no top-level \"env\" (policy section 3.1).",
+      "details": "Evaluated as: a new module (the default)\nPolicy: FOLIO Environment Variables policy, page version 13 of 2026-01-26 (https://folio-org.atlassian.net/wiki/spaces/TC/pages/1319141429/Environment+Variables)\nVariables used: 28 (28 in launchDescriptor.env, 24 in Spring placeholders)\nDocumentation: no ENV_VARS.md, README.md with 1 table; the descriptor's env lists do not count as documentation\nC1 Documentation:\n  - Top-level env: descriptors/ModuleDescriptor-template.json has no top-level \"env\" (policy section 3.1)\n  - Documented in a table: 24 of 28\n  - Not documented (4):\n    - JAVA_OPTIONS — launchDescriptor.env in descriptors/ModuleDescriptor-template.json:281\n    - DB_QUERYTIMEOUT — launchDescriptor.env in descriptors/ModuleDescriptor-template.json:289\n    - DB_CHARSET — launchDescriptor.env in descriptors/ModuleDescriptor-template.json:290\n    - DB_MAXPOOLSIZE — launchDescriptor.env in descriptors/ModuleDescriptor-template.json:291\n  - In a table without a column the policy requires (section 3.2) (24):\n    - DB_HOST — README.md:74: no Required or Description column\n    - DB_PORT — README.md:75: no Required or Description column\n    - DB_USERNAME — README.md:72: no Required or Description column\n    - DB_PASSWORD — README.md:73: no Required or Description column\n    - DB_DATABASE — README.md:76: no Required or Description column\n    - KAFKA_HOST — README.md:77: no Required or Description column\n    - KAFKA_PORT — README.md:78: no Required or Description column\n    - MAX_POLL_RECORDS — README.md:79: no Required or Description column\n    - KAFKA_SECURITY_PROTOCOL — README.md:80: no Required or Description column\n    - KAFKA_SSL_KEYSTORE_PASSWORD — README.md:81: no Required or Description column\n    - KAFKA_SSL_KEYSTORE_LOCATION — README.md:82: no Required or Description column\n    - KAFKA_SSL_TRUSTSTORE_PASSWORD — README.md:83: no Required or Description column\n    - KAFKA_SSL_TRUSTSTORE_LOCATION — README.md:84: no Required or Description column\n    - ENV — README.md:85: no Required or Description column\n    - OKAPI_URL — README.md:86: no Required or Description column\n    - KAFKA_RETRY_INTERVAL_MS — README.md:87: no Required or Description column\n    - KAFKA_RETRY_DELIVERY_ATTEMPTS — README.md:88: no Required or Description column\n    - KAFKA_EVENTS_CONCURRENCY — README.md:89: no Required or Description column\n    - KAFKA_EVENTS_CONSUMER_PATTERN — README.md:90: no Required or Description column\n    - SYSTEM_USER_ENABLED — README.md:91: no Required or Description column\n    - ... 4 more\nC2 Required vs optional:\n  - Not checked: no documentation says whether a variable is required\nC3 Naming:\n  - Every name is upper case letters, digits and underscores, and no AWS_ variable lacks an S3_ one\nC4 Startup behaviour:\n  - Not known for 28 variables, because the documentation does not say whether they are required\nC5 Startup logging:\n  - No log statement in files that read configuration prints a secret-like value or the whole environment\nWhat to do:\n  - Document every variable the module uses in ENV_VARS.md or a README table with its name, default (or empty), whether it is required, and a description (policy section 3).\n  - List every variable with a description in the descriptor template's top-level \"env\" (policy section 3.1).\nChecklist for the reviewer:\n  - B004-C1 Every environment variable the module uses is documented in ENV_VARS.md or a README table with a default, whether it is required, and a description, and the descriptor template lists it in a top-level env.\n    - Start with:\n      - descriptors/ModuleDescriptor-template.json — the template has no top-level \"env\"\n      - descriptors/ModuleDescriptor-template.json:281 — JAVA_OPTIONS: not in ENV_VARS.md or a README table\n      - README.md:74 — DB_HOST: its table has no Required or Description column\n      - README.md:75 — DB_PORT: its table has no Required or Description column\n      - README.md:72 — DB_USERNAME: its table has no Required or Description column\n      - README.md:73 — DB_PASSWORD: its table has no Required or Description column\n      - README.md:76 — DB_DATABASE: its table has no Required or Description column\n      - descriptors/ModuleDescriptor-template.json:289 — DB_QUERYTIMEOUT: not in ENV_VARS.md or a README table\n      - descriptors/ModuleDescriptor-template.json:290 — DB_CHARSET: not in ENV_VARS.md or a README table\n      - descriptors/ModuleDescriptor-template.json:291 — DB_MAXPOOLSIZE: not in ENV_VARS.md or a README table\n      - README.md:77 — KAFKA_HOST: its table has no Required or Description column\n      - README.md:78 — KAFKA_PORT: its table has no Required or Description column\n      - README.md:79 — MAX_POLL_RECORDS: its table has no Required or Description column\n      - README.md:80 — KAFKA_SECURITY_PROTOCOL: its table has no Required or Description column\n      - README.md:81 — KAFKA_SSL_KEYSTORE_PASSWORD: its table has no Required or Description column\n      - README.md:82 — KAFKA_SSL_KEYSTORE_LOCATION: its table has no Required or Description column\n      - README.md:83 — KAFKA_SSL_TRUSTSTORE_PASSWORD: its table has no Required or Description column\n      - README.md:84 — KAFKA_SSL_TRUSTSTORE_LOCATION: its table has no Required or Description column\n      - README.md:85 — ENV: its table has no Required or Description column\n      - README.md:86 — OKAPI_URL: its table has no Required or Description column\n      - ... 9 more\n  - B004-C4 Each required variable stops startup with a clear message when it is missing or empty.\n    - Start with:\n      - descriptors/ModuleDescriptor-template.json:281 — JAVA_OPTIONS: not documented as required or optional\n      - src/main/resources/application.yml:15 — DB_HOST: not documented as required or optional\n      - src/main/resources/application.yml:15 — DB_PORT: not documented as required or optional\n      - src/main/resources/application.yml:13 — DB_USERNAME: not documented as required or optional\n      - src/main/resources/application.yml:14 — DB_PASSWORD: not documented as required or optional\n      - src/main/resources/application.yml:15 — DB_DATABASE: not documented as required or optional\n      - descriptors/ModuleDescriptor-template.json:289 — DB_QUERYTIMEOUT: not documented as required or optional\n      - descriptors/ModuleDescriptor-template.json:290 — DB_CHARSET: not documented as required or optional\n      - descriptors/ModuleDescriptor-template.json:291 — DB_MAXPOOLSIZE: not documented as required or optional\n      - src/main/resources/application.yml:47 — KAFKA_HOST: not documented as required or optional\n      - src/main/resources/application.yml:47 — KAFKA_PORT: not documented as required or optional\n      - src/main/resources/application.yml:49 — MAX_POLL_RECORDS: not documented as required or optional\n      - src/main/resources/application.yml:51 — KAFKA_SECURITY_PROTOCOL: not documented as required or optional\n      - src/main/resources/application.yml:53 — KAFKA_SSL_KEYSTORE_PASSWORD: not documented as required or optional\n      - src/main/resources/application.yml:54 — KAFKA_SSL_KEYSTORE_LOCATION: not documented as required or optional\n      - src/main/resources/application.yml:55 — KAFKA_SSL_TRUSTSTORE_PASSWORD: not documented as required or optional\n      - src/main/resources/application.yml:56 — KAFKA_SSL_TRUSTSTORE_LOCATION: not documented as required or optional\n      - src/main/resources/application.yml:59 — ENV: not documented as required or optional\n      - src/main/resources/application.yml:60 — OKAPI_URL: not documented as required or optional\n      - src/main/resources/application.yml:65 — KAFKA_RETRY_INTERVAL_MS: not documented as required or optional\n      - ... 8 more",
+      "criterionDetails": {
+        "criterionId": "B004",
+        "status": "fail",
+        "summary": "B004 fail: ENV_VARS.md or a README table documents 24 of the 28 environment variables the module uses; 4 are not: JAVA_OPTIONS, DB_QUERYTIMEOUT, DB_CHARSET, and DB_MAXPOOLSIZE. 24 documented variables are in a table with no Required or Description column (policy section 3.2). The descriptor template has no top-level \"env\" (policy section 3.1).",
+        "kind": "backend-module",
+        "existingModule": false,
+        "policy": {
+          "title": "Environment Variables",
+          "url": "https://folio-org.atlassian.net/wiki/spaces/TC/pages/1319141429/Environment+Variables",
+          "pageVersion": 13,
+          "modifiedAt": "2026-01-26T15:03:06.548Z"
+        },
+        "templatePath": "descriptors/ModuleDescriptor-template.json",
+        "documentationChecked": true,
+        "documentationFiles": [
+          {
+            "path": "README.md",
+            "tableCount": 1
+          }
+        ],
+        "topLevelEnv": "missing",
+        "variables": [
+          {
+            "name": "JAVA_OPTIONS",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 281,
+                "value": "-XX:MaxRAMPercentage=66.0"
+              }
+            ],
+            "sourceCount": 1,
+            "problems": [
+              "undocumented"
+            ]
+          },
+          {
+            "name": "DB_HOST",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 284,
+                "value": "postgres"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 15,
+                "value": "localhost"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 74,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`localhost`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 74,
+              "value": "`localhost`"
+            }
+          },
+          {
+            "name": "DB_PORT",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 285,
+                "value": "5432"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 15,
+                "value": "5432"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 75,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`5432`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 75,
+              "value": "`5432`"
+            }
+          },
+          {
+            "name": "DB_USERNAME",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 286,
+                "value": "folio_admin"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 13,
+                "value": "folio_admin"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 72,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`folio_admin`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 72,
+              "value": "`folio_admin`"
+            }
+          },
+          {
+            "name": "DB_PASSWORD",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 287,
+                "value": "folio_admin"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 14,
+                "value": "folio_admin"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 73,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`folio_admin`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 73,
+              "value": "`folio_admin`"
+            }
+          },
+          {
+            "name": "DB_DATABASE",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 288,
+                "value": "okapi_modules"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 15,
+                "value": "db"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 76,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`db`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 76,
+              "value": "`db`"
+            }
+          },
+          {
+            "name": "DB_QUERYTIMEOUT",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 289,
+                "value": "60000"
+              }
+            ],
+            "sourceCount": 1,
+            "problems": [
+              "undocumented"
+            ]
+          },
+          {
+            "name": "DB_CHARSET",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 290,
+                "value": "UTF-8"
+              }
+            ],
+            "sourceCount": 1,
+            "problems": [
+              "undocumented"
+            ]
+          },
+          {
+            "name": "DB_MAXPOOLSIZE",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 291,
+                "value": "5"
+              }
+            ],
+            "sourceCount": 1,
+            "problems": [
+              "undocumented"
+            ]
+          },
+          {
+            "name": "KAFKA_HOST",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 292,
+                "value": "localhost"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 47,
+                "value": "localhost"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 77,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`localhost`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 77,
+              "value": "`localhost`"
+            }
+          },
+          {
+            "name": "KAFKA_PORT",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 293,
+                "value": "9092"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 47,
+                "value": "9092"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 78,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`9092`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 78,
+              "value": "`9092`"
+            }
+          },
+          {
+            "name": "MAX_POLL_RECORDS",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 294,
+                "value": "50"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 49,
+                "value": "50"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 79,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`50`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 79,
+              "value": "`50`"
+            }
+          },
+          {
+            "name": "KAFKA_SECURITY_PROTOCOL",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 295,
+                "value": "PLAINTEXT"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 51,
+                "value": "PLAINTEXT"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 80,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`PLAINTEXT`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 80,
+              "value": "`PLAINTEXT`"
+            }
+          },
+          {
+            "name": "KAFKA_SSL_KEYSTORE_PASSWORD",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 296,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 53,
+                "value": ""
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 81,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "*(empty)*"
+            }
+          },
+          {
+            "name": "KAFKA_SSL_KEYSTORE_LOCATION",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 297,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 54,
+                "value": ""
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 82,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "*(empty)*"
+            }
+          },
+          {
+            "name": "KAFKA_SSL_TRUSTSTORE_PASSWORD",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 298,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 55,
+                "value": ""
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 83,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "*(empty)*"
+            }
+          },
+          {
+            "name": "KAFKA_SSL_TRUSTSTORE_LOCATION",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 299,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 56,
+                "value": ""
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 84,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "*(empty)*"
+            }
+          },
+          {
+            "name": "ENV",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 300,
+                "value": "folio"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 59,
+                "value": "folio"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 85,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`folio`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 85,
+              "value": "`folio`"
+            }
+          },
+          {
+            "name": "OKAPI_URL",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 301,
+                "value": "http://localhost:8081"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 60,
+                "value": "http://localhost:8082"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 86,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`http://localhost:8081`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 86,
+              "value": "`http://localhost:8081`"
+            }
+          },
+          {
+            "name": "KAFKA_RETRY_INTERVAL_MS",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 302,
+                "value": "2000"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 65,
+                "value": "2000"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 87,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`2000`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 87,
+              "value": "`2000`"
+            }
+          },
+          {
+            "name": "KAFKA_RETRY_DELIVERY_ATTEMPTS",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 303,
+                "value": "6"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 66,
+                "value": "6"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 88,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`6`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 88,
+              "value": "`6`"
+            }
+          },
+          {
+            "name": "KAFKA_EVENTS_CONCURRENCY",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 304,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 70,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 74,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 78,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 82,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 86,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 90,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 94,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 98,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 102,
+                "value": "2"
+              }
+            ],
+            "sourceCount": 12,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 89,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`2`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 89,
+              "value": "`2`"
+            }
+          },
+          {
+            "name": "KAFKA_EVENTS_CONSUMER_PATTERN",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 305,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 71,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.instance"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 75,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.holdings-record"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 79,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.item"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 83,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.location"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 87,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.library"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 91,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.material-type"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 95,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.loan-type"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 99,
+                "value": "${folio.environment}\\.ALL\\.inventory\\.bound-with"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 103,
+                "value": "${folio.environment}\\.ALL\\.circulation\\.loan"
+              }
+            ],
+            "sourceCount": 12,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 90,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "computed per topic"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 90,
+              "value": "computed per topic"
+            }
+          },
+          {
+            "name": "SYSTEM_USER_ENABLED",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 306,
+                "value": "false"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 114,
+                "value": "false"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 91,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`false`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 91,
+              "value": "`false`"
+            }
+          },
+          {
+            "name": "SYSTEM_USER_USERNAME",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 307,
+                "value": "mod-rtac-cache"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 115,
+                "value": "mod-rtac-cache"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 92,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`mod-rtac-cache`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 92,
+              "value": "`mod-rtac-cache`"
+            }
+          },
+          {
+            "name": "SYSTEM_USER_PASSWORD",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 308,
+                "value": ""
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 116
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 93,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "*(none)*"
+            }
+          },
+          {
+            "name": "RTAC_CACHE_INVALIDATION_CRON",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 309,
+                "value": "0 0 2 * * ?"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 124,
+                "value": "0 0 2 * * ?"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 94,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`0 0 2 * * ?`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 94,
+              "value": "`0 0 2 * * ?`"
+            }
+          },
+          {
+            "name": "RTAC_CACHE_RETENTION_DAYS",
+            "sources": [
+              {
+                "kind": "launch-env",
+                "path": "descriptors/ModuleDescriptor-template.json",
+                "line": 310,
+                "value": "2"
+              },
+              {
+                "kind": "configuration",
+                "path": "src/main/resources/application.yml",
+                "line": 125,
+                "value": "2"
+              }
+            ],
+            "sourceCount": 2,
+            "problems": [
+              "missing-columns"
+            ],
+            "documentation": {
+              "path": "README.md",
+              "line": 95,
+              "missingColumns": [
+                "required",
+                "description"
+              ],
+              "default": "`2`"
+            },
+            "defaultFrom": {
+              "kind": "documentation",
+              "path": "README.md",
+              "line": 95,
+              "value": "`2`"
+            }
+          }
+        ],
+        "unreadReads": [],
+        "unreadReadCount": 0,
+        "logSignals": [],
+        "sourceDiagnostics": [],
+        "checklist": {
+          "items": [
+            {
+              "id": "B004-C1",
+              "title": "Every environment variable the module uses is documented in ENV_VARS.md or a README table with a default, whether it is required, and a description, and the descriptor template lists it in a top-level env.",
+              "startingPoints": [
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "note": "the template has no top-level \"env\""
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 281,
+                  "note": "JAVA_OPTIONS: not in ENV_VARS.md or a README table"
+                },
+                {
+                  "path": "README.md",
+                  "line": 74,
+                  "note": "DB_HOST: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 75,
+                  "note": "DB_PORT: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 72,
+                  "note": "DB_USERNAME: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 73,
+                  "note": "DB_PASSWORD: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 76,
+                  "note": "DB_DATABASE: its table has no Required or Description column"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 289,
+                  "note": "DB_QUERYTIMEOUT: not in ENV_VARS.md or a README table"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 290,
+                  "note": "DB_CHARSET: not in ENV_VARS.md or a README table"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 291,
+                  "note": "DB_MAXPOOLSIZE: not in ENV_VARS.md or a README table"
+                },
+                {
+                  "path": "README.md",
+                  "line": 77,
+                  "note": "KAFKA_HOST: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 78,
+                  "note": "KAFKA_PORT: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 79,
+                  "note": "MAX_POLL_RECORDS: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 80,
+                  "note": "KAFKA_SECURITY_PROTOCOL: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 81,
+                  "note": "KAFKA_SSL_KEYSTORE_PASSWORD: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 82,
+                  "note": "KAFKA_SSL_KEYSTORE_LOCATION: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 83,
+                  "note": "KAFKA_SSL_TRUSTSTORE_PASSWORD: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 84,
+                  "note": "KAFKA_SSL_TRUSTSTORE_LOCATION: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 85,
+                  "note": "ENV: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 86,
+                  "note": "OKAPI_URL: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 87,
+                  "note": "KAFKA_RETRY_INTERVAL_MS: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 88,
+                  "note": "KAFKA_RETRY_DELIVERY_ATTEMPTS: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 89,
+                  "note": "KAFKA_EVENTS_CONCURRENCY: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 90,
+                  "note": "KAFKA_EVENTS_CONSUMER_PATTERN: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 91,
+                  "note": "SYSTEM_USER_ENABLED: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 92,
+                  "note": "SYSTEM_USER_USERNAME: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 93,
+                  "note": "SYSTEM_USER_PASSWORD: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 94,
+                  "note": "RTAC_CACHE_INVALIDATION_CRON: its table has no Required or Description column"
+                },
+                {
+                  "path": "README.md",
+                  "line": 95,
+                  "note": "RTAC_CACHE_RETENTION_DAYS: its table has no Required or Description column"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B004-C1#1",
+                  "withheld": true
+                }
+              ]
+            },
+            {
+              "id": "B004-C4",
+              "title": "Each required variable stops startup with a clear message when it is missing or empty.",
+              "startingPoints": [
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 281,
+                  "note": "JAVA_OPTIONS: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 15,
+                  "note": "DB_HOST: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 15,
+                  "note": "DB_PORT: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 13,
+                  "note": "DB_USERNAME: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 14,
+                  "note": "DB_PASSWORD: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 15,
+                  "note": "DB_DATABASE: not documented as required or optional"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 289,
+                  "note": "DB_QUERYTIMEOUT: not documented as required or optional"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 290,
+                  "note": "DB_CHARSET: not documented as required or optional"
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 291,
+                  "note": "DB_MAXPOOLSIZE: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 47,
+                  "note": "KAFKA_HOST: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 47,
+                  "note": "KAFKA_PORT: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 49,
+                  "note": "MAX_POLL_RECORDS: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 51,
+                  "note": "KAFKA_SECURITY_PROTOCOL: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 53,
+                  "note": "KAFKA_SSL_KEYSTORE_PASSWORD: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 54,
+                  "note": "KAFKA_SSL_KEYSTORE_LOCATION: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 55,
+                  "note": "KAFKA_SSL_TRUSTSTORE_PASSWORD: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 56,
+                  "note": "KAFKA_SSL_TRUSTSTORE_LOCATION: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 59,
+                  "note": "ENV: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 60,
+                  "note": "OKAPI_URL: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 65,
+                  "note": "KAFKA_RETRY_INTERVAL_MS: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 66,
+                  "note": "KAFKA_RETRY_DELIVERY_ATTEMPTS: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 70,
+                  "note": "KAFKA_EVENTS_CONCURRENCY: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 71,
+                  "note": "KAFKA_EVENTS_CONSUMER_PATTERN: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 114,
+                  "note": "SYSTEM_USER_ENABLED: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 115,
+                  "note": "SYSTEM_USER_USERNAME: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 116,
+                  "note": "SYSTEM_USER_PASSWORD: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 124,
+                  "note": "RTAC_CACHE_INVALIDATION_CRON: not documented as required or optional"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "line": 125,
+                  "note": "RTAC_CACHE_RETENTION_DAYS: not documented as required or optional"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B004-C4#1",
+                  "subject": "JAVA_OPTIONS",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 281
+                },
+                {
+                  "id": "B004-C4#2",
+                  "subject": "DB_HOST",
+                  "path": "src/main/resources/application.yml",
+                  "line": 15
+                },
+                {
+                  "id": "B004-C4#3",
+                  "subject": "DB_PORT",
+                  "path": "src/main/resources/application.yml",
+                  "line": 15
+                },
+                {
+                  "id": "B004-C4#4",
+                  "subject": "DB_USERNAME",
+                  "path": "src/main/resources/application.yml",
+                  "line": 13
+                },
+                {
+                  "id": "B004-C4#5",
+                  "subject": "DB_PASSWORD",
+                  "path": "src/main/resources/application.yml",
+                  "line": 14
+                },
+                {
+                  "id": "B004-C4#6",
+                  "subject": "DB_DATABASE",
+                  "path": "src/main/resources/application.yml",
+                  "line": 15
+                },
+                {
+                  "id": "B004-C4#7",
+                  "subject": "DB_QUERYTIMEOUT",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 289
+                },
+                {
+                  "id": "B004-C4#8",
+                  "subject": "DB_CHARSET",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 290
+                },
+                {
+                  "id": "B004-C4#9",
+                  "subject": "DB_MAXPOOLSIZE",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 291
+                },
+                {
+                  "id": "B004-C4#10",
+                  "subject": "KAFKA_HOST",
+                  "path": "src/main/resources/application.yml",
+                  "line": 47
+                },
+                {
+                  "id": "B004-C4#11",
+                  "subject": "KAFKA_PORT",
+                  "path": "src/main/resources/application.yml",
+                  "line": 47
+                },
+                {
+                  "id": "B004-C4#12",
+                  "subject": "MAX_POLL_RECORDS",
+                  "path": "src/main/resources/application.yml",
+                  "line": 49
+                },
+                {
+                  "id": "B004-C4#13",
+                  "subject": "KAFKA_SECURITY_PROTOCOL",
+                  "path": "src/main/resources/application.yml",
+                  "line": 51
+                },
+                {
+                  "id": "B004-C4#14",
+                  "subject": "KAFKA_SSL_KEYSTORE_PASSWORD",
+                  "path": "src/main/resources/application.yml",
+                  "line": 53
+                },
+                {
+                  "id": "B004-C4#15",
+                  "subject": "KAFKA_SSL_KEYSTORE_LOCATION",
+                  "path": "src/main/resources/application.yml",
+                  "line": 54
+                },
+                {
+                  "id": "B004-C4#16",
+                  "subject": "KAFKA_SSL_TRUSTSTORE_PASSWORD",
+                  "path": "src/main/resources/application.yml",
+                  "line": 55
+                },
+                {
+                  "id": "B004-C4#17",
+                  "subject": "KAFKA_SSL_TRUSTSTORE_LOCATION",
+                  "path": "src/main/resources/application.yml",
+                  "line": 56
+                },
+                {
+                  "id": "B004-C4#18",
+                  "subject": "ENV",
+                  "path": "src/main/resources/application.yml",
+                  "line": 59
+                },
+                {
+                  "id": "B004-C4#19",
+                  "subject": "OKAPI_URL",
+                  "path": "src/main/resources/application.yml",
+                  "line": 60
+                },
+                {
+                  "id": "B004-C4#20",
+                  "subject": "KAFKA_RETRY_INTERVAL_MS",
+                  "path": "src/main/resources/application.yml",
+                  "line": 65
+                },
+                {
+                  "id": "B004-C4#21",
+                  "subject": "KAFKA_RETRY_DELIVERY_ATTEMPTS",
+                  "path": "src/main/resources/application.yml",
+                  "line": 66
+                },
+                {
+                  "id": "B004-C4#22",
+                  "subject": "KAFKA_EVENTS_CONCURRENCY",
+                  "path": "src/main/resources/application.yml",
+                  "line": 70
+                },
+                {
+                  "id": "B004-C4#23",
+                  "subject": "KAFKA_EVENTS_CONSUMER_PATTERN",
+                  "path": "src/main/resources/application.yml",
+                  "line": 71
+                },
+                {
+                  "id": "B004-C4#24",
+                  "subject": "SYSTEM_USER_ENABLED",
+                  "path": "src/main/resources/application.yml",
+                  "line": 114
+                },
+                {
+                  "id": "B004-C4#25",
+                  "subject": "SYSTEM_USER_USERNAME",
+                  "path": "src/main/resources/application.yml",
+                  "line": 115
+                },
+                {
+                  "id": "B004-C4#26",
+                  "subject": "SYSTEM_USER_PASSWORD",
+                  "path": "src/main/resources/application.yml",
+                  "line": 116,
+                  "withheld": true
+                },
+                {
+                  "id": "B004-C4#27",
+                  "subject": "RTAC_CACHE_INVALIDATION_CRON",
+                  "path": "src/main/resources/application.yml",
+                  "line": 124,
+                  "withheld": true
+                },
+                {
+                  "id": "B004-C4#28",
+                  "subject": "RTAC_CACHE_RETENTION_DAYS",
+                  "path": "src/main/resources/application.yml",
+                  "line": 125,
+                  "withheld": true
+                }
+              ]
+            }
+          ]
+        }
+      }
     },
     {
       "criterionId": "B005",
