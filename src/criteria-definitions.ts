@@ -229,11 +229,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B010',
     description: 'Tenant data segregation',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Scalability and load handling'
-    }
+    languages: ['java']
   },
   {
     id: 'B011',

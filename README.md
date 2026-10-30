@@ -275,6 +275,17 @@ when remote lookups are off and the repository has none. Tests in a folio-integr
 another name, such as `erm/` for mod-agreements, are not seen. See
 [Criterion Notes](docs/criterion-notes.md#b009-api-tests).
 
+### B010 Tenant Data Segregation
+
+B010 applies when the repository stores data: an RMB database schema, PostgresClient or PgUtil use, a
+Liquibase changelog, a datasource, or Grails domain classes with a datasource. It is then always left to
+the reviewer, with the mechanism that keeps each tenant in its own schema (RMB's PostgresClient,
+folio-spring-base, GORM multi-tenancy) and the places where tenant data may be shared: PostgresClient
+without a tenant id, a DataSource or pool the code creates itself, SQL that writes to the `public` schema, a
+schema with a fixed name, and Grails domain classes that do not implement `MultiTenant`. A repository
+without storage, such as an edge module, is not applicable. With agent review enabled, an advisory review
+of the checklist runs by default. See [Criterion Notes](docs/criterion-notes.md#b010-tenant-data-segregation).
+
 ### B011 Other Modules' Database Schemas
 
 B011 checks that a module with storage does not read or write other modules' database schemas. It looks

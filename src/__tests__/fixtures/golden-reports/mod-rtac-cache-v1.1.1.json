@@ -37,6 +37,8 @@
       "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
       "src/main/java/org/folio/rtaccache/service/RtacHoldingMappingService.java",
       "src/main/resources/application.yml",
+      "src/main/resources/db/changelog/changelog-master.xml",
+      "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
       "src/main/resources/swagger.api/examples/error.sample",
       "src/main/resources/swagger.api/examples/errors.sample",
       "src/main/resources/swagger.api/schemas/circulation/loan.json",
@@ -4744,8 +4746,106 @@
     {
       "criterionId": "B010",
       "status": "manual",
-      "evidence": "Scalability and load handling - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B010 manual: The module stores data with folio-spring-base, which sets each database connection to the tenant's schema. The tool found 1 place where tenant data may be stored outside a tenant's schema: CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants is in the public schema, which all tenants share (src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql:1). A reviewer must confirm.",
+      "details": "Storage: found\n  - Liquibase changelog src/main/resources/db/changelog/changelog-master.xml\n  - Datasource configured in src/main/resources/application.yml\nTenant-schema mechanism: found\n  - pom.xml — folio-spring-base, whose DataSource sets each connection's search_path to the request tenant's schema\n  - src/main/resources/db/changelog/changelog-master.xml — Liquibase changelog, which folio-spring-base runs in each tenant's schema\nPlaces where tenant data may be stored outside a tenant's schema: found\n  - src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql:1 — CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants is in the public schema, which all tenants share\nChecklist for the reviewer:\n  - B010-C1 Every table the module writes is in a per-tenant schema.\n    - Start with:\n      - pom.xml — folio-spring-base, whose DataSource sets each connection's search_path to the request tenant's schema\n      - src/main/resources/db/changelog/changelog-master.xml — Liquibase changelog, which folio-spring-base runs in each tenant's schema\n  - B010-C2 Each place listed stores no tenant data in a schema, table or connection that tenants share.\n    - Start with:\n      - src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql:1 — CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants is in the public schema, which all tenants share\n  - B010-C3 Caches and files that hold tenant data are keyed by tenant.\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B010",
+        "kind": "backend-module",
+        "storage": {
+          "present": true,
+          "evidence": [
+            "Liquibase changelog src/main/resources/db/changelog/changelog-master.xml",
+            "Datasource configured in src/main/resources/application.yml"
+          ]
+        },
+        "mechanisms": [
+          {
+            "name": "folio-spring-base",
+            "evidence": [
+              {
+                "path": "pom.xml",
+                "note": "folio-spring-base, whose DataSource sets each connection's search_path to the request tenant's schema"
+              },
+              {
+                "path": "src/main/resources/db/changelog/changelog-master.xml",
+                "note": "Liquibase changelog, which folio-spring-base runs in each tenant's schema"
+              }
+            ]
+          }
+        ],
+        "redFlags": [
+          {
+            "kind": "public-schema",
+            "path": "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
+            "line": 1,
+            "text": "CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants"
+          }
+        ],
+        "redFlagCount": 1,
+        "unreadClientCalls": [],
+        "unreadClientCallCount": 0,
+        "sourceDiagnostics": [],
+        "status": "manual",
+        "basis": "storage",
+        "summary": "B010 manual: The module stores data with folio-spring-base, which sets each database connection to the tenant's schema. The tool found 1 place where tenant data may be stored outside a tenant's schema: CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants is in the public schema, which all tenants share (src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql:1). A reviewer must confirm.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B010-C1",
+              "title": "Every table the module writes is in a per-tenant schema.",
+              "startingPoints": [
+                {
+                  "path": "pom.xml",
+                  "note": "folio-spring-base, whose DataSource sets each connection's search_path to the request tenant's schema"
+                },
+                {
+                  "path": "src/main/resources/db/changelog/changelog-master.xml",
+                  "note": "Liquibase changelog, which folio-spring-base runs in each tenant's schema"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B010-C1#1"
+                }
+              ]
+            },
+            {
+              "id": "B010-C2",
+              "title": "Each place listed stores no tenant data in a schema, table or connection that tenants share.",
+              "startingPoints": [
+                {
+                  "path": "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
+                  "line": 1,
+                  "note": "CREATE OR REPLACE FUNCTION public.delete_old_holdings_all_tenants is in the public schema, which all tenants share"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B010-C2#1",
+                  "subject": "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
+                  "path": "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
+                  "line": 1,
+                  "flag": "manual"
+                }
+              ]
+            },
+            {
+              "id": "B010-C3",
+              "title": "Caches and files that hold tenant data are keyed by tenant.",
+              "startingPoints": [],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B010-C3#1"
+                }
+              ]
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B011",
