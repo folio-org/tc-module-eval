@@ -576,6 +576,23 @@ B014 checks that the module serves `GET /admin/health`. It reads the committed s
 
 The checklist has B014-C1: the module answers `GET /admin/health` with 200 when it runs, starting from each setting or route listed. Each application lists at most 50 problems, with a count of the rest. B014 has no agent review.
 
+## B016 Supported Infrastructure
+
+B016 checks that the module uses only infrastructure on the Officially Supported Technologies list. It reads the committed source B001 reads, so it runs in safe mode, and the `infrastructure` and `fast-moving-infrastructure` sections of the policy S007 reads (`config/officially-supported-technologies.json`), the sections whose consumer is `b016`. Infrastructure server versions are not checked: the module does not pin them.
+
+- **Infrastructure** (shared with B012, `backendInfrastructure`):
+  - Client libraries among the direct production dependencies of every `pom.xml` (without `test` scope; profile, `<optional>` and `provided` dependencies are optional) and `build.gradle(.kts)` (`api`, `implementation`, `runtimeOnly`, `compile`, `runtime`, and `compileOnly` as optional; not `buildSrc/` or `build-logic/`): PostgreSQL drivers, Kafka clients (including `folio-kafka-wrapper` and Spring Kafka), OpenSearch and Elasticsearch clients, S3 clients (MinIO, the AWS SDK and `folio-s3-client`), the Keycloak admin client, and outside the list Redis, MongoDB, RabbitMQ, ActiveMQ, Cassandra, Solr, the Hazelcast client, AWS SSM, SQS and SNS, HashiCorp Vault, MySQL and MariaDB. Embedded libraries such as Caffeine and embedded Hazelcast are not infrastructure. Transitive dependencies are not visible without running the build.
+  - B001's storage evidence, which is PostgreSQL in FOLIO, unless nothing names PostgreSQL and a non-optional MySQL or MariaDB driver or JDBC URL names that database instead. The RMB dependency alone is not storage, so mod-circulation has no PostgreSQL.
+  - Configuration in `src/main/resources` and `grails-app/conf` (`.yml`, `.yaml`, `.properties`): Spring keys such as `spring.kafka.*` and `spring.data.redis.*`, JDBC URLs, and edge-common's `secureStore.type`.
+  - Environment variable prefixes (`DB_`, `KAFKA_`, `OPENSEARCH_`, `ELASTICSEARCH_`, `S3_`, `REDIS_` and others) in the descriptor template's env lists, `${NAME}` placeholders in configuration and `System.getenv` in sources.
+- **Optional:** HashiCorp Vault and AWS SSM are edge-common secure stores, chosen with `secure_store` (default `Ephemeral`), in a repository that depends on `edge-common` or `edge-common-spring`, is one of them, or sets `secureStore.type`; Maven profile, `<optional>` and `provided` dependencies and Gradle `compileOnly` dependencies are optional too.
+- **Listed:** an infrastructure is listed when its id is an entry's id or alias, so S3 counts as MinIO (alias `s3`). Advisory entries (MinIO, FOLIO Keycloak) count as listed, and the report says they are advisory.
+- `pass`: every infrastructure found is on the list.
+- `fail`: the module requires an infrastructure that is not on the list (a direct production dependency that is not optional, or storage evidence). The report ends with a "What to do" line.
+- `manual`: an optional backend that is not on the list (Vault and AWS SSM in edge modules); an infrastructure not on the list that only configuration or environment variables name; a dependency declaration the tool could not read (a version catalog entry, a variable or unresolved property in the coordinates, invalid XML or YAML, `apply from`); committed source the tool could not read completely; no `pom.xml` or `build.gradle`; or a policy that could not be read or gives B016 no sections.
+
+B016 applies to modules, edge modules and libraries alike. The checklist has B016-C1 (required, not on the list), B016-C2 (optional backends stay optional), B016-C3 (named only in configuration) and B016-C4 (what the tool could not read), each for the reviewer. B016 has no agent review.
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

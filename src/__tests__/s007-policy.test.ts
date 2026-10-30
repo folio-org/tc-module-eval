@@ -77,6 +77,22 @@ describe('S007 OST policy', () => {
     expect(normalizeS007PolicyVersionExpression('26.x')).toBe('>=26.0.0 <27.0.0-0');
   });
 
+  it('gives the infrastructure sections to B016 and rejects an unknown consumer', async () => {
+    const result = await loadS007Policy();
+    if (!result.ok) throw new Error(result.diagnostics.map(diagnostic => diagnostic.message).join('\n'));
+    const policy = result.policy;
+
+    expect(policy.sections.filter(section => section.consumer === 'b016').map(section => section.id)).toEqual(['infrastructure', 'fast-moving-infrastructure']);
+    expect(policy.sections.filter(section => section.consumer === 'future')).toEqual([]);
+
+    const unknownPath = path.join(fixtureDir, 'unknown-consumer.json');
+    await fs.writeJson(unknownPath, { ...policy, sections: policy.sections.map(section => section.id === 'infrastructure' ? { ...section, consumer: 'b012' } : section) });
+    const unknown = await loadS007Policy(unknownPath);
+
+    expect(unknown.ok).toBe(false);
+    expect(unknown.diagnostics.map(diagnostic => diagnostic.path)).toContain(`/sections/${policy.sections.findIndex(section => section.id === 'infrastructure')}/consumer`);
+  });
+
   it('preserves optional historical metadata without requiring it', async () => {
     const committed = await readCommittedPolicy();
     expect(committed.source?.url).toContain('Officially+Supported+Technologies');

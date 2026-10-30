@@ -1,4 +1,5 @@
 import type { EvaluationStatus, ModuleKindResult } from './index';
+import type { S007PolicyDiagnostic, S007RuleStrength } from './s007-officially-supported-technologies';
 import type { FrontendChecklist } from './frontend-checklist';
 import type { CommittedSourceDiagnostic, CommittedSourceSnapshot } from '../utils/committed-source';
 
@@ -495,6 +496,107 @@ export interface B014Analysis {
   /** Route registrations whose path or method the tool could not read: the first 100 of `unreadRouteCount`. */
   unreadRoutes: Array<{ file: string; line: number }>;
   unreadRouteCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}
+
+/**
+ * Infrastructure the B criteria recognise. The ids of listed infrastructure are the ids or aliases of entries in the
+ * Officially Supported Technologies policy (`s3` is MinIO's alias, `keycloak` FOLIO Keycloak's).
+ */
+export type BackendInfrastructureId =
+  | 'postgresql'
+  | 'kafka'
+  | 'opensearch'
+  | 'elasticsearch'
+  | 's3'
+  | 'keycloak'
+  | 'redis'
+  | 'mongodb'
+  | 'rabbitmq'
+  | 'activemq'
+  | 'cassandra'
+  | 'solr'
+  | 'hazelcast'
+  | 'aws-ssm'
+  | 'aws-sqs'
+  | 'aws-sns'
+  | 'vault'
+  | 'mysql'
+  | 'mariadb';
+
+/**
+ * One piece of evidence that the repository uses an infrastructure:
+ * - `dependency`: a direct production dependency on a client library (`detail` is `groupId:artifactId`);
+ * - `storage`: backendEvidence's storage evidence, which is PostgreSQL in FOLIO (`detail` is that evidence);
+ * - `configuration`: configuration keys or values in `src/main/resources` or `grails-app/conf` (`detail` lists them);
+ * - `environment`: environment variable names with the infrastructure's prefix, from the descriptor template's env
+ *   lists, `${NAME}` placeholders in configuration and `System.getenv` in sources (`detail` lists them).
+ */
+export interface BackendInfrastructureSignal {
+  kind: 'dependency' | 'storage' | 'configuration' | 'environment';
+  /** Repository text, unescaped. */
+  detail: string;
+  path?: string;
+  line?: number;
+  /** Why this evidence does not make the infrastructure required, such as a Maven `<optional>` dependency. */
+  optional?: string;
+}
+
+/**
+ * An infrastructure the repository uses:
+ * - `required`: a direct production dependency that is not optional, or storage evidence;
+ * - `optional`: only optional or selectable evidence (Maven `<optional>` or profile dependencies, edge-common's secure
+ *   stores);
+ * - `configuration-only`: configuration keys or environment variables, but no client library among the direct
+ *   dependencies.
+ */
+export interface BackendInfrastructure {
+  id: BackendInfrastructureId;
+  name: string;
+  usage: 'required' | 'optional' | 'configuration-only';
+  signals: BackendInfrastructureSignal[];
+}
+
+/** The infrastructure in backendEvidence's committed source: direct dependencies only, without dependency resolution. */
+export interface BackendInfrastructureEvidence {
+  items: BackendInfrastructure[];
+  /** The Maven and Gradle build files read for dependencies. */
+  buildFiles: string[];
+  /** Build and configuration files, or dependency declarations, the tool could not read; repository text, unescaped. */
+  diagnostics: Array<{ path: string; line?: number; message: string }>;
+  /** backendEvidence's material snapshot diagnostics: when present, infrastructure may have been missed. */
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+}
+
+/** A detected infrastructure and the Officially Supported Technologies entry it is listed under, if any. */
+export interface B016Technology {
+  id: BackendInfrastructureId;
+  name: string;
+  usage: BackendInfrastructure['usage'];
+  listedAs?: { id: string; displayName: string; sourceStatement: string; strength: S007RuleStrength; section: string };
+  signals: BackendInfrastructureSignal[];
+}
+
+/**
+ * What B016 decided from:
+ * - `policy-unreadable`: the committed policy could not be loaded;
+ * - `no-build-file`: no `pom.xml` or `build.gradle`, so the dependencies are unknown;
+ * - `infrastructure-checked`: the detected infrastructure against the policy's infrastructure sections.
+ */
+export type B016Basis = 'policy-unreadable' | 'no-build-file' | 'infrastructure-checked';
+
+export interface B016Analysis {
+  criterionId: 'B016';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B016Basis;
+  kind: BackendRepositoryKind;
+  policy?: { exportDate?: string; sections: string[] };
+  policyDiagnostics: S007PolicyDiagnostic[];
+  technologies: B016Technology[];
+  buildFiles: string[];
+  diagnostics: BackendInfrastructureEvidence['diagnostics'];
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }

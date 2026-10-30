@@ -173,7 +173,7 @@
       "id": "infrastructure",
       "area": "infrastructure",
       "category": "infrastructure",
-      "consumer": "future",
+      "consumer": "b016",
       "versionPolicy": "all-of-specified-versions",
       "entries": [
         { "id": "postgresql", "displayName": "PostgreSQL", "aliases": ["postgres"], "ecosystem": "infrastructure", "technologyType": "infrastructure", "sourceStatement": "PostgreSQL 16", "strength": "normative", "constraint": { "kind": "major-line", "expression": "16" } },
@@ -187,7 +187,7 @@
       "id": "fast-moving-infrastructure",
       "area": "fast-moving-infrastructure",
       "category": "infrastructure",
-      "consumer": "future",
+      "consumer": "b016",
       "versionPolicy": "unspecified-versions",
       "sourceStatement": "System operators are highly encouraged to update to the latest versions as they are released.",
       "entries": [

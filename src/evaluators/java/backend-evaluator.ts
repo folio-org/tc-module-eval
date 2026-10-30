@@ -7,12 +7,15 @@ import { evaluateB006, renderB006HumanDetails } from '../../utils/b006-api-docum
 import { b007Implementations, hasB007AgentReviewMaterial, reviewB007WithAgent } from '../../utils/b007-agent-review';
 import { evaluateB007, renderB007HumanDetails } from '../../utils/b007-endpoint-permissions';
 import { evaluateB014, renderB014HumanDetails } from '../../utils/b014-health-check';
+import { evaluateB016, renderB016HumanDetails } from '../../utils/b016-supported-infrastructure';
 import { getBackendApiSpecs } from '../../utils/backend-api-specs';
 import { getBackendEvidence } from '../../utils/backend-evidence';
+import { getBackendInfrastructure } from '../../utils/backend-infrastructure';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
+import { loadS007Policy } from '../../utils/s007-policy';
 
 /**
- * Evaluator for Backend criteria (B001-B016). B001, B003, B005, B006, B007 and B014 have automated logic; the others fall back to the
+ * Evaluator for Backend criteria (B001-B016). B001, B003, B005, B006, B007, B014 and B016 have automated logic; the others fall back to the
  * catalog-defined default result.
  */
 export class BackendEvaluator extends CatalogSectionEvaluator {
@@ -23,7 +26,8 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       B005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB005(repoPath, evaluationRun),
       B006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB006(repoPath, evaluationRun),
       B007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB007(repoPath, evaluationRun),
-      B014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB014(repoPath, evaluationRun)
+      B014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB014(repoPath, evaluationRun),
+      B016: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB016(repoPath, evaluationRun)
     });
   }
 
@@ -111,6 +115,21 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       status: analysis.status,
       evidence: analysis.summary,
       details: renderB014HumanDetails(analysis),
+      criterionDetails: analysis
+    };
+  }
+
+  private async evaluateB016(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'B016', evaluationRun);
+    const [evidence, infrastructure, policyLoad] = await Promise.all([
+      getBackendEvidence(run, repoPath), getBackendInfrastructure(run, repoPath), loadS007Policy()
+    ]);
+    const analysis = evaluateB016(evidence.kind, infrastructure, policyLoad);
+    return {
+      criterionId: 'B016',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderB016HumanDetails(analysis),
       criterionDetails: analysis
     };
   }

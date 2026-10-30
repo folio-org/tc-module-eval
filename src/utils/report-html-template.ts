@@ -36,7 +36,8 @@ const CRITERION_TITLES: Record<string, string> = {
   B005: 'Interface naming',
   B006: 'API documentation',
   B007: 'Endpoint permissions',
-  B014: 'Health check endpoint'
+  B014: 'Health check endpoint',
+  B016: 'Supported infrastructure'
 };
 
 function escapeHtml(text: string): string {
