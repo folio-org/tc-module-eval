@@ -35,7 +35,12 @@
       "src/main/java/org/folio/rtaccache/integration/RtacKafkaAdminService.java",
       "src/main/java/org/folio/rtaccache/repository/RtacHoldingBulkRepository.java",
       "src/main/java/org/folio/rtaccache/rest/RtacCacheController.java",
+      "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+      "src/main/java/org/folio/rtaccache/service/RtacCacheGenerationService.java",
+      "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
       "src/main/java/org/folio/rtaccache/service/RtacHoldingMappingService.java",
+      "src/main/java/org/folio/rtaccache/service/RtacTenantService.java",
+      "src/main/java/org/folio/rtaccache/util/EcsUtil.java",
       "src/main/resources/application.yml",
       "src/main/resources/db/changelog/changelog-master.xml",
       "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
@@ -5009,8 +5014,154 @@
     {
       "criterionId": "B013",
       "status": "manual",
-      "evidence": "Dependency injection and IoC - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B013 manual: Requests use folio-spring-base's FolioExecutionContext, which reads X-Okapi-Tenant. The tool found Kafka consumers in 1 file and scheduled jobs or timers in 1 file. A reviewer must confirm that every request uses the tenant from X-Okapi-Tenant, that no tenant comes from configuration or shared state, and that Kafka consumers and scheduled jobs set the tenant.",
+      "details": "Framework: Spring Boot\nTenant taken from X-Okapi-Tenant:\n  - folio-spring-base's FolioExecutionContext — 4 references in 4 files\nPossible tenant problems:\n  - none found\nWork outside requests:\n  - Kafka consumers — 11 references in 1 file\n  - Scheduled jobs or timers — 1 reference in 1 file\nWhat to do:\n  - Work through the checklist below, and change any request handler, Kafka consumer or scheduled job that selects tenant data by a tenant other than the one in X-Okapi-Tenant.\nChecklist for the reviewer:\n  - B013-C1 Every request reads the tenant from X-Okapi-Tenant.\n    - Start with:\n      - src/main/java/org/folio/rtaccache/service/ConsortiaService.java:20 — folio-spring-base's FolioExecutionContext\n      - src/main/java/org/folio/rtaccache/service/RtacCacheGenerationService.java:44 — folio-spring-base's FolioExecutionContext\n      - src/main/java/org/folio/rtaccache/service/RtacTenantService.java:23 — folio-spring-base's FolioExecutionContext\n      - src/main/java/org/folio/rtaccache/util/EcsUtil.java:13 — folio-spring-base's FolioExecutionContext\n  - B013-C2 No tenant comes from configuration or shared state.\n  - B013-C3 Asynchronous work (Kafka consumers, timers) carries the tenant.\n    - Start with:\n      - src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:53 — Kafka consumer\n      - src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java:21 — scheduled job or timer\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B013",
+        "kind": "backend-module",
+        "framework": {
+          "name": "spring",
+          "evidence": [
+            "@SpringBootApplication in src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "folio-spring-base in pom.xml"
+          ]
+        },
+        "sourceDiagnostics": [],
+        "status": "manual",
+        "mechanisms": [
+          {
+            "kind": "folio-execution-context",
+            "uses": 4,
+            "fileCount": 4,
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                "line": 20
+              },
+              {
+                "path": "src/main/java/org/folio/rtaccache/service/RtacCacheGenerationService.java",
+                "line": 44
+              },
+              {
+                "path": "src/main/java/org/folio/rtaccache/service/RtacTenantService.java",
+                "line": 23
+              },
+              {
+                "path": "src/main/java/org/folio/rtaccache/util/EcsUtil.java",
+                "line": 13
+              }
+            ]
+          }
+        ],
+        "redFlags": [],
+        "asyncWork": [
+          {
+            "kind": "kafka-consumer",
+            "uses": 11,
+            "fileCount": 1,
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java",
+                "line": 53
+              }
+            ]
+          },
+          {
+            "kind": "scheduled",
+            "uses": 1,
+            "fileCount": 1,
+            "sites": [
+              {
+                "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                "line": 21
+              }
+            ]
+          }
+        ],
+        "redFlagCount": 0,
+        "summary": "B013 manual: Requests use folio-spring-base's FolioExecutionContext, which reads X-Okapi-Tenant. The tool found Kafka consumers in 1 file and scheduled jobs or timers in 1 file. A reviewer must confirm that every request uses the tenant from X-Okapi-Tenant, that no tenant comes from configuration or shared state, and that Kafka consumers and scheduled jobs set the tenant.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B013-C1",
+              "title": "Every request reads the tenant from X-Okapi-Tenant.",
+              "startingPoints": [
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/ConsortiaService.java",
+                  "line": 20,
+                  "note": "folio-spring-base's FolioExecutionContext"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacCacheGenerationService.java",
+                  "line": 44,
+                  "note": "folio-spring-base's FolioExecutionContext"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacTenantService.java",
+                  "line": 23,
+                  "note": "folio-spring-base's FolioExecutionContext"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/util/EcsUtil.java",
+                  "line": 13,
+                  "note": "folio-spring-base's FolioExecutionContext"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B013-C1#1"
+                }
+              ]
+            },
+            {
+              "id": "B013-C2",
+              "title": "No tenant comes from configuration or shared state.",
+              "startingPoints": [],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B013-C2#1"
+                }
+              ]
+            },
+            {
+              "id": "B013-C3",
+              "title": "Asynchronous work (Kafka consumers, timers) carries the tenant.",
+              "startingPoints": [
+                {
+                  "path": "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java",
+                  "line": 53,
+                  "note": "Kafka consumer"
+                },
+                {
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                  "line": 21,
+                  "note": "scheduled job or timer"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B013-C3#1",
+                  "subject": "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java:53 (Kafka consumer)",
+                  "path": "src/main/java/org/folio/rtaccache/integration/KafkaMessageListener.java",
+                  "line": 53,
+                  "flag": "manual"
+                },
+                {
+                  "id": "B013-C3#2",
+                  "subject": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java:21 (scheduled job or timer)",
+                  "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
+                  "line": 21,
+                  "flag": "manual"
+                }
+              ]
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B014",

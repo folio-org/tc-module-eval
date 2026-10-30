@@ -247,11 +247,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B013',
     description: 'Respond with tenant-specific content',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Dependency injection and IoC'
-    }
+    languages: ['java']
   },
   {
     id: 'B014',
