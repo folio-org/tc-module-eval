@@ -65,6 +65,17 @@ describe('backend agent review contract', () => {
     expect(subjects[7_999].line).toBe(template(8_000).content.split('\n').indexOf('      "id": "interface-7999",'));
   });
 
+  it('finds lines in linear time after many keys, and takes the last of duplicate keys, as JSON.parse does', async () => {
+    const template = (size: number) => {
+      const keys = Array.from({ length: size }, (_, index) => `"k${index}": ${index}`).join(',\n');
+      const interfaces = Array.from({ length: size }, (_, index) => `{"id": "i${index}", "handlers": []}`).join(',\n');
+      const content = `{\n"provides": [],\n${keys},\n"provides": [\n${interfaces}\n]\n}`;
+      return { path: 'descriptors/ModuleDescriptor-template.json', content, descriptor: JSON.parse(content), placeholders: [] };
+    };
+    const subjects = await expectLinearTime(5_000, template, async input => providedInterfaceSubjects(input));
+    expect(subjects.map(subject => subject.line)).toEqual(Array.from({ length: 20_000 }, (_, index) => 20_004 + index));
+  });
+
   it('gives flagged subjects first (failing, then manual), then the rest by path and line, then whole items, up to 25', () => {
     const item = (id: string, subjects: FrontendChecklistItemDraft['subjects']): FrontendChecklistItemDraft =>
       ({ id, title: id, startingPoints: [], reviewerOnly: false, obligations: [], subjects });

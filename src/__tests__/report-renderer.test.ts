@@ -1101,7 +1101,13 @@ describe('EvaluationReportRenderer', () => {
         assessments: [{ technologyId: 'B007-C1#1', type: 'aligned_fact', summary: 'GET requires a read permission.',
           evidenceReferences: ['descriptors/ModuleDescriptor-template.json'], coverageDisposition: 'investigated' }],
         warnings: [], errors: [] };
-      const details: string[] = reportData(new EvaluationReportRenderer().renderHtml(backendResult('B007', 'stale note', review))).items[0].details;
+      const html = new EvaluationReportRenderer().renderHtml(backendResult('B007', 'stale note', review));
+      const details: string[] = reportData(html).items[0].details;
+      const tree = preparedItems(html)[0].tree;
+
+      expect(tree.map((node: any) => node.text)).toEqual(['Handlers: 1', 'Checklist for the reviewer:', 'Agent review (advisory):']);
+      expect(tree[2].hideCount).toBe(true);
+      expect(tree[2].children.find((node: any) => node.text.startsWith('Summary:')).showFullText).toBe(true);
 
       expect(details.slice(0, details.indexOf('Agent review (advisory):'))).toEqual([
         'Handlers: 1',

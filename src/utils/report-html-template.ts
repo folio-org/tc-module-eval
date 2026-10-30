@@ -422,11 +422,11 @@ export function createHtmlReport(result: EvaluationResult): string {
         checkItem.openByDefault = true; checkItem.hideCount = true;
         checkItem.children.forEach(function (node) { if (node.text === 'Start with:') { node.openByDefault = true; node.hideCount = true; } });
       });
-      // reportDetailLines puts the only real agent-review section first, or last for F criteria; a heading
+      // reportDetailLines puts the only real agent-review section first, or last for F and B criteria; a heading
       // anywhere else is repository text.
       var agentIndex = !tree.length ? -1
         : tree[0].text === 'Agent review (advisory):' ? 0
-          : /^F\d+$/.test(item.id) && tree[tree.length - 1].text === 'Agent review (advisory):' ? tree.length - 1 : -1;
+          : /^[FB]\d+$/.test(item.id) && tree[tree.length - 1].text === 'Agent review (advisory):' ? tree.length - 1 : -1;
       if (agentIndex >= 0) {
         tree[agentIndex].hideCount = true;
         tree[agentIndex].children.forEach(function (node) {
