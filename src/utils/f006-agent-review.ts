@@ -49,7 +49,7 @@ export function buildF006AgentReviewRequest(repoPath: string, analysis: F006Anal
     criterionInstructions: [
       `${GUIDELINES_DIRECTORY}/ holds the FOLIO UX guidelines, pinned from stripes-components ${guidelines.sourceDirectory} at commit ${guidelines.commit}: `
         + 'layout/, forms/, navigation/, actions/, feedback/ConfirmationModalPattern.mdx and data-display/MultiColumnListGuidelines.mdx. Measure the code against them.',
-      'Every item except F006-C3 is about the whole module: read a representative sample (the main routes and their screens, the settings) rather than every file, and say in the summary which screens you read.',
+      'Every item except F006-C3 is about the whole module: read a representative sample (the main routes and their screens) rather than every file, and say in the summary which screens you read.',
       'F006-C1: compare the structure of the main screens (Paneset, Pane, PaneHeader, Layer) with layout/LayoutTypesContext.mdx, layout/PanesetGuidelines.mdx, layout/PaneGuidelines.mdx, layout/PaneHeaderGuidelines.mdx and layout/LayerGuidelines.mdx.',
       'F006-C2: compare the search and filter screens (SearchAndSort, FilterGroups, SearchField, MultiColumnList) with navigation/FilterPaneSearchGuidelines.mdx, navigation/FilterGroupsGuidelines.mdx, forms/SearchFieldGuidelines.mdx, forms/AdvancedSearchGuidelines.mdx and data-display/MultiColumnListGuidelines.mdx.',
       'F006-C3: for each form, decide whether leaving it with unsaved changes asks the user first, as the "Leaving a page" section of actions/ConfirmationLanguageGuidelines.mdx requires for create and edit pages. '
@@ -59,12 +59,11 @@ export function buildF006AgentReviewRequest(repoPath: string, analysis: F006Anal
       `F006-C4: find destructive actions (delete, remove, discard, cancel a record) and check that each asks for confirmation in a ConfirmationModal whose heading, message and buttons follow feedback/ConfirmationModalPattern.mdx and actions/ConfirmationLanguageGuidelines.mdx.${wording}`,
       'F006-C5: check pane action menus (the actionMenu prop, PaneMenu), dropdowns and buttons against layout/PaneMenuGuidelines.mdx, layout/PaneHeaderGuidelines.mdx, navigation/DropdownGuidelines.mdx, navigation/MenuSectionGuidelines.mdx and the actions/ guidelines (ButtonGuidelines.mdx, IconButtonGuidelines.mdx, DropdownButtonGuidelines.mdx, ButtonGroupGuidelines.mdx, ActionLanguage.mdx).',
       'F006-C6: for the raw HTML controls and hex colors in checklist.json, decide whether a Stripes component (actions/ButtonGuidelines.mdx for buttons, forms/ for inputs, selects and text areas) or a Stripes color variable should be used. Vendored third-party CSS, and a color Stripes has no variable for, are not problems; say so.',
-      'F006-C8: compare the settings pages (the Settings component and its pages) with the pane layout and form guidelines.',
-      'When the module has nothing an item is about (no search screen, no settings), use aligned_fact with coverageDisposition immaterial, and cite package.json or the file that shows it: every assessment cites at least one repository file.',
+      'When the module has nothing an item is about (no search screen, no destructive action), use aligned_fact with coverageDisposition immaterial, and cite package.json or the file that shows it: every assessment cites at least one repository file.',
       `A substantive_concern must name, in its summary, the guideline file it is measured against, such as ${guidelineNames.includes('ConfirmationModalPattern') ? 'ConfirmationModalPattern' : guidelineNames[0]}.mdx. `
         + 'The guidelines have no page on colors, so an F006-C6 concern about a hard-coded color may instead name the Stripes color variable to use, such as --color-text.',
       'Before you answer, check every substantive_concern: its summary must contain the name of a guideline file ending in .mdx (or, for an F006-C6 color, a --variable name). A concern without one is dropped.',
-      'F006-C7 (state kept when navigating between apps) and F006-C9 (documentation links are publicly accessible) are for the reviewer only and are not in checklist.json. Do not fetch any link.'
+      'F006-C7 (state kept when navigating between apps), F006-C8 (settings pages follow the settings layout, which no guideline covers) and F006-C9 (documentation links are publicly accessible) are for the reviewer only and are not in checklist.json. Do not fetch any link.'
     ],
     criterionRule: assessment => assessment.type === 'substantive_concern'
       && !guidelineNames.some(name => assessment.summary.includes(name))

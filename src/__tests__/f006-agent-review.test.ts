@@ -35,7 +35,7 @@ describe('F006 agent review', () => {
   });
   afterEach(() => fs.rmSync(repoPath, { recursive: true, force: true }));
 
-  const ITEM_OBLIGATIONS = ['F006-C1#1', 'F006-C2#1', 'F006-C3#1', 'F006-C4#1', 'F006-C5#1', 'F006-C6#1', 'F006-C8#1'];
+  const ITEM_OBLIGATIONS = ['F006-C1#1', 'F006-C2#1', 'F006-C3#1', 'F006-C4#1', 'F006-C5#1', 'F006-C6#1'];
   const holds = (id: string, fields: Partial<CriterionAgentAssessment> = {}): CriterionAgentAssessment => ({
     technologyId: id, type: 'aligned_fact', summary: 'Follows the guideline.', evidenceReferences: ['src/Form.js'], coverageDisposition: 'investigated', ...fields
   });
@@ -53,18 +53,18 @@ describe('F006 agent review', () => {
     expect(paths.filter(file => ['src/Form.test.js', 'translations/ui-example/de.json', 'guides/Usage.md'].includes(file))).toEqual([]);
     expect(paths.filter(file => file.startsWith('.criterion-agent/F006/ux-guidelines/'))).toHaveLength(guidelines.files.length);
     const checklist = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/F006/checklist.json')!.content);
-    // C7 and C9 are for the reviewer only.
-    expect(checklist.items.map((item: { id: string }) => item.id)).toEqual(['F006-C1', 'F006-C2', 'F006-C3', 'F006-C4', 'F006-C5', 'F006-C6', 'F006-C8']);
+    // C7, C8 and C9 are for the reviewer only.
+    expect(checklist.items.map((item: { id: string }) => item.id)).toEqual(['F006-C1', 'F006-C2', 'F006-C3', 'F006-C4', 'F006-C5', 'F006-C6']);
     expect(checklist.items.flatMap((item: { obligations: unknown[] }) => item.obligations)).toEqual([
       { id: 'F006-C1#1' }, { id: 'F006-C2#1' },
       { id: 'F006-C3#1', subject: 'src/Form.js:4', path: 'src/Form.js', line: 4 },
-      { id: 'F006-C4#1' }, { id: 'F006-C5#1' }, { id: 'F006-C6#1' }, { id: 'F006-C8#1' }
+      { id: 'F006-C4#1' }, { id: 'F006-C5#1' }, { id: 'F006-C6#1' }
     ]);
     expect(prepared.instructions).toContain('You may browse only: source files under src/, lib/ and at the root (no tests, stories, examples, fixtures or mocks), '
       + 'CSS under src/ and lib/, package.json, translations/ui-example/en.json.');
   });
 
-  it('attaches an accepted review to the checklist items, leaves C7 and C9 to the reviewer, and keeps the status', async () => {
+  it('attaches an accepted review to the checklist items, leaves C7, C8 and C9 to the reviewer, and keeps the status', async () => {
     const result = await evaluateWith(fakeConfig({ assessments: ITEM_OBLIGATIONS.map(id => id === 'F006-C3#1' ? formConcern() : holds(id)), reviewerActions: [action] }));
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
@@ -83,6 +83,8 @@ describe('F006 agent review', () => {
     ].join('\n'));
     expect(from('  - F006-C7 State is kept when navigating between apps and back, or the user is told it will be lost.', 2)).toBe(
       '  - F006-C7 State is kept when navigating between apps and back, or the user is told it will be lost.\n    - Checked by the reviewer only');
+    expect(from('  - F006-C8 Settings pages follow the settings layout.', 2)).toBe(
+      '  - F006-C8 Settings pages follow the settings layout.\n    - Checked by the reviewer only');
     expect(from('  - F006-C9 Each documentation link shown in the UI is publicly accessible.', 2)).toBe(
       '  - F006-C9 Each documentation link shown in the UI is publicly accessible.\n    - Checked by the reviewer only');
   });
@@ -121,16 +123,19 @@ describe('F006 agent review', () => {
     }));
     expect(review.available).toBe(true);
     expect(review.droppedItems).toEqual(dropped);
-    expect(review.assessments).toHaveLength(dropped ? 6 : 7);
+    expect(review.assessments?.map(assessment => assessment.technologyId)).toEqual(ITEM_OBLIGATIONS.filter(id => !dropped || id !== 'F006-C6#1'));
   });
 
-  it('drops an assessment of C7 or C9, which only the reviewer checks, and keeps the rest', async () => {
-    const result = await evaluateWith(fakeConfig({ assessments: [...ITEM_OBLIGATIONS.map(id => holds(id)), holds('F006-C9#1')], reviewerActions: [action] }));
+  it('drops an assessment of C7, C8 or C9, which only the reviewer checks, and keeps the rest', async () => {
+    const result = await evaluateWith(fakeConfig({ assessments: [...ITEM_OBLIGATIONS.map(id => holds(id)), holds('F006-C8#1'), holds('F006-C9#1')], reviewerActions: [action] }));
 
     expect(result.agentReview?.assessments?.map(assessment => assessment.technologyId)).toEqual(ITEM_OBLIGATIONS);
+    expect(from(result.details, '  - F006-C8 Settings pages follow the settings layout.', 2)).toEqual([
+      '  - F006-C8 Settings pages follow the settings layout.', '    - Checked by the reviewer only']);
     expect(from(result.details, '  - F006-C9 Each documentation link shown in the UI is publicly accessible.', 2)).toEqual([
       '  - F006-C9 Each documentation link shown in the UI is publicly accessible.', '    - Checked by the reviewer only']);
-    expect(from(result.details, '  - Dropped from this review:', 3)).toEqual(['  - Dropped from this review:',
+    expect(from(result.details, '  - Dropped from this review:', 4)).toEqual(['  - Dropped from this review:',
+      '    - A result for F006-C8#1: It answers nothing the agent was asked to check.',
       '    - A result for F006-C9#1: It answers nothing the agent was asked to check.', '  - Sources:']);
   });
 
