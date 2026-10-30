@@ -43,6 +43,7 @@ const CRITERION_TITLES: Record<string, string> = {
   B010: 'Tenant data segregation',
   B011: 'Other modules\' database schemas',
   B012: 'Dependencies declared in README',
+  B013: 'Tenant selection',
   B014: 'Health check endpoint',
   B016: 'Supported infrastructure'
 };

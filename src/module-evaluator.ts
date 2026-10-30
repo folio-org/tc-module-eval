@@ -42,9 +42,9 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
  *
  * S001-S014, B001-B006, B008, B009, B011, B012, B014, B016, F001-F003 and F005 have automated evaluation logic and return
  * MANUAL only when the evidence is inconclusive; B007 returns MANUAL whenever it applies and does not fail, B010
- * whenever the repository stores data, and F004, F006 and F007 whenever the package renders a user interface. The
- * other 3 of the 38 criteria always return MANUAL: A001 is a manual review by design, and B013 and B015 (Java)
- * have no evaluation logic yet.
+ * whenever the repository stores data, B013 for every repository that is not a shared library, and F004, F006 and
+ * F007 whenever the package renders a user interface. The other 2 of the 38 criteria always return MANUAL: A001 is a
+ * manual review by design, and B015 (Java) has no evaluation logic yet.
  */
 export class ModuleEvaluator {
   private gitUtils: GitUtils;

@@ -1023,3 +1023,62 @@ export interface B010Analysis {
   checklist: FrontendChecklist;
   agentReviewUnavailableReason?: string;
 }
+
+/**
+ * How B013 found the module taking the tenant from `X-Okapi-Tenant`:
+ * - `folio-execution-context`: folio-spring-base's FolioExecutionContext;
+ * - `rmb-tenant-tool`: RMB's TenantTool, which reads the tenant from okapiHeaders;
+ * - `rmb-pg-util`: RMB's PgUtil, which selects the tenant's schema from okapiHeaders;
+ * - `grails-tenants`: grails-okapi's OkapiTenantResolver and GORM's Tenants;
+ * - `tenant-header`: the header's name, or a constant for it, in the module's own code.
+ */
+export type B013Mechanism = 'folio-execution-context' | 'rmb-tenant-tool' | 'rmb-pg-util' | 'grails-tenants' | 'tenant-header';
+
+/**
+ * A possible tenant problem B013 lists for the reviewer:
+ * - `configured-tenant`: a tenant named in configuration, an environment variable, a system property or `@Value`;
+ * - `static-tenant`: a static field that is not final and holds a tenant;
+ * - `cache-without-tenant`: a Spring cache annotation without a tenant in its key, or a cache built in a file that
+ *   never mentions a tenant.
+ */
+export type B013RedFlagKind = 'configured-tenant' | 'static-tenant' | 'cache-without-tenant';
+
+/** Work that runs outside a request: Kafka consumers, and scheduled jobs and timers. */
+export type B013AsyncKind = 'kafka-consumer' | 'scheduled';
+
+export interface B013Site {
+  path: string;
+  line: number;
+}
+
+/** Uses of one kind, counted in full, with the first site in each of the first 100 files in path order. */
+export interface B013Uses<Kind extends string> {
+  kind: Kind;
+  uses: number;
+  fileCount: number;
+  sites: B013Site[];
+}
+
+export interface B013RedFlag extends B013Site {
+  kind: B013RedFlagKind;
+  /** What was found, such as `tenantId: public`. */
+  text: string;
+}
+
+export interface B013Analysis {
+  criterionId: 'B013';
+  status: EvaluationStatus;
+  summary: string;
+  kind: BackendRepositoryKind;
+  framework: BackendEvidence['framework'];
+  /** Only the mechanisms found. */
+  mechanisms: Array<B013Uses<B013Mechanism>>;
+  /** The first 100 of `redFlagCount`, in path and line order. */
+  redFlags: B013RedFlag[];
+  redFlagCount: number;
+  /** Only the kinds found. */
+  asyncWork: Array<B013Uses<B013AsyncKind>>;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  agentReviewUnavailableReason?: string;
+  checklist: FrontendChecklist;
+}

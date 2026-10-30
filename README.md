@@ -306,6 +306,16 @@ optional or configuration-only infrastructure and unreadable files to the review
 and Kafka topics of other modules are checklist items and never fail it. See
 [Criterion Notes](docs/criterion-notes.md#b012-dependencies-declared-in-readme).
 
+### B013 Tenant Selection
+
+B013 checks that a module selects tenant content by the `X-Okapi-Tenant` header. It is always left to
+the reviewer: the report names how the module takes the tenant from the header (folio-spring-base's
+`FolioExecutionContext`, RMB's `TenantTool` and `PgUtil`, Grails' `OkapiTenantResolver` and `Tenants`,
+or the header itself; edge modules map an API key to a tenant), lists possible problems (a tenant named
+in configuration, an environment variable or `@Value`, a static tenant field, a cache without a tenant
+in its key) and the Kafka consumers and scheduled jobs that must set the tenant themselves. Shared
+libraries are not applicable. See [Criterion Notes](docs/criterion-notes.md#b013-tenant-selection).
+
 ### B014 Health Check Endpoint
 
 B014 checks that the module serves `GET /admin/health`, without starting the module or calling the
