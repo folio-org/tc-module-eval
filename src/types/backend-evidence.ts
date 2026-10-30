@@ -498,3 +498,72 @@ export interface B014Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }
+
+/**
+ * Infrastructure the B criteria recognise. The ids of listed infrastructure are the ids or aliases of entries in the
+ * Officially Supported Technologies policy (`s3` is MinIO's alias, `keycloak` FOLIO Keycloak's).
+ */
+export type BackendInfrastructureId =
+  | 'postgresql'
+  | 'kafka'
+  | 'opensearch'
+  | 'elasticsearch'
+  | 's3'
+  | 'keycloak'
+  | 'redis'
+  | 'mongodb'
+  | 'rabbitmq'
+  | 'activemq'
+  | 'cassandra'
+  | 'solr'
+  | 'hazelcast'
+  | 'aws-ssm'
+  | 'aws-sqs'
+  | 'aws-sns'
+  | 'vault'
+  | 'mysql'
+  | 'mariadb';
+
+/**
+ * One piece of evidence that the repository uses an infrastructure:
+ * - `dependency`: a direct production dependency on a client library (`detail` is `groupId:artifactId`);
+ * - `storage`: backendEvidence's storage evidence, which is PostgreSQL in FOLIO (`detail` is that evidence);
+ * - `configuration`: configuration keys or values in `src/main/resources` or `grails-app/conf` (`detail` lists them);
+ * - `environment`: environment variable names with the infrastructure's prefix, from the descriptor template's env
+ *   lists, `${NAME}` placeholders in configuration and `System.getenv` in sources (`detail` lists them).
+ */
+export interface BackendInfrastructureSignal {
+  kind: 'dependency' | 'storage' | 'configuration' | 'environment';
+  /** Repository text, unescaped. */
+  detail: string;
+  path?: string;
+  line?: number;
+  /** Why this evidence does not make the infrastructure required, such as a Maven `<optional>` dependency. */
+  optional?: string;
+}
+
+/**
+ * An infrastructure the repository uses:
+ * - `required`: a direct production dependency that is not optional, or storage evidence;
+ * - `optional`: only optional or selectable evidence (Maven `<optional>` or profile dependencies, edge-common's secure
+ *   stores);
+ * - `configuration-only`: configuration keys or environment variables, but no client library among the direct
+ *   dependencies.
+ */
+export interface BackendInfrastructure {
+  id: BackendInfrastructureId;
+  name: string;
+  usage: 'required' | 'optional' | 'configuration-only';
+  signals: BackendInfrastructureSignal[];
+}
+
+/** The infrastructure in backendEvidence's committed source: direct dependencies only, without dependency resolution. */
+export interface BackendInfrastructureEvidence {
+  items: BackendInfrastructure[];
+  /** The Maven and Gradle build files read for dependencies. */
+  buildFiles: string[];
+  /** Build and configuration files, or dependency declarations, the tool could not read; repository text, unescaped. */
+  diagnostics: Array<{ path: string; line?: number; message: string }>;
+  /** backendEvidence's material snapshot diagnostics: when present, infrastructure may have been missed. */
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+}

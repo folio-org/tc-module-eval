@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs' | 'uiRuntimeEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs' | 'backendInfrastructure' | 'uiRuntimeEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -139,6 +139,8 @@ export interface EvaluationRunArtifacts {
   backendEvidence?: import('./backend-evidence').BackendEvidence;
   /** The API specs in backendEvidence's snapshot, for B006 and B003. */
   backendApiSpecs?: import('./backend-evidence').BackendApiSpecs;
+  /** The infrastructure in backendEvidence's snapshot, for B012 and B016. */
+  backendInfrastructure?: import('./backend-evidence').BackendInfrastructureEvidence;
   uiRuntimeEvidence?: import('./ui-runtime-evidence').UiRuntimeEvidence;
 }
 
