@@ -4749,9 +4749,34 @@
     },
     {
       "criterionId": "B011",
-      "status": "manual",
-      "evidence": "Data migration and backward compatibility - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B011 pass: No reference to another module's database schema was found in the 91 SQL script, changelog and source files the tool read, with comments removed.",
+      "details": "Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml; Datasource configured in src/main/resources/application.yml\nOwn schema: <tenant>_mod_rtac_cache\nFiles read: 91 SQL scripts, changelogs and sources, with comments removed\nOwn-schema references (not counted): 1",
+      "criterionDetails": {
+        "criterionId": "B011",
+        "kind": "backend-module",
+        "storage": {
+          "present": true,
+          "evidence": [
+            "Liquibase changelog src/main/resources/db/changelog/changelog-master.xml",
+            "Datasource configured in src/main/resources/application.yml"
+          ]
+        },
+        "ownSchemas": [
+          "mod_rtac_cache"
+        ],
+        "filesRead": 91,
+        "ownSchemaReferences": 1,
+        "references": [],
+        "unreadRmbSchemas": [],
+        "sourceDiagnostics": [],
+        "status": "pass",
+        "basis": "references-checked",
+        "summary": "B011 pass: No reference to another module's database schema was found in the 91 SQL script, changelog and source files the tool read, with comments removed.",
+        "checklist": {
+          "items": []
+        }
+      }
     },
     {
       "criterionId": "B012",

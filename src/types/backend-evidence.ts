@@ -907,3 +907,56 @@ export interface B008Analysis {
   /** Why agent review did not run, when it would have been relevant. */
   agentReviewUnavailableReason?: string;
 }
+
+/**
+ * Where B011 found a reference, which decides how it counts:
+ * - `code`: Java, Groovy or Kotlin source outside a migration (fails);
+ * - `every-install-script`: an RMB script schema.json lists without `fromModuleVersion` (fails);
+ * - `migration`: an RMB script with `fromModuleVersion`, a Liquibase changelog or a Grails database migration;
+ * - `unlisted-script`: a file in `templates/db_scripts` that no readable schema.json lists;
+ * - `other-file`: another SQL, XML or YAML file, such as schema.json itself, whose execution the tool cannot place.
+ */
+export type B011Location = 'code' | 'every-install-script' | 'migration' | 'unlisted-script' | 'other-file';
+
+/** One file's references to one other module's schema, or to schema names it builds at runtime. */
+export interface B011Reference {
+  file: string;
+  /** The schema without the tenant, such as `mod_configuration`; absent when the rest of the name is built at runtime. */
+  schema?: string;
+  location: B011Location;
+  migration?: { kind: 'rmb' | 'liquibase' | 'grails'; fromModuleVersion?: string };
+  /** The occurrences, with the text as written, such as `${myuniversity}_mod_configuration.config_data`. */
+  occurrences: Array<{ line: number; text: string }>;
+  /** All occurrences; `occurrences` keeps the first 100. */
+  occurrenceCount: number;
+  /** A known schema of another module in code or an every-install script, when the module's own name is known. */
+  failing: boolean;
+}
+
+/**
+ * What B011 decided from:
+ * - `no-storage`: no positive storage evidence in completely read source;
+ * - `storage-not-known`: no storage evidence, but the source was not read completely;
+ * - `fqm`: mod-fqm-manager, which the criterion excepts;
+ * - `references-checked`: the scripts, changelogs and sources of a module with storage.
+ */
+export type B011Basis = 'no-storage' | 'storage-not-known' | 'fqm' | 'references-checked';
+
+export interface B011Analysis {
+  criterionId: 'B011';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B011Basis;
+  kind: BackendRepositoryKind;
+  storage: BackendEvidence['storage'];
+  /** The module's own schema names without the tenant, such as `mod_users`, from its artifactId, descriptor id, Gradle project name and the modules its descriptor replaces. */
+  ownSchemas: string[];
+  filesRead: number;
+  /** References to the module's own schema, which do not count. */
+  ownSchemaReferences: number;
+  references: B011Reference[];
+  /** RMB schema.json files that could not be parsed, so the scripts they list could not be placed. */
+  unreadRmbSchemas: Array<{ path: string; message: string }>;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}

@@ -124,11 +124,11 @@ program
     console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Shared/Common criteria S001-S014, B001-B009, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001-B009, B011, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
     console.log('   ⚠️  A001 - MANUAL REVIEW by design');
-    console.log('   ⚠️  B010, B011, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
-    console.log('   📝 5 of the 38 criteria always return MANUAL (5 of 31 for Java, 1 of 22 for JavaScript);');
-    console.log('      S001-S014, B001-B006, B008, B009, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
+    console.log('   ⚠️  B010, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 4 of the 38 criteria always return MANUAL (4 of 31 for Java, 1 of 22 for JavaScript);');
+    console.log('      S001-S014, B001-B006, B008, B009, B011, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
     console.log('      B007 whenever it applies and does not fail, and F004, F006 and F007 whenever the package renders a user interface\n');
     
     console.log('📝 Usage Examples:');
