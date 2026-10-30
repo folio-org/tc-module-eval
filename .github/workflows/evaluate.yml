@@ -58,6 +58,11 @@ on:
         required: false
         type: string
         default: ""
+      existing_module:
+        description: "Evaluate an existing module rather than a new one (relaxes some new-module rules, e.g. B006 accepts RAML from RMB modules)"
+        required: false
+        type: boolean
+        default: false
       # Hosted OpenCode criterion-agent review is intentionally not exposed here.
       # This reusable workflow remains deterministic-only until protected
       # environment secret handling and repository allowlists are designed.
@@ -213,6 +218,7 @@ jobs:
           REF: ${{ steps.derive-repo.outputs.ref }}
           OUTPUT_FORMAT: ${{ inputs.output_format }}
           CRITERIA_FILTER: ${{ inputs.criteria_filter }}
+          EXISTING_MODULE: ${{ inputs.existing_module }}
         run: |
           ARGS="$REPO_URL"
           OUTPUT_DIR="reports"
@@ -231,6 +237,10 @@ jobs:
 
           if [ -n "$CRITERIA_FILTER" ]; then
             ARGS="$ARGS --criteria $CRITERIA_FILTER"
+          fi
+
+          if [ "$EXISTING_MODULE" = "true" ]; then
+            ARGS="$ARGS --existing-module"
           fi
 
           ARGS="$ARGS --allow-local-commands"
