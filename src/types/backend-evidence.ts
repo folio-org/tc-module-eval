@@ -441,3 +441,60 @@ export interface B007Analysis {
   agentBrowseScope: string;
   agentReviewUnavailableReason?: string;
 }
+
+/**
+ * What B014 decided from:
+ * - `library`: a shared library, which serves no health check;
+ * - `ambiguous`: no descriptor and not a known library, so not known to be a module;
+ * - `mechanism-found`, `no-mechanism`: whether the committed files show a mechanism that serves GET /admin/health.
+ */
+export type B014Basis = 'library' | 'ambiguous' | 'mechanism-found' | 'no-mechanism';
+
+/** A mechanism the committed files show serving GET /admin/health. */
+export interface B014Mechanism {
+  /** RMB's RestVerticle as the main verticle, Spring Boot actuator configured at /admin, or a route in the source. */
+  kind: 'rmb' | 'actuator' | 'route';
+  path: string;
+  line?: number;
+  note: string;
+}
+
+/** A reason a Spring Boot or Grails application's actuator may not serve health at /admin/health. */
+export interface B014ActuatorProblem {
+  path?: string;
+  line?: number;
+  /** The profile or Grails environment the problem applies in; absent for the default configuration. */
+  condition?: string;
+  note: string;
+}
+
+export interface B014ActuatorApplication {
+  framework: 'spring' | 'grails';
+  /** The folder holding the application's `src/main` or `grails-app`, such as `service/`; empty at the root. */
+  root: string;
+  /** The `@SpringBootApplication` class or the `grails-app` folder. */
+  source: string;
+  /** The build file that brings in actuator, directly or through folio-spring-base. */
+  dependency?: { path: string; line: number };
+  configFiles: string[];
+  /** The first 50 of `problemCount`. */
+  problems: B014ActuatorProblem[];
+  problemCount: number;
+}
+
+export interface B014Analysis {
+  criterionId: 'B014';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B014Basis;
+  kind: BackendRepositoryKind;
+  /** Whether the tool called GET /admin/health; false when it decided from the committed files alone. */
+  endpointCalled: boolean;
+  mechanisms: B014Mechanism[];
+  actuator: B014ActuatorApplication[];
+  /** Route registrations whose path or method the tool could not read: the first 100 of `unreadRouteCount`. */
+  unreadRoutes: Array<{ file: string; line: number }>;
+  unreadRouteCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}

@@ -2799,9 +2799,47 @@
     },
     {
       "criterionId": "B014",
-      "status": "manual",
-      "evidence": "API versioning strategy - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B014 pass: Spring Boot actuator serves health at /admin/health (management.endpoints.web.base-path in src/main/resources/application.yml:132). The tool found the mechanism in configuration and did not call the endpoint.",
+      "details": "Health check: GET /admin/health was not called; the result comes from the committed files\nFound:\n  - Spring Boot actuator: src/main/resources/application.yml:132 — management.endpoints.web.base-path /admin; actuator serves health at /admin/health",
+      "criterionDetails": {
+        "criterionId": "B014",
+        "kind": "backend-module",
+        "endpointCalled": false,
+        "sourceDiagnostics": [],
+        "mechanisms": [
+          {
+            "kind": "actuator",
+            "path": "src/main/resources/application.yml",
+            "line": 132,
+            "note": "management.endpoints.web.base-path /admin; actuator serves health at /admin/health"
+          }
+        ],
+        "actuator": [
+          {
+            "framework": "spring",
+            "root": "",
+            "source": "src/main/java/org/folio/rtaccache/RtacCacheApplication.java",
+            "dependency": {
+              "path": "pom.xml",
+              "line": 49
+            },
+            "configFiles": [
+              "src/main/resources/application.yml"
+            ],
+            "problems": [],
+            "problemCount": 0
+          }
+        ],
+        "unreadRoutes": [],
+        "unreadRouteCount": 0,
+        "status": "pass",
+        "basis": "mechanism-found",
+        "summary": "B014 pass: Spring Boot actuator serves health at /admin/health (management.endpoints.web.base-path in src/main/resources/application.yml:132). The tool found the mechanism in configuration and did not call the endpoint.",
+        "checklist": {
+          "items": []
+        }
+      }
     },
     {
       "criterionId": "B015",
