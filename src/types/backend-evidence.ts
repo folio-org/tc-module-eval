@@ -287,3 +287,76 @@ export interface B003Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }
+
+/**
+ * A problem with a provided interface's id or version
+ * (https://dev.folio.org/guidelines/naming-conventions/#interfaces):
+ * - `dot`, `underscore`: the id has one, where the guide joins words with hyphens;
+ * - `version-format`: the version is not major.minor, the first two portions of a semantic version;
+ * - `uppercase`: the id has an uppercase letter, which the guide neither allows nor forbids;
+ * - `other-characters`: the id has characters other than letters, digits, hyphens, dots and underscores, or an empty word;
+ * - `id-placeholder`, `version-placeholder`: it has a build placeholder the build properties do not define;
+ * - `id-missing`, `version-missing`: it is absent or not a string.
+ */
+export type B005Problem =
+  | 'dot'
+  | 'underscore'
+  | 'version-format'
+  | 'uppercase'
+  | 'other-characters'
+  | 'id-placeholder'
+  | 'version-placeholder'
+  | 'id-missing'
+  | 'version-missing';
+
+/** A non-system interface in the descriptor template's `provides`. */
+export interface B005Interface {
+  /** As read; empty when missing or not a string. */
+  id: string;
+  version: string;
+  /** JSON pointer of the interface in the template. */
+  pointer: string;
+  problems: B005Problem[];
+  /** Unresolved build placeholders in the id or version, as written. */
+  placeholders: string[];
+  /** Build placeholders in the id or version that the build properties define. */
+  resolved: Array<{ field: 'id' | 'version'; text: string; value: string; source: string }>;
+  /** The first segments of its handler paths, when none is the id (information only). */
+  otherFirstSegments?: string[];
+}
+
+/**
+ * What B005 decided from:
+ * - `library`, `no-descriptor`: the repository kind, or a descriptor template B001 could not read;
+ * - `no-interfaces`: a descriptor that provides only system interfaces;
+ * - `interfaces-checked`: each interface's id and version, and the routes in the source.
+ */
+export type B005Basis = 'library' | 'no-descriptor' | 'no-interfaces' | 'interfaces-checked';
+
+export interface B005Analysis {
+  criterionId: 'B005';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B005Basis;
+  kind: BackendRepositoryKind;
+  existingModule: boolean;
+  templatePath?: string;
+  interfaces: B005Interface[];
+  /** The system interfaces left out, by id or, without one, JSON pointer. */
+  systemInterfaces: string[];
+  /** JSON pointers of a `provides` that is not a list, or of its entries that are not objects. */
+  unreadableEntries: string[];
+  /** Whether routes were checked against the provided interfaces; an edge module's routes serve clients outside FOLIO. */
+  routesChecked: boolean;
+  /** Routes the source registers, without `/admin/health` and paths with `*`. */
+  routeCount: number;
+  /** Routes no provided interface's handlers cover, system interfaces included. */
+  unprovidedRoutes: Array<{ method: string; path: string; file: string; line: number }>;
+  /** Route registrations whose path or method the tool could not read: the first 100 of `unreadRouteCount`. */
+  unreadRoutes: Array<{ file: string; line: number }>;
+  unreadRouteCount: number;
+  /** Routes not found covered when matching stopped at the tool's limit, so not known to be in no interface. */
+  unmatchedRoutes: Array<{ method: string; path: string; file: string; line: number }>;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}

@@ -168,6 +168,16 @@ annotations, Grails URL mappings). It fails when an RMB or Spring endpoint is in
 and leaves missing implementing classes, wildcard handlers, library endpoints and unreadable evidence
 to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b003-endpoint-implementations).
 
+### B005 Interface Naming
+
+B005 checks that each interface the module descriptor provides, other than system interfaces such as
+`_tenant`, has a name of words joined by hyphens and a major.minor version, with build placeholders such
+as `${okapiInterfaceVersion}` resolved from `pom.xml` and `gradle.properties`. It fails on a dot or an
+underscore in a name, or on a version that is not major.minor; with `--existing-module`, these are left
+to the reviewer, because renaming an interface breaks the modules that use it. Uppercase names,
+placeholders the build does not define, and routes in the source that no provided interface covers also
+go to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b005-interface-naming).
+
 ### B006 API Documentation
 
 B006 checks that every endpoint in the module descriptor (for an edge module, every router route) is

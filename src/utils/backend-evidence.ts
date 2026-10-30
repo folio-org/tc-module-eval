@@ -111,7 +111,7 @@ async function pomProject(content: string): Promise<Record<string, any> | undefi
 }
 
 // `${name}` (Maven, Gradle ReplaceTokens) and `@name@` (Spring Boot's Maven resource delimiter).
-const PLACEHOLDER = /\$\{([^{}\s"\\]+)\}|@([A-Za-z0-9_.-]+)@/g;
+export const PLACEHOLDER = /\$\{([^{}\s"\\]+)\}|@([A-Za-z0-9_.-]+)@/g;
 
 async function readTemplate(
   path: string,

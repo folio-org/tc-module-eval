@@ -11,14 +11,11 @@ import {
 } from '../types';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { descriptorEndpoints, EndpointMatcher, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, uniqueEndpoints } from './backend-endpoints';
-import { routerRoutes } from './backend-routes';
+import { HEALTH_ROUTE, routerRoutes } from './backend-routes';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 
 const MAX_ROWS = 20;
-
-// Served for Okapi and B014, not part of the module's API.
-const HEALTH_ROUTE = '/admin/health';
 
 /**
  * B006 (all API endpoints documented in OpenAPI) looks up every endpoint the module serves in the repository's API
