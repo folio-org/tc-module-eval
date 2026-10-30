@@ -286,10 +286,16 @@ export function moduleFrameworks(framework: BackendFramework, files: CommittedSo
   return frameworks;
 }
 
-/** The links, as URLs without the scheme, that the root README.md contains, each followed by no further name character. */
-export function readmeLinks(files: CommittedSourceFile[], links: string[]): Set<string> {
-  const readme = files.find(file => /^README\.md$/i.test(file.path))?.content.toLowerCase() ?? '';
-  return new Set(links.filter(link => new RegExp(`${escapeRegExp(link.toLowerCase())}(?![\\w-])`).test(readme)));
+/**
+ * The links, as URLs without the scheme, that the root README.md or ENV_VARS.md contains, each followed by no further
+ * name character.
+ */
+export function documentationLinks(files: CommittedSourceFile[], links: string[]): Set<string> {
+  const texts = files.filter(file => DOCUMENTATION_FILE.test(file.path)).map(file => file.content.toLowerCase());
+  return new Set(links.filter(link => {
+    const pattern = new RegExp(`${escapeRegExp(link.toLowerCase())}(?![\\w-])`);
+    return texts.some(text => pattern.test(text));
+  }));
 }
 
 export interface B004Documentation {

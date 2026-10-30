@@ -10,7 +10,7 @@ import {
   CriterionAgentReviewResult,
   EvaluationStatus
 } from '../types';
-import { B004FrameworkId, B004Read, documentationTables, moduleFrameworks, readmeLinks, sourceEnvReads, templateEnvReads } from './b004-env-evidence';
+import { B004FrameworkId, B004Read, documentationTables, documentationLinks, moduleFrameworks, sourceEnvReads, templateEnvReads } from './b004-env-evidence';
 import { numberBackendObligations } from './backend-agent-review';
 import { templateLineOf } from './backend-evidence';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
@@ -82,8 +82,8 @@ const COLUMN_NAMES = { default: 'Default Value', required: 'Required', descripti
  * C1 documented in ENV_VARS.md or a README table with a default, required or optional, and a description, and a
  * template with a top-level `env`; C2 no default on a required variable; C3 names; C4 fail-fast evidence for
  * required variables; C5 log statements that may print secrets. A library, or a repository without a descriptor,
- * gets C3-C5 only. A variable its framework documents needs no documentation of the module's own when the README links
- * to that framework's documentation (policy section 2.2); without the link a reviewer checks it.
+ * gets C3-C5 only. A variable its framework documents needs no documentation of the module's own when README.md or
+ * ENV_VARS.md links to that framework's documentation (policy section 2.2); without the link a reviewer checks it.
  */
 export function evaluateB004(evidence: BackendEvidence, existingModule: boolean, policy: B004Policy | { problem: string }): B004Analysis {
   const { kind, template } = evidence;
@@ -116,7 +116,7 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   const documentation = documentationChecked ? documentationTables(files) : undefined;
   const applicable = moduleFrameworks(evidence.framework.name, files);
   const frameworks = 'problem' in policy || !documentation ? [] : policy.frameworks.filter(framework => applicable.has(framework.id));
-  const linked = readmeLinks(files, frameworks.flatMap(framework => framework.documentationLinks));
+  const linked = documentationLinks(files, frameworks.flatMap(framework => framework.documentationLinks));
   const frameworkDocumentation = new Map<string, NonNullable<B004Variable['framework']>>();
   for (const framework of frameworks) {
     const isLinked = framework.documentationLinks.some(link => linked.has(link));
@@ -193,10 +193,10 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   }
   if (documentation && variables.length) {
     for (const [framework, list] of byFramework(variables.filter(variable => variable.framework?.linked))) {
-      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, which the README links to, so the module need not document ${list.length === 1 ? 'it' : 'them'} (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
+      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, which README.md or ENV_VARS.md links to, so the module need not document ${list.length === 1 ? 'it' : 'them'} (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
     }
     for (const [framework, list] of byFramework(frameworkUnlinked)) {
-      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, but the README does not link to its documentation (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
+      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, but neither README.md nor ENV_VARS.md links to its documentation (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
     }
     const documented = ownVariables.length - undocumented.length;
     const other = ownVariables.length < variables.length ? ' other' : '';
@@ -406,8 +406,8 @@ export function renderB004HumanDetails(analysis: B004Analysis, agentReview?: Cri
       ...list('No value for required or optional', having('missing-required'), rowText),
       ...list('Required or optional not readable', having('unreadable-required'), variable => `${rowText(variable)}: "${reportText(variable.documentation!.required!)}"`),
       ...list('No description', having('missing-description'), rowText),
-      ...list('Documented by a framework the README links to (policy section 2.2)', variables.filter(variable => variable.framework?.linked), frameworkText),
-      ...list('Documented by a framework the README does not link to (policy section 2.2)', having('framework-unlinked'), frameworkText)
+      ...list('Documented by a framework that README.md or ENV_VARS.md links to (policy section 2.2)', variables.filter(variable => variable.framework?.linked), frameworkText),
+      ...list('Documented by a framework that neither README.md nor ENV_VARS.md links to (policy section 2.2)', having('framework-unlinked'), frameworkText)
     );
     section('C1 Documentation', rows);
 
@@ -535,7 +535,7 @@ function rowText(variable: B004Variable): string {
 function documentationNote(variable: B004Variable): string {
   const problems = variable.problems;
   if (problems.includes('undocumented')) return 'not in ENV_VARS.md or a README table';
-  if (problems.includes('framework-unlinked')) return `documented by ${reportText(variable.framework!.name)} (${reportText(variable.framework!.source)}), but the README does not link to its documentation`;
+  if (problems.includes('framework-unlinked')) return `documented by ${reportText(variable.framework!.name)} (${reportText(variable.framework!.source)}), but neither README.md nor ENV_VARS.md links to its documentation`;
   return listText([
     ...(problems.includes('missing-columns') ? [`its table has ${missingColumnsText(variable.documentation!.missingColumns)}`] : []),
     ...(problems.includes('missing-required') ? ['no value for required or optional'] : []),

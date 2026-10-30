@@ -488,31 +488,31 @@ describe('B004 environment variables', () => {
   describe('variables a framework documents (policy section 2.2)', () => {
     const RMB_LINK = 'Environment variables of [RMB](https://github.com/folio-org/raml-module-builder#environment-variables)';
     const IMAGE_LINK = 'and of the [base image](https://github.com/folio-org/folio-tools/tree/master/folio-java-docker/openjdk21).';
-    const frameworkModule = (readme: string, launchEnv: Entry[] = []) => moduleRepository(
+    const frameworkModule = (readme: string, launchEnv: Entry[] = [], files: Record<string, string> = {}) => moduleRepository(
       template([{ name: 'DB_HOST' }, { name: 'DB_PORT' }, { name: 'JAVA_OPTIONS', value: '-Xmx1g' }, ...launchEnv], [{ name: 'CACHE_HOST', value: '' }]),
-      { 'Dockerfile': 'FROM folioci/alpine-jre-openjdk21:latest\n', 'README.md': `# mod-example\n\n${readme}\n\n${table(FULL_HEADER, ['| CACHE_HOST | | no | Cache host |'])}\n` }
+      { 'Dockerfile': 'FROM folioci/alpine-jre-openjdk21:latest\n', 'README.md': `# mod-example\n\n${readme}\n\n${table(FULL_HEADER, ['| CACHE_HOST | | no | Cache host |'])}\n`, ...files }
     );
     const RMB_SOURCE = 'https://github.com/folio-org/raml-module-builder/blob/a1152f5a80329dbbafdbdb3e4c6ffd19ca8f1eb4/README.md';
     const IMAGE_SOURCE = 'https://github.com/folio-org/folio-tools/blob/9a1446ae602abd9d9a7bed354ff13e6d600ed2a8/folio-java-docker/openjdk21/README.md#L11';
     const IMAGE = 'the FOLIO Java base image (folioci/alpine-jre-openjdk)';
 
-    it('needs no documentation of its own when the README links to the framework', async () => {
-      const { result, rows } = await b004(frameworkModule(`${RMB_LINK} ${IMAGE_LINK}`));
+    it('needs no documentation of its own when README.md or ENV_VARS.md links to the framework', async () => {
+      const { result, rows } = await b004(frameworkModule(RMB_LINK, [], { 'ENV_VARS.md': `# Environment variables\n\nSee the ${IMAGE_LINK}\n` }));
 
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.evidence).toBe('B004 pass: 2 variables are documented by RMB, which the README links to, so the module need not document them (policy section 2.2): DB_HOST and DB_PORT. '
-        + `JAVA_OPTIONS is documented by ${IMAGE}, which the README links to, so the module need not document it (policy section 2.2). `
+      expect(result.evidence).toBe('B004 pass: 2 variables are documented by RMB, which README.md or ENV_VARS.md links to, so the module need not document them (policy section 2.2): DB_HOST and DB_PORT. '
+        + `JAVA_OPTIONS is documented by ${IMAGE}, which README.md or ENV_VARS.md links to, so the module need not document it (policy section 2.2). `
         + 'The other environment variable is documented in a table with a default, required or optional, and a description, and the descriptor template has a top-level "env". '
         + 'Their names follow the policy, none is documented as required, and no log statement in files that read configuration prints a secret-like value or the whole environment.');
       expect(rows).toEqual([
         NEW_MODULE,
         POLICY,
         'Variables used: 4 (1 in the top-level env, 3 in launchDescriptor.env)',
-        'Documentation: no ENV_VARS.md, README.md with 1 table; the descriptor\'s env lists do not count as documentation',
+        'Documentation: ENV_VARS.md with 0 tables, README.md with 1 table; the descriptor\'s env lists do not count as documentation',
         'C1 Documentation:',
         `  - Top-level env: present in ${TEMPLATE}`,
         '  - Documented in a table: 1 of 4',
-        '  - Documented by a framework the README links to (policy section 2.2) (3):',
+        '  - Documented by a framework that README.md or ENV_VARS.md links to (policy section 2.2) (3):',
         `    - DB_HOST — RMB, ${RMB_SOURCE}#L348`,
         `    - DB_PORT — RMB, ${RMB_SOURCE}#L349`,
         `    - JAVA_OPTIONS — ${IMAGE}, ${IMAGE_SOURCE}`,
@@ -526,12 +526,13 @@ describe('B004 environment variables', () => {
       ]);
     });
 
-    it('leaves it to the reviewer when the README does not link to the framework', async () => {
-      const { result, analysis, rows } = await b004(frameworkModule('See [raml-module-builder-tools](https://github.com/folio-org/raml-module-builder-tools).'));
+    it('leaves it to the reviewer when neither README.md nor ENV_VARS.md links to the framework', async () => {
+      const { result, analysis, rows } = await b004(frameworkModule('See [raml-module-builder-tools](https://github.com/folio-org/raml-module-builder-tools).', [],
+        { 'README-old.md': `${RMB_LINK} ${IMAGE_LINK}\n` }));
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.evidence).toBe('B004 manual: 2 variables are documented by RMB, but the README does not link to its documentation (policy section 2.2): DB_HOST and DB_PORT. '
-        + `JAVA_OPTIONS is documented by ${IMAGE}, but the README does not link to its documentation (policy section 2.2). A reviewer must check the findings on the checklist.`);
+      expect(result.evidence).toBe('B004 manual: 2 variables are documented by RMB, but neither README.md nor ENV_VARS.md links to its documentation (policy section 2.2): DB_HOST and DB_PORT. '
+        + `JAVA_OPTIONS is documented by ${IMAGE}, but neither README.md nor ENV_VARS.md links to its documentation (policy section 2.2). A reviewer must check the findings on the checklist.`);
       expect(rows).toEqual([
         NEW_MODULE,
         POLICY,
@@ -540,7 +541,7 @@ describe('B004 environment variables', () => {
         'C1 Documentation:',
         `  - Top-level env: present in ${TEMPLATE}`,
         '  - Documented in a table: 1 of 4',
-        '  - Documented by a framework the README does not link to (policy section 2.2) (3):',
+        '  - Documented by a framework that neither README.md nor ENV_VARS.md links to (policy section 2.2) (3):',
         `    - DB_HOST — RMB, ${RMB_SOURCE}#L348`,
         `    - DB_PORT — RMB, ${RMB_SOURCE}#L349`,
         `    - JAVA_OPTIONS — ${IMAGE}, ${IMAGE_SOURCE}`,
@@ -554,9 +555,9 @@ describe('B004 environment variables', () => {
         'Checklist for the reviewer:',
         C1_TITLE,
         '    - Start with:',
-        `      - ${TEMPLATE}:11 — DB_HOST: documented by RMB (${RMB_SOURCE}#L348), but the README does not link to its documentation`,
-        `      - ${TEMPLATE}:14 — DB_PORT: documented by RMB (${RMB_SOURCE}#L349), but the README does not link to its documentation`,
-        `      - ${TEMPLATE}:17 — JAVA_OPTIONS: documented by ${IMAGE} (${IMAGE_SOURCE}), but the README does not link to its documentation`,
+        `      - ${TEMPLATE}:11 — DB_HOST: documented by RMB (${RMB_SOURCE}#L348), but neither README.md nor ENV_VARS.md links to its documentation`,
+        `      - ${TEMPLATE}:14 — DB_PORT: documented by RMB (${RMB_SOURCE}#L349), but neither README.md nor ENV_VARS.md links to its documentation`,
+        `      - ${TEMPLATE}:17 — JAVA_OPTIONS: documented by ${IMAGE} (${IMAGE_SOURCE}), but neither README.md nor ENV_VARS.md links to its documentation`,
         'Agent review:',
         '  - Not applied: agent review is disabled or unconfigured'
       ]);
@@ -570,8 +571,8 @@ describe('B004 environment variables', () => {
 
       const fresh = await b004(root);
       expect(fresh.result.status).toBe(EvaluationStatus.FAIL);
-      expect(fresh.result.evidence).toBe('B004 fail: 2 variables are documented by RMB, which the README links to, so the module need not document them (policy section 2.2): DB_HOST and DB_PORT. '
-        + `JAVA_OPTIONS is documented by ${IMAGE}, which the README links to, so the module need not document it (policy section 2.2). `
+      expect(fresh.result.evidence).toBe('B004 fail: 2 variables are documented by RMB, which README.md or ENV_VARS.md links to, so the module need not document them (policy section 2.2): DB_HOST and DB_PORT. '
+        + `JAVA_OPTIONS is documented by ${IMAGE}, which README.md or ENV_VARS.md links to, so the module need not document it (policy section 2.2). `
         + 'ENV_VARS.md or a README table documents 1 of the 2 other environment variables the module uses; 1 is not: DB_HOST_EXTRA.');
 
       const existing = await b004(root, true);
@@ -589,7 +590,7 @@ describe('B004 environment variables', () => {
       const { result, analysis } = await b004(springModule(dependency('folio-spring-base')));
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
-      expect(result.evidence).toBe('B004 fail: DB_MAX_LIFETIME is documented by folio-spring-base, which the README links to, so the module need not document it (policy section 2.2). '
+      expect(result.evidence).toBe('B004 fail: DB_MAX_LIFETIME is documented by folio-spring-base, which README.md or ENV_VARS.md links to, so the module need not document it (policy section 2.2). '
         + 'The module uses 1 other environment variable, but it is not documented in ENV_VARS.md or a README table.');
       expect(analysis.variables.map(variable => [variable.name, variable.problems, variable.framework])).toEqual([
         ['DB_HOST', ['undocumented'], undefined],
