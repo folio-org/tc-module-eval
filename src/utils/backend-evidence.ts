@@ -15,7 +15,7 @@ const MAX_FILE_BYTES = 1024 * 1024;
 // The directories classifyModuleKind looks in for a descriptor, so a backend module always has a candidate here.
 const TEMPLATE_CANDIDATE = /^(?:descriptors\/|src\/main\/resources\/descriptors\/|service\/src\/main\/okapi\/)?ModuleDescriptor[^/]*\.json$/i;
 
-const TEST_SOURCES = /(?:^|\/)src\/(?:test|it|integration-?test)[^/]*\//i;
+export const TEST_SOURCES = /(?:^|\/)src\/(?:test|it|integration-?test)[^/]*\//i;
 const INCLUDED = [
   /(?:^|\/)src\/main\//,
   /(?:^|\/)grails-app\//,

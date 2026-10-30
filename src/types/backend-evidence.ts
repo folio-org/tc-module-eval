@@ -831,3 +831,79 @@ export interface B002Analysis {
   agentReviewUnavailableReason?: string;
   checklist: FrontendChecklist;
 }
+
+/**
+ * Where a controlled vocabulary's reference data comes from:
+ * - `reference-data-folder`: files in a `ref-data/` or `reference-data/` folder, with an RMB `TenantLoading` for the
+ *   `loadReference` key or a Spring `loadReferenceData` override to load them;
+ * - `liquibase-insert`: an insert into the vocabulary's table in a Liquibase changelog, which runs at tenant initialization;
+ * - `grails-defaults`: the `@Defaults` values of a Grails refdata property, which the toolkit creates for each tenant.
+ */
+export type B008SourceKind = 'reference-data-folder' | 'liquibase-insert' | 'grails-defaults';
+
+export interface B008Source {
+  kind: B008SourceKind;
+  file: string;
+  line?: number;
+  /** The folder, the table, or the number of default values. */
+  detail: string;
+}
+
+/**
+ * Why B008 treats something as a controlled vocabulary:
+ * - `name`: a collection endpoint with GET and POST named like `*-types`, `*-statuses`, `*-reasons` or `*-categories`;
+ * - `reference-data`: an endpoint a reference-data folder or a `loadReference` load path names;
+ * - `grails-refdata`: a Grails refdata category, from the `RefdataValue` properties of domain classes.
+ */
+export type B008VocabularyReason = 'name' | 'reference-data' | 'grails-refdata';
+
+export interface B008Vocabulary {
+  /** The endpoint path, or the refdata category. */
+  name: string;
+  reason: B008VocabularyReason;
+  /** The descriptor template, or the domain class that declares the category's first property. */
+  file: string;
+  line?: number;
+  /** Reference data that gives it values at tenant initialization; empty when the tool found none. */
+  sources: B008Source[];
+  /** Reference data that names it but does not count, and why. */
+  notCounted: Array<{ file: string; line?: number; note: string }>;
+}
+
+/**
+ * What B008 decided from:
+ * - `library`, `no-storage`: the repository kind, or no positive storage evidence in a completely read source;
+ * - `storage-unconfirmed`: no storage evidence, in a source that was not read completely;
+ * - `no-descriptor`: a module whose descriptor template B001 could not read, so its endpoints are not known;
+ * - `no-vocabularies`: no controlled vocabulary found;
+ * - `vocabularies-checked`: each vocabulary looked up in the reference data.
+ */
+export type B008Basis = 'library' | 'no-storage' | 'storage-unconfirmed' | 'no-descriptor' | 'no-vocabularies' | 'vocabularies-checked';
+
+export interface B008Analysis {
+  criterionId: 'B008';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B008Basis;
+  kind: BackendRepositoryKind;
+  framework: BackendEvidence['framework'];
+  storage: BackendEvidence['storage'];
+  templatePath?: string;
+  /** Code that loads reference-data folders at tenant initialization. */
+  loaders: Array<{ file: string; line: number; mechanism: 'rmb-tenant-loading' | 'spring-load-reference-data' }>;
+  /**
+   * Folders under `ref-data/` or `reference-data/` that hold files, and whether reference data is loaded from them: a
+   * loader names them in a `loadReference` load path, or loads paths the tool could not read.
+   */
+  referenceDataFolders: Array<{ path: string; loaded: boolean }>;
+  /** Inserts in Liquibase changelogs and the SQL files in their folders, per file and table, with the first line. */
+  liquibaseInserts: Array<{ table: string; file: string; line: number; count: number }>;
+  vocabularies: B008Vocabulary[];
+  /** `add` calls for the `loadReference` key, or under a key, the tool could not read: the first 100 of `unreadLoadPathCount`. */
+  unreadLoadPaths: Array<{ file: string; line: number }>;
+  unreadLoadPathCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+  /** Why agent review did not run, when it would have been relevant. */
+  agentReviewUnavailableReason?: string;
+}

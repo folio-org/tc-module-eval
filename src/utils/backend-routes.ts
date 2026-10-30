@@ -173,7 +173,7 @@ export function withoutComments(content: string): string {
   return parts.join('');
 }
 
-function stringConstants(content: string): Map<string, string> {
+export function stringConstants(content: string): Map<string, string> {
   return new Map([...content.matchAll(STRING_CONSTANT)].map(([, name, value]) => [name, value]));
 }
 
@@ -193,7 +193,7 @@ function pathValue(expression: string, constants: Map<string, string>): string |
 }
 
 /** A string literal or an unqualified string constant of the same file, without Spring property placeholders. */
-function literalPath(expression: string, constants: Map<string, string>): string | undefined {
+export function literalPath(expression: string, constants: Map<string, string>): string | undefined {
   const value = /^"((?:[^"\\]|\\.)*)"$/.exec(expression)?.[1] ?? (/^[A-Za-z_]\w*$/.test(expression) ? constants.get(expression) : undefined);
   return value === undefined || /[$#]\{/.test(value) ? undefined : value;
 }
