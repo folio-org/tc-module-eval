@@ -360,3 +360,84 @@ export interface B005Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
 }
+
+/** A handler of a non-system provided interface: its methods, path and JSON pointer, and where it starts in the template. */
+export interface B007Endpoint {
+  interfaceId: string;
+  methods: string[];
+  /** `pathPattern`, or Okapi's legacy `path`; empty when the handler has neither. */
+  path: string;
+  pointer: string;
+  line?: number;
+  /** Absent when `permissionsRequired` is missing or not a list of strings. */
+  permissionsRequired?: string[];
+  modulePermissions: string[];
+}
+
+/**
+ * A permission problem of one endpoint:
+ * - `all-required`: it requires a `*.all` permission;
+ * - `undefined-required`: it requires a permission no permission set in the template defines;
+ * - `no-permission`: its `permissionsRequired` is missing or empty, so it is public;
+ * - `all-module-permission`: its `modulePermissions` include a `*.all` permission;
+ * - `unreadable`: its `permissionsRequired` or `modulePermissions` is not a list of strings.
+ */
+export type B007Problem = 'all-required' | 'undefined-required' | 'no-permission' | 'all-module-permission' | 'unreadable';
+
+export interface B007Finding extends B007Endpoint {
+  problem: B007Problem;
+  /** The permission at fault, for `all-required`, `undefined-required` and `all-module-permission`. */
+  permission?: string;
+  /** For `no-permission`: true when `permissionsRequired` is missing rather than an empty list. */
+  missing?: boolean;
+}
+
+/**
+ * How a permission name departs from the Permission Naming Guidelines (`<module>.<resource>.<scope>.<action>`):
+ * - `prefix`: its first term is not the module name without `mod-`;
+ * - `word-format`: a term is not lowercase words joined by hyphens, such as a camelCase term;
+ * - `action`: its last term is not a backend action (`get`, `post`, `put`, `patch`, `delete`, `execute`) or `all`.
+ */
+export type B007NamingProblem = 'prefix' | 'word-format' | 'action';
+
+/**
+ * What B007 decided from:
+ * - `library`, `no-descriptor`: the repository kind, or a descriptor template B001 could not read;
+ * - `no-endpoints`: a descriptor whose provided interfaces, other than system interfaces, have no handlers;
+ * - `endpoints-checked`: each handler's permissions checked against the template's permission sets.
+ */
+export type B007Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'endpoints-checked';
+
+export interface B007Analysis {
+  criterionId: 'B007';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B007Basis;
+  kind: BackendRepositoryKind;
+  templatePath?: string;
+  /** The module name permission names should start with, without `mod-`; absent when the build files do not give one. */
+  permissionPrefix?: string;
+  /** Where the module name came from. */
+  permissionPrefixSource?: string;
+  endpoints: B007Endpoint[];
+  /** Permission names the template's permission sets define. */
+  definedPermissionCount: number;
+  /**
+   * Whether every permission set name could be read: `permissionSets` and its entries are readable and no
+   * `permissionName` has an undefined build placeholder. Otherwise no required permission is reported as undefined.
+   */
+  definitionsChecked: boolean;
+  /** Required or defined permission names with a build placeholder the build properties do not define. */
+  placeholderPermissions: string[];
+  findings: B007Finding[];
+  namingDeviations: Array<{ permission: string; problems: B007NamingProblem[]; line?: number }>;
+  /**
+   * JSON pointers the tool could not read: a `provides`, `handlers` or `permissionSets` that is not a list, a handler or
+   * permission set that is not an object, a `permissionName` that is not a string, or a `permissionsRequired` or
+   * `modulePermissions` that is not a list of strings.
+   */
+  unreadable: Array<{ pointer: string; line?: number }>;
+  checklist: FrontendChecklist;
+  agentBrowseScope: string;
+  agentReviewUnavailableReason?: string;
+}

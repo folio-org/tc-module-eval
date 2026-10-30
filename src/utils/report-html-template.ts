@@ -34,7 +34,8 @@ const CRITERION_TITLES: Record<string, string> = {
   B001: 'Module descriptor template',
   B003: 'Endpoint implementations',
   B005: 'Interface naming',
-  B006: 'API documentation'
+  B006: 'API documentation',
+  B007: 'Endpoint permissions'
 };
 
 function escapeHtml(text: string): string {

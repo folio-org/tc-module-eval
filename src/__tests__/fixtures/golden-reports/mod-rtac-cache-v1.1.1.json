@@ -2551,8 +2551,215 @@
     {
       "criterionId": "B007",
       "status": "manual",
-      "evidence": "Event-driven architecture - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B007 manual: Each of the 8 endpoints requires a permission that a permission set defines, and none requires a *.all permission. A reviewer must judge whether the permissions fit the endpoints.",
+      "details": "Endpoints: 8 in 1 interface of descriptors/ModuleDescriptor-template.json, without system interfaces\nPermissions defined in permissionSets: 9\nModule name for permission names: rtac-cache (from pom.xml artifactId mod-rtac-cache)\nChecklist for the reviewer:\n  - B007-C1 Each endpoint's permission fits what it does: a read permission for a read and a write permission for a write, an item permission for one record and a collection permission for many.\n    - Start with:\n      - descriptors/ModuleDescriptor-template.json:5 — interface rtac-cache: 8 endpoints\n  - B007-C3 Each endpoint's modulePermissions cover every interface its implementation calls, without *.all permissions.\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "criterionDetails": {
+        "criterionId": "B007",
+        "kind": "backend-module",
+        "endpoints": [
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "GET"
+            ],
+            "path": "/rtac-cache/{id}",
+            "pointer": "/provides/0/handlers/0",
+            "line": 9,
+            "permissionsRequired": [
+              "rtac-cache.collection.get"
+            ],
+            "modulePermissions": [
+              "inventory-storage.instances.collection.get",
+              "inventory-storage.items.retrieve.collection.post",
+              "inventory-storage.holdings.retrieve.collection.post",
+              "inventory-storage.location-units.libraries.collection.get",
+              "inventory-storage.locations.collection.get",
+              "inventory-storage.material-types.collection.get",
+              "inventory-storage.loan-types.collection.get",
+              "inventory-storage.holdings-note-types.collection.get",
+              "inventory-storage.bound-with-parts.collection.get",
+              "circulation-storage.loans.collection.get",
+              "circulation.requests.collection.get",
+              "orders-storage.pieces.collection.get",
+              "user-tenants.collection.get",
+              "consortium-search.holdings.batch.collection.get"
+            ]
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "POST"
+            ],
+            "path": "/rtac-cache/batch",
+            "pointer": "/provides/0/handlers/1",
+            "line": 30,
+            "permissionsRequired": [
+              "rtac-cache.batch.collection.post"
+            ],
+            "modulePermissions": [
+              "inventory-storage.instances.collection.get",
+              "inventory-storage.items.retrieve.collection.post",
+              "inventory-storage.holdings.retrieve.collection.post",
+              "inventory-storage.location-units.libraries.collection.get",
+              "inventory-storage.locations.collection.get",
+              "inventory-storage.material-types.collection.get",
+              "inventory-storage.loan-types.collection.get",
+              "inventory-storage.holdings-note-types.collection.get",
+              "inventory-storage.bound-with-parts.collection.get",
+              "circulation-storage.loans.collection.get",
+              "circulation.requests.collection.get",
+              "orders-storage.pieces.collection.get",
+              "user-tenants.collection.get",
+              "consortium-search.holdings.batch.collection.get"
+            ]
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "GET"
+            ],
+            "path": "/rtac-cache/search/{instanceId}",
+            "pointer": "/provides/0/handlers/2",
+            "line": 51,
+            "permissionsRequired": [
+              "rtac-cache.search.collection.get"
+            ],
+            "modulePermissions": [
+              "inventory-storage.instances.collection.get",
+              "inventory-storage.items.retrieve.collection.post",
+              "inventory-storage.holdings.retrieve.collection.post",
+              "inventory-storage.location-units.libraries.collection.get",
+              "inventory-storage.locations.collection.get",
+              "inventory-storage.material-types.collection.get",
+              "inventory-storage.loan-types.collection.get",
+              "inventory-storage.holdings-note-types.collection.get",
+              "inventory-storage.bound-with-parts.collection.get",
+              "circulation-storage.loans.collection.get",
+              "circulation.requests.collection.get",
+              "orders-storage.pieces.collection.get",
+              "user-tenants.collection.get",
+              "consortium-search.holdings.batch.collection.get"
+            ]
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "GET"
+            ],
+            "path": "/rtac-cache/prewarm",
+            "pointer": "/provides/0/handlers/3",
+            "line": 76,
+            "permissionsRequired": [
+              "rtac-cache.prewarm.collection.get"
+            ],
+            "modulePermissions": []
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "GET"
+            ],
+            "path": "/rtac-cache/prewarm/{id}",
+            "pointer": "/provides/0/handlers/4",
+            "line": 81,
+            "permissionsRequired": [
+              "rtac-cache.prewarm.get"
+            ],
+            "modulePermissions": []
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "POST"
+            ],
+            "path": "/rtac-cache/prewarm",
+            "pointer": "/provides/0/handlers/5",
+            "line": 86,
+            "permissionsRequired": [
+              "rtac-cache.prewarm.post"
+            ],
+            "modulePermissions": []
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "POST"
+            ],
+            "path": "/rtac-cache/invalidate",
+            "pointer": "/provides/0/handlers/6",
+            "line": 91,
+            "permissionsRequired": [
+              "rtac-cache.invalidate.post"
+            ],
+            "modulePermissions": []
+          },
+          {
+            "interfaceId": "rtac-cache",
+            "methods": [
+              "POST"
+            ],
+            "path": "/rtac-cache/invalidate-all",
+            "pointer": "/provides/0/handlers/7",
+            "line": 96,
+            "permissionsRequired": [
+              "rtac-cache.invalidate-all.post"
+            ],
+            "modulePermissions": []
+          }
+        ],
+        "definedPermissionCount": 9,
+        "definitionsChecked": true,
+        "placeholderPermissions": [],
+        "findings": [],
+        "namingDeviations": [],
+        "unreadable": [],
+        "agentBrowseScope": "Java, Groovy and Kotlin sources and resources under src/main/ in any module folder (no reference or sample data), grails-app/, descriptors/ and the descriptor template, ramls/ (no raml-util), pom.xml and build.gradle files, and README, ENV_VARS.md, Dockerfile and docker-compose files at the root",
+        "templatePath": "descriptors/ModuleDescriptor-template.json",
+        "permissionPrefix": "rtac-cache",
+        "permissionPrefixSource": "pom.xml artifactId mod-rtac-cache",
+        "status": "manual",
+        "basis": "endpoints-checked",
+        "summary": "B007 manual: Each of the 8 endpoints requires a permission that a permission set defines, and none requires a *.all permission. A reviewer must judge whether the permissions fit the endpoints.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B007-C1",
+              "title": "Each endpoint's permission fits what it does: a read permission for a read and a write permission for a write, an item permission for one record and a collection permission for many.",
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B007-C1#1",
+                  "subject": "interface rtac-cache (#/provides/0)",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 5
+                }
+              ],
+              "startingPoints": [
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 5,
+                  "note": "interface rtac-cache: 8 endpoints"
+                }
+              ]
+            },
+            {
+              "id": "B007-C3",
+              "title": "Each endpoint's modulePermissions cover every interface its implementation calls, without *.all permissions.",
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B007-C3#1",
+                  "subject": "interface rtac-cache (#/provides/0)",
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "line": 5
+                }
+              ],
+              "startingPoints": []
+            }
+          ]
+        },
+        "agentReviewUnavailableReason": "agent review is disabled or unconfigured"
+      }
     },
     {
       "criterionId": "B008",

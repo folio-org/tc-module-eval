@@ -41,9 +41,9 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
  * Main orchestrator for module evaluation
  *
  * S001-S014, B001, B003, B005, B006, F001-F003 and F005 have automated evaluation logic and return MANUAL
- * only when the evidence is inconclusive; F004, F006 and F007 return MANUAL whenever the package
- * renders a user interface. The other 13 of the 38 criteria always return MANUAL: A001 is a
- * manual review by design, and B002, B004 and B007-B016 (Java)
+ * only when the evidence is inconclusive; B007 returns MANUAL whenever it applies and does not fail, and F004, F006
+ * and F007 whenever the package renders a user interface. The other 12 of the 38 criteria always return
+ * MANUAL: A001 is a manual review by design, and B002, B004 and B008-B016 (Java)
  * have no evaluation logic yet.
  */
 export class ModuleEvaluator {
