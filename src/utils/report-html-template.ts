@@ -37,6 +37,7 @@ const CRITERION_TITLES: Record<string, string> = {
   B005: 'Interface naming',
   B006: 'API documentation',
   B007: 'Endpoint permissions',
+  B009: 'API tests',
   B012: 'Dependencies declared in README',
   B014: 'Health check endpoint',
   B016: 'Supported infrastructure'

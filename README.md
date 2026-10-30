@@ -238,6 +238,17 @@ permission fits its endpoint; the report lists endpoints without a permission, `
 permissions and permission names that depart from the naming guidelines. Agent review runs by default
 for its manual results. See [Criterion Notes](docs/criterion-notes.md#b007-endpoint-permissions).
 
+### B009 API Tests
+
+B009 checks that API tests, where a module has them, use Karate, the framework the officially supported
+technologies page lists (as provisional). It looks for Karate `.feature` files and Postman, Bruno and
+Insomnia collections in the repository, and, with `--allow-remote-lookups`, for `.feature` files and a
+`karate-config.js` in the folio-integration-tests folder named after the module. It fails on Postman,
+Bruno or Insomnia tests, is not applicable when no tests are found anywhere, and is left to the reviewer
+when remote lookups are off and the repository has none. Tests in a folio-integration-tests folder with
+another name, such as `erm/` for mod-agreements, are not seen. See
+[Criterion Notes](docs/criterion-notes.md#b009-api-tests).
+
 ### B012 Dependencies Declared in README
 
 B012 checks that `README.md` names the infrastructure the module uses, as B016 detects it from direct
@@ -281,7 +292,8 @@ the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-thi
 
 Evaluation is offline by default, apart from the optional runtime UI probe of F004. S011 (SonarQube findings) and S013 (test coverage) need to read
 SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platform) needs to read
-`folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in:
+`folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in. B009 (API tests) also
+reads `folio-org/folio-integration-tests` when you do:
 
 ```bash
 folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
@@ -440,7 +452,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011, S013 and S014, also tick remote lookups, and for S014 enter the application named in the evaluation's Jira task.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011, S013 and S014, and folio-integration-tests for B009, also tick remote lookups, and for S014 enter the application named in the evaluation's Jira task.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 

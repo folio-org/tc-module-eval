@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// Maintainer tool: records the remote responses S014 and S011 read so tests replay them without the network.
+// Maintainer tool: records the remote responses S014, S011 and B009 read so tests replay them without the network.
 // Never run in CI. Usage:
 //   yarn capture:remote-fixtures [--platform-ref snapshot] [--template app-edge-locate ...]
+//   yarn capture:remote-fixtures --integration-tests mod-users mod-agreements ...
 //   yarn capture:remote-fixtures --sonar /path/to/mod-users /path/to/mod-agreements ... [--no-trim]
 //   yarn capture:remote-fixtures --retrim src/__tests__/fixtures/remote/sonarcloud-mod-users.json ...
 // --sonar takes local checkouts: S011 runs on each at its HEAD, so the rule-name lookup for its suppressions is
 // recorded too; each becomes sonarcloud-<repository>.json, its bodies trimmed to the fields the evaluator reads
 // (see sonarcloud-fixture-trim.ts) unless --no-trim is given. --retrim trims recorded fixtures again in place.
+// --integration-tests records the folio-integration-tests listing and the trees of the named modules' folders as B009
+// reads them, keeping only the entry fields B009 reads, in folio-integration-tests.json.
 import fs from 'fs-extra';
 import path from 'path';
 import { Command } from 'commander';
@@ -14,6 +17,7 @@ import { execFileSync } from 'child_process';
 import { RemoteEvidenceTransport } from '../utils/remote-evidence';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { analyzeS011 } from '../utils/s011-evaluator';
+import { lookUpIntegrationTests } from '../utils/b009-api-tests';
 import { trimSonarCloudResponses } from './sonarcloud-fixture-trim';
 import { checkApplicationTemplate, collectPlatformSnapshot, DEFAULT_PLATFORM_REF } from '../utils/s014-application-assignment';
 import { errorMessage } from '../utils/type-guards';
@@ -76,6 +80,25 @@ async function captureSonar(checkouts: string[], directory: string, trim: boolea
   }
 }
 
+async function captureIntegrationTests(modules: string[], output: string): Promise<void> {
+  const { transport, responses } = recordingTransport();
+  for (const module of modules) {
+    const lookup = await lookUpIntegrationTests(transport, module, []);
+    if (lookup.outcome === 'unread') throw new Error(`${module}: ${lookup.problem}`);
+    console.log(`${module}: ${lookup.outcome === 'folder' ? `${lookup.featureFileCount} .feature files` : 'no folder'}`);
+  }
+  const keep = (entry: unknown, fields: string[]) => entry && typeof entry === 'object'
+    ? Object.fromEntries(fields.flatMap(field => field in entry ? [[field, (entry as Record<string, unknown>)[field]]] : [])) : entry;
+  for (const response of Object.values(responses)) {
+    const body = response.body as { tree?: unknown[] } | unknown[];
+    response.body = Array.isArray(body) ? body.map(entry => keep(entry, ['name', 'path', 'sha', 'type']))
+      : { ...body, tree: body.tree?.map(entry => keep(entry, ['path', 'type', 'sha'])) };
+  }
+  const listing = responses['https://api.github.com/repos/folio-org/folio-integration-tests/contents/'];
+  const head = Array.isArray(listing?.body) ? listing.body.length : 0;
+  await writeFixture(output, `folio-org/folio-integration-tests as B009 reads it: the top-level listing (${head} entries) and the folder trees, looked up for ${modules.join(', ')}, with only the entry fields B009 reads`, responses);
+}
+
 async function capture(platformRef: string, templates: string[], output: string): Promise<void> {
   const { transport, responses } = recordingTransport();
   const snapshot = await collectPlatformSnapshot(transport, platformRef);
@@ -97,7 +120,9 @@ if (require.main === module) {
     .option('--sonar <checkout...>', 'record SonarCloud for these local module checkouts instead of the platform')
     .option('--no-trim', 'with --sonar, keep whole response bodies')
     .option('--retrim <fixture...>', 'trim recorded SonarCloud fixtures again, in place')
+    .option('--integration-tests <module...>', 'record folio-integration-tests as B009 reads it for these module names instead of the platform')
     .action(async options => options.retrim ? retrim(options.retrim)
+      : options.integrationTests ? captureIntegrationTests(options.integrationTests, path.join(REMOTE_FIXTURE_DIR, 'folio-integration-tests.json'))
       : options.sonar ? captureSonar(options.sonar, REMOTE_FIXTURE_DIR, options.trim)
         : capture(options.platformRef, options.template, options.output));
   program.parseAsync().catch(error => {
