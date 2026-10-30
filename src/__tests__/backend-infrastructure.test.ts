@@ -24,6 +24,7 @@ describe('backend infrastructure', () => {
         scoped('org.testcontainers', 'kafka', ''),
         dependency('hazelcast', 'com.hazelcast'),
         dependency('caffeine', 'com.github.ben-manes.caffeine'),
+        scoped('org.apache.solr', 'solr-solrj', '<scope>provided</scope>'),
         scoped('io.minio', 'minio', '<optional>true</optional>')
       ].join('')}</dependencies><profiles><profile><id>search</id><dependencies>${dependency('opensearch-java', 'org.opensearch.client')}</dependencies></profile></profiles>`),
       'descriptors/ModuleDescriptor-template.json': descriptor(['DB_HOST', 'RABBITMQ_HOST', 'JAVA_OPTIONS']),
@@ -67,6 +68,11 @@ describe('backend infrastructure', () => {
         ]
       },
       {
+        id: 'solr', name: 'Apache Solr', usage: 'optional', signals: [
+          { kind: 'dependency', detail: 'org.apache.solr:solr-solrj', path: 'pom.xml', optional: 'Maven provided dependency, which the runtime supplies' }
+        ]
+      },
+      {
         id: 'vault', name: 'HashiCorp Vault', usage: 'configuration-only', signals: [
           { kind: 'environment', detail: 'VAULT_TOKEN', path: 'src/main/java/org/example/Main.java' }
         ]
@@ -106,13 +112,39 @@ describe('backend infrastructure', () => {
     expect(postgresql.items.map(item => [item.id, item.usage, item.signals.length])).toEqual([['postgresql', 'required', 3]]);
   });
 
+  it('keeps the storage evidence on PostgreSQL when something names it, or when the other database is only optional', async () => {
+    const changelog = { 'src/main/resources/db/changelog/changelog-master.xml': '<databaseChangeLog/>' };
+    const profiles = await infrastructure({
+      ...changelog,
+      'pom.xml': pom('mod-example'),
+      'src/main/resources/application.yml': 'spring.datasource.url: jdbc:postgresql://db/example\n',
+      'src/main/resources/application-local.yml': 'spring.datasource.url: jdbc:mysql://localhost/example\n'
+    });
+    const optionalDriver = await infrastructure({
+      ...changelog,
+      'pom.xml': pom('mod-example', `<profiles><profile><id>mysql</id><dependencies>${dependency('mysql-connector-j', 'com.mysql')}</dependencies></profile></profiles>`)
+    });
+
+    expect(profiles.items.map(item => [item.id, item.usage, item.signals.map(signal => signal.kind)])).toEqual([
+      ['postgresql', 'required', ['storage', 'storage', 'configuration']],
+      ['mysql', 'configuration-only', ['configuration']]
+    ]);
+    expect(optionalDriver.items.map(item => [item.id, item.usage, item.signals.map(signal => signal.kind)])).toEqual([
+      ['postgresql', 'required', ['storage']],
+      ['mysql', 'optional', ['dependency']]
+    ]);
+  });
+
   it('treats Vault and AWS SSM as selectable secure stores only where edge-common chooses the store', async () => {
     const stores = `${dependency('ssm', 'software.amazon.awssdk')}${dependency('vault-java-driver', 'com.bettercloud')}`;
     const edge = await infrastructure({
       'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}${stores}</dependencies>`),
       'src/main/resources/vault.properties': 'secureStore.type=Vault\n'
     });
-    const spring = await infrastructure({ 'pom.xml': pom('mod-example', `<dependencies>${stores}</dependencies>`) });
+    const spring = await infrastructure({
+      'pom.xml': pom('mod-example', `<dependencies>${stores}</dependencies>`),
+      'src/main/resources/store.properties': 'secureStore.type=constructor\n'
+    });
     const dependent = await infrastructure({ 'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}${stores}</dependencies>`) });
     const configured = await infrastructure({
       'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}</dependencies>`),
@@ -149,6 +181,8 @@ describe('backend infrastructure', () => {
         '  implementation libs.lettuce',
         '  implementation "${solrGroup}:solr-solrj:9.0.0"',
         '  implementation project(":shared")',
+        '  compileOnly "redis.clients:jedis:5.0.0"',
+        '  implementation \'org.apache.solr:solr-solrj:9.0.0\', { transitive = false }',
         '}'
       ].join('\n'),
       'buildSrc/build.gradle': 'dependencies { implementation "io.minio:minio:8.5.0" }'
@@ -156,7 +190,13 @@ describe('backend infrastructure', () => {
 
     expect(result.items).toEqual([
       { id: 'postgresql', name: 'PostgreSQL', usage: 'required', signals: [{ kind: 'dependency', detail: 'org.postgresql:postgresql', path: 'service/build.gradle', line: 3 }] },
-      { id: 'kafka', name: 'Apache Kafka', usage: 'required', signals: [{ kind: 'dependency', detail: 'org.apache.kafka:kafka-clients', path: 'service/build.gradle', line: 4 }] }
+      { id: 'kafka', name: 'Apache Kafka', usage: 'required', signals: [{ kind: 'dependency', detail: 'org.apache.kafka:kafka-clients', path: 'service/build.gradle', line: 4 }] },
+      {
+        id: 'redis', name: 'Redis', usage: 'optional', signals: [
+          { kind: 'dependency', detail: 'redis.clients:jedis', path: 'service/build.gradle', line: 10, optional: 'Gradle compileOnly dependency, which the runtime supplies' }
+        ]
+      },
+      { id: 'solr', name: 'Apache Solr', usage: 'required', signals: [{ kind: 'dependency', detail: 'org.apache.solr:solr-solrj', path: 'service/build.gradle', line: 11 }] }
     ]);
     expect(result.buildFiles).toEqual(['service/build.gradle']);
     expect(result.diagnostics).toEqual([
@@ -190,6 +230,7 @@ describe('backend infrastructure', () => {
         'pom.xml': pom('mod-example', `<dependencies>${Array.from({ length: size }, (_item, index) => dependency(`lib${index}`, '${missing')).join('')}</dependencies>`),
         'build.gradle': `dependencies {\n${'  implementation group: "a b c d e f '.repeat(size)}\n${'  implementation "x:y:1", "${'.repeat(size)}\n}`,
         'src/main/resources/application.yml': `${Array.from({ length: size }, (_item, index) => `k${index}:\n  spring.kafka.x: "jdbc:postgresql:${'$'.repeat(20)}"\n`).join('')}deep: ${'['.repeat(100)}${']'.repeat(100)}\n`,
+        'src/main/resources/keys.yml': Array.from({ length: size * 25 }, (_item, index) => `spring.kafka.k${index}: v\n`).join(''),
         'src/main/resources/a.properties': `${'x=${KAFKA_'.repeat(size * 20)}\ny=\${KAFKA_HOST}\n`,
         'src/main/java/org/example/Main.java': `class Main { ${'System.getenv( "KAFKA_X'.repeat(size * 20)} }`
       });

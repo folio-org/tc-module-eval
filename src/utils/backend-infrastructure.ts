@@ -157,7 +157,7 @@ const JDBC_IDS: Record<string, BackendInfrastructureId> = { postgresql: 'postgre
 
 // edge-common reads the secure store from `secure_store` (Ephemeral, AwsSsm or Vault; default Ephemeral) and its
 // settings, including `secureStore.type`, from the properties file `secure_store_props` names.
-const SECURE_STORES: Record<string, BackendInfrastructureId> = { awsssm: 'aws-ssm', vault: 'vault' };
+const SECURE_STORES = new Map<string, BackendInfrastructureId>([['awsssm', 'aws-ssm'], ['vault', 'vault']]);
 const SECURE_STORE_KEY = 'securestore.type';
 const SECURE_STORE_NOTE = 'edge-common secure store, chosen with secure_store; the default is Ephemeral';
 const EDGE_COMMON = /^org\.folio:edge-common(?:-spring)?$/;
@@ -218,7 +218,9 @@ export async function collectBackendInfrastructure(evidence: BackendEvidence): P
   }
   for (const { id, path, details } of configuration.keys) add(id, { kind: 'configuration', detail: listText(unique(details)), path });
   if (evidence.storage.present) {
-    const databases = OTHER_DATABASES.filter(id => signals.has(id));
+    const named = (id: BackendInfrastructureId) => (signals.get(id) ?? [])
+      .some(signal => !signal.optional && (signal.kind === 'dependency' || signal.kind === 'configuration'));
+    const databases = named('postgresql') ? [] : OTHER_DATABASES.filter(named);
     for (const id of databases.length ? databases : ['postgresql' as const]) {
       for (const detail of evidence.storage.evidence) add(id, { kind: 'storage', detail });
     }
@@ -264,13 +266,15 @@ async function mavenDependencies(
   const resolve = (text: string) => text.replace(MAVEN_PROPERTY, (whole, name: string) => properties.get(name) ?? whole);
   const read = (dependencies: unknown, profile?: string) => {
     for (const dependency of asArray(dependencies)) {
-      if (xmlText(dependency?.scope) === 'test') continue;
+      const scope = xmlText(dependency?.scope);
+      if (scope === 'test') continue;
       const coordinate = `${resolve(xmlText(dependency?.groupId))}:${resolve(xmlText(dependency?.artifactId))}`;
       if (coordinate.includes('${')) {
         diagnostics.push({ path: file.path, message: `the dependency ${coordinate} uses a property the tool could not resolve` });
         continue;
       }
       const optional = xmlText(dependency?.optional) === 'true' ? 'Maven optional dependency'
+        : scope === 'provided' ? 'Maven provided dependency, which the runtime supplies'
         : profile !== undefined ? `declared in the Maven profile ${profile || '(no id)'}` : undefined;
       coordinates.push({ coordinate, path: file.path, ...(optional ? { optional } : {}) });
     }
@@ -281,7 +285,7 @@ async function mavenDependencies(
 
 function gradleDependencies(
   file: CommittedSourceFile,
-  coordinates: Array<{ coordinate: string; path: string; line?: number }>,
+  coordinates: Array<{ coordinate: string; path: string; line?: number; optional?: string }>,
   diagnostics: BackendInfrastructureEvidence['diagnostics']
 ): void {
   const content = stripGradleComments(file.content);
@@ -308,7 +312,7 @@ function gradleDependencies(
     const name = /\bname\s*[:=]\s*(['"])([^'"]*)\1/.exec(expression);
     const argumentsList = group && name ? [] : splitGradleArguments(expression);
     const literals = group && name ? [`${group[2]}:${name[2]}`] : argumentsList.map(argument => {
-      if (GRADLE_IGNORED.test(argument)) return null;
+      if (GRADLE_IGNORED.test(argument) || argument.startsWith('{')) return null;
       return quotedGradleLiteral(argument) ?? undefined;
     });
     for (const literal of literals) {
@@ -318,7 +322,8 @@ function gradleDependencies(
         diagnostics.push({ path: file.path, line, message: 'a dependency that is not a plain "group:name" string, such as a version catalog entry or a variable' });
         continue;
       }
-      coordinates.push({ coordinate: `${groupId}:${artifactId}`, path: file.path, line });
+      coordinates.push({ coordinate: `${groupId}:${artifactId}`, path: file.path, line,
+        ...(declaration.configuration === 'compileOnly' ? { optional: 'Gradle compileOnly dependency, which the runtime supplies' } : {}) });
     }
   }
 }
@@ -344,7 +349,11 @@ function configurationEvidence(files: CommittedSourceFile[], diagnostics: Backen
       entries = parsed.entries;
     }
     const keys = new Map<BackendInfrastructureId, string[]>();
-    const note = (id: BackendInfrastructureId, detail: string) => keys.set(id, [...keys.get(id) ?? [], detail]);
+    const note = (id: BackendInfrastructureId, detail: string) => {
+      const list = keys.get(id) ?? [];
+      keys.set(id, list);
+      list.push(detail);
+    };
     for (const [key, value] of entries) {
       const lower = key.toLowerCase();
       for (const definition of DEFINITIONS) {
@@ -352,7 +361,7 @@ function configurationEvidence(files: CommittedSourceFile[], diagnostics: Backen
       }
       const jdbc = JDBC_URL.exec(value);
       if (jdbc) note(JDBC_IDS[jdbc[1].toLowerCase()], `${key} (jdbc:${jdbc[1].toLowerCase()})`);
-      const store = lower === SECURE_STORE_KEY ? SECURE_STORES[value.trim().toLowerCase()] : undefined;
+      const store = lower === SECURE_STORE_KEY ? SECURE_STORES.get(value.trim().toLowerCase()) : undefined;
       if (store) result.secureStores.push({ id: store, path: file.path, key, value: value.trim() });
     }
     for (const [id, details] of keys) result.keys.push({ id, path: file.path, details });
