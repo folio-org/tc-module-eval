@@ -22,6 +22,7 @@ import { evaluateB012, renderB012HumanDetails } from '../../utils/b012-readme-de
 import { hasB013AgentReviewMaterial, reviewB013WithAgent } from '../../utils/b013-agent-review';
 import { evaluateB013, renderB013HumanDetails } from '../../utils/b013-tenant-selection';
 import { evaluateB014, renderB014HumanDetails } from '../../utils/b014-health-check';
+import { evaluateB015, renderB015HumanDetails } from '../../utils/b015-high-availability';
 import { evaluateB016, renderB016HumanDetails } from '../../utils/b016-supported-infrastructure';
 import { getBackendApiSpecs } from '../../utils/backend-api-specs';
 import { getBackendEvidence } from '../../utils/backend-evidence';
@@ -33,8 +34,7 @@ import { collectS008Declarations } from '../../utils/s008-interface-declarations
 import { errorMessage } from '../../utils/type-guards';
 
 /**
- * Evaluator for Backend criteria (B001-B016). B001-B014 and B016 have automated logic; the others fall back to the
- * catalog-defined default result.
+ * Evaluator for Backend criteria (B001-B016), each with automated logic.
  */
 export class BackendEvaluator extends CatalogSectionEvaluator {
   constructor() {
@@ -53,6 +53,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       B012: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB012(repoPath, evaluationRun),
       B013: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB013(repoPath, evaluationRun),
       B014: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB014(repoPath, evaluationRun),
+      B015: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB015(repoPath, evaluationRun),
       B016: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateB016(repoPath, evaluationRun)
     });
   }
@@ -272,6 +273,18 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       status: analysis.status,
       evidence: analysis.summary,
       details: renderB014HumanDetails(analysis),
+      criterionDetails: analysis
+    };
+  }
+
+  private async evaluateB015(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'B015', evaluationRun);
+    const analysis = evaluateB015(await getBackendEvidence(run, repoPath));
+    return {
+      criterionId: 'B015',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderB015HumanDetails(analysis),
       criterionDetails: analysis
     };
   }

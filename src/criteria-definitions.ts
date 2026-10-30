@@ -259,11 +259,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B015',
     description: 'High Availability compliance',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Resource management'
-    }
+    languages: ['java']
   },
   {
     id: 'B016',

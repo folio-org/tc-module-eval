@@ -325,6 +325,16 @@ Spring Boot or Grails application) serves health at `/admin/health`, or when the
 or disable health, in the default configuration or in any profile, and modules with no such mechanism are
 left to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
 
+### B015 High Availability
+
+B015 checks whether the module can run as several instances behind a load balancer. Only a reviewer can
+decide that, so it is always `manual`, for modules, edge modules and shared libraries alike. It lists the
+sites a reviewer starts from, each with file and line, in `src/main` and `grails-app` source without
+comments: HTTP sessions (Servlet, Spring Session, Vert.x session handlers), local file writes (temporary
+files included), in-memory caches and shared maps (Spring `@Cacheable`, Caffeine, Guava and edge-common
+caches, Vert.x local maps, concurrent map fields), and scheduled work (`@Scheduled`, Vert.x `setPeriodic`,
+executor schedules, timers, Quartz). See [Criterion Notes](docs/criterion-notes.md#b015-high-availability).
+
 ### B016 Supported Infrastructure
 
 B016 checks that the infrastructure a backend module, edge module or library uses is on the

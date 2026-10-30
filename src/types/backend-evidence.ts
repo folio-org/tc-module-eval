@@ -1082,3 +1082,35 @@ export interface B013Analysis {
   agentReviewUnavailableReason?: string;
   checklist: FrontendChecklist;
 }
+
+/**
+ * What a B015 signal may break when the module runs as several instances:
+ * - `session`: HTTP session state, which needs session affinity;
+ * - `file-write`: a write to the instance's local disk;
+ * - `in-memory-state`: a cache or shared map held in one instance's memory;
+ * - `scheduler`: work each instance schedules for itself.
+ */
+export type B015SignalKind = 'session' | 'file-write' | 'in-memory-state' | 'scheduler';
+
+/** One site in `src/main` or `grails-app` source, read with comments removed. */
+export interface B015Signal {
+  kind: B015SignalKind;
+  path: string;
+  line: number;
+  /** What the tool found there, such as `@Scheduled` or `Caffeine cache without expiry`. */
+  what: string;
+}
+
+export interface B015Analysis {
+  criterionId: 'B015';
+  status: EvaluationStatus;
+  summary: string;
+  kind: BackendRepositoryKind;
+  /** The Java, Groovy and Kotlin files read in `src/main` and `grails-app`. */
+  sourceFileCount: number;
+  /** Every signal found, by kind; `signals` lists the first 1,000. */
+  counts: Record<B015SignalKind, number>;
+  signals: B015Signal[];
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+}
