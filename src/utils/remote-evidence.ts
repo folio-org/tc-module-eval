@@ -49,7 +49,7 @@ const ALLOWED_PATHS: Readonly<Record<string, RegExp>> = {
   'sonarcloud.io': /^\/api\//,
   'far.ci.folio.org': /^\/applications$/,
   'raw.githubusercontent.com': new RegExp(`^/folio-org/${REPOSITORY}/`),
-  'api.github.com': new RegExp(`^/repos/folio-org/${REPOSITORY}(?:/|$)`)
+  'api.github.com': new RegExp(`^/repos/folio-org/(?:${REPOSITORY}(?:/|$)|folio-integration-tests/(?:contents/|git/trees/[0-9a-f]{40})$)`)
 };
 const DEFAULT_RETRY_WAIT_MS = 1_000;
 const TOKEN_PATTERN = /^[\x21-\x7e]{1,1024}$/;

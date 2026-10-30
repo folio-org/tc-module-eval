@@ -30,7 +30,7 @@ program
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
-  .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014)')
+  .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014), and folio-org/folio-integration-tests (B009)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
   .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
@@ -124,11 +124,11 @@ program
     console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003-B007, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003-B007, B009, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
     console.log('   ⚠️  A001 - MANUAL REVIEW by design');
-    console.log('   ⚠️  B002, B008-B011, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
-    console.log('   📝 8 of the 38 criteria always return MANUAL (8 of 31 for Java, 1 of 22 for JavaScript);');
-    console.log('      S001-S014, B001, B003-B006, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
+    console.log('   ⚠️  B002, B008, B010, B011, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 7 of the 38 criteria always return MANUAL (7 of 31 for Java, 1 of 22 for JavaScript);');
+    console.log('      S001-S014, B001, B003-B006, B009, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
     console.log('      B007 whenever it applies and does not fail, and F004, F006 and F007 whenever the package renders a user interface\n');
     
     console.log('📝 Usage Examples:');

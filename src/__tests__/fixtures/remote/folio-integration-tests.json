@@ -1,0 +1,1000 @@
+{
+  "capturedAt": "2026-10-30T16:07:56.076Z",
+  "description": "folio-org/folio-integration-tests as B009 reads it: the top-level listing (79 entries) and the folder trees, looked up for mod-users, mod-agreements, mod-search, with only the entry fields B009 reads",
+  "responses": {
+    "https://api.github.com/repos/folio-org/folio-integration-tests/contents/": {
+      "status": 200,
+      "body": [
+        {
+          "name": ".github",
+          "path": ".github",
+          "sha": "49a67db1a252943ce1e4d75d45fae4fe34a9b6ed",
+          "type": "dir"
+        },
+        {
+          "name": ".gitignore",
+          "path": ".gitignore",
+          "sha": "44176b78f42560ad9b83858c300e46cbeaffeb13",
+          "type": "file"
+        },
+        {
+          "name": ".rancher-pipeline.yml",
+          "path": ".rancher-pipeline.yml",
+          "sha": "80cf6c702820ae492e780c331e0d9b3f8a69184d",
+          "type": "file"
+        },
+        {
+          "name": "CONTRIBUTING.md",
+          "path": "CONTRIBUTING.md",
+          "sha": "c6e1e054b18f263dba35c5449088fda2df38ed97",
+          "type": "file"
+        },
+        {
+          "name": "LICENSE",
+          "path": "LICENSE",
+          "sha": "8dada3edaf50dbc082c9a125058f25def75e625a",
+          "type": "file"
+        },
+        {
+          "name": "PULL_REQUEST_TEMPLATE.md",
+          "path": "PULL_REQUEST_TEMPLATE.md",
+          "sha": "c65b7f7dbbf9245638da5e523e8b17e4ef51e55d",
+          "type": "file"
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "sha": "1ae6d48e30fcc0680100c3d7e4d6766db8ebf1ea",
+          "type": "file"
+        },
+        {
+          "name": "acquisitions",
+          "path": "acquisitions",
+          "sha": "553de59a9bd69dade7c5858f0e3e7eea3465f669",
+          "type": "dir"
+        },
+        {
+          "name": "common-consortia",
+          "path": "common-consortia",
+          "sha": "8b22082d0675fb8a2a03b8424fca45ec18a72f54",
+          "type": "dir"
+        },
+        {
+          "name": "common",
+          "path": "common",
+          "sha": "9bcbec563b0c1a8f01c9bb9d244cec4332e7bfac",
+          "type": "dir"
+        },
+        {
+          "name": "data-import-large-scale-tests",
+          "path": "data-import-large-scale-tests",
+          "sha": "fb6730f8cf46f53f293fd8431eb3b9b662f02a8f",
+          "type": "dir"
+        },
+        {
+          "name": "data-import",
+          "path": "data-import",
+          "sha": "1a313024b9fb3bb18185185113edc83d8e3d6f6c",
+          "type": "dir"
+        },
+        {
+          "name": "edge-caiasoft",
+          "path": "edge-caiasoft",
+          "sha": "663f0730434d7877377f767edfa9ccb71cccf678",
+          "type": "dir"
+        },
+        {
+          "name": "edge-dcb",
+          "path": "edge-dcb",
+          "sha": "6cbe9de467e2686b1b7f26c2a0aeb070f545952b",
+          "type": "dir"
+        },
+        {
+          "name": "edge-dematic",
+          "path": "edge-dematic",
+          "sha": "6300d7a7f66f9278311812171accca734bf998e9",
+          "type": "dir"
+        },
+        {
+          "name": "edge-fqm",
+          "path": "edge-fqm",
+          "sha": "95b4ac120fae6609c66ca093beb047b83e3c653e",
+          "type": "dir"
+        },
+        {
+          "name": "edge-inn-reach",
+          "path": "edge-inn-reach",
+          "sha": "72129ac2e6697e627832e980f057833a827beea3",
+          "type": "dir"
+        },
+        {
+          "name": "edge-oai-pmh",
+          "path": "edge-oai-pmh",
+          "sha": "af572f1b28b129f320ccb8000a34a3ba9999f7b6",
+          "type": "dir"
+        },
+        {
+          "name": "edge-patron",
+          "path": "edge-patron",
+          "sha": "6e15cc5a888adfcb1e290412fc4ea5cc581684c1",
+          "type": "dir"
+        },
+        {
+          "name": "edge-rtac",
+          "path": "edge-rtac",
+          "sha": "7f8ab99895bf1dcb89b35cccc1ce3d22093d7cc6",
+          "type": "dir"
+        },
+        {
+          "name": "erm",
+          "path": "erm",
+          "sha": "9819b670e7474d18e4a5c7a49127251fb75f9ac4",
+          "type": "dir"
+        },
+        {
+          "name": "folio-ecs-circulation",
+          "path": "folio-ecs-circulation",
+          "sha": "665d2fb686675552b6487040bfc7730013b394f9",
+          "type": "dir"
+        },
+        {
+          "name": "git",
+          "path": "git",
+          "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+          "type": "file"
+        },
+        {
+          "name": "img.png",
+          "path": "img.png",
+          "sha": "46258c655d7296293e57a0ee9a5b2442195be9b2",
+          "type": "file"
+        },
+        {
+          "name": "img_1.png",
+          "path": "img_1.png",
+          "sha": "b4e3fd7e575b8961268520b3a3c1fabbd1c9d2da",
+          "type": "file"
+        },
+        {
+          "name": "img_2.png",
+          "path": "img_2.png",
+          "sha": "0309c6edcfc90f5f5c50cf794708cc00f12d23f4",
+          "type": "file"
+        },
+        {
+          "name": "mgr-applications",
+          "path": "mgr-applications",
+          "sha": "d2abeb2d1fe375f185f977a01f6bcd5d13a8dc14",
+          "type": "dir"
+        },
+        {
+          "name": "mgr-tenant-entitlements",
+          "path": "mgr-tenant-entitlements",
+          "sha": "147c6bdcb23ac9f439e0c28e044b34df78e9c9df",
+          "type": "dir"
+        },
+        {
+          "name": "mgr-tenants",
+          "path": "mgr-tenants",
+          "sha": "e065bd50ebded6120e2bd8381e7ca4a1e249ccfc",
+          "type": "dir"
+        },
+        {
+          "name": "mod-audit",
+          "path": "mod-audit",
+          "sha": "5cf5954d763cbc47a12b52be93bb755235c14425",
+          "type": "dir"
+        },
+        {
+          "name": "mod-batch-print",
+          "path": "mod-batch-print",
+          "sha": "538261a90bd1fd1cea72ab91acf1583a12f66fb0",
+          "type": "dir"
+        },
+        {
+          "name": "mod-bulk-operations",
+          "path": "mod-bulk-operations",
+          "sha": "b0a6b5af09a8a50e930289fef8f2cf0b6e7b254b",
+          "type": "dir"
+        },
+        {
+          "name": "mod-calendar",
+          "path": "mod-calendar",
+          "sha": "9c7703abc6fb0a4fc46321a665b3e8f901494dc9",
+          "type": "dir"
+        },
+        {
+          "name": "mod-circulation-item",
+          "path": "mod-circulation-item",
+          "sha": "d83d244f723a665207144f0c2c13f337fdba3c59",
+          "type": "dir"
+        },
+        {
+          "name": "mod-circulation-storage",
+          "path": "mod-circulation-storage",
+          "sha": "842f49818e02013ba69ac4dae020ba5dbdc8d3df",
+          "type": "dir"
+        },
+        {
+          "name": "mod-circulation",
+          "path": "mod-circulation",
+          "sha": "876bc9f3dd4da04f534e7b8c42405d759ae56e7d",
+          "type": "dir"
+        },
+        {
+          "name": "mod-consortia",
+          "path": "mod-consortia",
+          "sha": "9e957154228be2ec25163d41ef1aedfeb857f4e7",
+          "type": "dir"
+        },
+        {
+          "name": "mod-copycat",
+          "path": "mod-copycat",
+          "sha": "2754a984c7c089ab1224b1f2af52ec170505c347",
+          "type": "dir"
+        },
+        {
+          "name": "mod-data-export",
+          "path": "mod-data-export",
+          "sha": "15275308569f66b723caf0e77b8397e01c09ed90",
+          "type": "dir"
+        },
+        {
+          "name": "mod-dcb",
+          "path": "mod-dcb",
+          "sha": "df1a4fbe7a293011b1d5b56a3035094e1b1e547c",
+          "type": "dir"
+        },
+        {
+          "name": "mod-di-converter-storage",
+          "path": "mod-di-converter-storage",
+          "sha": "49f33121759c949a4d4de2dd1d2927d9eda32e98",
+          "type": "dir"
+        },
+        {
+          "name": "mod-email",
+          "path": "mod-email",
+          "sha": "1171b57647154fd11f46401d829174390db3228b",
+          "type": "dir"
+        },
+        {
+          "name": "mod-entities-links",
+          "path": "mod-entities-links",
+          "sha": "e9b326ec77a4d00485875d1239d7b1abcc95ec20",
+          "type": "dir"
+        },
+        {
+          "name": "mod-event-config",
+          "path": "mod-event-config",
+          "sha": "9c5fd06d5871fe46dfb3c2a4fab54a72f899334f",
+          "type": "dir"
+        },
+        {
+          "name": "mod-feesfines",
+          "path": "mod-feesfines",
+          "sha": "9b03c0c6f40f2c058c49a518d8e032754a0a0de5",
+          "type": "dir"
+        },
+        {
+          "name": "mod-fqm-manager",
+          "path": "mod-fqm-manager",
+          "sha": "e9ba8ea6643585cd5ef56f72cab4a6bb6a7bb6ce",
+          "type": "dir"
+        },
+        {
+          "name": "mod-inn-reach",
+          "path": "mod-inn-reach",
+          "sha": "55a011a5ec38c85bb951243546419631663b1874",
+          "type": "dir"
+        },
+        {
+          "name": "mod-inventory",
+          "path": "mod-inventory",
+          "sha": "cdf4020355579f194f0eba2f5da422053db6789d",
+          "type": "dir"
+        },
+        {
+          "name": "mod-kb-ebsco-java",
+          "path": "mod-kb-ebsco-java",
+          "sha": "f7a01e91701fcbdee93e953555814e09ff9db967",
+          "type": "dir"
+        },
+        {
+          "name": "mod-ldp",
+          "path": "mod-ldp",
+          "sha": "a2aeb8edcdaf346663c99a7652856ea1443e4f13",
+          "type": "dir"
+        },
+        {
+          "name": "mod-linked-data",
+          "path": "mod-linked-data",
+          "sha": "81582973e96cf2ac5f10e73802e7c35d2cc67a07",
+          "type": "dir"
+        },
+        {
+          "name": "mod-lists",
+          "path": "mod-lists",
+          "sha": "5616edfae267616ecbe06cf100d168d38bb6d2f5",
+          "type": "dir"
+        },
+        {
+          "name": "mod-login-keycloak",
+          "path": "mod-login-keycloak",
+          "sha": "c5f0d2e24c22fc58225c423ca8acfb01e1e216db",
+          "type": "dir"
+        },
+        {
+          "name": "mod-login-saml",
+          "path": "mod-login-saml",
+          "sha": "2b12f3d323a7eaaebcc62877ec58ea55614ffe32",
+          "type": "dir"
+        },
+        {
+          "name": "mod-notes",
+          "path": "mod-notes",
+          "sha": "900ef37bb786f8e7aef6331d44227fad29a41f97",
+          "type": "dir"
+        },
+        {
+          "name": "mod-notify",
+          "path": "mod-notify",
+          "sha": "4057b6f41ffb073db30f0052f5f906353bec60d5",
+          "type": "dir"
+        },
+        {
+          "name": "mod-oai-pmh",
+          "path": "mod-oai-pmh",
+          "sha": "8ec2e068cab8589a7ef8dbe5477c8622f20ab513",
+          "type": "dir"
+        },
+        {
+          "name": "mod-password-validator",
+          "path": "mod-password-validator",
+          "sha": "69a827b6004a583bcaeb7e96d25107b3930b50b2",
+          "type": "dir"
+        },
+        {
+          "name": "mod-patron-blocks",
+          "path": "mod-patron-blocks",
+          "sha": "8574daf9d50a71f2f57f3a81ade78a3586f45423",
+          "type": "dir"
+        },
+        {
+          "name": "mod-permissions",
+          "path": "mod-permissions",
+          "sha": "6b81b555702212923145a28f6bfb779d74287b6f",
+          "type": "dir"
+        },
+        {
+          "name": "mod-quick-marc",
+          "path": "mod-quick-marc",
+          "sha": "8c1acffad9f043363425a0821d256661c2f62431",
+          "type": "dir"
+        },
+        {
+          "name": "mod-reading-room",
+          "path": "mod-reading-room",
+          "sha": "8295d514c6b476c617b2c2d41765216abf64807e",
+          "type": "dir"
+        },
+        {
+          "name": "mod-roles-keycloak",
+          "path": "mod-roles-keycloak",
+          "sha": "c72404eb6807170a97e5b5e5218c686f5db58dd5",
+          "type": "dir"
+        },
+        {
+          "name": "mod-scheduler",
+          "path": "mod-scheduler",
+          "sha": "c009e5d2a8953d946b516c6714686aa08a1dfb74",
+          "type": "dir"
+        },
+        {
+          "name": "mod-search",
+          "path": "mod-search",
+          "sha": "74f8e40a8226fb521428933fa3175f953996365b",
+          "type": "dir"
+        },
+        {
+          "name": "mod-sender",
+          "path": "mod-sender",
+          "sha": "c43e3d66ef6debc0de150591f160028d7eca7883",
+          "type": "dir"
+        },
+        {
+          "name": "mod-source-record-manager",
+          "path": "mod-source-record-manager",
+          "sha": "d7ec24e58dc864cd9d4d1b8f37530fd42572508a",
+          "type": "dir"
+        },
+        {
+          "name": "mod-source-record-storage",
+          "path": "mod-source-record-storage",
+          "sha": "15b557dce61bf0614a2b7f8694dd0ce8694abaef",
+          "type": "dir"
+        },
+        {
+          "name": "mod-tags",
+          "path": "mod-tags",
+          "sha": "bea4a3fa01ed8e7d9a927fa494723ae11b2904bd",
+          "type": "dir"
+        },
+        {
+          "name": "mod-template-engine",
+          "path": "mod-template-engine",
+          "sha": "be3ad3bd8effcefb79a37fd15f1c24b357bb6e22",
+          "type": "dir"
+        },
+        {
+          "name": "mod-user-import",
+          "path": "mod-user-import",
+          "sha": "d577ffac54c8b88a53c99f32985d5ae53270c5ef",
+          "type": "dir"
+        },
+        {
+          "name": "mod-users-bl",
+          "path": "mod-users-bl",
+          "sha": "1f4b8b61ff6f004ea4d82724ecc5f76d8ba9e672",
+          "type": "dir"
+        },
+        {
+          "name": "mod-users-keycloak",
+          "path": "mod-users-keycloak",
+          "sha": "62e08a6509ccf1805bf055397b2b7d3a586ff1d5",
+          "type": "dir"
+        },
+        {
+          "name": "mod-users",
+          "path": "mod-users",
+          "sha": "e77c67c63e490071a7e09649b24bcfda7584c276",
+          "type": "dir"
+        },
+        {
+          "name": "poc",
+          "path": "poc",
+          "sha": "b4ef5d0b977eaaacfd6a10cd96d33044b0eb0326",
+          "type": "dir"
+        },
+        {
+          "name": "pom.xml",
+          "path": "pom.xml",
+          "sha": "843ce9947bfcd14cd957ed404165b599701ce441",
+          "type": "file"
+        },
+        {
+          "name": "runtests.sh",
+          "path": "runtests.sh",
+          "sha": "7da0b03e35ef6c2316bf43c524f32ede5feb9d0a",
+          "type": "file"
+        },
+        {
+          "name": "teams-assignment.json",
+          "path": "teams-assignment.json",
+          "sha": "0c4aab34a851a04f45aec34dd1bd7696933015be",
+          "type": "file"
+        },
+        {
+          "name": "testrail-integration",
+          "path": "testrail-integration",
+          "sha": "c6ab80b992dec3748f69e8125d884d851202a801",
+          "type": "dir"
+        }
+      ]
+    },
+    "https://api.github.com/repos/folio-org/folio-integration-tests/git/trees/74f8e40a8226fb521428933fa3175f953996365b?recursive=1": {
+      "status": 200,
+      "body": {
+        "sha": "74f8e40a8226fb521428933fa3175f953996365b",
+        "url": "https://api.github.com/repos/folio-org/folio-integration-tests/git/trees/74f8e40a8226fb521428933fa3175f953996365b",
+        "tree": [
+          {
+            "path": "pom.xml",
+            "type": "blob",
+            "sha": "28068e05c318e37df7a3cc5f63388061e30f1a6a"
+          },
+          {
+            "path": "src",
+            "type": "tree",
+            "sha": "51aeefead9b198433246d023693500262c2ce6fc"
+          },
+          {
+            "path": "src/test",
+            "type": "tree",
+            "sha": "8ba3f6a17b044f56e28d8e3d641ad1b2f22d2a02"
+          },
+          {
+            "path": "src/test/java",
+            "type": "tree",
+            "sha": "7c6a8a4f808d67e76d01a1844386adb80e7ffe86"
+          },
+          {
+            "path": "src/test/java/org",
+            "type": "tree",
+            "sha": "1f28ac14cd437aefd44e05af6e3f58a4bc9cbddf"
+          },
+          {
+            "path": "src/test/java/org/folio",
+            "type": "tree",
+            "sha": "8ec379f8ee17c9126b26d112b4b263df5b296f72"
+          },
+          {
+            "path": "src/test/java/org/folio/SearchApiTest.java",
+            "type": "blob",
+            "sha": "0a1c80a64c14dbccf5adf1ed01a66ac40eb2bf8d"
+          },
+          {
+            "path": "src/test/resources",
+            "type": "tree",
+            "sha": "60b2fdbd44895f80ec9440cfd8cbf099d3f4462d"
+          },
+          {
+            "path": "src/test/resources/karate-config.js",
+            "type": "blob",
+            "sha": "1e6f1d86f968026f73a77f8295778eaa8654e5de"
+          },
+          {
+            "path": "src/test/resources/logback-test.xml",
+            "type": "blob",
+            "sha": "869311ac375b800063d2c6607de1076938c1d78b"
+          },
+          {
+            "path": "src/test/resources/promin",
+            "type": "tree",
+            "sha": "ebeee872a25535ea8485dc5f8cccf92104e4b10c"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search",
+            "type": "tree",
+            "sha": "42a7ece44d6c22e5df0d21902c54301b8f0059a8"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/browse",
+            "type": "tree",
+            "sha": "ab7844c41940a948497e6fb30630b007a3852a16"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/browse/authority-browse.feature",
+            "type": "blob",
+            "sha": "7ce645a59d2bbac182f3f73be771c44ea1a53cfa"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/browse/call-number-browse.feature",
+            "type": "blob",
+            "sha": "fc25b3aec842f8454bf5cb3e30328ece727489d2"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/browse/contributor-browse.feature",
+            "type": "blob",
+            "sha": "d96c46a8be8fb4f14178c50c235ce99ab7a4b2ce"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/browse/subject-browse.feature",
+            "type": "blob",
+            "sha": "41f48ccb2d26013d57ffb857055ccbb1e45ae8cc"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/filters",
+            "type": "tree",
+            "sha": "8473abaae557edb06218a502127adf322eb8a071"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/filters/facet-search.feature",
+            "type": "blob",
+            "sha": "dbba3e061df778b6b658ef801abf4695143c5096"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/filters/filter-search.feature",
+            "type": "blob",
+            "sha": "1624c3148fc142c63fa329c3fa088b3d0216c123"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/filters/sort-by-option-search.feature",
+            "type": "blob",
+            "sha": "7add04cfdbd2d348d3219f821a33150a27664a62"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/search",
+            "type": "tree",
+            "sha": "ba584f4d23b6aae58b4573415aabbdd8761b5830"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/search/authority-single-property-search.feature",
+            "type": "blob",
+            "sha": "163d118f53b481faa9782e4485bd337ed64e82c6"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/search/boolean-search.feature",
+            "type": "blob",
+            "sha": "aee947d16248d0ac3b0c493882d3b1055d39b75b"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/search/resource-job-ids-search.feature",
+            "type": "blob",
+            "sha": "20dd31d6aed0fafec18196d77089e71922bb796f"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/search/single-property-search.feature",
+            "type": "blob",
+            "sha": "58d90cd0c7220f0389809a703a5b16a501017323"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/set-up",
+            "type": "tree",
+            "sha": "2a7aafc24b64ad332126633bc066299d31f82c64"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/set-up/create-authority.feature",
+            "type": "blob",
+            "sha": "f4b02780742f88f09758ebba608ef0e6fd8e4814"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/set-up/create-test-data.feature",
+            "type": "blob",
+            "sha": "aefab3a51313177e87d455756ee91448fc1e0359"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/set-up/tenant-destroy.feature",
+            "type": "blob",
+            "sha": "785c9512bccbbdaef88a7c3662051c4c4a1d8571"
+          },
+          {
+            "path": "src/test/resources/promin/mod-search/set-up/tenant-init.feature",
+            "type": "blob",
+            "sha": "cd83867da81bcd410bd5e9cc0b4ca6c3b59579d1"
+          },
+          {
+            "path": "src/test/resources/samples",
+            "type": "tree",
+            "sha": "5903e41516e62f47eb0df219a0e4435bff67192e"
+          },
+          {
+            "path": "src/test/resources/samples/createLink.json",
+            "type": "blob",
+            "sha": "00a88893abe8c93066bed189918b14d5618be634"
+          },
+          {
+            "path": "src/test/resources/samples/createSecondLink.json",
+            "type": "blob",
+            "sha": "2d5665df55b721d57ad6e4df84864641c212d33c"
+          },
+          {
+            "path": "src/test/resources/samples/resourceIdsSearch.json",
+            "type": "blob",
+            "sha": "b376830a0aba5e5afc7b49df996663d5807b8b8b"
+          },
+          {
+            "path": "src/test/resources/samples/test-data",
+            "type": "tree",
+            "sha": "13fba404a71539d36be2faa46ac9a2848a9fc13b"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities",
+            "type": "tree",
+            "sha": "ba2d28873f746df8d4d3f1cafcd6104b8ac4bbd7"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/corporate-authority.json",
+            "type": "blob",
+            "sha": "7b0e09c72653b7ea9cda6d5f8099c8100990d51c"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/corporate-title-authority.json",
+            "type": "blob",
+            "sha": "c92018df3c2ce0d458434ec96f61011ff2f8c114"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/genre-authority.json",
+            "type": "blob",
+            "sha": "f5603c9c9cdf8cce8b8ecad3ac0aec8bc1225409"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/geographic-authority.json",
+            "type": "blob",
+            "sha": "f453b74e45b808590302f26393b1a23d4947a2f7"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/meeting-authority.json",
+            "type": "blob",
+            "sha": "2529f828822ee12619462e9448e81465ce0a1a50"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/meeting-title-authority.json",
+            "type": "blob",
+            "sha": "42f338326a1763aed0988fcc7187af4bd37a80b3"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/personal-authority.json",
+            "type": "blob",
+            "sha": "4b03af0c5e31f6c68304ea1900101c677b1f6f12"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/personal-title-authority.json",
+            "type": "blob",
+            "sha": "21e26afd0ead83d50b896bcef1f39e0eb4cb5643"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/sourceFiles",
+            "type": "tree",
+            "sha": "dbaf3b76b6f32071e926cba20411c5b12dbd4dbd"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/sourceFiles/AuthoritySourceFIle.json",
+            "type": "blob",
+            "sha": "b3bd976795bde7d100fba918e5a31f4da23b5af1"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/sourceFiles/AuthoritySourceFIleSecond.json",
+            "type": "blob",
+            "sha": "e0927bb79982636797ba0f669a3222fc72fa67b8"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/sourceFiles/AuthoritySourceFIleThird.json",
+            "type": "blob",
+            "sha": "9578973abdcc6c64d88ace268a439200cb40a17a"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/topical-authority.json",
+            "type": "blob",
+            "sha": "f47828ed8496841c0d73b9bc9c2d886fd3dbf3be"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/authorities/uniform-authority.json",
+            "type": "blob",
+            "sha": "228d009fb633ee1d2972b4168963184c4a16a43a"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/campuses-city.json",
+            "type": "blob",
+            "sha": "f6b780da41035e67a38efe2c885d0d8a28fac847"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/campuses-online.json",
+            "type": "blob",
+            "sha": "52a060ca7d5be52855fb0b40a250b4cf66cc630c"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/holdings.json",
+            "type": "blob",
+            "sha": "ce75fe84f2a08dbacdaa489a4375e05e4c973803"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/instances.json",
+            "type": "blob",
+            "sha": "1a9dc55a350b30b0cf47ed8f2e5de6e3ecc65c1f"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/institutions-ku.json",
+            "type": "blob",
+            "sha": "effa8790f76b38c398df6a67fab5b530d987afad"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/items.json",
+            "type": "blob",
+            "sha": "807d14b368b0b3c292f23cae4e1e28ad2f00f00b"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/libraries-diku.json",
+            "type": "blob",
+            "sha": "c7a9324a6e4301126aeccb8ce714d796ddde6692"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/libraries-online.json",
+            "type": "blob",
+            "sha": "22138c2290c09d392efcf82f2488fdc5d7a78c46"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/locations-main-library.json",
+            "type": "blob",
+            "sha": "5f3629b88b0faf7a5a66dea2a0ceee368fc8ef2b"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/locations-online.json",
+            "type": "blob",
+            "sha": "6ce86ef74977440d8f7349667f50fdd1c69d1f17"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/locations-orwig-ethno-cd.json",
+            "type": "blob",
+            "sha": "8fcc5aa62e3de9c1626ad41198af78bb228d69d1"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/service-points-cd3.json",
+            "type": "blob",
+            "sha": "0c9260f26cac609fe7179cb27ff282b1cee73ea3"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/service-points-online.json",
+            "type": "blob",
+            "sha": "bd0da9a256315748ef4718e4b20a659deb6f50e9"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/statistical-code-type.json",
+            "type": "blob",
+            "sha": "a0342bfe4348112c701c6dd134337222d1acfec2"
+          },
+          {
+            "path": "src/test/resources/samples/test-data/statistical-code.json",
+            "type": "blob",
+            "sha": "407a931335d4a5e59f49bc5d974d5c41370de5dc"
+          }
+        ],
+        "truncated": false
+      }
+    },
+    "https://api.github.com/repos/folio-org/folio-integration-tests/git/trees/e77c67c63e490071a7e09649b24bcfda7584c276?recursive=1": {
+      "status": 200,
+      "body": {
+        "sha": "e77c67c63e490071a7e09649b24bcfda7584c276",
+        "url": "https://api.github.com/repos/folio-org/folio-integration-tests/git/trees/e77c67c63e490071a7e09649b24bcfda7584c276",
+        "tree": [
+          {
+            "path": "pom.xml",
+            "type": "blob",
+            "sha": "4cd5a518d8da2bb2ab28465aae1fb41d94901c2d"
+          },
+          {
+            "path": "src",
+            "type": "tree",
+            "sha": "0c4d12d90cda71d600e5d3be6931ff77cbc46d25"
+          },
+          {
+            "path": "src/main",
+            "type": "tree",
+            "sha": "9fb87e4b713cf8a20cdc47129b75cce5bbe6bbc3"
+          },
+          {
+            "path": "src/main/resources",
+            "type": "tree",
+            "sha": "81e9efd5644e5ae14cc6c33e1ff293a8a233198e"
+          },
+          {
+            "path": "src/main/resources/karate-config.js",
+            "type": "blob",
+            "sha": "438d409e65760e247dd86a68d3cd570a4d319d04"
+          },
+          {
+            "path": "src/main/resources/logback-test.xml",
+            "type": "blob",
+            "sha": "337b0eccc74c0332fa58aa6eb4e413a9ec9be9ae"
+          },
+          {
+            "path": "src/main/resources/vega",
+            "type": "tree",
+            "sha": "c41e18f04dbce8c57ce36486c0597d08399380a8"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users",
+            "type": "tree",
+            "sha": "346d2f58af97faa001565ca464d5ae78a5690451"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features",
+            "type": "tree",
+            "sha": "37b1c88e72140508a9e625682a06baaf1789522b"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/profile-picture.feature",
+            "type": "blob",
+            "sha": "1647836c7b72c090e06ce3c876c48fde2f8c631b"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/samples",
+            "type": "tree",
+            "sha": "cfd185d3f0e8e03ab9b595f57547b8bc46c5e153"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/samples/PatronGroup",
+            "type": "tree",
+            "sha": "42edbb39330b89fb2512f02354824f449bdeaeb1"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/samples/PatronGroup/create-patronGroup-request.json",
+            "type": "blob",
+            "sha": "e613e9fc5dbac871d5884cf125e03cd12c9c49f0"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/samples/User",
+            "type": "tree",
+            "sha": "1b5206986db809aa1328afb386ca216944a30b5d"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/samples/User/create-user-request.json",
+            "type": "blob",
+            "sha": "2619709a02cb9645f279222f56f5e559fb412de7"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/users.feature",
+            "type": "blob",
+            "sha": "ac74df1f816ff7c9acfe15ef37cf34e442a48143"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/util",
+            "type": "tree",
+            "sha": "95d8d140f0e05acf783dff6bc817748f1bd981dd"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/features/util/initData.feature",
+            "type": "blob",
+            "sha": "bdfc0196da8f5535a18e6bcba01221cc5b1ec635"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples",
+            "type": "tree",
+            "sha": "9609743969814a85252f41bb685660cb3e43b5b9"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/picture1.png",
+            "type": "blob",
+            "sha": "6793ec730d2e89877f58ba7430b68caa594efe95"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/picture2.psd",
+            "type": "blob",
+            "sha": "0946df142c7b47e1de0bbd904f30d9d167ce9200"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/picture3.GIF",
+            "type": "blob",
+            "sha": "b6c733ee1bbd549458228d8f5759f42c1f3abe74"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/picture4.pdf",
+            "type": "blob",
+            "sha": "f698ff53d41575b222e6778f87f9e9fd8da4f2b1"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/pictureBigSize10.png",
+            "type": "blob",
+            "sha": "0aa2e8da7304b9093ba119f536e2d155fa4ca760"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/pictureBigSize4.png",
+            "type": "blob",
+            "sha": "fde9fa21b3d252e4f6808827809e61688717985c"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/samples/pictureUpdated.jpg",
+            "type": "blob",
+            "sha": "6d90f78d4bad471d013e6e489958774c3fc79ce8"
+          },
+          {
+            "path": "src/main/resources/vega/mod-users/users-junit.feature",
+            "type": "blob",
+            "sha": "8ebc2e989114b7c63352fed37e067922dd7f3b59"
+          },
+          {
+            "path": "src/test",
+            "type": "tree",
+            "sha": "fe9890924513bed6351cb38d1fd819ffa90fdac0"
+          },
+          {
+            "path": "src/test/java",
+            "type": "tree",
+            "sha": "dd2b63f838bdb9f1c67bea31cfebc37509749b38"
+          },
+          {
+            "path": "src/test/java/org",
+            "type": "tree",
+            "sha": "4ab48b246d2f6d1765c28573565cd9425b0e5828"
+          },
+          {
+            "path": "src/test/java/org/folio",
+            "type": "tree",
+            "sha": "3a2d6c875366e8f4233c134f4d88e49dae225e50"
+          },
+          {
+            "path": "src/test/java/org/folio/ModUsersTests.java",
+            "type": "blob",
+            "sha": "fe19663754e2a96acaade0d095fe623d50f18a05"
+          },
+          {
+            "path": "src/test/java/org/folio/UsersSimulation.scala",
+            "type": "blob",
+            "sha": "17e3a96c40221b9d17c1f6d8adb2481ed4ce6f5e"
+          }
+        ],
+        "truncated": false
+      }
+    }
+  }
+}

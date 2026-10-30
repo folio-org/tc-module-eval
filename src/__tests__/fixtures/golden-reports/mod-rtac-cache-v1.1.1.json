@@ -4247,8 +4247,41 @@
     {
       "criterionId": "B009",
       "status": "manual",
-      "evidence": "Health checks and monitoring endpoints - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "evidence": "B009 manual: The repository has no API tests; folio-integration-tests not checked, because remote lookups are off. Rerun with --allow-remote-lookups to look for a folder named mod-rtac-cache there.",
+      "details": "Evaluated as: a backend module\nPolicy: Karate (provisional) under backend-integration-testing\nAPI tests in the repository:\n  - none (no Karate or other .feature files, and no Postman, Bruno or Insomnia collections)\nfolio-integration-tests (only a folder named after the module is searched):\n  - Module name: mod-rtac-cache (from pom.xml)\n  - Not checked: remote lookups are off\nWhat to do:\n  - Rerun with --allow-remote-lookups, or check folio-integration-tests by hand for the module's API tests.\nChecklist for the reviewer:\n  - B009-C2 The module's API tests, in the repository or outside it (such as in folio-integration-tests, in a folder named mod-rtac-cache or under another name), use Karate.",
+      "criterionDetails": {
+        "criterionId": "B009",
+        "kind": "backend-module",
+        "remoteLookups": false,
+        "moduleName": {
+          "name": "mod-rtac-cache",
+          "source": "pom",
+          "path": "pom.xml"
+        },
+        "suites": [],
+        "policy": {
+          "loaded": true,
+          "displayName": "Karate",
+          "strength": "provisional",
+          "provisional": true
+        },
+        "unread": [],
+        "remoteEvidence": [],
+        "status": "manual",
+        "basis": "lookups-off",
+        "summary": "B009 manual: The repository has no API tests; folio-integration-tests not checked, because remote lookups are off. Rerun with --allow-remote-lookups to look for a folder named mod-rtac-cache there.",
+        "checklist": {
+          "items": [
+            {
+              "id": "B009-C2",
+              "title": "The module's API tests, in the repository or outside it (such as in folio-integration-tests, in a folder named mod-rtac-cache or under another name), use Karate.",
+              "startingPoints": [],
+              "reviewerOnly": true,
+              "obligations": []
+            }
+          ]
+        }
+      }
     },
     {
       "criterionId": "B010",

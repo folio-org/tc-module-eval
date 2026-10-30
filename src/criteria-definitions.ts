@@ -231,11 +231,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B009',
     description: 'Integration tests in supported technology',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Health checks and monitoring endpoints'
-    }
+    languages: ['java']
   },
   {
     id: 'B010',

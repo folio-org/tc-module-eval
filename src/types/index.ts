@@ -227,6 +227,7 @@ export * from './f006-ui-patterns';
 export * from './f007-latest-chrome';
 export * from './ui-runtime-evidence';
 export * from './backend-evidence';
+export * from './b009-api-tests';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 
