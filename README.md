@@ -222,6 +222,15 @@ permission fits its endpoint; the report lists endpoints without a permission, `
 permissions and permission names that depart from the naming guidelines. Agent review runs by default
 for its manual results. See [Criterion Notes](docs/criterion-notes.md#b007-endpoint-permissions).
 
+### B014 Health Check Endpoint
+
+B014 checks that the module serves `GET /admin/health`, without starting the module or calling the
+endpoint: it passes when RMB's `RestVerticle` is the main verticle, when Spring Boot actuator (in a
+Spring Boot or Grails application) serves health at `/admin/health`, or when the source registers a
+`GET /admin/health` route, and the report says the endpoint was not called. Actuator settings that move
+or disable health, in the default configuration or in any profile, and modules with no such mechanism are
+left to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.

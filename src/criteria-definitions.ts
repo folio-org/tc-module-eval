@@ -285,11 +285,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B014',
     description: 'Standard health check endpoint',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'API versioning strategy'
-    }
+    languages: ['java']
   },
   {
     id: 'B015',

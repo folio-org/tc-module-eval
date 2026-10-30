@@ -270,6 +270,7 @@ async function buildProperties(templatePath: string, files: Map<string, Committe
 }
 
 export const SOURCE_FILE = /(?:^|\/)src\/main\/(?:java|groovy|kotlin)\/.+\.(?:java|groovy|kt)$/;
+export const REST_VERTICLE = />\s*org\.folio\.rest\.RestVerticle\s*</;
 
 function detectFramework(kind: BackendRepositoryKind, files: CommittedSourceFile[]): BackendEvidence['framework'] {
   const result = (name: BackendFramework, evidence: string[]) => ({ name, evidence });
@@ -280,7 +281,7 @@ function detectFramework(kind: BackendRepositoryKind, files: CommittedSourceFile
   const grails = files.find(file => /(?:^|\/)grails-app\//.test(file.path));
   if (grails) return result('grails', [`Grails application folder ${grails.path.replace(/(grails-app)\/.*$/, '$1/')}`]);
 
-  const restVerticle = files.find(file => /(?:^|\/)pom\.xml$/.test(file.path) && />\s*org\.folio\.rest\.RestVerticle\s*</.test(file.content));
+  const restVerticle = files.find(file => /(?:^|\/)pom\.xml$/.test(file.path) && REST_VERTICLE.test(file.content));
   const schema = files.find(file => /(?:^|\/)templates\/db_scripts\/schema\.json$/.test(file.path));
   if (restVerticle || schema) {
     return result('rmb', [
