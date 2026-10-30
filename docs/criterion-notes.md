@@ -723,7 +723,7 @@ B015 checks that the module can run as several instances, with requests spread a
 - **Scheduled work (B015-C4):** `@Scheduled` (marked when a ShedLock `@SchedulerLock` is on the same method), Vert.x `setPeriodic`, `scheduleAtFixedRate` and `scheduleWithFixedDelay`, `new Timer(`, and Quartz triggers (`static triggers =` in Grails jobs, `TriggerBuilder.newTrigger`). One-off delays (`setTimer`) are not listed.
 - A line is listed once per kind. The details count every site and list the first 1,000; a committed source the tool could not read completely is reported, and the summary says the tool may have missed sites.
 
-The checklist has B015-C1 (no session affinity), B015-C2 (no data kept only on local disk), B015-C3 (in-memory state is a cache that can be rebuilt) and B015-C4 (scheduled work runs once across instances or is safe to repeat), with each site as a starting point. Each item's obligations are one per file with sites, or the whole item when it has none.
+The checklist has B015-C1 (no session affinity), B015-C2 (no data kept only on local disk), B015-C3 (in-memory state is a cache that can be rebuilt) and B015-C4 (scheduled work runs once across instances or is safe to repeat), with each site as a starting point. Each item's obligations are one per file with sites, or the whole item when it has none. Agent review runs by default (see [B015 in Agent Review](agent-review.md#b00x-backend-criteria-review)); it may add sites the tool missed as `discovered:site:<n>` and never changes the status.
 
 ## B016 Supported Infrastructure
 

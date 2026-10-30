@@ -1112,5 +1112,7 @@ export interface B015Analysis {
   counts: Record<B015SignalKind, number>;
   signals: B015Signal[];
   sourceDiagnostics: CommittedSourceDiagnostic[];
+  agentBrowseScope: string;
+  agentReviewUnavailableReason?: string;
   checklist: FrontendChecklist;
 }

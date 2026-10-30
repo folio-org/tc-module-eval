@@ -1,9 +1,10 @@
-import { B015Analysis, B015Signal, B015SignalKind, BackendEvidence, EvaluationStatus } from '../types';
+import { B015Analysis, B015Signal, B015SignalKind, BackendEvidence, CriterionAgentReviewResult, EvaluationStatus } from '../types';
+import { backendBrowse, numberBackendObligations } from './backend-agent-review';
 import { SOURCE_FILE } from './backend-evidence';
 import { lineCounter, withoutComments } from './backend-routes';
 import { CommittedSourceFile } from './committed-source';
-import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
-import { FrontendChecklistItemDraft, numberObligations } from './frontend-agent-review';
+import { frontendChecklist, frontendReviewLines } from './frontend-checklist';
+import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { count, listText, reportPath, reportText } from './report-text';
 
 const MAX_SIGNALS = 1_000;
@@ -107,11 +108,12 @@ export function evaluateB015(evidence: BackendEvidence): B015Analysis {
     counts,
     signals,
     sourceDiagnostics,
+    agentBrowseScope: backendBrowse().scope,
     checklist: frontendChecklist(status, checklistItems(signals))
   };
 }
 
-export function renderB015HumanDetails(analysis: B015Analysis): string {
+export function renderB015HumanDetails(analysis: B015Analysis, agentReview?: CriterionAgentReviewResult): string {
   const files = (kind: B015SignalKind) => new Set(analysis.signals.filter(signal => signal.kind === kind).map(signal => signal.path)).size;
   const row = (label: string, kind: B015SignalKind) =>
     `  - ${label}: ${analysis.counts[kind] ? `${analysis.counts[kind]} in ${count(files(kind), 'file')}` : 'none found'}`;
@@ -123,14 +125,15 @@ export function renderB015HumanDetails(analysis: B015Analysis): string {
     row('Local file writes', 'file-write'),
     row('In-memory caches and maps', 'in-memory-state'),
     row('Scheduled jobs', 'scheduler'),
-    ...(total > analysis.signals.length ? [`  - Listed: the first ${analysis.signals.length} of ${total} sites`] : [])
+    ...(total > analysis.signals.length ? [`  - Listed: the first ${analysis.signals.length} of ${total} sites`] : []),
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
   ];
   if (analysis.sourceDiagnostics.length) {
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
   lines.push('What to do:', '  - Check each item below for a deployment of several instances behind a load balancer without session affinity; B015 is always decided by a reviewer.');
-  lines.push(...renderFrontendChecklistLines(analysis.checklist));
+  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }
 
@@ -159,8 +162,7 @@ function fileSignals(file: CommittedSourceFile): B015Signal[] {
 
 function builderNote(name: string, match: RegExpMatchArray, source: string): string {
   const start = match.index! + match[0].length;
-  const end = source.indexOf(';', start);
-  const chain = source.slice(start, end < 0 ? start + BUILDER_LOOKAHEAD : Math.min(end, start + BUILDER_LOOKAHEAD));
+  const chain = source.slice(start, start + BUILDER_LOOKAHEAD).split(';', 1)[0];
   return `${name} ${EXPIRY.test(chain) ? 'with' : 'without'} expiry`;
 }
 
@@ -198,7 +200,7 @@ function checklistItems(signals: B015Signal[]) {
       subjects: [...firstByFile.values()].map(site => ({ subject: site.path, path: site.path, line: site.line }))
     };
   };
-  return numberObligations([
+  return numberBackendObligations([
     item('B015-C1', 'No request depends on session affinity: no HTTP session state, and no sticky routing.', 'session'),
     item('B015-C2', 'No data is kept only on one instance\'s local disk; temporary files are removed in the same request or job.', 'file-write'),
     item('B015-C3', 'In-memory state is a cache that can be rebuilt from shared storage, not data other instances need.', 'in-memory-state'),

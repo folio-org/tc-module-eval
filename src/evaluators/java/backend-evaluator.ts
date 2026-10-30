@@ -22,6 +22,7 @@ import { evaluateB012, renderB012HumanDetails } from '../../utils/b012-readme-de
 import { hasB013AgentReviewMaterial, reviewB013WithAgent } from '../../utils/b013-agent-review';
 import { evaluateB013, renderB013HumanDetails } from '../../utils/b013-tenant-selection';
 import { evaluateB014, renderB014HumanDetails } from '../../utils/b014-health-check';
+import { hasB015AgentReviewMaterial, reviewB015WithAgent } from '../../utils/b015-agent-review';
 import { evaluateB015, renderB015HumanDetails } from '../../utils/b015-high-availability';
 import { evaluateB016, renderB016HumanDetails } from '../../utils/b016-supported-infrastructure';
 import { getBackendApiSpecs } from '../../utils/backend-api-specs';
@@ -280,12 +281,21 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
   private async evaluateB015(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'B015', evaluationRun);
     const analysis = evaluateB015(await getBackendEvidence(run, repoPath));
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'B015',
+      status: analysis.status,
+      hasReviewMaterial: hasB015AgentReviewMaterial(analysis),
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewB015WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
     return {
       criterionId: 'B015',
       status: analysis.status,
       evidence: analysis.summary,
-      details: renderB015HumanDetails(analysis),
-      criterionDetails: analysis
+      details: renderB015HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 

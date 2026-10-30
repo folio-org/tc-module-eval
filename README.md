@@ -333,7 +333,8 @@ sites a reviewer starts from, each with file and line, in `src/main` and `grails
 comments: HTTP sessions (Servlet, Spring Session, Vert.x session handlers), local file writes (temporary
 files included), in-memory caches and shared maps (Spring `@Cacheable`, Caffeine, Guava and edge-common
 caches, Vert.x local maps, concurrent map fields), and scheduled work (`@Scheduled`, Vert.x `setPeriodic`,
-executor schedules, timers, Quartz). See [Criterion Notes](docs/criterion-notes.md#b015-high-availability).
+executor schedules, timers, Quartz). When agent review is enabled, the agent judges each file with sites,
+and looks for sites the tool missed. See [Criterion Notes](docs/criterion-notes.md#b015-high-availability).
 
 ### B016 Supported Infrastructure
 

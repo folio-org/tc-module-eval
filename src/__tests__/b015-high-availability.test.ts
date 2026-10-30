@@ -90,7 +90,9 @@ describe('B015 high availability', () => {
       '  - B015-C4 Scheduled work runs once across instances, or is safe to run on every instance.',
       '    - Start with:',
       `      - ${JAVA}/Jobs.java:7 — @Scheduled`,
-      `      - ${JAVA}/Jobs.java:10 — @Scheduled with a ShedLock @SchedulerLock`
+      `      - ${JAVA}/Jobs.java:10 — @Scheduled with a ShedLock @SchedulerLock`,
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.counts).toEqual({ session: 0, 'file-write': 3, 'in-memory-state': 5, scheduler: 2 });
     expect(analysis.checklist.items.map(item => [item.id, item.obligations])).toEqual([
@@ -179,17 +181,18 @@ describe('B015 high availability', () => {
   });
 
   it.each([
-    ['unclosed annotation-like words', (size: number) => '@EnableX'.repeat(size)],
-    ['request-like words without getSession', (size: number) => `${'a'.repeat(size)}Request.`.repeat(4)],
-    ['concurrent maps without a statement start', (size: number) => 'x new ConcurrentHashMap '.repeat(size)],
-    ['cache builders without a semicolon', (size: number) => 'Caffeine.newBuilder() .maximumSize(1) '.repeat(size)],
-    ['schedules near locks', (size: number) => '@SchedulerLock @Scheduled '.repeat(size)],
-    ['field annotations before a map', (size: number) => `${'@A(x) '.repeat(size)}private Map m = new ConcurrentHashMap<>();`]
-  ])('scans %s in linear time', async (_name, content) => {
-    const prepare = async (size: number) => {
-      const root = springModule({ [`${JAVA}/Big.java`]: content(size) });
+    ['unclosed annotation-like words', (size: number) => '@EnableX'.repeat(size), 4_000],
+    ['request-like words without getSession', (size: number) => `${'a'.repeat(size)}Request.`.repeat(4), 4_000],
+    ['concurrent maps without a statement start', (size: number) => 'x new ConcurrentHashMap '.repeat(size), 4_000],
+    ['cache builders without a semicolon', (size: number) => 'Caffeine.newBuilder() .maximumSize(1) '.repeat(size), 6_000],
+    ['schedules near locks', (size: number) => '@SchedulerLock @Scheduled '.repeat(size), 4_000],
+    ['field annotations before a map', (size: number) => `${'@A(x) '.repeat(size)}private Map m = new ConcurrentHashMap<>();`, 4_000]
+  ])('scans %s in linear time', async (_name, content, size) => {
+    const prepare = async (n: number) => {
+      const root = springModule({ [`${JAVA}/Big.java`]: content(n) });
       return getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root);
     };
-    await expectLinearTime(4_000, prepare, async evidence => evaluateB015(evidence));
+    const analysis = await expectLinearTime(size, prepare, async evidence => evaluateB015(evidence));
+    expect(analysis.sourceDiagnostics).toEqual([]);
   });
 });
