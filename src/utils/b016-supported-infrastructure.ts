@@ -7,15 +7,16 @@ import {
   BackendRepositoryKind,
   EvaluationStatus,
   FrontendChecklistItem,
+  S007PolicyArea,
   S007PolicyLoadResult
 } from '../types';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { capitalize, count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
-import { findPolicyEntry } from './s007-policy';
+import { findPolicyEntry, policySections } from './s007-policy';
 
 const MAX_ROWS = 20;
 const MAX_SIGNALS = 5;
-const POLICY_AREAS = new Set(['infrastructure', 'fast-moving-infrastructure']);
+const POLICY_AREAS: S007PolicyArea[] = ['infrastructure', 'fast-moving-infrastructure'];
 const LIST = 'the Officially Supported Technologies list';
 
 /**
@@ -24,7 +25,7 @@ const LIST = 'the Officially Supported Technologies list';
  */
 export function evaluateB016(kind: BackendRepositoryKind, infrastructure: BackendInfrastructureEvidence, policyLoad: S007PolicyLoadResult): B016Analysis {
   const subject = kind === 'library' ? 'The library' : kind === 'ambiguous' ? 'The repository' : 'The module';
-  const sections = policyLoad.ok ? policyLoad.policy.sections.filter(section => POLICY_AREAS.has(section.area)) : [];
+  const sections = policyLoad.ok ? POLICY_AREAS.flatMap(area => policySections(policyLoad.policy, 'b016', area)) : [];
   const technologies: B016Technology[] = infrastructure.items.map(item => {
     const listed = policyLoad.ok ? findPolicyEntry(sections, item.id) : undefined;
     return {

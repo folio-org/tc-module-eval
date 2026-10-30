@@ -7,7 +7,7 @@ export type S007PolicyArea =
   | 'fast-moving-infrastructure';
 
 export type S007PolicyCategory = 'language' | 'framework' | 'build-tool' | 'testing' | 'infrastructure';
-export type S007PolicyConsumer = 's007' | 's012' | 's013' | 'future';
+export type S007PolicyConsumer = 's007' | 's012' | 's013' | 'b016' | 'future';
 export type S007VersionPolicy =
   | 'one-of-specified-versions'
   | 'all-of-specified-versions'

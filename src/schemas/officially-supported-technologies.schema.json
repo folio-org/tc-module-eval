@@ -145,7 +145,7 @@
         },
         "area": { "enum": ["frontend", "backend", "infrastructure", "fast-moving-infrastructure"] },
         "category": { "enum": ["language", "framework", "build-tool", "testing", "infrastructure"] },
-        "consumer": { "enum": ["s007", "s012", "s013", "future"] },
+        "consumer": { "enum": ["s007", "s012", "s013", "b016", "future"] },
         "versionPolicy": { "enum": ["one-of-specified-versions", "all-of-specified-versions", "unspecified-versions", "provisional"] },
         "sourceStatement": { "type": "string", "minLength": 1 },
         "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/entry" } }

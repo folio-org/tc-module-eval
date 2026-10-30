@@ -182,7 +182,7 @@ describe('B016 supported infrastructure', () => {
     expect(result.evidence).toBe(evidence);
   });
 
-  it('leaves the result to the reviewer when the policy cannot be read or has no infrastructure sections', async () => {
+  it('leaves the result to the reviewer when the policy cannot be read or gives B016 no sections', async () => {
     const infrastructure = {
       items: [{ id: 'redis' as const, name: 'Redis', usage: 'required' as const, signals: [{ kind: 'dependency' as const, detail: 'redis.clients:jedis', path: 'pom.xml' }] }],
       buildFiles: ['pom.xml'], diagnostics: [], sourceDiagnostics: []
@@ -190,8 +190,8 @@ describe('B016 supported infrastructure', () => {
     const missing = evaluateB016('backend-module', infrastructure, await loadS007Policy('/nonexistent/officially-supported-technologies.json'));
     const policyLoad = await loadS007Policy();
     if (!policyLoad.ok) throw new Error('the committed policy must load');
-    const withoutSections = evaluateB016('backend-module', infrastructure,
-      { ...policyLoad, policy: { ...policyLoad.policy, sections: policyLoad.policy.sections.filter(section => section.area === 'backend') } });
+    const withoutSections = evaluateB016('backend-module', infrastructure, { ...policyLoad, policy: { ...policyLoad.policy, sections: policyLoad.policy.sections
+      .map(section => section.consumer === 'b016' ? { ...section, consumer: 'future' as const } : section) } });
 
     expect(missing.status).toBe(EvaluationStatus.MANUAL);
     expect(missing.summary).toBe('B016 manual: The Officially Supported Technologies list could not be read (The officially supported technologies list was not found at '
