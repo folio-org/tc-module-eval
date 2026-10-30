@@ -29,7 +29,7 @@ program
   .option('--no-cleanup', 'Do not delete the cloned repository after evaluation')
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
   .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment, and with --allow-runtime-checks the backend runtime harness')
-  .option('--allow-runtime-checks', 'Build the backend module and run it in Docker (needs --allow-local-commands) for runtime evidence, which B003 shows without changing its status. Docker access is root-equivalent on this host, so use it only for trusted repositories on a disposable host; a rootless Docker context is recommended')
+  .option('--allow-runtime-checks', 'Build the backend module and run it in Docker (needs --allow-local-commands) to decide B014 by GET /admin/health and to add informational evidence to B003, B008, B010 and B013. Docker access is root-equivalent on this host, so use it only for trusted repositories on a disposable host; a rootless Docker context is recommended')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014), and folio-org/folio-integration-tests (B009)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')

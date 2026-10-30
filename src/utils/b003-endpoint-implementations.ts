@@ -16,7 +16,7 @@ import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
 import { SOURCE_FILE } from './backend-evidence';
 import { lineCounter, sourceRoutes, withoutComments } from './backend-routes';
-import { RUNTIME_TENANTS, runtimeDockerLines, runtimeOutcomeText } from './backend-runtime-harness';
+import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 
@@ -216,17 +216,14 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
 export function b003Runtime(runtime: BackendRuntimeEvidence): B003Runtime {
   const tenant = RUNTIME_TENANTS[0];
   return {
-    outcome: runtime.outcome,
-    ...(runtime.problem ? { problem: runtime.problem } : {}),
+    ...runtimeSummary(runtime),
     tenant,
     requests: runtime.getRequests.filter(request => request.tenant === tenant).map(request => ({
       path: request.path,
       ...(request.status !== undefined ? { status: request.status } : {}),
       ...(request.error ? { error: request.error } : {})
     })),
-    requestsCut: runtime.getRequestsCut,
-    ...(runtime.docker ? { docker: runtime.docker } : {}),
-    cleanup: runtime.cleanup
+    requestsCut: runtime.getRequestsCut
   };
 }
 
@@ -282,15 +279,11 @@ export function renderB003HumanDetails(analysis: B003Analysis): string {
 
 function runtimeLines(runtime: B003Runtime | undefined): string[] {
   if (!runtime) return [];
-  const heading = ['Runtime evidence (informational; it does not change the status):', ...runtimeDockerLines(runtime.docker, runtime.cleanup)];
-  if (runtime.outcome !== 'collected' || runtime.problem) return [...heading, `  - ${runtimeOutcomeText(runtime.outcome, runtime.problem)}`];
-  if (!runtime.requests.length) return [...heading, '  - The module ran in Docker; the descriptor provides no GET path without parameters to call'];
-  return [
-    ...heading,
+  return runtimeEvidenceLines(runtime, () => runtime.requests.length ? [
     `  - The module ran in Docker. GET requests in tenant ${runtime.tenant} to each provided path without parameters; 404 or 405 means no implementation answered:`,
     ...runtime.requests.map(request => `    - GET ${reportText(request.path)} answered ${request.status ?? `nothing (${reportText(request.error ?? 'no response')})`}`),
     ...overflowLine(runtime.requests.length + runtime.requestsCut, runtime.requests.length)
-  ];
+  ] : ['  - The module ran in Docker; the descriptor provides no GET path without parameters to call']);
 }
 
 function endpointLabel(endpoint: B003Endpoint): string {

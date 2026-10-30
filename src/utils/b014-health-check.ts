@@ -5,13 +5,16 @@ import {
   B014Analysis,
   B014Basis,
   B014Mechanism,
+  B014Runtime,
   BackendEvidence,
+  BackendRuntimeEvidence,
   EvaluationStatus,
   FrontendChecklistItem
 } from '../types';
 import { CommittedSourceDiagnostic, CommittedSourceFile } from './committed-source';
 import { REST_VERTICLE, SOURCE_FILE } from './backend-evidence';
 import { HEALTH_ROUTE, lineCounter, sourceRoutes, withoutComments } from './backend-routes';
+import { runtimeDockerLines, runtimeOutcomeText, runtimeSummary } from './backend-runtime-harness';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText } from './report-text';
 
@@ -75,11 +78,33 @@ interface ConfigSource {
 }
 
 /**
- * B014 (GET /admin/health returns 200) decides, without calling the endpoint, from the mechanism the framework uses to
- * serve it: RMB's RestVerticle as the main verticle, Spring Boot actuator configured at /admin, or a route in the
- * source.
+ * B014 (GET /admin/health returns 200) decides from the mechanism the framework uses to serve it: RMB's RestVerticle as
+ * the main verticle, Spring Boot actuator configured at /admin, or a route in the source. With `runtime` from the
+ * runtime harness, a module whose health check was called is decided by its answer: 200 passes, anything else is
+ * manual; when the module never reached the health check, the committed files decide.
  */
-export function evaluateB014(evidence: BackendEvidence): B014Analysis {
+export function evaluateB014(evidence: BackendEvidence, runtime?: BackendRuntimeEvidence): B014Analysis {
+  const analysis = staticB014(evidence);
+  if (!runtime) return analysis;
+  const summary: B014Runtime = { ...runtimeSummary(runtime), ...(runtime.health ? { health: runtime.health } : {}) };
+  const health = runtime.health;
+  if (!health || analysis.basis === 'library' || analysis.basis === 'ambiguous') return { ...analysis, runtime: summary };
+  if (health.status === 200) {
+    return { ...analysis, status: EvaluationStatus.PASS, basis: 'runtime-200', endpointCalled: true, runtime: summary,
+      summary: `B014 pass: GET ${HEALTH_ROUTE} answered 200 when the tool ran the module in Docker.`, checklist: frontendChecklist(EvaluationStatus.PASS, []) };
+  }
+  return { ...analysis, status: EvaluationStatus.MANUAL, basis: 'runtime-not-200', endpointCalled: true, runtime: summary,
+    summary: `B014 manual: GET ${HEALTH_ROUTE} ${healthAnswer(health)} when the tool ran the module in Docker. The tool starts no more than an Okapi stub, PostgreSQL and Kafka beside it, so a reviewer must check that it answers 200 once the module's dependencies are available.`,
+    checklist: frontendChecklist(EvaluationStatus.MANUAL, [...analysis.checklist.items, {
+      id: 'B014-C2',
+      title: `GET ${HEALTH_ROUTE} returns 200 once the module's dependencies are available.`,
+      startingPoints: analysis.mechanisms.map(mechanism => ({ path: mechanism.path, line: mechanism.line, note: mechanism.note })),
+      reviewerOnly: true,
+      obligations: []
+    }]) };
+}
+
+function staticB014(evidence: BackendEvidence): B014Analysis {
   const { kind, snapshot } = evidence;
   const sourceDiagnostics = snapshot.diagnostics.filter(diagnostic => diagnostic.material);
   const base = { criterionId: 'B014' as const, kind, endpointCalled: false, sourceDiagnostics };
@@ -166,8 +191,9 @@ export function evaluateB014(evidence: BackendEvidence): B014Analysis {
 }
 
 export function renderB014HumanDetails(analysis: B014Analysis): string {
-  if (analysis.basis === 'library') return 'Health check: not applicable to a shared library';
-  const lines = [`Health check: GET ${HEALTH_ROUTE} was ${analysis.endpointCalled ? 'called' : 'not called; the result comes from the committed files'}`];
+  if (analysis.basis === 'library') return ['Health check: not applicable to a shared library', ...runtimeLines(analysis.runtime)].join('\n');
+  const lines = [`Health check: GET ${HEALTH_ROUTE} was ${analysis.endpointCalled ? 'called' : 'not called; the result comes from the committed files'}`,
+    ...runtimeLines(analysis.runtime)];
   if (analysis.mechanisms.length) {
     lines.push('Found:', ...analysis.mechanisms.slice(0, MAX_ROWS).map(mechanism =>
       `  - ${MECHANISM_NAMES[mechanism.kind]}: ${location(mechanism.path, mechanism.line)} — ${reportText(mechanism.note)}`),
@@ -190,6 +216,18 @@ export function renderB014HumanDetails(analysis: B014Analysis): string {
   }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
+}
+
+function runtimeLines(runtime: B014Runtime | undefined): string[] {
+  if (!runtime) return [];
+  const health = runtime.health;
+  return ['Runtime check:', ...runtimeDockerLines(runtime.docker, runtime.cleanup), health
+    ? `  - GET ${HEALTH_ROUTE} ${healthAnswer(health)} after ${count(health.attempts, 'attempt')} over ${Math.round(health.waitedMs / 1000)} s${health.status !== 200 && health.body ? `: ${reportText(health.body)}` : ''}`
+    : `  - ${runtimeOutcomeText(runtime.outcome, runtime.problem)}; the result comes from the committed files`];
+}
+
+function healthAnswer(health: NonNullable<B014Runtime['health']>): string {
+  return health.status !== undefined ? `answered ${health.status}` : `got no response${health.error ? ` (${reportText(health.error)})` : ''}`;
 }
 
 const MECHANISM_NAMES: Record<B014Mechanism['kind'], string> = {

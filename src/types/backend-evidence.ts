@@ -269,17 +269,21 @@ export interface B003Endpoint {
  */
 export type B003Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'endpoints-checked';
 
-/** What the backend runtime harness saw of B003's endpoints; informational, never a status. */
-export interface B003Runtime {
+/** How far the backend runtime harness got, as every criterion that shows its evidence reports it. */
+export interface BackendRuntimeSummary {
   outcome: BackendRuntimeOutcome;
   problem?: string;
+  docker?: BackendRuntimeEvidence['docker'];
+  cleanup: BackendRuntimeEvidence['cleanup'];
+}
+
+/** What the backend runtime harness saw of B003's endpoints; informational, never a status. */
+export interface B003Runtime extends BackendRuntimeSummary {
   tenant: string;
   /** GET requests to provided paths without parameters, in `tenant`. */
   requests: Array<{ path: string; status?: number; error?: string }>;
   /** Provided GET paths without parameters that were not requested, over the harness's limit. */
   requestsCut: number;
-  docker?: BackendRuntimeEvidence['docker'];
-  cleanup: BackendRuntimeEvidence['cleanup'];
 }
 
 export interface B003Analysis {
@@ -464,9 +468,15 @@ export interface B007Analysis {
  * What B014 decided from:
  * - `library`: a shared library, which serves no health check;
  * - `ambiguous`: no descriptor and not a known library, so not known to be a module;
- * - `mechanism-found`, `no-mechanism`: whether the committed files show a mechanism that serves GET /admin/health.
+ * - `mechanism-found`, `no-mechanism`: whether the committed files show a mechanism that serves GET /admin/health;
+ * - `runtime-200`, `runtime-not-200`: the runtime harness ran the module and GET /admin/health answered 200, or did not.
  */
-export type B014Basis = 'library' | 'ambiguous' | 'mechanism-found' | 'no-mechanism';
+export type B014Basis = 'library' | 'ambiguous' | 'mechanism-found' | 'no-mechanism' | 'runtime-200' | 'runtime-not-200';
+
+/** The runtime harness's GET /admin/health; absent `health` means the module never reached the health check. */
+export interface B014Runtime extends BackendRuntimeSummary {
+  health?: BackendRuntimeEvidence['health'];
+}
 
 /** A mechanism the committed files show serving GET /admin/health. */
 export interface B014Mechanism {
@@ -515,6 +525,8 @@ export interface B014Analysis {
   unreadRouteCount: number;
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
+  /** Present only with --allow-runtime-checks. */
+  runtime?: B014Runtime;
 }
 
 /**
@@ -922,6 +934,15 @@ export interface B008Analysis {
   checklist: FrontendChecklist;
   /** Why agent review did not run, when it would have been relevant. */
   agentReviewUnavailableReason?: string;
+  /** Present only with --allow-runtime-checks; informational, never a status. */
+  runtime?: B008Runtime;
+}
+
+/** Tenant initialization with loadReference=true, and the records each provided GET path without parameters returned after it. */
+export interface B008Runtime extends BackendRuntimeSummary {
+  tenants: Array<{ tenant: string; status?: number; complete?: boolean; body?: string; error?: string }>;
+  requests: Array<{ path: string; tenant: string; status?: number; recordCount?: number; error?: string }>;
+  requestsCut: number;
 }
 
 /**
@@ -1038,6 +1059,14 @@ export interface B010Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
   agentReviewUnavailableReason?: string;
+  /** Present only with --allow-runtime-checks; informational, never a status. */
+  runtime?: B010Runtime;
+}
+
+/** The schemas and `public` tables after the runtime harness initialized two tenants; `database` is absent when it started no PostgreSQL. */
+export interface B010Runtime extends BackendRuntimeSummary {
+  tenants: string[];
+  database?: BackendRuntimeEvidence['database'];
 }
 
 /**
@@ -1097,6 +1126,14 @@ export interface B013Analysis {
   sourceDiagnostics: CommittedSourceDiagnostic[];
   agentReviewUnavailableReason?: string;
   checklist: FrontendChecklist;
+  /** Present only with --allow-runtime-checks; informational, never a status. */
+  runtime?: B013Runtime;
+}
+
+/** Whether a record created in the runtime harness's first tenant is visible in the second. */
+export interface B013Runtime extends BackendRuntimeSummary {
+  tenants: string[];
+  crossTenant?: BackendRuntimeEvidence['crossTenant'];
 }
 
 /**

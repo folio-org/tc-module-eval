@@ -4,13 +4,16 @@ import {
   B010Mechanism,
   B010RedFlag,
   B010RedFlagKind,
+  B010Runtime,
   BackendEvidence,
+  BackendRuntimeEvidence,
   CriterionAgentReviewResult,
   EvaluationStatus,
   FrontendChecklistItem
 } from '../types';
 import { numberBackendObligations } from './backend-agent-review';
 import { SOURCE_FILE } from './backend-evidence';
+import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { lineCounter, withoutComments } from './backend-routes';
 import { CommittedSourceFile } from './committed-source';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
@@ -152,6 +155,11 @@ export function evaluateB010(evidence: BackendEvidence): B010Analysis {
   return result(EvaluationStatus.MANUAL, storage.present ? 'storage' : 'storage-unconfirmed', sentences.join(' '), drafts, facts);
 }
 
+/** The schemas the runtime harness found after initializing its tenants, as B010's informational runtime evidence. */
+export function b010Runtime(runtime: BackendRuntimeEvidence): B010Runtime {
+  return { ...runtimeSummary(runtime), tenants: RUNTIME_TENANTS, ...(runtime.database ? { database: runtime.database } : {}) };
+}
+
 export function renderB010HumanDetails(analysis: B010Analysis, agentReview?: CriterionAgentReviewResult): string {
   const lines = [`Storage: ${analysis.storage.present ? 'found' : 'none found'}`, ...analysis.storage.evidence.map(item => `  - ${reportText(item)}`)];
   if (analysis.status !== EvaluationStatus.NOT_APPLICABLE) {
@@ -169,6 +177,7 @@ export function renderB010HumanDetails(analysis: B010Analysis, agentReview?: Cri
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
+  if (analysis.runtime) lines.push(...runtimeLines(analysis.runtime));
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }
@@ -433,4 +442,20 @@ function withoutSqlComments(content: string, format: 'sql' | 'yaml' | 'xml' | 'j
   }
   parts.push(content.slice(kept));
   return parts.join('');
+}
+
+function runtimeLines(runtime: B010Runtime): string[] {
+  return runtimeEvidenceLines(runtime, () => {
+    const database = runtime.database;
+    if (!database) return ['  - The module ran in Docker without PostgreSQL: the tool found no storage and no DB_HOST variable'];
+    if (database.problem) return [`  - The module ran in Docker, but the schemas could not be listed: ${reportText(database.problem)}`];
+    const schemas = database.schemas.slice(0, MAX_ROWS);
+    const tables = database.publicTables.slice(0, MAX_ROWS);
+    return [
+      `  - The module ran in Docker. Schemas after POST /_/tenant for ${listText(runtime.tenants)}:`,
+      ...schemas.map(schema => `    - ${reportText(schema.name)}: ${count(schema.tables, 'table')}`),
+      ...overflowLine(database.schemas.length, schemas.length),
+      `  - Tables in public: ${tables.length ? tables.map(reportText).join(', ') : 'none'}${database.publicTables.length > tables.length ? `, and ${database.publicTables.length - tables.length} more` : ''}`
+    ];
+  });
 }

@@ -4,7 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { BackendEvaluator } from '../evaluators/java/backend-evaluator';
 import { ModuleEvaluator } from '../module-evaluator';
-import { B003Analysis, BackendRuntimeEvidence, BackendRuntimeHarness, BackendRuntimePlan } from '../types';
+import { B003Analysis, B008Analysis, B010Analysis, B013Analysis, B014Analysis, BackendRuntimeEvidence, BackendRuntimeHarness, BackendRuntimePlan, EvaluationStatus } from '../types';
+import { evaluateB014 } from '../utils/b014-health-check';
 import { getBackendEvidence } from '../utils/backend-evidence';
 import {
   backendRuntimePlan,
@@ -15,7 +16,7 @@ import {
   RUNTIME_IMAGES_PATH
 } from '../utils/backend-runtime-harness';
 import { createEvaluationRun } from '../utils/evaluation-run';
-import { pom, repository } from './helpers/backend-repository';
+import { pom, repository, restVerticleBuild } from './helpers/backend-repository';
 import { FakeDocker, FakeSignals, IMAGES, probeInput } from './helpers/fake-docker';
 import { expectLinearTime } from './helpers/linear-time';
 
@@ -477,6 +478,25 @@ describe('backend runtime harness isolation rules', () => {
     expect(evidence.tenants).toHaveLength(2);
   });
 
+  it('records no health check when the probe container gives no result, and an error for each request when the request probe gives none', async () => {
+    const silent = new FakeDocker();
+    const quiet = silent.probe;
+    silent.probe = input => input.phase === 'health' ? {} : quiet(input);
+    const { evidence } = await collect(silent);
+    expect([evidence.outcome, evidence.problem, 'health' in evidence, evidence.tenants]).toEqual(['collected', 'the probe container gave no result for GET /admin/health', false, []]);
+
+    const docker = new FakeDocker();
+    const answers = docker.probe;
+    docker.probe = input => input.phase === 'requests' ? {} : answers(input);
+    const later = await collect(docker);
+    expect([later.evidence.problem, later.evidence.getRequests, later.evidence.crossTenant]).toEqual([undefined, [
+      { method: 'GET', path: '/examples', tenant: 'tcevala', error: 'the probe container gave no result' },
+      { method: 'GET', path: '/examples', tenant: 'tcevalb', error: 'the probe container gave no result' },
+      { method: 'GET', path: '/example-missing', tenant: 'tcevala', error: 'the probe container gave no result' },
+      { method: 'GET', path: '/example-missing', tenant: 'tcevalb', error: 'the probe container gave no result' }
+    ], { problem: 'the probe container gave no result', requests: [] }]);
+  });
+
   it('reports a module that stops running as a failed start', async () => {
     let inspections = 0;
     const docker = new FakeDocker(command => command.args[0] === 'container' && ++inspections > 1
@@ -558,10 +578,250 @@ describe('backend runtime evidence in the evaluation', () => {
     expect(lines.slice(at, at + 2)).toEqual(['Runtime evidence (informational; it does not change the status):', row]);
   });
 
+  async function evaluate<T>(criterionId: string, root: string, backendRuntime?: BackendRuntimeHarness) {
+    const result = await new BackendEvaluator().evaluateCriterion(criterionId, root, createEvaluationRun({ repositoryPath: root, language: 'java', backendRuntime }));
+    return { result, analysis: result.criterionDetails as T, lines: result.details!.split('\n') };
+  }
+
+  const section = (lines: string[], heading: string) => {
+    const at = lines.indexOf(heading);
+    if (at < 0) return [];
+    const end = lines.findIndex((line, index) => index > at && !line.startsWith('  '));
+    return lines.slice(at, end < 0 ? undefined : end);
+  };
+
+  const RUNTIME = 'Runtime evidence (informational; it does not change the status):';
+  const expectOnlyRuntimeAdded = (
+    without: { result: { status: EvaluationStatus }; analysis: object; lines: string[] },
+    withRuntime: { result: { status: EvaluationStatus }; analysis: object; lines: string[] }
+  ) => {
+    const runtimeRows = section(withRuntime.lines, RUNTIME);
+    const at = withRuntime.lines.indexOf(RUNTIME);
+    expect(runtimeRows.length).toBeGreaterThan(1);
+    expect([...withRuntime.lines.slice(0, at), ...withRuntime.lines.slice(at + runtimeRows.length)]).toEqual(without.lines);
+    expect({ ...withRuntime.analysis, runtime: undefined }).toEqual({ ...without.analysis, runtime: undefined });
+    expect(withRuntime.result.status).toBe(without.result.status);
+  };
+
+  const health = (status: number | undefined, extra: Partial<NonNullable<BackendRuntimeEvidence['health']>> = {}) =>
+    ({ method: 'GET', path: '/admin/health', ...(status !== undefined ? { status } : {}), attempts: 3, waitedMs: 41_600, ...extra });
+
+  it('passes B014 when GET /admin/health answered 200, over a static result that found no mechanism', async () => {
+    const root = moduleRepository();
+    const without = await evaluate<B014Analysis>('B014', root);
+    expect([without.analysis.status, without.analysis.basis]).toEqual([EvaluationStatus.MANUAL, 'no-mechanism']);
+    const { result, analysis, lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({ health: health(200), docker: { serverVersion: '29.9.2', rootless: true } }));
+    expect([result.status, analysis.basis, analysis.endpointCalled, analysis.checklist.items]).toEqual([EvaluationStatus.PASS, 'runtime-200', true, []]);
+    expect(result.evidence).toBe('B014 pass: GET /admin/health answered 200 when the tool ran the module in Docker.');
+    expect(lines).toEqual([
+      'Health check: GET /admin/health was called',
+      'Runtime check:',
+      '  - Docker 29.9.2, rootless',
+      '  - GET /admin/health answered 200 after 3 attempts over 42 s',
+      'Actuator not counted for the Spring Boot application:',
+      '  - src/main/java/org/example/Application.java — no build file of the application or its parent folders has a dependency on spring-boot-starter-actuator or folio-spring-base',
+      '  - src/main/java/org/example/Application.java — management.endpoints.web.base-path is not set, so actuator serves health at /actuator/health'
+    ]);
+    expect(analysis.runtime).toEqual({ outcome: 'collected', docker: { serverVersion: '29.9.2', rootless: true }, cleanup: { remaining: [], problems: [] }, health: health(200) });
+  });
+
+  it('makes B014 manual with B014-C2 when GET /admin/health answered another status, even where the committed files show a mechanism', async () => {
+    const root = moduleRepository({ 'pom.xml': pom('mod-example', restVerticleBuild) });
+    const without = await evaluate<B014Analysis>('B014', root);
+    expect([without.analysis.status, without.analysis.basis]).toEqual([EvaluationStatus.PASS, 'mechanism-found']);
+    const { result, analysis, lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({ health: health(503, { body: '{"status":"DOWN",\n"db":"DOWN"}' }) }));
+    expect([result.status, analysis.basis, analysis.endpointCalled]).toEqual([EvaluationStatus.MANUAL, 'runtime-not-200', true]);
+    expect(result.evidence).toBe('B014 manual: GET /admin/health answered 503 when the tool ran the module in Docker. The tool starts no more than an Okapi stub, '
+      + 'PostgreSQL and Kafka beside it, so a reviewer must check that it answers 200 once the module\'s dependencies are available.');
+    expect(lines).toEqual([
+      'Health check: GET /admin/health was called',
+      'Runtime check:',
+      '  - GET /admin/health answered 503 after 3 attempts over 42 s: {"status":"DOWN", ↵ "db":"DOWN"}',
+      'Found:',
+      '  - RMB: pom.xml:1 — org.folio.rest.RestVerticle is the main verticle, and RMB serves GET /admin/health',
+      'Actuator not counted for the Spring Boot application:',
+      '  - src/main/java/org/example/Application.java — no build file of the application or its parent folders has a dependency on spring-boot-starter-actuator or folio-spring-base',
+      '  - src/main/java/org/example/Application.java — management.endpoints.web.base-path is not set, so actuator serves health at /actuator/health',
+      'Checklist for the reviewer:',
+      '  - B014-C2 GET /admin/health returns 200 once the module\'s dependencies are available.',
+      '    - Start with:',
+      '      - pom.xml:1 — org.folio.rest.RestVerticle is the main verticle, and RMB serves GET /admin/health'
+    ]);
+    expect(analysis.checklist.items.map(item => [item.id, item.title, item.startingPoints.map(point => point.path)])).toEqual([
+      ['B014-C2', 'GET /admin/health returns 200 once the module\'s dependencies are available.', ['pom.xml']]
+    ]);
+    expect(analysis.mechanisms).toEqual(without.analysis.mechanisms);
+  });
+
+  it('keeps B014\'s own checklist item beside B014-C2 when the health check got no response', async () => {
+    const { result, analysis, lines } = await evaluate<B014Analysis>('B014', moduleRepository(),
+      new CannedHarness({ problem: 'GET /admin/health got no response within 420 s', health: health(undefined, { error: 'connect ECONNREFUSED', waitedMs: 420_000 }) }));
+    expect([result.status, analysis.basis]).toEqual([EvaluationStatus.MANUAL, 'runtime-not-200']);
+    expect(result.evidence).toBe('B014 manual: GET /admin/health got no response (connect ECONNREFUSED) when the tool ran the module in Docker. The tool starts no more than an Okapi stub, '
+      + 'PostgreSQL and Kafka beside it, so a reviewer must check that it answers 200 once the module\'s dependencies are available.');
+    expect(lines[2]).toBe('  - GET /admin/health got no response (connect ECONNREFUSED) after 3 attempts over 420 s');
+    expect(analysis.checklist.items.map(item => item.id)).toEqual(['B014-C1', 'B014-C2']);
+  });
+
+  it.each([
+    ['start-failed', 'the module container stopped running (exit code 1)', undefined, '  - The module did not start in Docker: the module container stopped running (exit code 1); the result comes from the committed files'],
+    ['build-failed', 'the build exited with 1', undefined, '  - The module could not be built in Docker: the build exited with 1; the result comes from the committed files'],
+    ['not-run', 'the evaluation was stopped by SIGINT', undefined, '  - The runtime harness did not run: the evaluation was stopped by SIGINT; the result comes from the committed files'],
+    ['collected', 'the probe container gave no result for GET /admin/health', undefined,
+      '  - The module ran in Docker: the probe container gave no result for GET /admin/health; the result comes from the committed files']
+  ] as const)('keeps B014\'s static result with a note when the harness outcome is %s and the health check was not called', async (outcome, problem, _health, row) => {
+    const root = moduleRepository({ 'pom.xml': pom('mod-example', restVerticleBuild) });
+    const without = await evaluate<B014Analysis>('B014', root);
+    const { result, analysis, lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({ outcome, problem }));
+    const { runtime, ...rest } = analysis;
+    expect(rest).toEqual(without.analysis);
+    expect(result.evidence).toBe(without.result.evidence);
+    expect(runtime).toEqual({ outcome, problem, cleanup: { remaining: [], problems: [] } });
+    expect(lines).toEqual([without.result.details!.split('\n')[0], 'Runtime check:', row, ...without.result.details!.split('\n').slice(1)]);
+  });
+
+  it('decides B014 from a health answer recorded before a later step failed, and only 200 passes', async () => {
+    const { analysis } = await evaluate<B014Analysis>('B014', moduleRepository(),
+      new CannedHarness({ outcome: 'start-failed', problem: 'probe database: docker run failed', health: health(200) }));
+    expect([analysis.status, analysis.basis]).toEqual([EvaluationStatus.PASS, 'runtime-200']);
+    const noContent = await evaluate<B014Analysis>('B014', moduleRepository(), new CannedHarness({ health: health(204) }));
+    expect([noContent.analysis.status, noContent.analysis.basis]).toEqual([EvaluationStatus.MANUAL, 'runtime-not-200']);
+  });
+
+  it.each([
+    ['ambiguous', { 'pom.xml': pom('mod-example'), 'src/main/java/org/example/Application.java': '@SpringBootApplication\npublic class Application {}\n' }, EvaluationStatus.MANUAL],
+    ['library', { 'pom.xml': pom('folio-spring-base', restVerticleBuild) }, EvaluationStatus.NOT_APPLICABLE]
+  ] as const)('never lets the runtime check decide B014 for a repository that is %s', async (kind, files, status) => {
+    const root = repository(files);
+    const evidence = await getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root);
+    expect(evidence.kind).toBe(kind);
+    for (const value of [200, 503]) {
+      const canned = await new CannedHarness({ health: health(value) }).collect(root, {} as BackendRuntimePlan);
+      const analysis = evaluateB014(evidence, canned);
+      expect([analysis.status, analysis.basis, analysis.endpointCalled]).toEqual([status, kind, false]);
+    }
+  });
+
+  it('notes on a shared library why the runtime check did not decide B014 or B013', async () => {
+    const root = repository({ 'pom.xml': pom('folio-spring-base', restVerticleBuild) });
+    const { lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({}));
+    expect(lines).toEqual(['Health check: not applicable to a shared library', 'Runtime check:',
+      '  - The runtime harness did not run: the repository is not a backend or edge module; the result comes from the committed files']);
+    const b013 = await evaluate<B013Analysis>('B013', root, new CannedHarness({}));
+    expect([b013.result.status, ...b013.lines]).toEqual([EvaluationStatus.NOT_APPLICABLE, 'Framework: shared library', RUNTIME,
+      '  - The runtime harness did not run: the repository is not a backend or edge module']);
+  });
+
+  it('adds B008 tenant initialization and record counts as rows that do not change its status', async () => {
+    const root = moduleRepository();
+    const without = await evaluate<B008Analysis>('B008', root);
+    const tenant = (name: string, extra: object) => ({ method: 'POST', path: '/_/tenant', tenant: name, ...extra });
+    const withRuntime = await evaluate<B008Analysis>('B008', root, new CannedHarness({
+      tenants: [tenant('tcevala', { status: 204, complete: true }), tenant('tcevalb', { status: 400, body: 'Invalid schema' }), tenant('tcevalc', { status: 201, complete: false }),
+        tenant('tcevald', { status: 201, complete: true, body: 'loading\nfailed' }), tenant('tcevale', { error: 'socket hang up' })],
+      getRequests: [
+        { method: 'GET', path: '/examples', tenant: 'tcevala', status: 200, recordCount: 2 },
+        { method: 'GET', path: '/example-missing', tenant: 'tcevala', status: 404 },
+        { method: 'GET', path: '/examples', tenant: 'tcevalb', status: 200, recordCount: 0 },
+        { method: 'GET', path: '/example-missing', tenant: 'tcevalb', error: 'no response within 15000 ms' }
+      ],
+      getRequestsCut: 1
+    }));
+    expectOnlyRuntimeAdded(without, withRuntime);
+    expect(section(withRuntime.lines, RUNTIME)).toEqual([
+      RUNTIME,
+      '  - The module ran in Docker. Tenant initialization with loadReference=true:',
+      '    - tcevala: POST /_/tenant answered 204',
+      '    - tcevalb: POST /_/tenant answered 400: Invalid schema',
+      '    - tcevalc: POST /_/tenant answered 201; the tenant job did not complete',
+      '    - tcevald: POST /_/tenant answered 201; the tenant job failed: loading ↵ failed',
+      '    - tcevale: POST /_/tenant got no response (socket hang up)',
+      '  - Records each provided GET path without parameters returned afterwards:',
+      '    - GET /examples: tcevala 2 records, tcevalb 0 records',
+      '    - GET /example-missing: tcevala answered 404, tcevalb got no response (no response within 15000 ms)',
+      '    - ... 1 more'
+    ]);
+  });
+
+  it('adds B010 schemas and public tables as rows that do not change its status', async () => {
+    const root = moduleRepository();
+    const without = await evaluate<B010Analysis>('B010', root);
+    const run = async (database: BackendRuntimeEvidence['database']) => {
+      const withRuntime = await evaluate<B010Analysis>('B010', root, new CannedHarness({ database }));
+      expectOnlyRuntimeAdded(without, withRuntime);
+      return section(withRuntime.lines, RUNTIME).slice(1);
+    };
+    expect(await run({ schemas: [{ name: 'public', tables: 1 }, { name: 'tcevala_mod_example', tables: 6 }, { name: 'tcevalb_mod_example', tables: 0 }], publicTables: ['shared\nnotes'] })).toEqual([
+      '  - The module ran in Docker. Schemas after POST /_/tenant for tcevala and tcevalb:',
+      '    - public: 1 table',
+      '    - tcevala_mod_example: 6 tables',
+      '    - tcevalb_mod_example: 0 tables',
+      '  - Tables in public: shared ↵ notes'
+    ]);
+    expect(await run({ schemas: [{ name: 'public', tables: 0 }], publicTables: [] })).toEqual([
+      '  - The module ran in Docker. Schemas after POST /_/tenant for tcevala and tcevalb:',
+      '    - public: 0 tables',
+      '  - Tables in public: none'
+    ]);
+    expect(await run({ schemas: [], publicTables: [], problem: 'the database probe failed: exit code 2' }))
+      .toEqual(['  - The module ran in Docker, but the schemas could not be listed: the database probe failed: exit code 2']);
+    expect(await run(undefined)).toEqual(['  - The module ran in Docker without PostgreSQL: the tool found no storage and no DB_HOST variable']);
+  });
+
+  it('adds the B013 cross-tenant check as rows that do not change its status', async () => {
+    const root = moduleRepository();
+    const without = await evaluate<B013Analysis>('B013', root);
+    const run = async (crossTenant: BackendRuntimeEvidence['crossTenant']) => {
+      const withRuntime = await evaluate<B013Analysis>('B013', root, new CannedHarness({ crossTenant }));
+      expectOnlyRuntimeAdded(without, withRuntime);
+      return section(withRuntime.lines, RUNTIME).slice(1);
+    };
+    expect(await run({ path: '/examples', recordId: 'r1', visibleInOwnTenant: true, visibleInOtherTenant: false, requests: [
+      { method: 'GET', path: '/examples', tenant: 'tcevala', status: 200 },
+      { method: 'POST', path: '/examples', tenant: 'tcevala', status: 201 },
+      { method: 'GET', path: '/examples/r1', tenant: 'tcevala', status: 200 },
+      { method: 'GET', path: '/examples/r1', tenant: 'tcevalb', error: 'socket hang up' }
+    ] })).toEqual([
+      '  - The module ran in Docker. Cross-tenant check: a record created with POST /examples in tcevala:',
+      '    - visible in tcevala: yes',
+      '    - visible in tcevalb: no',
+      '  - Requests:',
+      '    - GET /examples in tcevala answered 200',
+      '    - POST /examples in tcevala answered 201',
+      '    - GET /examples/r1 in tcevala answered 200',
+      '    - GET /examples/r1 in tcevalb got no response (socket hang up)'
+    ]);
+    expect(await run({ path: '/examples', recordId: 'r1', visibleInOtherTenant: true, requests: [] })).toEqual([
+      '  - The module ran in Docker. Cross-tenant check: a record created with POST /examples in tcevala:',
+      '    - visible in tcevala: unknown',
+      '    - visible in tcevalb: yes'
+    ]);
+    expect(await run({ problem: '/examples listed no record\nin tcevala to copy', requests: [{ method: 'GET', path: '/examples', tenant: 'tcevala', status: 200 }] })).toEqual([
+      '  - The module ran in Docker. No cross-tenant check: /examples listed no record ↵ in tcevala to copy',
+      '  - Requests:',
+      '    - GET /examples in tcevala answered 200'
+    ]);
+    expect(await run(undefined)).toEqual(['  - The module ran in Docker; the descriptor provides no path with both GET and POST without parameters for a cross-tenant check']);
+  });
+
+  it.each(['B008', 'B010', 'B013'])('says why %s has no runtime evidence when the module did not start, keeping its status', async criterionId => {
+    const root = moduleRepository();
+    const without = await evaluate<B008Analysis>(criterionId, root);
+    const withRuntime = await evaluate<B008Analysis>(criterionId, root, new CannedHarness({ outcome: 'start-failed', problem: 'the module container stopped running (exit code 1)',
+      cleanup: { remaining: ['container 1f2e'], problems: [] } }));
+    expectOnlyRuntimeAdded(without, withRuntime);
+    expect(section(withRuntime.lines, RUNTIME)).toEqual([RUNTIME, '  - Cleanup left Docker resources of this run behind; remove them by hand:', '    - container 1f2e',
+      '  - The module did not start in Docker: the module container stopped running (exit code 1)']);
+  });
+
   it('leaves B003 unchanged and runs nothing without --allow-runtime-checks', async () => {
     const root = moduleRepository();
     const { analysis, run } = await b003(root);
     expect('runtime' in analysis).toBe(false);
+    for (const criterionId of ['B008', 'B010', 'B013', 'B014']) {
+      const other = await evaluate<B014Analysis>(criterionId, root);
+      expect([criterionId, 'runtime' in other.analysis, other.lines.includes('Runtime check:') || other.lines.includes(RUNTIME)]).toEqual([criterionId, false, false]);
+    }
     expect(run.artifacts.backendRuntimeEvidence).toBeUndefined();
     expect(await getBackendRuntimeEvidence(run, root)).toEqual(expect.objectContaining({ outcome: 'not-configured', actions: [] }));
   });

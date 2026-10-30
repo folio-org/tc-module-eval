@@ -325,7 +325,10 @@ endpoint: it passes when RMB's `RestVerticle` is the main verticle, when Spring 
 Spring Boot or Grails application) serves health at `/admin/health`, or when the source registers a
 `GET /admin/health` route, and the report says the endpoint was not called. Actuator settings that move
 or disable health, in the default configuration or in any profile, and modules with no such mechanism are
-left to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
+left to the reviewer. With the [backend runtime harness](#backend-runtime-harness), the module's answer
+decides instead: 200 passes, and any other answer goes to the reviewer; when the module did not reach the
+health check, the committed files decide and the report says why. See
+[Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
 
 ### B015 High Availability
 
@@ -355,8 +358,10 @@ With `--allow-runtime-checks` and `--allow-local-commands`, the evaluator builds
 pinned Maven or Gradle container, builds its image with the repository's `Dockerfile`, and runs it with
 PostgreSQL and Kafka as needed on an internal Docker network without internet or host access and
 without published ports. A probe container calls `GET /admin/health`, initializes two tenants with
-reference data, and calls the module's GET endpoints. B003 shows the GET statuses as informational
-evidence that never changes its status. Every container, network, volume and image is labelled with the
+reference data, and calls the module's GET endpoints. B014 is decided by the health check's answer.
+B003 (GET statuses), B008 (tenant initialization and record counts), B010 (schemas and the tables in
+`public`) and B013 (whether a record created in one tenant is visible in the other) show informational
+evidence that never changes their status. Every container, network, volume and image is labelled with the
 run and removed afterwards, also on Ctrl-C. It needs a reachable Docker daemon. See
 [Criterion Notes](docs/criterion-notes.md#backend-runtime-harness).
 

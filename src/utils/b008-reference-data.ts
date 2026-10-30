@@ -3,20 +3,23 @@ import {
   BackendDescriptorTemplate,
   CriterionAgentReviewResult,
   B008Basis,
+  B008Runtime,
   B008Source,
   B008Vocabulary,
   BackendEvidence,
+  BackendRuntimeEvidence,
   EvaluationStatus
 } from '../types';
 import { CommittedSourceFile } from './committed-source';
 import { descriptorEndpoints } from './backend-endpoints';
 import { numberBackendObligations } from './backend-agent-review';
 import { SOURCE_FILE, TEST_SOURCES, templateLineOf } from './backend-evidence';
+import { runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { lineCounter, literalPath, stringConstants, withoutComments } from './backend-routes';
 import { isSystemInterface } from './descriptor-handlers';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { frontendChecklist, frontendReviewLines } from './frontend-checklist';
-import { capitalize, listText, overflowLine, reportPath, reportText, unique } from './report-text';
+import { capitalize, count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 import { isRecord } from './type-guards';
 
 const MAX_ROWS = 20;
@@ -622,6 +625,28 @@ function categoryValue(args: string): string | undefined {
   return literal ? literal.slice(1, -1) : undefined;
 }
 
+/** The runtime harness's tenant initialization and record counts, as B008's informational runtime evidence. */
+export function b008Runtime(runtime: BackendRuntimeEvidence): B008Runtime {
+  return {
+    ...runtimeSummary(runtime),
+    tenants: runtime.tenants.map(request => ({
+      tenant: request.tenant ?? '',
+      ...(request.status !== undefined ? { status: request.status } : {}),
+      ...(request.complete !== undefined ? { complete: request.complete } : {}),
+      ...(request.body ? { body: request.body } : {}),
+      ...(request.error ? { error: request.error } : {})
+    })),
+    requests: runtime.getRequests.map(request => ({
+      path: request.path,
+      tenant: request.tenant ?? '',
+      ...(request.status !== undefined ? { status: request.status } : {}),
+      ...(request.recordCount !== undefined ? { recordCount: request.recordCount } : {}),
+      ...(request.error ? { error: request.error } : {})
+    })),
+    requestsCut: runtime.getRequestsCut
+  };
+}
+
 export function renderB008HumanDetails(analysis: B008Analysis, agentReview?: CriterionAgentReviewResult): string {
   const lines: string[] = [];
   if (analysis.kind !== 'library') {
@@ -663,8 +688,43 @@ export function renderB008HumanDetails(analysis: B008Analysis, agentReview?: Cri
   if (missing.length && analysis.status === EvaluationStatus.MANUAL) {
     lines.push('What to do:', '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.');
   }
+  if (analysis.runtime) lines.push(...runtimeLines(analysis.runtime));
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
+}
+
+function runtimeLines(runtime: B008Runtime): string[] {
+  return runtimeEvidenceLines(runtime, () => {
+    const paths = new Map<string, B008Runtime['requests']>();
+    for (const request of runtime.requests) {
+      const list = paths.get(request.path);
+      if (list) list.push(request);
+      else paths.set(request.path, [request]);
+    }
+    const listed = [...paths].slice(0, MAX_ROWS);
+    return [
+      '  - The module ran in Docker. Tenant initialization with loadReference=true:',
+      ...(runtime.tenants.length ? runtime.tenants.map(tenant => `    - ${reportText(tenant.tenant)}: POST /_/tenant ${tenantAnswer(tenant)}`) : ['    - the probe gave no result']),
+      ...(paths.size ? [
+        '  - Records each provided GET path without parameters returned afterwards:',
+        ...listed.map(([path, requests]) => `    - GET ${reportText(path)}: ${requests.map(request => `${reportText(request.tenant)} ${requestAnswer(request)}`).join(', ')}`),
+        ...overflowLine(paths.size + runtime.requestsCut, listed.length)
+      ] : ['  - The descriptor provides no GET path without parameters to call'])
+    ];
+  });
+}
+
+function tenantAnswer(tenant: B008Runtime['tenants'][number]): string {
+  if (tenant.status === undefined) return `got no response (${reportText(tenant.error ?? 'no response')})`;
+  const body = tenant.body ? `: ${reportText(tenant.body)}` : '';
+  if (tenant.status < 200 || tenant.status >= 300) return `answered ${tenant.status}${body}`;
+  if (tenant.complete === false) return `answered ${tenant.status}; the tenant job did not complete`;
+  return body ? `answered ${tenant.status}; the tenant job failed${body}` : `answered ${tenant.status}`;
+}
+
+function requestAnswer(request: B008Runtime['requests'][number]): string {
+  if (request.recordCount !== undefined) return count(request.recordCount, 'record');
+  return request.status !== undefined ? `answered ${request.status}` : `got no response (${reportText(request.error ?? 'no response')})`;
 }
 
 function sourceText(source: B008Source): string {

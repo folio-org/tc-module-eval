@@ -12,6 +12,7 @@ import {
   BackendRuntimeHarness,
   BackendRuntimeOutcome,
   BackendRuntimePlan,
+  BackendRuntimeSummary,
   EvaluationRun
 } from '../types';
 import { descriptorEndpoints } from './backend-endpoints';
@@ -219,6 +220,24 @@ export function runtimeDockerLines(docker: BackendRuntimeEvidence['docker'], cle
       ? 'rootless' : 'not rootless (root-equivalent on this host)'}`] : []),
     ...(left.length ? ['  - Cleanup left Docker resources of this run behind; remove them by hand:', ...left.slice(0, 20).map(item => `    - ${reportText(item)}`),
       ...overflowLine(left.length, 20)] : [])
+  ];
+}
+
+export function runtimeSummary(runtime: BackendRuntimeEvidence): BackendRuntimeSummary {
+  return {
+    outcome: runtime.outcome,
+    ...(runtime.problem ? { problem: runtime.problem } : {}),
+    ...(runtime.docker ? { docker: runtime.docker } : {}),
+    cleanup: runtime.cleanup
+  };
+}
+
+/** An informational runtime section: the outcome when the harness collected nothing, else `collected`. */
+export function runtimeEvidenceLines(summary: BackendRuntimeSummary, collected: () => string[]): string[] {
+  return [
+    'Runtime evidence (informational; it does not change the status):',
+    ...runtimeDockerLines(summary.docker, summary.cleanup),
+    ...(summary.outcome !== 'collected' || summary.problem ? [`  - ${runtimeOutcomeText(summary.outcome, summary.problem)}`] : collected())
   ];
 }
 
@@ -575,9 +594,13 @@ export class DockerBackendRuntimeHarness implements BackendRuntimeHarness {
       }
       if (this.now() >= healthDeadline) break;
     }
-    evidence.health = { ...(health ?? { method: 'GET', path: '/admin/health', error: 'the probe gave no result' }), attempts, waitedMs: this.now() - healthStarted };
     evidence.outcome = 'collected';
-    if (health?.status === undefined) {
+    if (!health) {
+      evidence.problem = 'the probe container gave no result for GET /admin/health';
+      return;
+    }
+    evidence.health = { ...health, attempts, waitedMs: this.now() - healthStarted };
+    if (health.status === undefined) {
       evidence.problem = `GET /admin/health got no response within ${Math.round((this.now() - healthStarted) / 1000)} s`;
       return;
     }
@@ -587,8 +610,14 @@ export class DockerBackendRuntimeHarness implements BackendRuntimeHarness {
     if (plan.infrastructure.includes('postgres')) evidence.database = await this.database(context, images.postgres, dbPassword);
     const requests = await this.probe(context, images.node, { phase: 'requests', moduleUrl, tenants: RUNTIME_TENANTS, getPaths: plan.getPaths,
       collections: plan.collections, maxCollections: MAX_COLLECTIONS });
-    evidence.getRequests = requests?.getRequests ?? [];
-    if (requests?.crossTenant) evidence.crossTenant = requests.crossTenant;
+    if (requests?.getRequests) {
+      evidence.getRequests = requests.getRequests;
+      if (requests.crossTenant) evidence.crossTenant = requests.crossTenant;
+      return;
+    }
+    const noResult = 'the probe container gave no result';
+    evidence.getRequests = plan.getPaths.flatMap(getPath => RUNTIME_TENANTS.map(tenant => ({ method: 'GET', path: getPath, tenant, error: noResult })));
+    if (plan.collections.length) evidence.crossTenant = { problem: noResult, requests: [] };
   }
 
   private async build(context: RunContext, repositoryPath: string, plan: BackendRuntimePlan, buildImage: string): Promise<string> {

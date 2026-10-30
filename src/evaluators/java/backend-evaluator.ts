@@ -12,15 +12,15 @@ import { b007Implementations, hasB007AgentReviewMaterial, reviewB007WithAgent } 
 import { analyzeB009, renderB009HumanDetails } from '../../utils/b009-api-tests';
 import { evaluateB007, renderB007HumanDetails } from '../../utils/b007-endpoint-permissions';
 import { hasB008AgentReviewMaterial, reviewB008WithAgent } from '../../utils/b008-agent-review';
-import { evaluateB008, renderB008HumanDetails } from '../../utils/b008-reference-data';
+import { b008Runtime, evaluateB008, renderB008HumanDetails } from '../../utils/b008-reference-data';
 import { hasB010AgentReviewMaterial, reviewB010WithAgent } from '../../utils/b010-agent-review';
-import { evaluateB010, renderB010HumanDetails } from '../../utils/b010-tenant-segregation';
+import { b010Runtime, evaluateB010, renderB010HumanDetails } from '../../utils/b010-tenant-segregation';
 import { hasB011AgentReviewMaterial, reviewB011WithAgent } from '../../utils/b011-agent-review';
 import { evaluateB011, renderB011HumanDetails } from '../../utils/b011-schema-access';
 import { hasB012AgentReviewMaterial, reviewB012WithAgent } from '../../utils/b012-agent-review';
 import { evaluateB012, renderB012HumanDetails } from '../../utils/b012-readme-dependencies';
 import { hasB013AgentReviewMaterial, reviewB013WithAgent } from '../../utils/b013-agent-review';
-import { evaluateB013, renderB013HumanDetails } from '../../utils/b013-tenant-selection';
+import { b013Runtime, evaluateB013, renderB013HumanDetails } from '../../utils/b013-tenant-selection';
 import { evaluateB014, renderB014HumanDetails } from '../../utils/b014-health-check';
 import { hasB015AgentReviewMaterial, reviewB015WithAgent } from '../../utils/b015-agent-review';
 import { evaluateB015, renderB015HumanDetails } from '../../utils/b015-high-availability';
@@ -205,6 +205,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewB008WithAgent(repoPath, analysis, evidence.snapshot.listedPaths ?? [], config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    if (run.backendRuntime) analysis.runtime = b008Runtime(await getBackendRuntimeEvidence(run, repoPath));
     return {
       criterionId: 'B008',
       status: analysis.status,
@@ -258,6 +259,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewB013WithAgent(repoPath, analysis, config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    if (run.backendRuntime) analysis.runtime = b013Runtime(await getBackendRuntimeEvidence(run, repoPath));
     return {
       criterionId: 'B013',
       status: analysis.status,
@@ -270,7 +272,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
 
   private async evaluateB014(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'B014', evaluationRun);
-    const analysis = evaluateB014(await getBackendEvidence(run, repoPath));
+    const analysis = evaluateB014(await getBackendEvidence(run, repoPath), run.backendRuntime ? await getBackendRuntimeEvidence(run, repoPath) : undefined);
     return {
       criterionId: 'B014',
       status: analysis.status,
@@ -352,6 +354,7 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewB010WithAgent(repoPath, analysis, config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    if (run.backendRuntime) analysis.runtime = b010Runtime(await getBackendRuntimeEvidence(run, repoPath));
     return {
       criterionId: 'B010',
       status: analysis.status,
