@@ -21,9 +21,9 @@ export function frontendChecklist(status: EvaluationStatus, items: FrontendCheck
   return { items: status === EvaluationStatus.FAIL || status === EvaluationStatus.MANUAL ? items : [] };
 }
 
-/** The checklist of an F criterion's result, or undefined for other criteria. */
+/** The checklist of an F or B criterion's result, or undefined for other criteria. */
 export function frontendChecklistOf(criterionId: string, criterionDetails: unknown): FrontendChecklist | undefined {
-  if (!/^F\d{3}$/.test(criterionId)) return undefined;
+  if (!/^[FB]\d{3}$/.test(criterionId)) return undefined;
   const checklist = (criterionDetails as { checklist?: FrontendChecklist } | undefined)?.checklist;
   return Array.isArray(checklist?.items) ? checklist : undefined;
 }

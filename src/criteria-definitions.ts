@@ -219,11 +219,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B007',
     description: 'Appropriate endpoint permissions',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Event-driven architecture'
-    }
+    languages: ['java']
   },
   {
     id: 'B008',

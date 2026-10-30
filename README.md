@@ -213,6 +213,15 @@ module; with `--existing-module`, an RMB module may keep RAML. Endpoints served 
 custom fields, and specs it cannot fully read leave it to the reviewer. See
 [Criterion Notes](docs/criterion-notes.md#b006-api-documentation).
 
+### B007 Endpoint Permissions
+
+B007 checks the permissions of every endpoint in the module descriptor template, other than those of
+system interfaces. It fails when an endpoint requires a `*.all` permission or a permission no permission
+set in the template defines. Otherwise it is always left to the reviewer, who judges whether each
+permission fits its endpoint; the report lists endpoints without a permission, `*.all` module
+permissions and permission names that depart from the naming guidelines. Agent review runs by default
+for its manual results. See [Criterion Notes](docs/criterion-notes.md#b007-endpoint-permissions).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.

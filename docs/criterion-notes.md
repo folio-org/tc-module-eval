@@ -547,6 +547,22 @@ B006 checks that every endpoint the module serves is documented in an OpenAPI sp
 
 B006 has no agent review. The parsed specs are a run artifact (`backendApiSpecs`): for each spec its root file, format and version, operations (method, full path, defining file, the resource as the spec writes it, and OpenAPI tags and operationId), and the parts that could not be read.
 
+## B007 Endpoint Permissions
+
+B007 checks that every endpoint the module provides is protected with an appropriate permission. It reads the descriptor template B001 reads, so it runs in safe mode.
+
+- **Endpoints:** each handler of the template's `provides`, without system interfaces (named with a leading underscore or typed `system`), with its `permissionsRequired` and `modulePermissions`. `permissionsDesired` is not read.
+- **Defined permissions:** the `permissionName` of each entry of the template's `permissionSets`. A permission named only in a set's `subPermissions` is not defined there.
+- `fail`: an endpoint requires a `*.all` permission (a name ending in `.all`), or a permission no permission set in the template defines (Q7). The report ends with a "What to do" line.
+- `manual`: in every other case with endpoints, because only a reviewer can judge whether each permission fits its endpoint. The report lists endpoints whose `permissionsRequired` is missing or empty, endpoints with a `*.all` module permission, permissions the tool could not read (a `provides`, `handlers` or `permissionSets` that is not a list, a handler or permission set that is not an object, a `permissionName` that is not a string, or a `permissionsRequired` or `modulePermissions` that is not a list of strings; the strings in such a list are still checked, so a `*.all` permission still fails), permissions with a build placeholder the build properties do not define (an unread permission set or such a placeholder in a `permissionName` means no required permission counts as undefined; such a placeholder in a required permission skips that permission), and permission names that depart from the [Permission Naming Guidelines](https://folio-org.atlassian.net/wiki/x/BgDtY) (Q7: never a fail). Also manual: a repository with no readable descriptor template.
+- `not_applicable`: a shared library; a template whose non-system interfaces have no handlers, such as an edge module with an empty `provides`.
+
+**Naming.** A defined permission name departs from the guidelines when its first term is not the module name without `mod-` (the root `pom.xml` artifactId, or Gradle's `rootProject.name` in a `settings.gradle` beside the template or above it; without either, this is not checked), when a dot-separated term is not lowercase words joined by hyphens (camelCase, underscores, an empty term), or when its last term is not `get`, `post`, `put`, `patch`, `delete`, `execute` or `all`.
+
+Checklist items, shown for fail and manual: **B007-C1** each endpoint's permission fits what it does (read or write, item or collection), one agent obligation per interface; **B007-C2** each endpoint without a permission is meant to be public, one obligation per interface that has one; **B007-C3** each endpoint's `modulePermissions` cover every interface its implementation calls, without `*.all`, one obligation per interface; **B007-C4** (reviewer only) permission names follow the guidelines, listing the deviations. Interfaces the tool flagged come first under the limit of 25.
+
+B007 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
+
 ## Advisory Agent Review
 
 Optional OpenCode review can inform manual results but cannot change criterion status. See [Agent Review Configuration](agent-review.md) for setup and supported criteria.

@@ -17,22 +17,26 @@ const EVIDENCE_SUMMARY_BYTES = 48 * 1024;
 
 /** A checklist item before its obligations are numbered: what the agent assesses, one obligation per subject. */
 export type FrontendChecklistItemDraft = FrontendChecklistItem & {
-  subjects: Array<{ subject: string; path?: string; line?: number }>;
+  subjects: Array<{ subject: string; path?: string; line?: number; flag?: FrontendChecklistObligation['flag'] }>;
 };
 
 /**
  * Number each item's obligations (`F003-C1#1`, `F003-C1#2`, ...): one per subject, or one for the whole item when it
  * has none; reviewer-only items get none. At most FRONTEND_AGENT_OBLIGATION_LIMIT are given to the agent: subject
- * obligations first, in item order, then whole-item ones. The rest are marked withheld.
+ * obligations first, in item order or the given order, then whole-item ones. The rest are marked withheld.
  */
-export function numberObligations(drafts: FrontendChecklistItemDraft[]): FrontendChecklistItem[] {
+export function numberObligations(
+  drafts: FrontendChecklistItemDraft[],
+  order?: (a: FrontendChecklistObligation, b: FrontendChecklistObligation) => number
+): FrontendChecklistItem[] {
   const items = drafts.map(({ subjects, ...item }) => ({
     ...item,
     obligations: item.reviewerOnly ? [] : subjects.length
       ? subjects.map((subject, index): FrontendChecklistObligation => ({ id: `${item.id}#${index + 1}`, ...subject }))
       : [{ id: `${item.id}#1` }]
   }));
-  const ranked = [...items.flatMap(item => item.obligations.filter(obligation => obligation.subject !== undefined)),
+  const subjectObligations = items.flatMap(item => item.obligations.filter(obligation => obligation.subject !== undefined));
+  const ranked = [...order ? subjectObligations.sort(order) : subjectObligations,
     ...items.flatMap(item => item.obligations.filter(obligation => obligation.subject === undefined))];
   ranked.slice(FRONTEND_AGENT_OBLIGATION_LIMIT).forEach(obligation => { obligation.withheld = true; });
   return items;
@@ -77,6 +81,10 @@ export interface FrontendAgentReviewOptions {
   /** The criterion's own rule for one assessment, applied after the shared ones: why to drop it, or undefined to keep it. */
   criterionRule?: (assessment: CriterionAgentAssessment) => string | undefined;
   generatedEvidencePaths?: CriterionAgentReviewRequest['generatedEvidencePaths'];
+  /** 420 s unless given. */
+  defaultTimeoutMs?: number;
+  /** Two repository paths for the example response, the second for a discovered finding. */
+  examplePaths?: [string, string];
 }
 
 /**
@@ -88,6 +96,8 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
   const given = givenObligations(checklist);
   const withheld = withheldCount(checklist);
   const discoveredExample = discoveredKinds.length ? `discovered:${discoveredKinds[0]}:1` : undefined;
+  const [examplePath, otherExamplePath] = options.examplePaths ?? ['src/actual/source/path.js', 'src/other/source/path.js'];
+  const flagged = given.some(obligation => obligation.flag);
   const responseShape = {
     note: 'Shape example only, not findings. Replace prose and citations with investigated evidence, and return one assessment for every obligation in checklist.json.',
     response: {
@@ -95,26 +105,27 @@ export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOpti
       confidence: 'medium',
       summary: 'State the overall judgment and the remaining decision.',
       rationale: 'State the decisive evidence and the scope actually investigated.',
-      evidenceReferences: ['src/actual/source/path.js'],
+      evidenceReferences: [examplePath],
       assessments: [
         { technologyId: given[0]?.id ?? `${criterionId}-C1#1`, type: 'aligned_fact', summary: 'State whether the item\'s desired state holds for this subject, with line numbers.',
-          evidenceReferences: [given[0]?.path ?? 'src/actual/source/path.js'], coverageDisposition: 'investigated' },
+          evidenceReferences: [given[0]?.path ?? examplePath], coverageDisposition: 'investigated' },
         ...(discoveredExample ? [{ technologyId: discoveredExample, type: 'substantive_concern', summary: 'Describe a problem of the same kind that the tool did not list.',
-          evidenceReferences: ['src/other/source/path.js'], coverageDisposition: 'investigated' }] : [])
+          evidenceReferences: [otherExamplePath], coverageDisposition: 'investigated' }] : [])
       ],
-      reviewerActions: [{ action: 'Name the fact to verify and the decision it resolves.', evidenceReferences: ['src/actual/source/path.js'] }]
+      reviewerActions: [{ action: 'Name the fact to verify and the decision it resolves.', evidenceReferences: [examplePath] }]
     }
   };
   return {
     criterionId,
     repositoryPath: options.repositoryPath,
     browseInclude: options.browseInclude,
-    defaultTimeoutMs: FRONTEND_AGENT_TIMEOUT_MS,
+    defaultTimeoutMs: options.defaultTimeoutMs ?? FRONTEND_AGENT_TIMEOUT_MS,
     ...(options.generatedEvidencePaths ? { generatedEvidencePaths: options.generatedEvidencePaths } : {}),
     instructions: [
       `Act as an advisory reviewer for ${options.criterionTitle}.`,
       `You may browse only: ${options.browseScope}.`,
       `checklist.json lists the reviewer's checklist. Each item is phrased as the desired state. Each obligation (an ID such as ${given[0]?.id ?? `${criterionId}-C1#1`}) asks whether the item's desired state holds for its subject, or for the whole item when it has no subject. evidence-summary.json holds the tool's deterministic findings.`,
+      ...flagged ? ['An obligation\'s flag is what the tool decided for its subject on its own: fail when it found a violation, manual when it left the subject to the reviewer. Assess flagged subjects against the evidence like any other.'] : [],
       ...options.criterionInstructions,
       'Return assessments as an array with exactly one object for every obligation ID in checklist.json, using the ID as technologyId, and no other IDs except discovered ones. Each object has technologyId, type, summary, evidenceReferences (an array of repository paths) and coverageDisposition. Use exactly these field names; see response-shape.json.',
       'type: aligned_fact when the desired state holds; substantive_concern when it does not; evidence_gap when you could not establish it; analyzer_limitation when the tool\'s finding is wrong (for example a false positive); policy_question when the guideline or policy is unclear.',

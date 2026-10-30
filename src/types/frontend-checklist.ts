@@ -15,6 +15,8 @@ export interface FrontendChecklistObligation {
   subject?: string;
   path?: string;
   line?: number;
+  /** The tool's own finding for the subject, when it flagged it; flagged subjects are given to the agent first. */
+  flag?: 'fail' | 'manual';
   /** Left out of the agent review by the obligation limit, so it has no agent result. */
   withheld?: boolean;
 }
