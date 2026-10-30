@@ -360,11 +360,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'F007',
     description: 'Works in latest Chrome',
     section: 'Frontend',
-    languages: ['javascript'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Browser compatibility with latest Chrome'
-    }
+    languages: ['javascript']
   }
 ] as const satisfies readonly AcceptanceCriterionDefinition[];
 

@@ -10,6 +10,7 @@ import { evaluateF003, renderF003HumanDetails } from '../../utils/f003-internati
 import { evaluateF005, renderF005HumanDetails } from '../../utils/f005-stripes-version';
 import { hasF006AgentReviewMaterial, reviewF006WithAgent } from '../../utils/f006-agent-review';
 import { evaluateF006, F006Input, loadF006Guidelines, readF006Css, renderF006HumanDetails } from '../../utils/f006-ui-patterns';
+import { evaluateF007, F007Input, loadF007BrowserApis, readF007Browserslist, renderF007HumanDetails } from '../../utils/f007-latest-chrome';
 import { getFrontendSource } from '../../utils/frontend-source';
 import { getModuleKind } from '../../utils/module-kind';
 import { getS007Analysis } from '../../utils/s007-evaluator';
@@ -18,7 +19,7 @@ import { errorMessage } from '../../utils/type-guards';
 import { getUiRequestSites } from '../../utils/ui-request-sites';
 
 /**
- * Evaluator for Frontend criteria (F001-F007). F001, F002, F003, F005 and F006 have automated logic; the others fall back to
+ * Evaluator for Frontend criteria (F001-F007). F001, F002, F003, F005, F006 and F007 have automated logic; F004 falls back to
  * the catalog-defined default result.
  */
 export class FrontendEvaluator extends CatalogSectionEvaluator {
@@ -28,7 +29,8 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       F002: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF002(repoPath, evaluationRun),
       F003: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF003(repoPath, evaluationRun),
       F005: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF005(repoPath, evaluationRun),
-      F006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF006(repoPath, evaluationRun)
+      F006: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF006(repoPath, evaluationRun),
+      F007: async (repoPath: string, evaluationRun?: EvaluationRun) => this.evaluateF007(repoPath, evaluationRun)
     });
   }
 
@@ -144,6 +146,25 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       details: renderF006HumanDetails(analysis, agentReview),
       criterionDetails: analysis,
       agentReview
+    };
+  }
+
+  private async evaluateF007(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
+    const run = this.runFor(repoPath, 'F007', evaluationRun);
+    const [source, browserslistFiles] = await Promise.all([getFrontendSource(run, repoPath), readF007Browserslist(repoPath)]);
+    let apiList: F007Input['apiList'];
+    try {
+      apiList = loadF007BrowserApis();
+    } catch (error) {
+      apiList = { problem: `the browser API list could not be read: ${errorMessage(error)}` };
+    }
+    const analysis = evaluateF007({ source, browserslistFiles, apiList });
+    return {
+      criterionId: 'F007',
+      status: analysis.status,
+      evidence: analysis.summary,
+      details: renderF007HumanDetails(analysis),
+      criterionDetails: analysis
     };
   }
 }

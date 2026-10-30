@@ -1,0 +1,91 @@
+{
+  "description": "F007's pinned list of browser-specific JavaScript: navigator properties that identify the browser, vendor API prefixes, APIs Chrome has removed, and polyfill packages. Each part names its source.",
+  "retrievedAt": "2026-10-30",
+  "userAgentProperties": {
+    "sources": [
+      "https://developer.mozilla.org/en-US/docs/Web/API/Navigator",
+      "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Browser_detection_using_the_user_agent"
+    ],
+    "names": ["appCodeName", "appName", "appVersion", "buildID", "oscpu", "platform", "product", "productSub", "userAgent", "userAgentData", "vendor", "vendorSub"]
+  },
+  "vendorPrefixes": {
+    "source": "https://developer.mozilla.org/en-US/docs/Glossary/Vendor_Prefix",
+    "prefixes": [
+      { "property": "webkit", "interface": "WebKit", "browsers": "Chrome, Safari and other WebKit or Chromium browsers" },
+      { "property": "moz", "interface": "Moz", "browsers": "Firefox" },
+      { "property": "ms", "interface": "MS", "browsers": "Internet Explorer and Edge before Chromium" }
+    ],
+    "leftOut": "The o and O prefixes of pre-WebKit Opera: names such as oItem are common in code that is not browser-specific."
+  },
+  "removedFromChrome": [
+    {
+      "name": "registerElement", "forms": ["member"], "receivers": ["document"],
+      "api": "document.registerElement() (Custom Elements v0)", "removedIn": "Chrome 80",
+      "source": "https://developer.chrome.com/blog/chrome-80-deps-rems"
+    },
+    {
+      "name": "createShadowRoot", "forms": ["member"],
+      "api": "Element.createShadowRoot() (Shadow DOM v0)", "removedIn": "Chrome 80",
+      "source": "https://developer.chrome.com/blog/chrome-80-deps-rems"
+    },
+    {
+      "name": "showModalDialog", "forms": ["global", "member"], "receivers": ["window", "self", "globalThis", "global"],
+      "api": "window.showModalDialog()", "removedIn": "Chrome 37",
+      "source": "https://blog.chromium.org/2014/07/disabling-showmodaldialog.html"
+    },
+    {
+      "name": "openDatabase", "forms": ["global", "member"], "receivers": ["window", "self", "globalThis", "global"],
+      "api": "window.openDatabase() (Web SQL)", "removedIn": "Chrome 119",
+      "source": "https://developer.chrome.com/blog/deprecating-web-sql"
+    },
+    {
+      "name": "applicationCache", "forms": ["global", "member"], "receivers": ["window", "self", "globalThis", "global"],
+      "api": "window.applicationCache (AppCache)", "removedIn": "Chrome 85",
+      "source": "https://web.dev/articles/appcache-removal"
+    },
+    {
+      "name": "DOMNodeInserted", "forms": ["event"],
+      "api": "the DOMNodeInserted mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "DOMNodeRemoved", "forms": ["event"],
+      "api": "the DOMNodeRemoved mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "DOMSubtreeModified", "forms": ["event"],
+      "api": "the DOMSubtreeModified mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "DOMCharacterDataModified", "forms": ["event"],
+      "api": "the DOMCharacterDataModified mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "DOMNodeInsertedIntoDocument", "forms": ["event"],
+      "api": "the DOMNodeInsertedIntoDocument mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "DOMNodeRemovedFromDocument", "forms": ["event"],
+      "api": "the DOMNodeRemovedFromDocument mutation event", "removedIn": "Chrome 127",
+      "source": "https://developer.chrome.com/blog/mutation-events-deprecation"
+    },
+    {
+      "name": "unload", "forms": ["event"],
+      "api": "the unload event", "removedIn": "Chrome 155 (no longer fires by default)",
+      "source": "https://developer.chrome.com/blog/unload-deprecated-in-chrome"
+    },
+    {
+      "name": "onunload", "forms": ["member"],
+      "api": "the onunload handler", "removedIn": "Chrome 155 (no longer fires by default)",
+      "source": "https://developer.chrome.com/blog/unload-deprecated-in-chrome"
+    }
+  ],
+  "polyfills": {
+    "packages": ["core-js", "regenerator-runtime", "whatwg-fetch", "es5-shim", "es6-shim", "es6-promise", "intl", "intersection-observer", "@webcomponents/webcomponentsjs"],
+    "namesContaining": "polyfill"
+  }
+}

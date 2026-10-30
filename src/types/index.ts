@@ -217,6 +217,7 @@ export * from './f002-e2e-tests';
 export * from './f003-internationalization';
 export * from './f005-stripes-version';
 export * from './f006-ui-patterns';
+export * from './f007-latest-chrome';
 export * from './backend-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
