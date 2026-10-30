@@ -45,6 +45,7 @@ const CRITERION_TITLES: Record<string, string> = {
   B012: 'Dependencies declared in README',
   B013: 'Tenant selection',
   B014: 'Health check endpoint',
+  B015: 'High availability',
   B016: 'Supported infrastructure'
 };
 
