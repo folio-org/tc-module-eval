@@ -148,6 +148,16 @@ colors in CSS, settings pages and external links (never fetched). When agent rev
 checks the checklist items against a pinned copy of the stripes-components UX guidelines in
 `config/f006-ux-guidelines/`. See [Criterion Notes](docs/criterion-notes.md#f006-ui-layouts-and-patterns).
 
+### F007 Works in the Latest Chrome
+
+F007 checks that a UI package works in the latest Chrome. Only a browser can show that, so it is always
+`manual` (and not applicable to a package that renders no user interface). It lists the browser-specific
+code a reviewer starts from, each with file and line: reads of navigator properties that identify the
+browser (`navigator.userAgent`, `navigator.vendor`, …), vendor-prefixed APIs and APIs Chrome has removed,
+from the pinned and sourced list in `config/f007-browser-apis.json`, a `browserslist` override and the
+polyfills the package ships. F007 has no agent review: it needs runtime evidence from a running instance,
+which the evaluator does not collect. See [Criterion Notes](docs/criterion-notes.md#f007-works-in-the-latest-chrome).
+
 ### B001 Module Descriptor Template
 
 B001 checks that a backend or edge module commits a module descriptor template that matches the Okapi
