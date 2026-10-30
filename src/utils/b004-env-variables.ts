@@ -10,7 +10,7 @@ import {
   CriterionAgentReviewResult,
   EvaluationStatus
 } from '../types';
-import { B004Read, documentationTables, sourceEnvReads, templateEnvReads } from './b004-env-evidence';
+import { B004FrameworkId, B004Read, documentationTables, moduleFrameworks, readmeLinks, sourceEnvReads, templateEnvReads } from './b004-env-evidence';
 import { numberBackendObligations } from './backend-agent-review';
 import { templateLineOf } from './backend-evidence';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
@@ -27,7 +27,21 @@ export interface B004Policy {
   pageVersion: number;
   modifiedAt: string;
   text: string;
+  /** The variables each framework documents (policy section 2.2), from `framework-variables.json`, pinned to a commit. */
+  frameworks: B004Framework[];
 }
+
+interface B004Framework {
+  id: B004FrameworkId;
+  name: string;
+  repository: string;
+  commit: string;
+  /** URLs without the scheme; a README that contains one links to the framework's documentation. */
+  documentationLinks: string[];
+  variables: Array<{ name: string; file: string; line: number }>;
+}
+
+const FRAMEWORK_IDS: B004FrameworkId[] = ['rmb', 'folio-spring-base', 'folio-java-docker'];
 
 export function loadB004Policy(directory = B004_POLICY_DIRECTORY): B004Policy {
   const source: unknown = JSON.parse(fs.readFileSync(path.join(directory, 'source.json'), 'utf8'));
@@ -35,12 +49,22 @@ export function loadB004Policy(directory = B004_POLICY_DIRECTORY): B004Policy {
     || typeof source.modifiedAt !== 'string' || typeof source.file !== 'string') {
     throw new Error('source.json must name the title, URL, page version, modification date and file');
   }
+  const frameworks: unknown = JSON.parse(fs.readFileSync(path.join(directory, 'framework-variables.json'), 'utf8'));
+  const strings = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === 'string');
+  if (!isRecord(frameworks) || !Array.isArray(frameworks.frameworks) || !frameworks.frameworks.every(framework => isRecord(framework)
+    && FRAMEWORK_IDS.includes(framework.id as B004FrameworkId) && typeof framework.name === 'string' && typeof framework.repository === 'string'
+    && typeof framework.commit === 'string' && /^[0-9a-f]{40}$/.test(framework.commit) && strings(framework.documentationLinks)
+    && Array.isArray(framework.variables) && framework.variables.every(variable => isRecord(variable) && typeof variable.name === 'string'
+      && typeof variable.file === 'string' && typeof variable.line === 'number'))) {
+    throw new Error('framework-variables.json must list frameworks with an id, name, repository, commit, documentation links and variables with their file and line');
+  }
   return {
     title: source.title,
     url: source.url,
     pageVersion: source.pageVersion,
     modifiedAt: source.modifiedAt,
-    text: fs.readFileSync(path.join(directory, source.file), 'utf8')
+    text: fs.readFileSync(path.join(directory, source.file), 'utf8'),
+    frameworks: frameworks.frameworks as B004Framework[]
   };
 }
 
@@ -49,6 +73,7 @@ const MAX_SOURCES = 10;
 const NAME_FORMAT = /^[A-Z0-9_]+$/;
 const NO_DEFAULT = new Set(['', '-', '–', '—', 'none', 'n/a', 'na', 'empty', 'empty string', 'no default', 'no default value', 'not set', 'unset', 'null', 'required', 'mandatory']);
 const C1_GAPS: B004Problem[] = ['undocumented', 'missing-columns', 'missing-required', 'missing-description'];
+const C1_REVIEW: B004Problem[] = ['unreadable-required', 'framework-unlinked'];
 const COLUMN_NAMES = { default: 'Default Value', required: 'Required', description: 'Description' } as const;
 
 /**
@@ -57,7 +82,8 @@ const COLUMN_NAMES = { default: 'Default Value', required: 'Required', descripti
  * C1 documented in ENV_VARS.md or a README table with a default, required or optional, and a description, and a
  * template with a top-level `env`; C2 no default on a required variable; C3 names; C4 fail-fast evidence for
  * required variables; C5 log statements that may print secrets. A library, or a repository without a descriptor,
- * gets C3-C5 only.
+ * gets C3-C5 only. A variable its framework documents needs no documentation of the module's own when the README links
+ * to that framework's documentation (policy section 2.2); without the link a reviewer checks it.
  */
 export function evaluateB004(evidence: BackendEvidence, existingModule: boolean, policy: B004Policy | { problem: string }): B004Analysis {
   const { kind, template } = evidence;
@@ -88,6 +114,18 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   if (!sourcesByName.size && ['missing', 'empty', 'not-a-list'].includes(topLevelEnv)) topLevelEnv = 'not-checked';
 
   const documentation = documentationChecked ? documentationTables(files) : undefined;
+  const applicable = moduleFrameworks(evidence.framework.name, files);
+  const frameworks = 'problem' in policy || !documentation ? [] : policy.frameworks.filter(framework => applicable.has(framework.id));
+  const linked = readmeLinks(files, frameworks.flatMap(framework => framework.documentationLinks));
+  const frameworkDocumentation = new Map<string, NonNullable<B004Variable['framework']>>();
+  for (const framework of frameworks) {
+    const isLinked = framework.documentationLinks.some(link => linked.has(link));
+    for (const variable of framework.variables) {
+      frameworkDocumentation.set(variable.name, {
+        name: framework.name, source: `${framework.repository}/blob/${framework.commit}/${variable.file}#L${variable.line}`, linked: isLinked
+      });
+    }
+  }
   const variables: B004Variable[] = [...sourcesByName].map(([name, sources]) => {
     const problems: B004Problem[] = [];
     const kept = sources.slice(0, MAX_SOURCES);
@@ -120,6 +158,12 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
         variable.defaultFrom = { kind: 'code', path: codeDefault.path, ...(codeDefault.line ? { line: codeDefault.line } : {}), value: codeDefault.value! };
       }
       if (variable.required && variable.defaultFrom) problems.push('required-with-default');
+      const framework = frameworkDocumentation.get(name);
+      if (framework && problems.some(problem => C1_GAPS.includes(problem))) {
+        variable.framework = framework;
+        problems.splice(0, problems.length, ...problems.filter(problem => !C1_GAPS.includes(problem)));
+        if (!framework.linked) problems.push('framework-unlinked');
+      }
     }
     if (!NAME_FORMAT.test(name)) problems.push('name-format');
     if (name.startsWith('AWS_') && !sourcesByName.has(`S3_${name.slice(4)}`)) problems.push('aws-prefix');
@@ -132,13 +176,15 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   const missingRequired = having('missing-required');
   const missingDescription = having('missing-description');
   const unreadableRequired = having('unreadable-required');
+  const frameworkUnlinked = having('framework-unlinked');
+  const ownVariables = variables.filter(variable => !variable.framework);
   const requiredWithDefault = having('required-with-default');
   const nameFormat = having('name-format');
   const awsPrefix = having('aws-prefix');
   const noFailFast = having('no-fail-fast');
   const envGap = topLevelEnv === 'missing' || topLevelEnv === 'empty' || topLevelEnv === 'not-a-list';
   const c1Gap = envGap || variables.some(variable => C1_GAPS.some(problem => variable.problems.includes(problem)));
-  const unknownRequired = variables.filter(variable => variable.required === undefined);
+  const unknownRequired = ownVariables.filter(variable => variable.required === undefined);
   const templateUnreadable = topLevelEnv === 'template-unreadable';
 
   const sentences: string[] = [];
@@ -146,11 +192,18 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
     sentences.push('The module descriptor template could not be read (see B001), so the variables its env lists name are not known.');
   }
   if (documentation && variables.length) {
-    const documented = variables.length - undocumented.length;
-    if (!documented) {
-      sentences.push(`The module uses ${count(variables.length, 'environment variable')}, but ${variables.length === 1 ? 'it is not' : 'none is'} documented in ENV_VARS.md or a README table.`);
+    for (const [framework, list] of byFramework(variables.filter(variable => variable.framework?.linked))) {
+      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, which the README links to, so the module need not document ${list.length === 1 ? 'it' : 'them'} (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
+    }
+    for (const [framework, list] of byFramework(frameworkUnlinked)) {
+      sentences.push(`${list.length === 1 ? `${names(list)} is` : `${list.length} variables are`} documented by ${reportText(framework)}, but the README does not link to its documentation (policy section 2.2)${list.length === 1 ? '' : `: ${names(list)}`}.`);
+    }
+    const documented = ownVariables.length - undocumented.length;
+    const other = ownVariables.length < variables.length ? ' other' : '';
+    if (ownVariables.length && !documented) {
+      sentences.push(`The module uses ${ownVariables.length}${other} environment variable${ownVariables.length === 1 ? '' : 's'}, but ${ownVariables.length === 1 ? 'it is not' : 'none is'} documented in ENV_VARS.md or a README table.`);
     } else if (undocumented.length) {
-      sentences.push(`ENV_VARS.md or a README table documents ${documented} of the ${variables.length} environment variables the module uses; ${undocumented.length} ${undocumented.length === 1 ? 'is' : 'are'} not: ${names(undocumented)}.`);
+      sentences.push(`ENV_VARS.md or a README table documents ${documented} of the ${ownVariables.length}${other} environment variables the module uses; ${undocumented.length} ${undocumented.length === 1 ? 'is' : 'are'} not: ${names(undocumented)}.`);
     }
     const byMissing = new Map<string, B004Variable[]>();
     for (const variable of having('missing-columns')) {
@@ -191,7 +244,7 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   if (sourceDiagnostics.length) sentences.push('The committed source was not read completely, so the tool may have missed variables.');
 
   const fails = (c1Gap && !existingModule) || requiredWithDefault.length > 0 || nameFormat.length > 0 || awsPrefix.length > 0;
-  const toReview = (c1Gap && existingModule) || unreadableRequired.length > 0 || noFailFast.length > 0 || scan.logSignals.length > 0
+  const toReview = (c1Gap && existingModule) || unreadableRequired.length > 0 || frameworkUnlinked.length > 0 || noFailFast.length > 0 || scan.logSignals.length > 0
     || scan.unreadReadCount > 0 || sourceDiagnostics.length > 0 || templateUnreadable || (!documentationChecked && variables.length > 0);
   const status = fails ? EvaluationStatus.FAIL : toReview ? EvaluationStatus.MANUAL : EvaluationStatus.PASS;
   if (status === EvaluationStatus.MANUAL) sentences.push('A reviewer must check the findings on the checklist.');
@@ -199,7 +252,9 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
     const required = variables.filter(variable => variable.required);
     sentences.push(!variables.length
       ? `The ${documentationChecked ? 'module' : 'repository'} uses no environment variables, and no log statement in files that read configuration prints the whole environment.`
-      : `${variables.length === 1 ? 'The environment variable the module uses is' : `All ${variables.length} environment variables the module uses are`} documented in a table with a default, required or optional, and a description${topLevelEnv === 'present' ? ', and the descriptor template has a top-level "env"' : ''}. `
+      : `${!ownVariables.length ? 'The module documents no variable of its own'
+        : ownVariables.length < variables.length ? `${ownVariables.length === 1 ? 'The other environment variable is' : `The other ${ownVariables.length} environment variables are`} documented in a table with a default, required or optional, and a description`
+          : `${variables.length === 1 ? 'The environment variable the module uses is' : `All ${variables.length} environment variables the module uses are`} documented in a table with a default, required or optional, and a description`}${topLevelEnv === 'present' ? ', and the descriptor template has a top-level "env"' : ''}. `
         + `Their names follow the policy, ${required.length ? `each required variable stops startup when missing (a @Value binding without a default)` : 'none is documented as required'}, `
         + 'and no log statement in files that read configuration prints a secret-like value or the whole environment.');
   }
@@ -214,13 +269,13 @@ export function evaluateB004(evidence: BackendEvidence, existingModule: boolean,
   const unreadSubjects = scan.unreadReads.map(read => ({ subject: `System.getenv read at ${read.path}:${read.line}`, path: read.path, line: read.line, flag: 'manual' as const }));
   const unreadFiles = sourceDiagnostics.flatMap(diagnostic => diagnostic.path ? [{ path: diagnostic.path, note: `not read: ${reportText(diagnostic.message)}` }] : []);
   const items: FrontendChecklistItemDraft[] = [];
-  if (documentation && (c1Gap || unreadableRequired.length || scan.unreadReadCount || templateUnreadable || sourceDiagnostics.length)) {
+  if (documentation && (c1Gap || unreadableRequired.length || frameworkUnlinked.length || scan.unreadReadCount || templateUnreadable || sourceDiagnostics.length)) {
     items.push({
       id: 'B004-C1',
       title: 'Every environment variable the module uses is documented in ENV_VARS.md or a README table with a default, whether it is required, and a description, and the descriptor template lists it in a top-level env.',
       startingPoints: [
         ...(envGap ? [{ path: template!.path, note: `the template ${TOP_LEVEL_ENV_TEXT[topLevelEnv]}` }] : []),
-        ...variables.filter(variable => variable.problems.some(problem => C1_GAPS.includes(problem) || problem === 'unreadable-required'))
+        ...variables.filter(variable => variable.problems.some(problem => C1_GAPS.includes(problem) || C1_REVIEW.includes(problem)))
           .map(variable => variable.documentation
             ? { path: variable.documentation.path, line: variable.documentation.line, note: `${reportText(variable.name)}: ${documentationNote(variable)}` }
             : startingPoint(variable, documentationNote(variable), readSource(variable))),
@@ -350,7 +405,9 @@ export function renderB004HumanDetails(analysis: B004Analysis, agentReview?: Cri
         `${rowText(variable)}: ${missingColumnsText(variable.documentation!.missingColumns)}`),
       ...list('No value for required or optional', having('missing-required'), rowText),
       ...list('Required or optional not readable', having('unreadable-required'), variable => `${rowText(variable)}: "${reportText(variable.documentation!.required!)}"`),
-      ...list('No description', having('missing-description'), rowText)
+      ...list('No description', having('missing-description'), rowText),
+      ...list('Documented by a framework the README links to (policy section 2.2)', variables.filter(variable => variable.framework?.linked), frameworkText),
+      ...list('Documented by a framework the README does not link to (policy section 2.2)', having('framework-unlinked'), frameworkText)
     );
     section('C1 Documentation', rows);
 
@@ -372,7 +429,7 @@ export function renderB004HumanDetails(analysis: B004Analysis, agentReview?: Cri
   ] : [variables.length ? '  - Every name is upper case letters, digits and underscores, and no AWS_ variable lacks an S3_ one' : '  - No variables']);
 
   const required = variables.filter(variable => variable.required);
-  const unknown = variables.filter(variable => variable.required === undefined).length;
+  const unknown = variables.filter(variable => variable.required === undefined && !variable.framework).length;
   section('C4 Startup behaviour', !analysis.documentationChecked
     ? [variables.length ? '  - Not checked: a library\'s documentation is not read, so which variables are required is not known' : '  - No variables']
     : !required.length
@@ -438,6 +495,12 @@ function readSource(variable: B004Variable): B004Source {
   return variable.sources.find(source => source.kind === 'code' || source.kind === 'configuration') ?? variable.sources[0];
 }
 
+function byFramework(variables: B004Variable[]): Map<string, B004Variable[]> {
+  const groups = new Map<string, B004Variable[]>();
+  for (const variable of variables) groups.set(variable.framework!.name, [...(groups.get(variable.framework!.name) ?? []), variable]);
+  return groups;
+}
+
 function names(variables: B004Variable[]): string {
   return listText(variables.map(variable => reportText(variable.name)));
 }
@@ -461,6 +524,10 @@ function missingColumnsText(columns: Array<keyof typeof COLUMN_NAMES>): string {
   return `no ${names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0]} column`;
 }
 
+function frameworkText(variable: B004Variable): string {
+  return `${reportText(variable.framework!.name)}, ${reportText(variable.framework!.source)}`;
+}
+
 function rowText(variable: B004Variable): string {
   return location(variable.documentation!);
 }
@@ -468,6 +535,7 @@ function rowText(variable: B004Variable): string {
 function documentationNote(variable: B004Variable): string {
   const problems = variable.problems;
   if (problems.includes('undocumented')) return 'not in ENV_VARS.md or a README table';
+  if (problems.includes('framework-unlinked')) return `documented by ${reportText(variable.framework!.name)} (${reportText(variable.framework!.source)}), but the README does not link to its documentation`;
   return listText([
     ...(problems.includes('missing-columns') ? [`its table has ${missingColumnsText(variable.documentation!.missingColumns)}`] : []),
     ...(problems.includes('missing-required') ? ['no value for required or optional'] : []),

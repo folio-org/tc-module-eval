@@ -1,7 +1,8 @@
-import { B004DocumentationRow, B004LogSignal, B004Source, B004TopLevelEnv } from '../types';
+import { B004DocumentationRow, B004LogSignal, B004Source, B004TopLevelEnv, BackendFramework } from '../types';
 import { SOURCE_FILE } from './backend-evidence';
 import { lineCounter, withoutComments } from './backend-routes';
 import { CommittedSourceFile } from './committed-source';
+import { escapeRegExp } from './regexp';
 import { isRecord } from './type-guards';
 
 export interface B004Read {
@@ -28,6 +29,8 @@ const MAX_ROWS_PER_NAME = 5;
 const ENV_SHAPED = /^[A-Z][A-Z0-9_]*$/;
 const CONFIGURATION_FILE = /(?:^|\/)(?:src\/main\/resources\/(?:[^/]+\/)*|grails-app\/conf\/)application[^/]*\.(?:ya?ml|properties)$/;
 const DOCUMENTATION_FILE = /^(?:ENV_VARS|README)\.md$/i;
+const BUILD_FILE = /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/;
+const FOLIO_JAVA_IMAGE = /^[ \t]*FROM[ \t]+(?:--platform=\S+[ \t]+)?(?:docker\.io\/)?folioci\/alpine-jre-openjdk\d+(?![\w-])/im;
 
 const JAVA_STRING = /"(?:[^"\\\n]|\\.)*"/g;
 const VALUE_ANNOTATION = /@Value\s*\(\s*(?:value\s*=\s*)?$/;
@@ -267,6 +270,26 @@ function repositoryConstants(sources: Array<{ content: string }>): Map<string, s
     }
   }
   return new Map([...values].filter((entry): entry is [string, string] => entry[1] !== null));
+}
+
+export type B004FrameworkId = 'rmb' | 'folio-spring-base' | 'folio-java-docker';
+
+/**
+ * The frameworks whose documented variables a module may leave to that documentation (policy section 2.2): RMB, a
+ * Spring module that depends on folio-spring-base, and a root Dockerfile built on the FOLIO Java base image.
+ */
+export function moduleFrameworks(framework: BackendFramework, files: CommittedSourceFile[]): Set<B004FrameworkId> {
+  const frameworks = new Set<B004FrameworkId>();
+  if (framework === 'rmb') frameworks.add('rmb');
+  if (framework === 'spring' && files.some(file => BUILD_FILE.test(file.path) && file.content.includes('folio-spring-base'))) frameworks.add('folio-spring-base');
+  if (files.some(file => file.path === 'Dockerfile' && FOLIO_JAVA_IMAGE.test(file.content))) frameworks.add('folio-java-docker');
+  return frameworks;
+}
+
+/** The links, as URLs without the scheme, that the root README.md contains, each followed by no further name character. */
+export function readmeLinks(files: CommittedSourceFile[], links: string[]): Set<string> {
+  const readme = files.find(file => /^README\.md$/i.test(file.path))?.content.toLowerCase() ?? '';
+  return new Set(links.filter(link => new RegExp(`${escapeRegExp(link.toLowerCase())}(?![\\w-])`).test(readme)));
 }
 
 export interface B004Documentation {

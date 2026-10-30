@@ -204,8 +204,11 @@ documented in `ENV_VARS.md` or a README table with a default, required or option
 when the template has no top-level `env`, when a variable documented as required has a default, when a
 name is not upper case letters, digits and underscores, or when an `AWS_` variable has no `S3_` variable
 alongside. With `--existing-module`, documentation gaps are left to the reviewer; the `S3_` rule still
-applies. Required variables without fail-fast evidence and log statements that may print secrets also go
-to the reviewer, and, for a manual result, to the agent review. See [Criterion Notes](docs/criterion-notes.md#b004-environment-variables).
+applies. A variable that RMB, folio-spring-base or the FOLIO Java base image documents (listed with
+pinned sources in the same directory) needs no documentation of its own when the README links to that
+documentation, and goes to the reviewer when it does not. Required variables without fail-fast evidence
+and log statements that may print secrets also go to the reviewer, and, for a manual result, to the
+agent review. See [Criterion Notes](docs/criterion-notes.md#b004-environment-variables).
 
 ### B005 Interface Naming
 

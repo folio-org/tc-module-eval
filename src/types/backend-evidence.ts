@@ -669,6 +669,7 @@ export interface B004DocumentationRow {
  * - C1 `undocumented`: in no ENV_VARS.md or README table row; `missing-columns`: its table lacks a default, required
  *   or description column; `missing-required`, `missing-description`: its row leaves that cell empty;
  *   `unreadable-required`: its required cell is not yes, no, true, false, required or optional;
+ *   `framework-unlinked`: not documented by the module, but by its framework, which the README does not link to;
  * - C2 `required-with-default`: documented as required, but has a default;
  * - C3 `name-format`: not upper case letters, digits and underscores; `aws-prefix`: `AWS_` without the `S3_` name;
  * - C4 `no-fail-fast`: documented as required, with no evidence that startup stops without it.
@@ -679,6 +680,7 @@ export type B004Problem =
   | 'missing-required'
   | 'missing-description'
   | 'unreadable-required'
+  | 'framework-unlinked'
   | 'required-with-default'
   | 'name-format'
   | 'aws-prefix'
@@ -690,6 +692,11 @@ export interface B004Variable {
   sources: B004Source[];
   sourceCount: number;
   documentation?: B004DocumentationRow;
+  /**
+   * The framework that documents the variable when the module does not (policy section 2.2), with the pinned source;
+   * `linked` when the README links to that framework's documentation.
+   */
+  framework?: { name: string; source: string; linked: boolean };
   /** Required or optional, as the documentation says; absent when it does not say. */
   required?: boolean;
   /** The default from the documentation, a top-level `env` value or the code, when it has one. */

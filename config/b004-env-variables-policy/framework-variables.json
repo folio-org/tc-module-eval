@@ -1,0 +1,269 @@
+{
+  "frameworks": [
+    {
+      "id": "rmb",
+      "name": "RMB",
+      "repository": "https://github.com/folio-org/raml-module-builder",
+      "commit": "a1152f5a80329dbbafdbdb3e4c6ffd19ca8f1eb4",
+      "committedAt": "2026-10-07T11:07:35+02:00",
+      "documentationLinks": [
+        "github.com/folio-org/raml-module-builder"
+      ],
+      "variables": [
+        {
+          "name": "DB_HOST",
+          "line": 348,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_PORT",
+          "line": 349,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_USERNAME",
+          "line": 350,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "line": 351,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_DATABASE",
+          "line": 352,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_HOST_READER",
+          "line": 353,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_PORT_READER",
+          "line": 354,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_SERVER_PEM",
+          "line": 355,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_QUERYTIMEOUT",
+          "line": 356,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_CHARSET",
+          "line": 357,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_MAXPOOLSIZE",
+          "line": 358,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_MAXSHAREDPOOLSIZE",
+          "line": 359,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_CONNECTIONRELEASEDELAY",
+          "line": 360,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_MAX_LIFETIME",
+          "line": 361,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_RECONNECTATTEMPTS",
+          "line": 362,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_RECONNECTINTERVAL",
+          "line": 363,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_EXPLAIN_QUERY_THRESHOLD",
+          "line": 364,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_ALLOW_SUPPRESS_OPTIMISTIC_LOCKING",
+          "line": 365,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_HOST_READER_ASYNC",
+          "line": 408,
+          "file": "README.md"
+        },
+        {
+          "name": "DB_PORT_READER_ASYNC",
+          "line": 408,
+          "file": "README.md"
+        },
+        {
+          "name": "TESTCONTAINERS_POSTGRES_IMAGE",
+          "line": 366,
+          "file": "README.md"
+        }
+      ]
+    },
+    {
+      "id": "folio-spring-base",
+      "name": "folio-spring-base",
+      "repository": "https://github.com/folio-org/folio-spring-base",
+      "commit": "49a2441d74a82e97bc3be86e85af7fd1942c5bde",
+      "committedAt": "2026-10-27T16:14:30+02:00",
+      "documentationLinks": [
+        "github.com/folio-org/folio-spring-base",
+        "github.com/folio-org/folio-spring-support"
+      ],
+      "variables": [
+        {
+          "name": "DB_QUERYTIMEOUT",
+          "line": 24,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "DB_CHARSET",
+          "line": 25,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "DB_MINSHAREDPOOLSIZE",
+          "line": 26,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "DB_MAXSHAREDPOOLSIZE",
+          "line": 27,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "DB_CONNECTIONRELEASEDELAY",
+          "line": 28,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "DB_MAX_LIFETIME",
+          "line": 29,
+          "file": "doc/DB_CONNECTION_POOL_SETTINGS.md"
+        },
+        {
+          "name": "FOLIO_KAFKA_TENANT_FILTER_ENABLED",
+          "line": 223,
+          "file": "README.md"
+        },
+        {
+          "name": "FOLIO_KAFKA_TENANT_FILTER_IGNORE_EMPTY_BATCH",
+          "line": 224,
+          "file": "README.md"
+        },
+        {
+          "name": "FOLIO_KAFKA_TENANT_FILTER_TENANT_DISABLED_STRATEGY",
+          "line": 225,
+          "file": "README.md"
+        },
+        {
+          "name": "FOLIO_KAFKA_TENANT_FILTER_ALL_TENANTS_DISABLED_STRATEGY",
+          "line": 226,
+          "file": "README.md"
+        },
+        {
+          "name": "FOLIO_KAFKA_TENANT_FILTER_ENTITLEMENT_REFRESH_INTERVAL_SECONDS",
+          "line": 227,
+          "file": "README.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_MAX_CONNECTIONS_PER_ROUTE",
+          "line": 26,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_MAX_CONNECTIONS_TOTAL",
+          "line": 27,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_POOL_CONCURRENCY_POLICY",
+          "line": 28,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_POOL_REUSE_POLICY",
+          "line": 29,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_CONNECT_TIMEOUT",
+          "line": 30,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_SOCKET_TIMEOUT",
+          "line": 31,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_CONNECTION_TIME_TO_LIVE",
+          "line": 32,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_VALIDATE_AFTER_INACTIVITY",
+          "line": 33,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_CONNECTION_REQUEST_TIMEOUT",
+          "line": 34,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_RESPONSE_TIMEOUT",
+          "line": 35,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_EVICT_IDLE_CONNECTIONS_AFTER",
+          "line": 36,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        },
+        {
+          "name": "FOLIO_EXCHANGE_HTTP_CLIENT_AUTOMATIC_RETRIES_ENABLED",
+          "line": 37,
+          "file": "doc/HTTP_CLIENT_CONFIGURATION.md"
+        }
+      ]
+    },
+    {
+      "id": "folio-java-docker",
+      "name": "the FOLIO Java base image (folioci/alpine-jre-openjdk)",
+      "repository": "https://github.com/folio-org/folio-tools",
+      "commit": "9a1446ae602abd9d9a7bed354ff13e6d600ed2a8",
+      "committedAt": "2026-10-01T12:37:11-04:00",
+      "documentationLinks": [
+        "github.com/folio-org/folio-tools/tree/master/folio-java-docker",
+        "github.com/folio-org/folio-tools/blob/master/folio-java-docker",
+        "hub.docker.com/r/folioci/alpine-jre-openjdk",
+        "github.com/fabric8io-images/java"
+      ],
+      "variables": [
+        {
+          "name": "JAVA_OPTIONS",
+          "line": 11,
+          "file": "folio-java-docker/openjdk21/README.md"
+        }
+      ]
+    }
+  ]
+}
