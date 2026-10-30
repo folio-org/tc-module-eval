@@ -40,6 +40,7 @@ const CRITERION_TITLES: Record<string, string> = {
   B007: 'Endpoint permissions',
   B008: 'Reference data',
   B009: 'API tests',
+  B010: 'Tenant data segregation',
   B011: 'Other modules\' database schemas',
   B012: 'Dependencies declared in README',
   B014: 'Health check endpoint',

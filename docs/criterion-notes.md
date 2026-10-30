@@ -635,6 +635,26 @@ B009 checks "if API tests are provided, they use a supported technology". The of
 
 The checklist has B009-C1 (each suite listed uses Karate, or is not an API test suite) and B009-C2 (the module's API tests, in the repository or outside it, use Karate). B009 has no agent review.
 
+## B010 Tenant Data Segregation
+
+B010 checks that each tenant's data is kept apart at the storage layer. It reads the committed source B001 reads, so it runs in safe mode. Whether every table the module writes is in a per-tenant schema depends on how the code uses the framework, so a reviewer always decides.
+
+- **Storage:** the storage evidence B001 records (an RMB `schema.json`, `PostgresClient` or `PgUtil` used, a Liquibase changelog, a datasource in `application*.yml` or `.properties`, Grails domain classes with a datasource). A framework dependency alone is not storage, so mod-circulation, which uses `domain-models-runtime` only for logging, has none.
+- **Mechanism:** how the repository keeps each tenant in its own schema, listed as starting points for the reviewer:
+  - RMB: the `schema.json` whose tables RMB creates in each tenant's `<tenant>_<module>` schema, `PostgresClient.getInstance` calls with a tenant id, and `PgUtil`, which takes the tenant from the Okapi headers;
+  - folio-spring-base, named in a `pom.xml` or `build.gradle`: its DataSource sets each connection's `search_path` to the request tenant's schema, and it runs the Liquibase changelog (the one named `*master*`, if any) in that schema;
+  - Grails: GORM multi-tenancy with `mode: SCHEMA` or `DATABASE` under `multiTenancy:` (or `multiTenancy.mode`) in `grails-app/conf/`, read without comments, and how many domain classes implement `MultiTenant`. Without such a mode, the summary does not claim that the domain classes keep each tenant apart.
+- **Places where tenant data may be shared,** read with comments removed (`//` and `/* */` in sources; `--` and `/* */` in SQL; `<!-- -->` in XML changelogs, and `--` and `/* */` there only after a space, a line start or `>`, so that `id="a--1"` and `path="db/*/"` are not comments; `--`, `/* */` and `#` in YAML changelogs; none in JSON changelogs):
+  - `PostgresClient.getInstance` with one argument, which RMB connects to the shared `public` schema, or with a string literal (`"diku"`, or Groovy's `'diku'`) as the tenant id. A call whose arguments do not end within 2,000 characters is listed as unread;
+  - a DataSource, connection or Vert.x pool the code creates itself (`DataSourceBuilder.create`, `new HikariDataSource`, `DriverManager.getConnection`, `PgBuilder.pool`, `PgPool.pool`, ...), outside the framework's per-tenant connection;
+  - SQL in `.sql` files, Liquibase changelogs (`.xml`, `.yaml`, `.json` under `src/main/resources` with `databaseChangeLog`) and source strings that creates, alters or writes a table, view, sequence, function, procedure, type or index in `public` (`CREATE OR REPLACE FUNCTION public.f`, `INSERT INTO public.t`). Calling a function in `public`, such as `public.uuid_generate_v4()`, and `CREATE EXTENSION ... WITH SCHEMA public` are not listed;
+  - a schema with a fixed name: `CREATE SCHEMA name`, a literal Liquibase `schemaName` (in changelogs and `grails-app/migrations/`), or a JPA `@Table(schema = "name")` (with one level of nested parentheses, as in `indexes = {@Index(...)}`). Names with placeholders, such as `${myuniversity}_${mymodule}` or `${database.defaultSchemaName}`, are per tenant;
+  - a Grails domain class (in `grails-app/domain/`) that neither implements `MultiTenant` nor extends or implements a class or trait in the repository's Groovy sources that does (each declaration is checked, so two classes with the same name in different packages are checked separately), and GORM multi-tenancy in `DISCRIMINATOR` mode, which keeps all tenants in shared tables.
+- `manual`: the repository has storage evidence (modules, libraries such as folio-spring-base, and repositories that are neither), or none was found but the committed source was not read completely.
+- `not_applicable`: no storage evidence in completely read committed source, as in edge modules and mod-circulation.
+
+The checklist has B010-C1 (every table the module writes is in a per-tenant schema, starting from the mechanism), B010-C2 (each place listed stores no tenant data in a schema, table or connection that tenants share; one obligation per file; C1 and C3 are always given to the agent, so at most 23 files are) and B010-C3 (caches and files that hold tenant data are keyed by tenant, which B015 also covers). Agent review runs by default for a manual result; see [B00x Backend Criteria Review](agent-review.md#b00x-backend-criteria-review).
+
 ## B011 Other Modules' Database Schemas
 
 B011 checks that a module does not access other modules' database schemas; FQM is excepted. It reads the committed source B001 reads, so it runs in safe mode.

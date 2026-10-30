@@ -961,3 +961,65 @@ export interface B011Analysis {
   checklist: FrontendChecklist;
   agentReviewUnavailableReason?: string;
 }
+
+/**
+ * How the repository keeps each tenant's data in its own schema:
+ * - `rmb`: RMB's PostgresClient and PgUtil, which use the `<tenant>_<module>` schema of the tenant they are given;
+ * - `folio-spring-base`: its DataSource sets each connection's search_path to the request tenant's schema, and it runs
+ *   Liquibase in that schema;
+ * - `grails`: GORM multi-tenancy in SCHEMA or DATABASE mode.
+ */
+export type B010MechanismName = 'rmb' | 'folio-spring-base' | 'grails';
+
+export interface B010Mechanism {
+  name: B010MechanismName;
+  evidence: Array<{ path: string; line?: number; note: string }>;
+}
+
+/**
+ * A place where tenant data may be stored outside a tenant's schema:
+ * - `shared-client`: `PostgresClient.getInstance` without a tenant id, which RMB connects to the shared `public` schema;
+ * - `fixed-tenant`: `PostgresClient.getInstance` with a string literal as the tenant id;
+ * - `own-datasource`: a DataSource, JDBC connection or Vert.x database pool the code creates itself;
+ * - `public-schema`: SQL that creates or writes an object in the `public` schema;
+ * - `fixed-schema`: a schema with a fixed name (`CREATE SCHEMA`, a Liquibase `schemaName`, a JPA `@Table(schema)`);
+ * - `not-multitenant`: a Grails domain class that neither implements MultiTenant nor extends or implements a class or trait
+ *   in the repository that does;
+ * - `discriminator`: GORM multi-tenancy in DISCRIMINATOR mode, which keeps every tenant in shared tables.
+ */
+export type B010RedFlagKind = 'shared-client' | 'fixed-tenant' | 'own-datasource' | 'public-schema' | 'fixed-schema' | 'not-multitenant' | 'discriminator';
+
+export interface B010RedFlag {
+  kind: B010RedFlagKind;
+  path: string;
+  line: number;
+  /** What was found, as written: a call, a statement such as `CREATE FUNCTION public.f`, a schema or class name. */
+  text: string;
+}
+
+/**
+ * What B010 decided from:
+ * - `no-storage`: the committed source was read completely and has no storage evidence;
+ * - `storage-unconfirmed`: no storage evidence, but the committed source was not read completely;
+ * - `storage`: storage evidence was found.
+ */
+export type B010Basis = 'no-storage' | 'storage-unconfirmed' | 'storage';
+
+export interface B010Analysis {
+  criterionId: 'B010';
+  status: EvaluationStatus;
+  summary: string;
+  basis: B010Basis;
+  kind: BackendRepositoryKind;
+  storage: BackendEvidence['storage'];
+  mechanisms: B010Mechanism[];
+  /** The first 100 of `redFlagCount`, by path and line. */
+  redFlags: B010RedFlag[];
+  redFlagCount: number;
+  /** `PostgresClient.getInstance` calls whose arguments the tool could not read: the first 100 of `unreadClientCallCount`. */
+  unreadClientCalls: Array<{ path: string; line: number }>;
+  unreadClientCallCount: number;
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+  agentReviewUnavailableReason?: string;
+}
