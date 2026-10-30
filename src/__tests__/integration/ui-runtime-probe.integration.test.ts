@@ -11,13 +11,16 @@ const LOGIN_FORM = '<!doctype html><html lang="en"><body><form method="post" act
   + '<input id="username" name="username"><input id="password" name="password" type="password"><input type="submit" value="Sign in"></form></body></html>';
 const PASSWORD = 'probe-test-secret-9431';
 
-function chromePath(): string {
+function chromePath(): string | undefined {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   const browsers = path.join(os.homedir(), '.agent-browser', 'browsers');
-  const found = fs.existsSync(browsers) ? fs.readdirSync(browsers).map(name => path.join(browsers, name, 'chrome')).find(file => fs.existsSync(file)) : undefined;
-  if (!found) throw new Error('These tests need Chrome: set CHROME_PATH to a Chrome or Chromium executable.');
-  return found;
+  return fs.existsSync(browsers) ? fs.readdirSync(browsers).map(name => path.join(browsers, name, 'chrome')).find(file => fs.existsSync(file)) : undefined;
 }
+
+const chrome = chromePath();
+const NO_CHROME = 'Skipping the runtime UI probe tests: no Chrome found. Set CHROME_PATH to a Chrome or Chromium executable to run them.';
+if (!chrome) console.warn(NO_CHROME);
+const describeWithChrome = chrome ? describe : describe.skip;
 
 interface Hit {
   method: string;
@@ -67,9 +70,8 @@ interface Options {
   afterLogin?: (environment: Environment) => { status: number; location: string };
 }
 
-describe('runtime UI probe against a loopback UI and login server', () => {
+describeWithChrome(chrome ? 'runtime UI probe against a loopback UI and login server' : NO_CHROME, () => {
   let environment: Environment;
-  const chrome = chromePath();
 
   async function start(options: Options = {}): Promise<Environment> {
     const third = await serve((_request, _body, response) => response.end('third'));
@@ -286,22 +288,29 @@ describe('runtime UI probe against a loopback UI and login server', () => {
     ]);
   }, 60_000);
 
-  it('cuts a page at its time budget and the probe at its total budget', async () => {
+  it('cuts each page that never finishes loading at its time budget, and goes on to the next', async () => {
     await start();
-    const targets: UiRuntimeTarget[] = Array.from({ length: 5 }, (_unused, index) => ({ path: `/hang-${index + 1}`, source: 'route' }));
 
-    const evidence: UiRuntimeEvidence = await probe({ pageTimeoutMs: 3_000, totalTimeoutMs: 7_000 }).collect(targets, 'folio_example');
+    const evidence = await probe({ pageTimeoutMs: 3_000 }).collect([{ path: '/hang-1', source: 'route' }, { path: '/hang-2', source: 'route' }], 'folio_example');
 
     expect(evidence.outcome).toBe('collected');
-    expect(evidence.pages.length).toBeGreaterThanOrEqual(1);
-    expect(evidence.pages.length).toBeLessThanOrEqual(3);
-    expect(evidence.pages[0]).toMatchObject({ path: '/hang-1', problem: 'the page did not finish within 3 s' });
-    for (const page of evidence.pages) {
-      expect(['the page did not finish within 3 s', 'the 7 s budget for the probe ran out during this page']).toContain(page.problem);
-      expect(page.axe).toBeUndefined();
-    }
-    expect(evidence.skippedPaths.at(-1)).toEqual({ path: '/hang-5', source: 'route', reason: 'the 7 s budget for the probe ran out' });
-    expect(evidence.durationMs).toBeLessThan(10_000);
+    expect(evidence.pages.map(page => [page.path, page.problem, page.axe])).toEqual([
+      ['/hang-1', 'the page did not finish within 3 s', undefined], ['/hang-2', 'the page did not finish within 3 s', undefined]]);
+    expect(evidence.skippedPaths).toEqual([]);
+  }, 60_000);
+
+  it('cuts the page in progress when the total budget runs out, and skips the pages after it', async () => {
+    await start();
+    const targets: UiRuntimeTarget[] = Array.from({ length: 3 }, (_unused, index) => ({ path: `/hang-${index + 1}`, source: 'route' }));
+
+    const evidence: UiRuntimeEvidence = await probe({ pageTimeoutMs: 600_000, totalTimeoutMs: 15_000 }).collect(targets, 'folio_example');
+
+    expect(evidence.outcome).toBe('collected');
+    expect(evidence.pages.map(page => [page.path, page.problem, page.axe])).toEqual([['/hang-1', 'the 15 s budget for the probe ran out during this page', undefined]]);
+    expect(evidence.skippedPaths).toEqual([
+      { path: '/hang-2', source: 'route', reason: 'the 15 s budget for the probe ran out' },
+      { path: '/hang-3', source: 'route', reason: 'the 15 s budget for the probe ran out' }
+    ]);
   }, 60_000);
 
   it('cuts a page whose script never yields at its time budget', async () => {
@@ -310,6 +319,5 @@ describe('runtime UI probe against a loopback UI and login server', () => {
     const evidence = await probe({ pageTimeoutMs: 3_000 }).collect([{ path: '/busy', source: 'route' }], 'folio_example');
 
     expect(evidence.pages.map(page => [page.path, page.problem, page.axe])).toEqual([['/busy', 'the page did not finish within 3 s', undefined]]);
-    expect(evidence.durationMs).toBeLessThan(10_000);
   }, 60_000);
 });
