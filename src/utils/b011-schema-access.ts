@@ -4,14 +4,16 @@ import {
   B011Location,
   B011Reference,
   BackendEvidence,
+  CriterionAgentReviewResult,
   EvaluationStatus,
   FrontendChecklistItem
 } from '../types';
 import { SOURCE_FILE } from './backend-evidence';
 import { lineCounter, withoutComments } from './backend-routes';
 import { CommittedSourceFile } from './committed-source';
-import { FrontendChecklistItemDraft, numberObligations } from './frontend-agent-review';
-import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
+import { numberBackendObligations } from './backend-agent-review';
+import { FrontendChecklistItemDraft } from './frontend-agent-review';
+import { frontendChecklist, frontendReviewLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 import { errorMessage, isRecord } from './type-guards';
 
@@ -74,7 +76,7 @@ export function evaluateB011(evidence: BackendEvidence): B011Analysis {
     }
     return result(EvaluationStatus.MANUAL, 'storage-not-known',
       'No storage evidence was found, but the committed source was not read completely, so the tool cannot tell whether the module stores data. A reviewer must check the files it could not read.',
-      numberObligations([unreadItem()]));
+      numberBackendObligations([unreadItem()]));
   }
 
   const { references, filesRead, ownSchemaReferences, unreadRmbSchemas } = scanReferences(snapshot.files, new Set(ownSchemas));
@@ -131,15 +133,20 @@ export function evaluateB011(evidence: BackendEvidence): B011Analysis {
       startingPoints: references.map(reference => ({ path: reference.file, line: reference.occurrences[0].line, note: startingPointNote(reference) })),
       reviewerOnly: false,
       obligations: [],
-      subjects: references.map(reference => ({ subject: `${reference.file}: ${reference.occurrences[0].text}`, path: reference.file, line: reference.occurrences[0].line }))
+      subjects: references.map(reference => ({
+        subject: `${reference.file}: ${reference.occurrences[0].text}`,
+        path: reference.file,
+        line: reference.occurrences[0].line,
+        flag: reference.failing ? 'fail' as const : 'manual' as const
+      }))
     });
   }
   if (sourceIncomplete) items.push(unreadItem());
 
-  return result(status, 'references-checked', sentences.join(' '), numberObligations(items), extra);
+  return result(status, 'references-checked', sentences.join(' '), numberBackendObligations(items), extra);
 }
 
-export function renderB011HumanDetails(analysis: B011Analysis): string {
+export function renderB011HumanDetails(analysis: B011Analysis, agentReview?: CriterionAgentReviewResult): string {
   if (analysis.basis === 'fqm') return 'Module: mod-fqm-manager, which the criterion excepts';
   const lines = [`Storage: ${analysis.storage.present ? analysis.storage.evidence.map(reportText).join('; ') : 'none found'}`];
   if (analysis.basis === 'references-checked') {
@@ -179,7 +186,7 @@ export function renderB011HumanDetails(analysis: B011Analysis): string {
   if (analysis.status === EvaluationStatus.FAIL) {
     lines.push('What to do:', '  - Read the data of other modules through their APIs instead of their database schemas, for each reference in the module\'s code or in an RMB script that runs on every install and upgrade; a one-time copy belongs in a migration (an RMB script with fromModuleVersion, or a Liquibase changeset).');
   }
-  lines.push(...renderFrontendChecklistLines(analysis.checklist));
+  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }
 

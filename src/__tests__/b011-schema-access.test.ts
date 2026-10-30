@@ -72,15 +72,17 @@ describe('B011 access to other modules\' database schemas', () => {
       '  - B011-C1 Each reference to another module\'s database schema is unreachable, part of FQM, or an accepted one-time migration.',
       '    - Start with:',
       `      - ${DB}/migrate.sql:3 — \${myuniversity}_mod_configuration.config_data at line 3: an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`,
-      `      - ${DB}/migrate.sql:6 — \${myuniversity}_mod_settings.settings at lines 6, 7, and 13: an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`
+      `      - ${DB}/migrate.sql:6 — \${myuniversity}_mod_settings.settings at lines 6, 7, and 13: an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`,
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.references.map(({ schema, location, migration: how, occurrenceCount, failing }) => ({ schema, location, how, occurrenceCount, failing }))).toEqual([
       { schema: 'mod_configuration', location: 'migration', how: { kind: 'rmb', fromModuleVersion: '17.5.0' }, occurrenceCount: 1, failing: false },
       { schema: 'mod_settings', location: 'migration', how: { kind: 'rmb', fromModuleVersion: '17.5.0' }, occurrenceCount: 3, failing: false }
     ]);
     expect(analysis.checklist.items[0].obligations).toEqual([
-      { id: 'B011-C1#1', subject: `${DB}/migrate.sql: \${myuniversity}_mod_configuration.config_data`, path: `${DB}/migrate.sql`, line: 3 },
-      { id: 'B011-C1#2', subject: `${DB}/migrate.sql: \${myuniversity}_mod_settings.settings`, path: `${DB}/migrate.sql`, line: 6 }
+      { id: 'B011-C1#1', subject: `${DB}/migrate.sql: \${myuniversity}_mod_configuration.config_data`, path: `${DB}/migrate.sql`, line: 3, flag: 'manual' },
+      { id: 'B011-C1#2', subject: `${DB}/migrate.sql: \${myuniversity}_mod_settings.settings`, path: `${DB}/migrate.sql`, line: 6, flag: 'manual' }
     ]);
   });
 
@@ -138,6 +140,9 @@ describe('B011 access to other modules\' database schemas', () => {
       ['views.sql', 'mod_inventory_storage', 'every-install-script', true],
       ['views.sql', 'mod_orders_storage', 'every-install-script', true],
       ['migrate.sql', 'mod_configuration', 'migration', false]
+    ]);
+    expect(analysis.checklist.items[0].obligations.map(obligation => [obligation.id, obligation.flag])).toEqual([
+      ['B011-C1#1', 'fail'], ['B011-C1#2', 'fail'], ['B011-C1#3', 'fail'], ['B011-C1#4', 'fail'], ['B011-C1#5', 'fail'], ['B011-C1#6', 'manual']
     ]);
   });
 
@@ -431,7 +436,9 @@ describe('B011 access to other modules\' database schemas', () => {
       'Checklist for the reviewer:',
       '  - B011-C2 The files the tool could not read refer to no other module\'s database schema.',
       '    - Start with:',
-      '      - src/main/resources/data.json — Committed file exceeds the 1048576-byte per-file limit'
+      '      - src/main/resources/data.json — Committed file exceeds the 1048576-byte per-file limit',
+      'Agent review:',
+      '  - Not applied: only the files the tool could not read remain, and the reviewer checks those'
     ]);
   });
 

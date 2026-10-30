@@ -13,6 +13,7 @@ import { analyzeB009, renderB009HumanDetails } from '../../utils/b009-api-tests'
 import { evaluateB007, renderB007HumanDetails } from '../../utils/b007-endpoint-permissions';
 import { hasB008AgentReviewMaterial, reviewB008WithAgent } from '../../utils/b008-agent-review';
 import { evaluateB008, renderB008HumanDetails } from '../../utils/b008-reference-data';
+import { hasB011AgentReviewMaterial, reviewB011WithAgent } from '../../utils/b011-agent-review';
 import { evaluateB011, renderB011HumanDetails } from '../../utils/b011-schema-access';
 import { hasB012AgentReviewMaterial, reviewB012WithAgent } from '../../utils/b012-agent-review';
 import { evaluateB012, renderB012HumanDetails } from '../../utils/b012-readme-dependencies';
@@ -266,12 +267,25 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
   private async evaluateB011(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'B011', evaluationRun);
     const analysis = evaluateB011(await getBackendEvidence(run, repoPath));
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'B011',
+      status: analysis.status,
+      hasReviewMaterial: hasB011AgentReviewMaterial(analysis),
+      notRunReason: 'only the files the tool could not read remain, and the reviewer checks those',
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewB011WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
+    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
+      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the reviewer confirms each reference in code or in an every-install script (B011-C1)';
+    }
     return {
       criterionId: 'B011',
       status: analysis.status,
       evidence: analysis.summary,
-      details: renderB011HumanDetails(analysis),
-      criterionDetails: analysis
+      details: renderB011HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 }

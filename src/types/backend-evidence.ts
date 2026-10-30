@@ -959,4 +959,5 @@ export interface B011Analysis {
   unreadRmbSchemas: Array<{ path: string; message: string }>;
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
+  agentReviewUnavailableReason?: string;
 }

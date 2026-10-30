@@ -653,7 +653,7 @@ B011 checks that a module does not access other modules' database schemas; FQM i
 - `manual`: references in migrations (a reviewer decides whether a one-time copy is acceptable), in unlisted scripts or other files, and schema names built at runtime; any reference when the module's own name is not known; committed source not read completely; no storage evidence in source that was not read completely.
 - `not_applicable`: no storage evidence; mod-fqm-manager.
 
-A Liquibase changeset counts as a migration even with `runAlways`; the reviewer sees it as one. The checklist has B011-C1 (each reference is unreachable, part of FQM, or an accepted one-time migration), with one obligation per file and schema, references in code and every-install scripts first; and B011-C2 (the files the tool could not read refer to no other module's schema), for the reviewer only.
+A Liquibase changeset counts as a migration even with `runAlways`; the reviewer sees it as one. The checklist has B011-C1 (each reference is unreachable, part of FQM, or an accepted one-time migration), with one obligation per file and schema, references in code and every-install scripts first; and B011-C2 (the files the tool could not read refer to no other module's schema), for the reviewer only. With agent review enabled, a `manual` B011 is reviewed by default (see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review)): the agent classifies each B011-C1 reference and reports schema names the tool did not find as `discovered:schema:<n>`.
 
 ## B012 Dependencies Declared in README
 
