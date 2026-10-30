@@ -630,3 +630,116 @@ export interface B012Analysis {
   /** Why agent review was not applied, when it was not. */
   agentReviewUnavailableReason?: string;
 }
+
+/**
+ * Where B004 found an environment variable:
+ * - `env`, `launch-env`: the descriptor template's top-level `env` or `launchDescriptor.env`;
+ * - `code`: a `System.getenv` read in `src/main` sources;
+ * - `configuration`: a `${NAME}` or `${NAME:default}` Spring placeholder in a Java string or in an `application*.yml`
+ *   or `.properties` file under `src/main/resources` or `grails-app/conf`.
+ */
+export type B004SourceKind = 'env' | 'launch-env' | 'code' | 'configuration';
+
+export interface B004Source {
+  kind: B004SourceKind;
+  path: string;
+  line?: number;
+  /** The entry's `value` (`env`, `launch-env`), or the default the code gives (`code`, `configuration`), as written. */
+  value?: string;
+  /** A `@Value("${NAME}")` binding without a default, which stops a Spring module at startup when the variable is unset. */
+  failFast?: boolean;
+}
+
+/** The documentation row B004 reads for a variable: a Markdown table row in ENV_VARS.md or the README that names it. */
+export interface B004DocumentationRow {
+  path: string;
+  line: number;
+  /** The table's columns for a default, required or optional, and a description that it lacks. */
+  missingColumns: Array<'default' | 'required' | 'description'>;
+  /** The cells of the columns it has, as written. */
+  default?: string;
+  required?: string;
+  description?: string;
+  /** The required column's header names only "optional", so "yes" there means optional. */
+  optionalColumn?: boolean;
+}
+
+/**
+ * A problem with one variable, by sub-check:
+ * - C1 `undocumented`: in no ENV_VARS.md or README table row; `missing-columns`: its table lacks a default, required
+ *   or description column; `missing-required`, `missing-description`: its row leaves that cell empty;
+ *   `unreadable-required`: its required cell is not yes, no, true, false, required or optional;
+ *   `framework-unlinked`: not documented by the module, but by its framework, which neither README.md nor ENV_VARS.md links to;
+ * - C2 `required-with-default`: documented as required, but has a default;
+ * - C3 `name-format`: not upper case letters, digits and underscores; `aws-prefix`: `AWS_` without the `S3_` name;
+ * - C4 `no-fail-fast`: documented as required, with no evidence that startup stops without it.
+ */
+export type B004Problem =
+  | 'undocumented'
+  | 'missing-columns'
+  | 'missing-required'
+  | 'missing-description'
+  | 'unreadable-required'
+  | 'framework-unlinked'
+  | 'required-with-default'
+  | 'name-format'
+  | 'aws-prefix'
+  | 'no-fail-fast';
+
+export interface B004Variable {
+  name: string;
+  /** The first sources found; `sourceCount` counts them all. */
+  sources: B004Source[];
+  sourceCount: number;
+  documentation?: B004DocumentationRow;
+  /**
+   * The framework that documents the variable when the module does not (policy section 2.2), with the pinned source;
+   * `linked` when README.md or ENV_VARS.md links to that framework's documentation.
+   */
+  framework?: { name: string; source: string; linked: boolean };
+  /** Required or optional, as the documentation says; absent when it does not say. */
+  required?: boolean;
+  /** The default from the documentation, a top-level `env` value or the code, when it has one. */
+  defaultFrom?: { kind: 'documentation' | 'env' | 'code'; path: string; line?: number; value: string };
+  problems: B004Problem[];
+}
+
+/** A log or print statement in `src/main` sources of a file that reads configuration. */
+export interface B004LogSignal {
+  kind: 'secret-value' | 'environment-dump';
+  path: string;
+  line: number;
+  /** The secret-like name, or the call that reads the whole environment. */
+  subject: string;
+}
+
+/**
+ * The state of the descriptor template's top-level `env` (policy section 3.1): `not-checked` for a repository C1 does
+ * not apply to (a library or a repository without a descriptor) or one that uses no variables; `no-template` for an
+ * edge module without a template, which B001 fails; `template-unreadable` when B001 could not read the template.
+ */
+export type B004TopLevelEnv = 'present' | 'missing' | 'empty' | 'not-a-list' | 'no-template' | 'template-unreadable' | 'not-checked';
+
+export interface B004Analysis {
+  criterionId: 'B004';
+  status: EvaluationStatus;
+  summary: string;
+  kind: BackendRepositoryKind;
+  existingModule: boolean;
+  policy: { title: string; url: string; pageVersion: number; modifiedAt: string } | { problem: string };
+  templatePath?: string;
+  /** Whether C1 and C2 apply: not to a library or a repository without a descriptor, which B004 treats as one. */
+  documentationChecked: boolean;
+  /** The root ENV_VARS.md and README.md files, and how many Markdown tables they have. */
+  documentationFiles: Array<{ path: string; tableCount: number }>;
+  topLevelEnv: B004TopLevelEnv;
+  variables: B004Variable[];
+  /** `System.getenv` reads whose name is not a literal or a string constant: the first 100 of `unreadReadCount`. */
+  unreadReads: Array<{ path: string; line: number }>;
+  unreadReadCount: number;
+  logSignals: B004LogSignal[];
+  sourceDiagnostics: CommittedSourceDiagnostic[];
+  checklist: FrontendChecklist;
+  /** Why the agent review was not applied, when agent review is enabled. */
+  agentReviewUnavailableReason?: string;
+}

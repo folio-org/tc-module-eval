@@ -197,11 +197,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B004',
     description: 'Environment vars documented',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Authentication and authorization'
-    }
+    languages: ['java']
   },
   {
     id: 'B005',

@@ -36,7 +36,7 @@ program
   .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
   .option('--ui-runtime-login-origin <origin>', 'Origin of that UI\'s login page (Keycloak); the test account is typed only into a page there')
   .option('--ui-runtime-chrome <path>', 'Chrome or Chromium executable for --ui-runtime-url (default: the installed Google Chrome)')
-  .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, B005 leaves interface naming violations to the reviewer, and B004, once implemented, relaxes some new-module rules for it')
+  .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, B005 leaves interface naming violations to the reviewer, and B004 leaves environment variable documentation gaps to the reviewer')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
   .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review; the list replaces the default set for the whole run, and B002, B008 and B012 review only when listed')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
@@ -124,11 +124,11 @@ program
     console.log('   ✅ HTML and JSON report generation\n');
 
     console.log('📊 Current Status:');
-    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003, B005-B007, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
+    console.log('   ✅ Shared/Common criteria S001-S014, B001, B003-B007, B012, B014 and B016 (Java), and F001-F007 (JavaScript) - IMPLEMENTED');
     console.log('   ⚠️  A001 - MANUAL REVIEW by design');
-    console.log('   ⚠️  B002, B004, B008-B011, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
-    console.log('   📝 9 of the 38 criteria always return MANUAL (9 of 31 for Java, 1 of 22 for JavaScript);');
-    console.log('      S001-S014, B001, B003, B005, B006, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
+    console.log('   ⚠️  B002, B008-B011, B013 and B015 (Java) - NOT IMPLEMENTED (return MANUAL)');
+    console.log('   📝 8 of the 38 criteria always return MANUAL (8 of 31 for Java, 1 of 22 for JavaScript);');
+    console.log('      S001-S014, B001, B003-B006, B012, B014, B016, F001-F003 and F005 return MANUAL when the evidence is inconclusive,');
     console.log('      B007 whenever it applies and does not fail, and F004, F006 and F007 whenever the package renders a user interface\n');
     
     console.log('📝 Usage Examples:');

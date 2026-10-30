@@ -194,6 +194,22 @@ annotations, Grails URL mappings). It fails when an RMB or Spring endpoint is in
 and leaves missing implementing classes, wildcard handlers, library endpoints and unreadable evidence
 to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b003-endpoint-implementations).
 
+### B004 Environment Variables
+
+B004 checks the environment variables a module uses against the FOLIO
+[Environment Variables policy](https://folio-org.atlassian.net/wiki/x/NYCgTg), pinned in
+`config/b004-env-variables-policy/`. The variables come from both env lists of the module descriptor
+template, `System.getenv` reads and Spring `${NAME}` placeholders. It fails when a variable is not
+documented in `ENV_VARS.md` or a README table with a default, required or optional, and a description,
+when the template has no top-level `env`, when a variable documented as required has a default, when a
+name is not upper case letters, digits and underscores, or when an `AWS_` variable has no `S3_` variable
+alongside. With `--existing-module`, documentation gaps are left to the reviewer; the `S3_` rule still
+applies. A variable that RMB, folio-spring-base or the FOLIO Java base image documents (listed with
+pinned sources in the same directory) needs no documentation of its own when README.md or ENV_VARS.md links to
+that documentation, and goes to the reviewer when it does not. Required variables without fail-fast evidence
+and log statements that may print secrets also go to the reviewer, and, for a manual result, to the
+agent review. See [Criterion Notes](docs/criterion-notes.md#b004-environment-variables).
+
 ### B005 Interface Naming
 
 B005 checks that each interface the module descriptor provides, other than system interfaces such as
