@@ -50,7 +50,7 @@ export interface EvaluationProvenance {
   citedSourcePaths?: string[];
 }
 
-export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs' | 'backendInfrastructure' | 'uiRuntimeEvidence';
+export type ArtifactKey = 'moduleDescriptor' | 'moduleKind' | 's007TechnologyEvidence' | 's007Analysis' | 's009DependencyEvidence' | 's010ThirdPartyEvidence' | 'buildTestEvidence' | 'platformMembership' | 'sonarCloudSnapshot' | 's011SuppressionScan' | 'agentReviewSnapshot' | 'frontendSource' | 'uiRequestSites' | 'backendEvidence' | 'backendApiSpecs' | 'backendInfrastructure' | 'uiRuntimeEvidence' | 'backendRuntimeEvidence';
 export type CommandExecutionEnvironment = 'local' | 'github-actions';
 
 export interface CommandExecutionRequest {
@@ -142,6 +142,7 @@ export interface EvaluationRunArtifacts {
   /** The infrastructure in backendEvidence's snapshot, for B012 and B016. */
   backendInfrastructure?: import('./backend-evidence').BackendInfrastructureEvidence;
   uiRuntimeEvidence?: import('./ui-runtime-evidence').UiRuntimeEvidence;
+  backendRuntimeEvidence?: import('./backend-runtime-evidence').BackendRuntimeEvidence;
 }
 
 export interface EvaluationRun {
@@ -168,6 +169,8 @@ export interface EvaluationRun {
   /** Evaluate an existing module rather than a new one (--existing-module), which relaxes some new-module rules. */
   existingModule: boolean;
   uiRuntime?: import('./ui-runtime-evidence').UiRuntimeProbe;
+  /** The backend runtime harness; absent unless --allow-runtime-checks was given with --allow-local-commands. */
+  backendRuntime?: import('./backend-runtime-evidence').BackendRuntimeHarness;
   getOrCreateArtifact<K extends ArtifactKey>(
     key: K,
     producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>
@@ -202,6 +205,10 @@ export interface EvaluationConfig {
   existingModule?: boolean;
   uiRuntime?: import('../utils/ui-runtime-probe').UiRuntimeOptions;
   uiRuntimeProbe?: import('./ui-runtime-evidence').UiRuntimeProbe;
+  /** Build and run the module in Docker for the backend runtime harness (--allow-runtime-checks); needs allowLocalCommands. */
+  allowRuntimeChecks?: boolean;
+  /** Replaces the Docker harness, like commandRunner; used only when allowRuntimeChecks and allowLocalCommands are set. */
+  backendRuntime?: import('./backend-runtime-evidence').BackendRuntimeHarness;
 }
 
 export * from './s004-installation-documentation';
@@ -228,6 +235,7 @@ export * from './f007-latest-chrome';
 export * from './ui-runtime-evidence';
 export * from './backend-evidence';
 export * from './b009-api-tests';
+export * from './backend-runtime-evidence';
 
 export type ModuleKind = 'backend-module' | 'ui-module' | 'library' | 'ambiguous';
 

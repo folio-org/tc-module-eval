@@ -3,6 +3,7 @@ import type { S007PolicyDiagnostic, S007RuleStrength } from './s007-officially-s
 import type { FrontendChecklist } from './frontend-checklist';
 import type { CommittedSourceDiagnostic, CommittedSourceSnapshot } from '../utils/committed-source';
 import type { F001Analysis, F001SiteOutcome } from './f001-consumed-apis';
+import type { BackendRuntimeEvidence, BackendRuntimeOutcome } from './backend-runtime-evidence';
 
 /**
  * What the B criteria evaluate the repository as:
@@ -268,6 +269,19 @@ export interface B003Endpoint {
  */
 export type B003Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'endpoints-checked';
 
+/** What the backend runtime harness saw of B003's endpoints; informational, never a status. */
+export interface B003Runtime {
+  outcome: BackendRuntimeOutcome;
+  problem?: string;
+  tenant: string;
+  /** GET requests to provided paths without parameters, in `tenant`. */
+  requests: Array<{ path: string; status?: number; error?: string }>;
+  /** Provided GET paths without parameters that were not requested, over the harness's limit. */
+  requestsCut: number;
+  docker?: BackendRuntimeEvidence['docker'];
+  cleanup: BackendRuntimeEvidence['cleanup'];
+}
+
 export interface B003Analysis {
   criterionId: 'B003';
   status: EvaluationStatus;
@@ -288,6 +302,8 @@ export interface B003Analysis {
   gaps: BackendApiSpecGap[];
   sourceDiagnostics: CommittedSourceDiagnostic[];
   checklist: FrontendChecklist;
+  /** Only with --allow-runtime-checks. */
+  runtime?: B003Runtime;
 }
 
 /**

@@ -28,7 +28,8 @@ program
   .option('--temp-dir <dir>', 'Temporary directory for cloning repositories')
   .option('--no-cleanup', 'Do not delete the cloned repository after evaluation')
   .option('--criteria <ids>', 'Comma-separated list of criterion IDs to evaluate (e.g., S001,S002,B005)')
-  .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment')
+  .option('--allow-local-commands', 'Allow Maven, Gradle, and npm commands to run in the current trusted environment, and with --allow-runtime-checks the backend runtime harness')
+  .option('--allow-runtime-checks', 'Build the backend module and run it in Docker (needs --allow-local-commands) for runtime evidence, which B003 shows without changing its status. Docker access is root-equivalent on this host, so use it only for trusted repositories on a disposable host; a rootless Docker context is recommended')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014), and folio-org/folio-integration-tests (B009)')
   .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
@@ -73,6 +74,9 @@ program
       }
       if (options.allowLocalCommands) {
         console.log(`🔐 Local command execution allowed (${resolveCommandExecutionEnvironment()})`);
+      }
+      if (config.allowRuntimeChecks) {
+        console.log('🐳 Backend runtime harness allowed: the module is built and run in Docker, with root-equivalent access to this host');
       }
 
       const evaluator = new ModuleEvaluator(config);
@@ -182,6 +186,9 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
   if (!isValidPlatformRef(options.platformRef)) {
     throw new Error('Invalid --platform-ref. Use a platform-lsp branch, tag or commit such as snapshot or R1-2026.');
   }
+  if (options.allowRuntimeChecks && !options.allowLocalCommands) {
+    throw new Error('Use --allow-runtime-checks together with --allow-local-commands: the runtime harness builds and runs repository code.');
+  }
   if (Boolean(options.uiRuntimeUrl) !== Boolean(options.uiRuntimeLoginOrigin)) {
     throw new Error('Use --ui-runtime-url and --ui-runtime-login-origin together.');
   }
@@ -199,6 +206,7 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     s014Application: options.application,
     s014PlatformRef: options.platformRef,
     existingModule: options.existingModule === true,
+    allowRuntimeChecks: options.allowRuntimeChecks === true,
     ...(options.uiRuntimeUrl ? {
       uiRuntime: {
         url: parseUiRuntimeOrigin(options.uiRuntimeUrl, '--ui-runtime-url'),

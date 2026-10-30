@@ -3,7 +3,7 @@ import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { evaluateB001, renderB001HumanDetails } from '../../utils/b001-descriptor-template';
 import { hasB002AgentReviewMaterial, reviewB002WithAgent } from '../../utils/b002-agent-review';
 import { evaluateB002, renderB002HumanDetails } from '../../utils/b002-consumed-apis';
-import { evaluateB003, renderB003HumanDetails } from '../../utils/b003-endpoint-implementations';
+import { b003Runtime, evaluateB003, renderB003HumanDetails } from '../../utils/b003-endpoint-implementations';
 import { hasB004AgentReviewMaterial, reviewB004WithAgent } from '../../utils/b004-agent-review';
 import { B004Policy, evaluateB004, loadB004Policy, renderB004HumanDetails } from '../../utils/b004-env-variables';
 import { evaluateB005, renderB005HumanDetails } from '../../utils/b005-interface-naming';
@@ -28,6 +28,7 @@ import { evaluateB016, renderB016HumanDetails } from '../../utils/b016-supported
 import { getBackendApiSpecs } from '../../utils/backend-api-specs';
 import { getBackendEvidence } from '../../utils/backend-evidence';
 import { getBackendInfrastructure } from '../../utils/backend-infrastructure';
+import { getBackendRuntimeEvidence } from '../../utils/backend-runtime-harness';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import { loadF001HandlerIndex } from '../../utils/f001-consumed-apis';
 import { loadS007Policy } from '../../utils/s007-policy';
@@ -99,7 +100,8 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
 
   private async evaluateB003(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'B003', evaluationRun);
-    const analysis = evaluateB003(await getBackendEvidence(run, repoPath), await getBackendApiSpecs(run, repoPath));
+    const staticAnalysis = evaluateB003(await getBackendEvidence(run, repoPath), await getBackendApiSpecs(run, repoPath));
+    const analysis = run.backendRuntime ? { ...staticAnalysis, runtime: b003Runtime(await getBackendRuntimeEvidence(run, repoPath)) } : staticAnalysis;
     return {
       criterionId: 'B003',
       status: analysis.status,
