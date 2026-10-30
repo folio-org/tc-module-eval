@@ -239,11 +239,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B011',
     description: 'Restricted database schema access',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Data migration and backward compatibility'
-    }
+    languages: ['java']
   },
   {
     id: 'B012',

@@ -275,6 +275,17 @@ when remote lookups are off and the repository has none. Tests in a folio-integr
 another name, such as `erm/` for mod-agreements, are not seen. See
 [Criterion Notes](docs/criterion-notes.md#b009-api-tests).
 
+### B011 Other Modules' Database Schemas
+
+B011 checks that a module with storage does not read or write other modules' database schemas. It looks
+in its SQL scripts, Liquibase changelogs and Java, Groovy and Kotlin sources, with comments removed, for
+schema names that a tenant placeholder or concatenation qualifies, such as `${myuniversity}_mod_users` or
+`String.format("%s_mod_users", tenant)`, and that name another module. It fails on such a reference in code
+or in an RMB script that runs on every install and upgrade; a reference in a migration (an RMB script with
+`fromModuleVersion`, a Liquibase changeset, a Grails database migration), a schema name built at runtime,
+or a script the tool cannot place goes to the reviewer. Modules without storage and mod-fqm-manager are not
+applicable. See [Criterion Notes](docs/criterion-notes.md#b011-other-modules-database-schemas).
+
 ### B012 Dependencies Declared in README
 
 B012 checks that `README.md` names the infrastructure the module uses, as B016 detects it from direct

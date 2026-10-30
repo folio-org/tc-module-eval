@@ -635,6 +635,26 @@ B009 checks "if API tests are provided, they use a supported technology". The of
 
 The checklist has B009-C1 (each suite listed uses Karate, or is not an API test suite) and B009-C2 (the module's API tests, in the repository or outside it, use Karate). B009 has no agent review.
 
+## B011 Other Modules' Database Schemas
+
+B011 checks that a module does not access other modules' database schemas; FQM is excepted. It reads the committed source B001 reads, so it runs in safe mode.
+
+- **Applicability:** B001's positive storage evidence. Without it, B011 is `not_applicable`, or `manual` when the committed source was not read completely. mod-fqm-manager (by its artifactId, descriptor id or Gradle project name) is `not_applicable`. FQM's own configuration (`fqm-config.toml`, entity-type `.json5` files) is never read.
+- **Files:** Java, Groovy and Kotlin sources in `src/main`, Groovy files in `grails-app/`, SQL files, RMB `schema.json` files, and XML and YAML files in `src/main/resources`, outside tests. Comments are removed first: `//` and `/* */` in sources; `--`, nested `/* */`, XML `<!-- -->`, FreeMarker `<#-- -->` and, in YAML, `#` in the others, where quoted strings may span lines and backslashes escape only in PostgreSQL `E'...'` strings. A Java text block or SQL string is not searched for comments. An apostrophe outside a quoted string, such as in `$$Don't$$` or XML text, is read as the start of one, so comments after it in the same file are kept; this can only add a reference for the reviewer or a fail the reviewer sees with its line.
+- **References:** `_mod_<name>` right after a tenant placeholder (`${myuniversity}`, `${tenant}`, `{tenant}`, `{0}`), a format specifier (`%s`, `%1$s`), a LIKE wildcard (`%`), or a string that a `+` or `||` concatenation starts (`tenantId + "_mod_users"`), in any case. A literal tenant (`diku_mod_users`) does not count, nor does the module's own schema: `mod_` and the module's pom.xml artifactId, descriptor id without its version, `settings.gradle` `rootProject.name`, or a `mod-` module the descriptor `replaces` (mod-di-converter-storage renames mod-data-import-converter-storage's schema), with hyphens as underscores (RMB and folio-spring-base name a tenant's schema `<tenant>_<module>`). A name that is not letters, digits and underscores after that, such as an unresolved `@artifactId@`, is not used. `_mod_` followed by no name (`tenantId + "_mod_" + name`) is a schema name built at runtime.
+- **Where a reference is:**
+  - code: a Java, Groovy or Kotlin source outside a Grails migration;
+  - an RMB script that runs on every install and upgrade: a `snippetPath` (of any extension) that `schema.json` in the same `templates/db_scripts/` lists without `fromModuleVersion` (or both with and without it);
+  - a migration: a `snippetPath` listed with `fromModuleVersion`, which RMB runs on a tenant's first install and on upgrades from older versions; any file under the folder of a Liquibase changelog in `src/main/resources` (a file whose name contains `changelog` and whose text contains `databaseChangeLog`; a changelog directly in `src/main/resources` is a migration on its own); a file in `grails-app/migrations/`;
+  - an SQL script in `templates/db_scripts/` that no readable `schema.json` lists, which may run from Java code (mod-di-converter-storage's `rename_module.sql`);
+  - another file: `schema.json` itself (its inline `snippet`s), or another SQL, XML or YAML file.
+- `pass`: no reference to another module's schema, and the committed source was read completely.
+- `fail`: a reference to another module's schema in code or in an RMB script that runs on every install and upgrade, when the module's own name is known. The report ends with a "What to do" line.
+- `manual`: references in migrations (a reviewer decides whether a one-time copy is acceptable), in unlisted scripts or other files, and schema names built at runtime; any reference when the module's own name is not known; committed source not read completely; no storage evidence in source that was not read completely.
+- `not_applicable`: no storage evidence; mod-fqm-manager.
+
+A Liquibase changeset counts as a migration even with `runAlways`; the reviewer sees it as one. The checklist has B011-C1 (each reference is unreachable, part of FQM, or an accepted one-time migration), with one obligation per file and schema, references in code and every-install scripts first; and B011-C2 (the files the tool could not read refer to no other module's schema), for the reviewer only. With agent review enabled, a `manual` B011 is reviewed by default (see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review)): the agent classifies each B011-C1 reference and reports schema names the tool did not find as `discovered:schema:<n>`.
+
 ## B012 Dependencies Declared in README
 
 B012 checks that the root `README.md` (in any case, such as `README.MD`) names the non-interface dependencies the module uses. It reads the committed source B001 reads, so it runs in safe mode, and it applies to every Java repository: modules, edge modules, shared libraries and repositories of unclear kind.
