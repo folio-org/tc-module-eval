@@ -563,6 +563,18 @@ Checklist items, shown for fail and manual: **B007-C1** each endpoint's permissi
 
 B007 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
 
+## B012 Dependencies Declared in README
+
+B012 checks that the root `README.md` (in any case, such as `README.MD`) names the non-interface dependencies the module uses. It reads the committed source B001 reads, so it runs in safe mode, and it applies to every Java repository: modules, edge modules, shared libraries and repositories of unclear kind.
+
+- **Infrastructure:** what B016's detection finds: client libraries among the direct production dependencies, configuration keys and environment variable prefixes, and storage evidence (PostgreSQL, unless nothing names PostgreSQL and a required MySQL or MariaDB driver or JDBC URL does). Dependencies are not resolved, so a client that only arrives through another library is not seen.
+- **Names:** S003's README matcher, case-insensitive and on whole names (`kafkaesque` does not name Kafka, nor does `S3-compatible` name S3), with the infrastructure's name and these synonyms: Postgres for PostgreSQL, OpenSearch and Elasticsearch for each other, MinIO for S3, and AWS SSM, Parameter Store and `AwsSsm` for AWS SSM (edge-patron's README names its secure store only as `AwsSsm`).
+- `pass`: README.md names every infrastructure found, or none was found. The checklist still lists B012-C1 and B012-C2 for the reviewer.
+- `fail`: README.md does not name an infrastructure the module requires (a direct production dependency that is neither optional nor supplied by the runtime, or storage evidence), or there is no README.md and the module requires any infrastructure. The report ends with a "What to do" line.
+- `manual`: README.md does not name an infrastructure that is optional or selectable (a Maven `<optional>`, profile or `provided` dependency, a Gradle `compileOnly` one, edge-common's secure stores) or found only in configuration; README.md could not be read, or the committed source was cut short before the tool reached it (more than 2,000 candidate files), so whether it names the infrastructure is unknown; or build, configuration or source files could not be read, so infrastructure may have been missed. A failure takes precedence over all of these, except a README.md the tool did not read. The report lists at most 20 files the tool could not read.
+
+The checklist has B012-C1 (each external service the module calls, outside FOLIO interfaces and the infrastructure listed, is named in README.md), B012-C2 (each Kafka topic the module consumes from or produces for other modules is named in README.md; such topics never fail B012) and, for a manual result, B012-C3 (each infrastructure listed as not named or not checked, and any in files the tool could not read, is named if the module uses it), which is for the reviewer only. Agent review runs only for a manual result, and only when `--criterion-agent-criteria` lists B012; see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
+
 ## B014 Health Check Endpoint
 
 B014 checks that the module serves `GET /admin/health`. It reads the committed source B001 reads, so it runs in safe mode, and it neither starts the module nor calls the endpoint: a pass shows the mechanism that serves the endpoint, not a 200 response, and the report says the endpoint was not called.

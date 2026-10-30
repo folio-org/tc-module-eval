@@ -2787,9 +2787,131 @@
     },
     {
       "criterionId": "B012",
-      "status": "manual",
-      "evidence": "Environment configuration - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B012 pass: README.md names every infrastructure the tool found: PostgreSQL (as \"Postgres\") and Apache Kafka (as \"Kafka\").",
+      "details": "README: README.md\nInfrastructure the module uses (direct dependencies, configuration and storage):\n  - PostgreSQL (required) — named as \"Postgres\"\n    - org.postgresql:postgresql in pom.xml\n    - Liquibase changelog src/main/resources/db/changelog/changelog-master.xml\n    - Datasource configured in src/main/resources/application.yml\n    - spring.datasource.url (jdbc:postgresql) in src/main/resources/application.yml\n    - DB_HOST, DB_PORT, DB_USERNAME, and 5 more in descriptors/ModuleDescriptor-template.json\n    - ... 1 more\n  - Apache Kafka (required) — named as \"Kafka\"\n    - org.springframework.boot:spring-boot-starter-kafka in pom.xml\n    - spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more in src/main/resources/application.yml\n    - KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more in descriptors/ModuleDescriptor-template.json\n    - KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more in src/main/resources/application.yml\nChecklist for the reviewer:\n  - B012-C1 Each external service the module calls, other than FOLIO interfaces and the infrastructure listed, is named in README.md.\n    - Start with:\n      - README.md — the README\n  - B012-C2 Each Kafka topic the module consumes from or produces for other modules is named in README.md.\n    - Start with:\n      - README.md — the README\n      - pom.xml — Apache Kafka: org.springframework.boot:spring-boot-starter-kafka\n      - src/main/resources/application.yml — Apache Kafka: spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more",
+      "criterionDetails": {
+        "criterionId": "B012",
+        "status": "pass",
+        "summary": "B012 pass: README.md names every infrastructure the tool found: PostgreSQL (as \"Postgres\") and Apache Kafka (as \"Kafka\").",
+        "basis": "readme-checked",
+        "kind": "backend-module",
+        "readmePaths": [
+          "README.md"
+        ],
+        "unreadableReadmePaths": [],
+        "infrastructure": [
+          {
+            "id": "postgresql",
+            "name": "PostgreSQL",
+            "usage": "required",
+            "signals": [
+              {
+                "kind": "dependency",
+                "detail": "org.postgresql:postgresql",
+                "path": "pom.xml"
+              },
+              {
+                "kind": "storage",
+                "detail": "Liquibase changelog src/main/resources/db/changelog/changelog-master.xml"
+              },
+              {
+                "kind": "storage",
+                "detail": "Datasource configured in src/main/resources/application.yml"
+              },
+              {
+                "kind": "configuration",
+                "detail": "spring.datasource.url (jdbc:postgresql)",
+                "path": "src/main/resources/application.yml"
+              },
+              {
+                "kind": "environment",
+                "detail": "DB_HOST, DB_PORT, DB_USERNAME, and 5 more",
+                "path": "descriptors/ModuleDescriptor-template.json"
+              },
+              {
+                "kind": "environment",
+                "detail": "DB_USERNAME, DB_PASSWORD, DB_HOST, and 2 more",
+                "path": "src/main/resources/application.yml"
+              }
+            ],
+            "namedAs": "Postgres"
+          },
+          {
+            "id": "kafka",
+            "name": "Apache Kafka",
+            "usage": "required",
+            "signals": [
+              {
+                "kind": "dependency",
+                "detail": "org.springframework.boot:spring-boot-starter-kafka",
+                "path": "pom.xml"
+              },
+              {
+                "kind": "configuration",
+                "detail": "spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more",
+                "path": "src/main/resources/application.yml"
+              },
+              {
+                "kind": "environment",
+                "detail": "KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more",
+                "path": "descriptors/ModuleDescriptor-template.json"
+              },
+              {
+                "kind": "environment",
+                "detail": "KAFKA_HOST, KAFKA_PORT, KAFKA_SECURITY_PROTOCOL, and 8 more",
+                "path": "src/main/resources/application.yml"
+              }
+            ],
+            "namedAs": "Kafka"
+          }
+        ],
+        "diagnostics": [],
+        "checklist": {
+          "items": [
+            {
+              "id": "B012-C1",
+              "title": "Each external service the module calls, other than FOLIO interfaces and the infrastructure listed, is named in README.md.",
+              "startingPoints": [
+                {
+                  "path": "README.md",
+                  "note": "the README"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B012-C1#1"
+                }
+              ]
+            },
+            {
+              "id": "B012-C2",
+              "title": "Each Kafka topic the module consumes from or produces for other modules is named in README.md.",
+              "startingPoints": [
+                {
+                  "path": "README.md",
+                  "note": "the README"
+                },
+                {
+                  "path": "pom.xml",
+                  "note": "Apache Kafka: org.springframework.boot:spring-boot-starter-kafka"
+                },
+                {
+                  "path": "src/main/resources/application.yml",
+                  "note": "Apache Kafka: spring.kafka.ssl.trust-store-location, spring.kafka.ssl.trust-store-password, spring.kafka.ssl.key-store-location, and 4 more"
+                }
+              ],
+              "reviewerOnly": false,
+              "obligations": [
+                {
+                  "id": "B012-C2#1"
+                }
+              ]
+            }
+          ]
+        }
+      }
     },
     {
       "criterionId": "B013",

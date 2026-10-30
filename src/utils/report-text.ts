@@ -29,11 +29,11 @@ export function reportPath(path: string): string {
     [...Buffer.from(character, 'utf8')].map(byte => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`).join(''));
 }
 
-/** "a and b", or "a, b, and c"; after four items, the first three and "N more". */
-export function listText(items: string[]): string {
+/** "a and b", or "a, b, and c" (or another conjunction); after four items, the first three and "N more". */
+export function listText(items: string[], conjunction = 'and'): string {
   const shown = items.length > 4 ? [...items.slice(0, 3), `${items.length - 3} more`] : items;
-  if (shown.length <= 2) return shown.join(' and ');
-  return `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`;
+  if (shown.length <= 2) return shown.join(` ${conjunction} `);
+  return `${shown.slice(0, -1).join(', ')}, ${conjunction} ${shown[shown.length - 1]}`;
 }
 
 /** "1 file", "2 files". */
