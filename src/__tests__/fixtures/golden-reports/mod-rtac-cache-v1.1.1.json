@@ -2399,9 +2399,42 @@
     },
     {
       "criterionId": "B005",
-      "status": "manual",
-      "evidence": "Data persistence and transactions - evaluation logic not yet implemented",
-      "details": "This criterion requires manual evaluation by a human reviewer"
+      "status": "pass",
+      "evidence": "B005 pass: The interface \"rtac-cache\" in the module descriptor has a name of words joined by hyphens and a major.minor version.",
+      "details": "Evaluated as: a new module (the default)\nInterfaces: 1 in descriptors/ModuleDescriptor-template.json, without the system interface _tenant\nRoutes found in the source: 0",
+      "criterionDetails": {
+        "criterionId": "B005",
+        "kind": "backend-module",
+        "existingModule": false,
+        "interfaces": [
+          {
+            "id": "rtac-cache",
+            "version": "1.0",
+            "pointer": "/provides/0",
+            "problems": [],
+            "placeholders": [],
+            "resolved": []
+          }
+        ],
+        "systemInterfaces": [
+          "_tenant"
+        ],
+        "unreadableEntries": [],
+        "routesChecked": true,
+        "routeCount": 0,
+        "unprovidedRoutes": [],
+        "unreadRoutes": [],
+        "unreadRouteCount": 0,
+        "unmatchedRoutes": [],
+        "sourceDiagnostics": [],
+        "templatePath": "descriptors/ModuleDescriptor-template.json",
+        "status": "pass",
+        "basis": "interfaces-checked",
+        "summary": "B005 pass: The interface \"rtac-cache\" in the module descriptor has a name of words joined by hyphens and a major.minor version.",
+        "checklist": {
+          "items": []
+        }
+      }
     },
     {
       "criterionId": "B006",

@@ -19,6 +19,9 @@ export interface RouteScan {
 
 type SourceText = Pick<CommittedSourceFile, 'path' | 'content'>;
 
+// Served for Okapi and B014, not part of the module's API.
+export const HEALTH_ROUTE = '/admin/health';
+
 const MAX_UNREAD_ROUTES = 100;
 const STRING_CONSTANT = /\bString\s+(\w+)\s*=\s*"((?:[^"\\\n]|\\.)*)"\s*;/g;
 

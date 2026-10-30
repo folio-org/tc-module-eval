@@ -207,11 +207,7 @@ export const ACCEPTANCE_CRITERION_CATALOG = [
     id: 'B005',
     description: 'Provide interfaces per naming conventions',
     section: 'Backend',
-    languages: ['java'],
-    defaultEvaluation: {
-      type: 'not_implemented',
-      reason: 'Data persistence and transactions'
-    }
+    languages: ['java']
   },
   {
     id: 'B006',

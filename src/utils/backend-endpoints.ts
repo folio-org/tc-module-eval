@@ -48,9 +48,9 @@ export function endpointLibraries(evidence: BackendEvidence): Array<{ artifactId
   });
 }
 
-/** Each method and path of the descriptor's handlers, without system interfaces, once each. */
-export function descriptorEndpoints(descriptor: unknown): HandlerEndpoint[] {
-  return uniqueEndpoints(providedInterfaces(descriptor).flatMap(provided => provided.handlers.flatMap(handler => {
+/** Each method and path of the descriptor's handlers, once each; system interfaces' only when asked for. */
+export function descriptorEndpoints(descriptor: unknown, includeSystem = false): HandlerEndpoint[] {
+  return uniqueEndpoints(providedInterfaces(descriptor, includeSystem).flatMap(provided => provided.handlers.flatMap(handler => {
     // Okapi matches a legacy `path` as a prefix.
     const pathPattern = handler.pathPattern ?? (typeof handler.path === 'string' ? `${handler.path}*` : undefined);
     return pathPattern ? handler.methods.map(method => ({ method: method.toUpperCase(), path: pathPattern, interfaceId: provided.id })) : [];
@@ -105,9 +105,9 @@ export function pathIndex<T extends PathItem>(items: T[]): PathIndex<T> {
  * The items that serve or document an endpoint, and, when none does, those that cover its path only with fixed values
  * where the endpoint has a parameter (`/erm/jobs/packageImport` for `/erm/jobs/{type}`). An item's parameter covers
  * any value of its segment. A wildcard endpoint is matched by any item path it covers. Each lookup visits each index
- * node at most once.
+ * node at most once; with a budget, each visit spends one, and a lookup that finds it spent returns what it has found.
  */
-export function lookup<T extends PathItem>(index: PathIndex<T>, matcher: EndpointMatcher): { documented: T[]; partial: T[] } {
+export function lookup<T extends PathItem>(index: PathIndex<T>, matcher: EndpointMatcher, budget?: { visits: number }): { documented: T[]; partial: T[] } {
   const { method } = matcher.endpoint;
   const methodMatches = (candidate: string) => method === '*' || candidate === '*' || candidate === method;
   if (matcher.wildcard) {
@@ -115,6 +115,7 @@ export function lookup<T extends PathItem>(index: PathIndex<T>, matcher: Endpoin
   }
   const segments = matcher.segments;
   const collect = (node: TrieNode<T>, position: number, fixedValues: boolean, found: T[]): T[] => {
+    if (budget && --budget.visits < 0) return found;
     if (position === segments.length) {
       for (const [candidate, items] of node.items) if (methodMatches(candidate)) found.push(...items);
       return found;

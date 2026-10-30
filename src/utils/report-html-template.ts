@@ -30,6 +30,7 @@ const CRITERION_TITLES: Record<string, string> = {
   F006: 'UI layouts and patterns',
   B001: 'Module descriptor template',
   B003: 'Endpoint implementations',
+  B005: 'Interface naming',
   B006: 'API documentation'
 };
 
