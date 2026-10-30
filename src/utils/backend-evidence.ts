@@ -1,4 +1,5 @@
 import { BackendDescriptorTemplate, BackendEvidence, BackendFramework, BackendPlaceholder, BackendRepositoryKind, EvaluationRun, ModuleKindResult } from '../types';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument } from 'yaml';
 import { CommittedSourceFile, CommittedSourceSnapshot, readCommittedSource } from './committed-source';
 import { parseJavaProperties, parsePom, pomDependencies, xmlText } from './manifest-parsers';
 import { getModuleKind, pomArtifactId } from './module-kind';
@@ -147,6 +148,24 @@ async function readTemplate(
     if (placeholder.value === undefined) placeholder.pointers = stringPointers(template.descriptor, placeholder.text);
   }
   return template;
+}
+
+/**
+ * The line of the template where the value at a JSON pointer (`/provides/3`) starts, or undefined when the template
+ * could not be parsed or has no such value. Replaced placeholders keep the template's lines.
+ */
+export function templateLineOf(template: BackendDescriptorTemplate | undefined): (pointer: string) => number | undefined {
+  if (template?.content === undefined || template.descriptor === undefined) return () => undefined;
+  const lineCounter = new LineCounter();
+  const document = parseDocument(template.content, { lineCounter, uniqueKeys: false });
+  if (document.errors.length) return () => undefined;
+  return pointer => {
+    let node: unknown = document.contents;
+    for (const key of pointer.split('/').slice(1).map(part => part.replace(/~1/g, '/').replace(/~0/g, '~'))) {
+      node = isSeq(node) ? node.items[Number(key)] : isMap(node) ? node.items.find(pair => isScalar(pair.key) && String(pair.key.value) === key)?.value : undefined;
+    }
+    return isNode(node) && node.range ? lineCounter.linePos(node.range[0]).line : undefined;
+  };
 }
 
 /** For each character of JSON text, whether it is inside a string literal. */

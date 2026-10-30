@@ -5,6 +5,7 @@ import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
 import { s011AgentReviewNames } from './s011-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
+import { AGENT_REVIEW_CRITERIA } from './criterion-agent-review';
 import { CHECKLIST_HEADING, frontendChecklistOf, renderFrontendAgentReviewLines, renderFrontendChecklistLines } from './frontend-checklist';
 
 const CRITERION_TITLES: Record<string, string> = {
@@ -92,11 +93,6 @@ function pinnedSourceBase(result: EvaluationResult): string | undefined {
     : undefined;
 }
 
-// Criteria that write an "Agent review:" section even when no structured review is attached.
-const AGENT_REVIEW_CRITERIA = new Set([
-  'S004', 'S005', 'S006', 'S007', 'S010', 'S011', 'F001', 'F002', 'F003', 'F004', 'F005', 'F006', 'F007'
-]);
-
 // The rows from a "Heading:" row through its indented rows removed.
 function withoutSection(lines: string[], heading: string): string[] {
   let inSection = false;
@@ -110,9 +106,10 @@ function withoutSection(lines: string[], heading: string): string[] {
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
 function reportDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
   const original = criterion.details?.split('\n') ?? [];
-  // Elsewhere an "Agent review:" line can only come from repository text, so it stays an ordinary row.
+  // Criteria with agent review write an "Agent review:" section even without a structured review; elsewhere such a
+  // line can only come from repository text, so it stays an ordinary row.
   if (!criterion.agentReview && !AGENT_REVIEW_CRITERIA.has(criterion.criterionId)) return original;
-  // F criteria show what the tool found, then the checklist, then the agent review; S criteria put the review first.
+  // F and B criteria show what the tool found, then the checklist, then the agent review; S criteria put the review first.
   const checklist = frontendChecklistOf(criterion.criterionId, criterion.criterionDetails);
   let inReview = false;
   let hadReview = false;
@@ -133,7 +130,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
     const diagnostics = diagnosticLines([...(review?.errors ?? []), ...(review?.warnings ?? []), ...legacyReview]);
     const reason = diagnostics.join(' ');
     const skippedForEvidence = /no candidate evidence was available for agent review/i.test(reason);
-    const skippedForCriterion = /agent review is not enabled for [SF]\d+/i.test(reason);
+    const skippedForCriterion = /agent review is not enabled for [SFB]\d+/i.test(reason);
     const skippedForConfiguration = /agent review is disabled|disabled or unconfigured/i.test(reason);
     const skipped = skippedForEvidence || skippedForCriterion || skippedForConfiguration;
     const failed = review || /failed|failure|error|incomplete|unavailable|timed out|exceeded (?:its )?time limit/i.test(reason);

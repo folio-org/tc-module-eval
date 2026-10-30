@@ -91,6 +91,17 @@ export interface OptionalCriterionAgentReviewResult {
   unavailableReason?: string;
 }
 
+/**
+ * The criteria with agent review, including F007, whose report says why its review does not run yet. Enabling agent
+ * review runs it for each of them, unless --criterion-agent-criteria lists others, which replaces the defaults for the
+ * whole run; an `optInOnly` criterion reviews only when that list names it.
+ */
+export const AGENT_REVIEW_CRITERIA: ReadonlyMap<string, { optInOnly: boolean }> = new Map([
+  ...['S004', 'S005', 'S006', 'S007', 'S010', 'S011', 'F001', 'F002', 'F003', 'F004', 'F006', 'F007',
+    'B004', 'B007', 'B010', 'B011', 'B013', 'B015'].map((id): [string, { optInOnly: boolean }] => [id, { optInOnly: false }]),
+  ...['B002', 'B008', 'B012'].map((id): [string, { optInOnly: boolean }] => [id, { optInOnly: true }])
+]);
+
 export async function reviewCriterionWithAgent(
   request: OptionalCriterionAgentReviewRequest
 ): Promise<OptionalCriterionAgentReviewResult> {
@@ -103,11 +114,12 @@ export async function reviewCriterionWithAgent(
   if (!request.evaluationRun.agentReview?.enabled) {
     return { unavailableReason: 'agent review is disabled or unconfigured' };
   }
-  if (
-    request.evaluationRun.agentReview.enabledCriteria?.length &&
-    !request.evaluationRun.agentReview.enabledCriteria.includes(request.criterionId)
-  ) {
+  const listed = request.evaluationRun.agentReview.enabledCriteria ?? [];
+  if (listed.length && !listed.includes(request.criterionId)) {
     return { unavailableReason: `agent review is not enabled for ${request.criterionId}` };
+  }
+  if (!listed.length && AGENT_REVIEW_CRITERIA.get(request.criterionId)?.optInOnly) {
+    return { unavailableReason: `agent review for ${request.criterionId} runs only when listed in --criterion-agent-criteria` };
   }
 
   const run = request.evaluationRun;

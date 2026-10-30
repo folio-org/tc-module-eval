@@ -38,7 +38,7 @@ program
   .option('--ui-runtime-chrome <path>', 'Chrome or Chromium executable for --ui-runtime-url (default: the installed Google Chrome)')
   .option('--existing-module', 'Evaluate as an existing module, not a new one (the default); B006 then accepts RAML from RMB modules, B005 leaves interface naming violations to the reviewer, and B004, once implemented, relaxes some new-module rules for it')
   .option('--criterion-agent-opencode', 'Enable reusable OpenCode criterion-agent advisory review')
-  .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review')
+  .option('--criterion-agent-criteria <ids>', 'Comma-separated criterion IDs allowed to use criterion-agent review; the list replaces the default set for the whole run, and B002, B008 and B012 review only when listed')
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
   .option('--criterion-agent-read-only-agent <name>', 'OpenCode read-only agent name', 'reviewer')
   .option('--criterion-agent-timeout-ms <ms>', 'Criterion-agent command timeout in milliseconds')

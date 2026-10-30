@@ -1083,6 +1083,48 @@ describe('EvaluationReportRenderer', () => {
     expect(html).not.toContain('<script>alert("x")</script>');
   });
 
+  describe('B criteria with agent review', () => {
+    const checklist: FrontendChecklist = { items: [
+      { id: 'B007-C1', title: 'Each permission fits what its endpoint does.', reviewerOnly: false,
+        startingPoints: [{ path: 'descriptors/ModuleDescriptor-template.json', line: 12, note: 'interface users' }],
+        obligations: [{ id: 'B007-C1#1', subject: 'interface users (#/provides/1)', path: 'descriptors/ModuleDescriptor-template.json', line: 12, flag: 'manual' }] }
+    ] };
+    const backendResult = (criterionId: string, reason: string, agentReview?: CriterionAgentReviewResult): EvaluationResult => ({ ...result, criteria: [{
+      criterionId, status: EvaluationStatus.MANUAL, evidence: `${criterionId} manual: a reviewer must judge the permissions.`,
+      details: ['Handlers: 1', ...renderFrontendChecklistLines(checklist), 'Agent review:', `  - Not applied: ${reason}`].join('\n'),
+      criterionDetails: { checklist }, agentReview
+    }] });
+
+    it('attaches agent results to the checklist items, as for F criteria', () => {
+      const review: CriterionAgentReviewResult = { available: true, criterionId: 'B007', recommendation: 'needs_reviewer_judgment',
+        confidence: 'medium', summary: 'The permission fits.', rationale: 'Read the handler.', evidenceReferences: ['descriptors/ModuleDescriptor-template.json'],
+        assessments: [{ technologyId: 'B007-C1#1', type: 'aligned_fact', summary: 'GET requires a read permission.',
+          evidenceReferences: ['descriptors/ModuleDescriptor-template.json'], coverageDisposition: 'investigated' }],
+        warnings: [], errors: [] };
+      const details: string[] = reportData(new EvaluationReportRenderer().renderHtml(backendResult('B007', 'stale note', review))).items[0].details;
+
+      expect(details.slice(0, details.indexOf('Agent review (advisory):'))).toEqual([
+        'Handlers: 1',
+        'Checklist for the reviewer:',
+        '  - B007-C1 Each permission fits what its endpoint does.',
+        '    - Start with:', '      - descriptors/ModuleDescriptor-template.json:12 — interface users',
+        '    - Agent: Supported by evidence — interface users (#/provides/1): GET requires a read permission.',
+        '      - Sources:', '        - descriptors/ModuleDescriptor-template.json', '      - Coverage judgment: Investigated directly'
+      ]);
+    });
+
+    it.each([
+      ['B007', 'agent review is not enabled for B007', ['  - Status: Skipped', '  - Summary: Skipped because agent review is not enabled for this criterion.']],
+      ['B002', 'agent review for B002 runs only when listed in --criterion-agent-criteria',
+        ['  - Status: Not run', '  - Summary: Agent review was not run.', '  - Reason: agent review for B002 runs only when listed in --criterion-agent-criteria']]
+    ])('keeps the checklist and shows why %s did not review after it', (criterionId, reason, rows) => {
+      const details: string[] = reportData(new EvaluationReportRenderer().renderHtml(backendResult(criterionId, reason))).items[0].details;
+
+      expect(details.slice(details.indexOf('Agent review (advisory):'))).toEqual(['Agent review (advisory):', ...rows]);
+      expect(details[1]).toBe('Checklist for the reviewer:');
+    });
+  });
+
   describe('F criteria', () => {
     // An F003-like result: what the tool found, then the checklist, then the agent review note.
     const checklist: FrontendChecklist = { items: [
@@ -1155,6 +1197,13 @@ describe('EvaluationReportRenderer', () => {
         .toEqual(['What the tool found:', 'Checklist for the reviewer:', 'Agent review (advisory):']);
       expect(details).toEqual(expect.arrayContaining(['  - F003-C1 Each listed id exists in en.json.', `  - Status: ${status}`, `  - Summary: ${summary}`]));
       expect(details).not.toContain('    - Checked by the reviewer only');
+    });
+
+    it('shows why F007, which has no agent review, did not review', () => {
+      const report: EvaluationResult = { ...result, criteria: [{ criterionId: 'F007', status: EvaluationStatus.MANUAL, evidence: 'F007 manual: a reviewer must check.',
+        details: 'Agent review:\n  - Not applied: F007 agent review needs runtime evidence', criterionDetails: { checklist: { items: [] } } }] };
+      expect(reportData(new EvaluationReportRenderer().renderHtml(report)).items[0].details).toEqual(['Agent review (advisory):',
+        '  - Status: Not run', '  - Summary: Agent review was not run.', '  - Reason: F007 agent review needs runtime evidence']);
     });
 
     it('renders F005 as a Frontend criterion whose checklist starting points link to the cited file', async () => {

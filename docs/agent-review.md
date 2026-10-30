@@ -156,6 +156,15 @@ F004 runs only with runtime evidence. `axe-results.json` holds, per page the pro
 
 F006 is mostly judgment, so the agent review is its main value. The agent gets the pinned UX guidelines (`config/f006-ux-guidelines/`, copied to `.criterion-agent/F006/ux-guidelines/`) and one obligation for each of F006-C1 (pane layout), C2 (search and filter), C4 (confirmation of destructive actions, with the wording in `en.json`), C5 (action menus and buttons) and C6 (raw HTML controls and hex colors), plus one F006-C3 obligation per form that does not set `navigationCheck` to `true`, which come first under the limit of 25. The prompt names the guideline files for each item, tells the agent that `navigationCheck` defaults to `false`, and asks it to sample representative screens and say which it read. F006-C7 (state kept across apps), F006-C8 (settings pages, which no pinned guideline covers) and F006-C9 (documentation links are publicly accessible) are reviewer-only, and no link is fetched. There are no `discovered:` IDs.
 
+## B00x Backend Criteria Review
+
+B criteria use the F00x contract above (`src/utils/backend-agent-review.ts` builds on `src/utils/frontend-agent-review.ts`): checklist obligations with short per-run IDs, the starting material under `.criterion-agent/<ID>/`, the 48 KB evidence summary, the limit of 25 obligations, item-by-item validation that drops an invalid item on its own, and the recommendation rules. What differs:
+
+- **Which criteria run.** Agent review runs by default, for a manual result, for B004, B007, B010, B011, B013 and B015 (Q6). B002, B008 and B012 review only when `--criterion-agent-criteria` lists them; otherwise the report says "agent review for B002 runs only when listed in --criterion-agent-criteria". A list replaces the defaults for the whole run, S and F criteria included (Q16): to add B002 to a default run, list the defaults too.
+- **Obligations.** A subject may stand for several findings: B007 gives one obligation per provided interface for all of its handlers, with the interface's line in the descriptor template as its path and line, so citing the template is what "investigated" requires. Subjects the tool flagged come first under the limit of 25 (those it failed, then those it left to the reviewer), then the rest by path and line, then whole-item obligations. An obligation's `flag` is shown to the agent in `checklist.json`.
+- **Browse scope.** Java, Groovy and Kotlin sources and resources under `src/main/` in any module folder, without `ref-data/`, `reference-data/`, `sample-data/` and `sample_data/`; `grails-app/`; `descriptors/` and the descriptor template; `ramls/` without `raml-util`; `pom.xml` and `build.gradle` files; and `README*`, `ENV_VARS.md`, `Dockerfile` and `docker-compose*` at the root. Tests and generated sources are left out. A criterion may add its own paths.
+- **Timeout.** B criteria use 600,000 ms per OpenCode command unless `--criterion-agent-timeout-ms` is given.
+
 ## S006 Sensitive Information Review
 
 S006 scans bounded high-signal text, configuration, documentation, CI, Docker, and env surfaces for committed sensitive or environment-specific information. It detects secret assignments, provider API keys and tokens, credential URLs, private key blocks, private URLs, tenant or host endpoints, and local absolute paths. Reports hide matched values: an assignment shows only its name, such as `DB_PASSWORD=[REDACTED]`, and other findings show their kind, such as `[REDACTED_PROVIDER_API_KEY]`. This is part of S006, not output masking. Agent prose is shown as written, so a value the agent quotes despite its instructions appears in the report.
@@ -206,7 +215,7 @@ folio-eval evaluate <repo-url> \
 
 ## CLI Options
 
-Use `--criterion-agent-opencode` to enable OpenCode review. Use `--criterion-agent-criteria` to choose which criteria may invoke it.
+Use `--criterion-agent-opencode` to enable OpenCode review. Use `--criterion-agent-criteria` to choose which criteria may invoke it; the list replaces the default set for the whole run, and B002, B008 and B012 review only when it names them.
 
 ```bash
 folio-eval evaluate <repo-url> \
@@ -215,7 +224,7 @@ folio-eval evaluate <repo-url> \
   --criterion-agent-timeout-ms 420000
 ```
 
-The default timeout is 120,000 ms, or 420,000 ms for F criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
+The default timeout is 120,000 ms, or 420,000 ms for F criteria and 600,000 ms for B criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
 
 Advanced options:
 
