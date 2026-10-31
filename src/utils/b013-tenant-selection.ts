@@ -5,12 +5,15 @@ import {
   B013Mechanism,
   B013RedFlag,
   B013RedFlagKind,
+  B013Runtime,
   B013Uses,
   BackendEvidence,
+  BackendRuntimeEvidence,
   EvaluationStatus
 } from '../types';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { SOURCE_FILE } from './backend-evidence';
+import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { lineCounter, withoutComments } from './backend-routes';
 import { CommittedSourceFile } from './committed-source';
 import { backendBrowse, numberBackendObligations } from './backend-agent-review';
@@ -101,9 +104,14 @@ export function evaluateB013(evidence: BackendEvidence): B013Analysis {
   return { ...analysis, summary: summaryText(analysis), checklist: frontendChecklist(EvaluationStatus.MANUAL, checklistItems(analysis)) };
 }
 
+/** The runtime harness's cross-tenant check, as B013's informational runtime evidence. */
+export function b013Runtime(runtime: BackendRuntimeEvidence): B013Runtime {
+  return { ...runtimeSummary(runtime), tenants: RUNTIME_TENANTS, ...(runtime.crossTenant ? { crossTenant: runtime.crossTenant } : {}) };
+}
+
 export function renderB013HumanDetails(analysis: B013Analysis, agentReview?: CriterionAgentReviewResult): string {
   const lines = [`Framework: ${FRAMEWORK_LABELS[analysis.framework.name]}`];
-  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) return lines.join('\n');
+  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) return [...lines, ...(analysis.runtime ? runtimeLines(analysis.runtime) : [])].join('\n');
   const usesLine = (label: string, uses: B013Uses<string>) => `  - ${label} — ${count(uses.uses, 'reference')} in ${count(uses.fileCount, 'file')}`;
   lines.push('Tenant taken from X-Okapi-Tenant:', ...analysis.mechanisms.length
     ? analysis.mechanisms.map(uses => usesLine(MECHANISM_LABELS[uses.kind], uses))
@@ -120,9 +128,29 @@ export function renderB013HumanDetails(analysis: B013Analysis, agentReview?: Cri
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
   lines.push('What to do:', `  - ${WHAT_TO_DO}`);
+  if (analysis.runtime) lines.push(...runtimeLines(analysis.runtime));
   if (agentReview) lines.push(`Agent review scope: ${backendBrowse().scope}`);
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
+}
+
+function runtimeLines(runtime: B013Runtime): string[] {
+  return runtimeEvidenceLines(runtime, () => {
+    const [own, other] = runtime.tenants;
+    const check = runtime.crossTenant;
+    if (!check) return ['  - The module ran in Docker; the descriptor provides no path with both GET and POST without parameters for a cross-tenant check'];
+    const visible = (value: boolean | undefined) => value === undefined ? 'unknown' : value ? 'yes' : 'no';
+    return [
+      ...(check.path ? [
+        `  - The module ran in Docker. Cross-tenant check: a record created with POST ${reportText(check.path)} in ${own}:`,
+        `    - visible in ${own}: ${visible(check.visibleInOwnTenant)}`,
+        `    - visible in ${other}: ${visible(check.visibleInOtherTenant)}`
+      ] : [`  - The module ran in Docker. No cross-tenant check: ${reportText(check.problem ?? 'no record was created')}`]),
+      ...(check.requests.length ? ['  - Requests:', ...check.requests.slice(0, MAX_ROWS).map(request =>
+        `    - ${reportText(request.method)} ${reportText(request.path)} in ${reportText(request.tenant ?? '')} ${request.status !== undefined
+          ? `answered ${request.status}` : `got no response (${reportText(request.error ?? 'no response')})`}`), ...overflowLine(check.requests.length, MAX_ROWS)] : [])
+    ];
+  });
 }
 
 type Scan = Pick<B013Analysis, 'mechanisms' | 'redFlags' | 'asyncWork'>;

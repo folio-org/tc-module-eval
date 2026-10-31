@@ -33,6 +33,8 @@ When this flag is used, reports record where commands ran: `github-actions` in G
 
 Source-inspection review is read-only: it does not mutate evaluated repositories and does not execute repository code, tests, builds, services, databases, or Okapi calls.
 
+`--allow-runtime-checks`, which needs `--allow-local-commands`, goes further: the [backend runtime harness](#backend-runtime-harness) builds the module and runs it in Docker. Access to the Docker daemon is root-equivalent on the evaluating host, and the harness runs repository code, so use it only for trusted repositories on a disposable host, such as an orb or a CI runner. A dedicated rootless Docker context is recommended but not required.
+
 Evaluated repositories are open source, so reports show repository text, command output, and agent advice as written. Only the evaluator's own credentials are masked: the values of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SONAR_TOKEN`, `GITHUB_TOKEN`, `FOLIO_UI_USERNAME`, `FOLIO_UI_PASSWORD`, and any variable passed to OpenCode with `--criterion-agent-provider-env` or `--criterion-agent-proxy-env` become `[REDACTED_<VARIABLE>]` in all output, and the keys in an OpenCode auth store become `[REDACTED_AUTH_STORE]`. See [Output masking](docs/agent-review.md#output-masking).
 
 ### S007 Officially Supported Technologies
@@ -323,7 +325,10 @@ endpoint: it passes when RMB's `RestVerticle` is the main verticle, when Spring 
 Spring Boot or Grails application) serves health at `/admin/health`, or when the source registers a
 `GET /admin/health` route, and the report says the endpoint was not called. Actuator settings that move
 or disable health, in the default configuration or in any profile, and modules with no such mechanism are
-left to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
+left to the reviewer. With the [backend runtime harness](#backend-runtime-harness), the module's answer
+decides instead: 200 passes, and any other answer goes to the reviewer; when the module did not reach the
+health check, the committed files decide and the report says why. See
+[Criterion Notes](docs/criterion-notes.md#b014-health-check-endpoint).
 
 ### B015 High Availability
 
@@ -347,6 +352,19 @@ It fails when the module requires an infrastructure that is not on the list, and
 backends that are not on the list, such as edge-common's HashiCorp Vault and AWS SSM secure stores, to
 the reviewer. See [Criterion Notes](docs/criterion-notes.md#b016-supported-infrastructure).
 
+### Backend Runtime Harness
+
+With `--allow-runtime-checks` and `--allow-local-commands`, the evaluator builds a backend module in a
+pinned Maven or Gradle container, builds its image with the repository's `Dockerfile`, and runs it with
+PostgreSQL and Kafka as needed on an internal Docker network without internet or host access and
+without published ports. A probe container calls `GET /admin/health`, initializes two tenants with
+reference data, and calls the module's GET endpoints. B014 is decided by the health check's answer.
+B003 (GET statuses), B008 (tenant initialization and record counts), B010 (schemas and the tables in
+`public`) and B013 (whether a record created in one tenant is visible in the other) show informational
+evidence that never changes their status. Every container, network, volume and image is labelled with the
+run and removed afterwards, also on Ctrl-C. It needs a reachable Docker daemon. See
+[Criterion Notes](docs/criterion-notes.md#backend-runtime-harness).
+
 ### Agent Review
 
 Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
@@ -359,7 +377,7 @@ the deterministic status. See [Criterion Notes](docs/criterion-notes.md#s010-thi
 
 ### Remote Lookups
 
-Evaluation is offline by default, apart from the optional runtime UI probe of F004 and F007. S011 (SonarQube findings) and S013 (test coverage) need to read
+Evaluation is offline by default, apart from the optional runtime UI probe of F004 and F007 and the image pulls and dependency downloads of the optional backend runtime harness. S011 (SonarQube findings) and S013 (test coverage) need to read
 SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platform) needs to read
 `folio-org/platform-lsp` and FAR, so all three are `manual` unless you opt in. B009 (API tests) also
 reads `folio-org/folio-integration-tests` when you do:
@@ -541,6 +559,9 @@ folio-eval evaluate <repo-url> --output ./my-reports --json-only
 FOLIO_UI_USERNAME=<test user> FOLIO_UI_PASSWORD=<password> folio-eval evaluate https://github.com/folio-org/ui-users \
   --criteria F004 --ui-runtime-url https://folio-etesting-snapshot-diku.ci.folio.org \
   --ui-runtime-login-origin https://folio-etesting-snapshot-keycloak.ci.folio.org --ui-runtime-chrome /path/to/chrome
+
+# Build and run a trusted backend module in Docker (root-equivalent; use a disposable host)
+folio-eval evaluate https://github.com/folio-org/mod-notes --allow-local-commands --allow-runtime-checks
 
 # List supported languages
 folio-eval list-languages

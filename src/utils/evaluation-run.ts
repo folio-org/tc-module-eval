@@ -27,6 +27,7 @@ export interface CreateEvaluationRunOptions {
   s014PlatformRef?: string;
   existingModule?: boolean;
   uiRuntime?: EvaluationRun['uiRuntime'];
+  backendRuntime?: EvaluationRun['backendRuntime'];
 }
 
 export function createEvaluationRun(options: CreateEvaluationRunOptions): EvaluationRun {
@@ -59,6 +60,7 @@ export function createEvaluationRun(options: CreateEvaluationRunOptions): Evalua
     s014PlatformRef: options.s014PlatformRef,
     existingModule: options.existingModule ?? false,
     uiRuntime: options.uiRuntime,
+    backendRuntime: options.backendRuntime,
     async getOrCreateArtifact<K extends ArtifactKey>(
       key: K,
       producer: () => Promise<NonNullable<EvaluationRunArtifacts[K]>>

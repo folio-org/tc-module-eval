@@ -8,6 +8,7 @@ import { createEvaluationRun, languageToCatalogLanguage } from './utils/evaluati
 import { LocalCommandRunner } from './utils/command-runner';
 import { RemoteEvidenceTransport } from './utils/remote-evidence';
 import { PlaywrightUiRuntimeProbe } from './utils/ui-runtime-probe';
+import { DockerBackendRuntimeHarness } from './utils/backend-runtime-harness';
 import packageMetadata from '../package.json';
 
 export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: string[]): string[] {
@@ -114,7 +115,10 @@ export class ModuleEvaluator {
               username: process.env.FOLIO_UI_USERNAME || undefined,
               password: process.env.FOLIO_UI_PASSWORD || undefined
             })
-          : undefined)
+          : undefined),
+        backendRuntime: this.config.allowRuntimeChecks && this.config.allowLocalCommands
+          ? this.config.backendRuntime ?? new DockerBackendRuntimeHarness()
+          : undefined
       });
 
       const criterionResults = await evaluator.evaluate(repoPath, this.config.criteriaFilter, evaluationRun);
