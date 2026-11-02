@@ -118,7 +118,7 @@ export function renderB016HumanDetails(analysis: B016Analysis): string {
   }
   lines.push(analysis.buildFiles.length
     ? `Checked: direct production dependencies in ${count(analysis.buildFiles.length, 'build file')} (${listText(analysis.buildFiles.map(reportPath))}), storage evidence, configuration keys and environment variables. Transitive dependencies are not visible without running the build, and server versions are not checked.`
-    : 'Checked: no pom.xml or build.gradle found');
+    : 'Checked: no pom.xml or build.gradle found', ...whatToDo(analysis));
 
   const section = (heading: string, list: B016Technology[], label: (technology: B016Technology) => string) => {
     if (!list.length) return;
@@ -145,11 +145,24 @@ export function renderB016HumanDetails(analysis: B016Analysis): string {
       ...overflowLine(analysis.diagnostics.length, MAX_ROWS, '  '),
       ...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Replace each infrastructure listed under "Not on the list, required" with one on the Officially Supported Technologies list, or ask the Technical Council to add it to the list.');
-  }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B016Analysis): string[] {
+  if (analysis.status === EvaluationStatus.FAIL) {
+    return ['What to do:', '  - Replace each infrastructure listed under "Not on the list, required" with one on the Officially Supported Technologies list, or ask the Technical Council to add it to the list.'];
+  }
+  if (analysis.basis === 'policy-unreadable') {
+    return ['What to do: Check the infrastructure found against the Officially Supported Technologies list by hand, starting with the checklist below.'];
+  }
+  if (analysis.basis === 'no-build-file') {
+    return ['What to do: Check which infrastructure the module uses, and that each is on the Officially Supported Technologies list, starting with the checklist below.'];
+  }
+  if (analysis.status === EvaluationStatus.MANUAL) return ['What to do: Check each item on the checklist below against the Officially Supported Technologies list.'];
+  return [analysis.technologies.length
+    ? 'What to do: Nothing; every infrastructure the module uses is on the Officially Supported Technologies list.'
+    : 'What to do: Nothing; the tool found no infrastructure to check.'];
 }
 
 const USAGE_TEXT: Record<B016Technology['usage'], string> = {

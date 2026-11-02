@@ -322,7 +322,7 @@ function firstBy<T>(items: T[], key: (item: T) => string): T[] {
 
 export function renderB002HumanDetails(analysis: B002Analysis, agentReview?: CriterionAgentReviewResult): string {
   const reviewLines = frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason);
-  if (analysis.basis === 'library') return '';
+  if (analysis.basis === 'library') return 'What to do: Nothing; a shared library has no module descriptor to declare the interfaces it calls.';
   if (analysis.basis === 'no-descriptor') {
     return ['What to do:', '  - Commit the module descriptor template, with the interfaces the module calls in requires or optional (see B001).',
       ...reviewLines].join('\n');
@@ -349,7 +349,11 @@ export function renderB002HumanDetails(analysis: B002Analysis, agentReview?: Cri
       ? `interface paths of ${reportText(analysis.index.descriptorVersion ?? '')} (platform-lsp ${(analysis.index.platformCommit ?? '').slice(0, 7)}), ${count(analysis.index.interfaceCount ?? 0, 'interface')}`
       : `not loaded: ${reportText(analysis.index.problem ?? '')}`}`,
     `  - Production source: ${count(analysis.productionFileCount, 'Java or Groovy file')} under src/main and grails-app`,
-    ...(agentReview ? [`  - Agent review scope: ${backendBrowse().scope}`] : [])
+    ...(agentReview ? [`  - Agent review scope: ${backendBrowse().scope}`] : []),
+    ...(analysis.status !== EvaluationStatus.MANUAL ? ['What to do: Nothing; the descriptor declares every interface the module sends requests to in requires or optional.']
+      : analysis.undeclared.length
+        ? ['What to do:', '  - Add each interface under "Used but not declared" to requires, or to optional when the module works without it, unless the code that sends the request never runs.']
+        : ['What to do:', '  - Check that every request the module sends goes to an interface in requires or optional, starting with the checklist below.'])
   ];
   const siteRow = (site: B002MappedSite, note: string) => `  - ${reportPath(site.path)}:${site.line} — ${note}`;
   if (analysis.undeclared.length) {
@@ -372,11 +376,6 @@ export function renderB002HumanDetails(analysis: B002Analysis, agentReview?: Cri
     ...overflowLine(analysis.kotlinFiles.length, SHOWN_SITES, '  ')
   ];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  if (analysis.status === EvaluationStatus.MANUAL) {
-    lines.push('What to do:', analysis.undeclared.length
-      ? '  - Add each interface under "Used but not declared" to requires, or to optional when the module works without it, unless the code that sends the request never runs.'
-      : '  - Check that each request listed above goes to an interface in requires or optional, starting with the checklist below.');
-  }
   lines.push(...reviewLines);
   return lines.join('\n');
 }

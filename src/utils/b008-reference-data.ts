@@ -652,6 +652,7 @@ export function renderB008HumanDetails(analysis: B008Analysis, agentReview?: Cri
   if (analysis.kind !== 'library') {
     lines.push(`Storage: ${analysis.storage.present ? reportText(analysis.storage.evidence.join('; ')) : 'none found'}`);
   }
+  lines.push(...whatToDo(analysis));
   if (analysis.loaders.length) {
     lines.push('Code that loads reference data at tenant initialization:', ...analysis.loaders.slice(0, MAX_ROWS).map(loader =>
       `  - ${reportPath(loader.file)}:${loader.line} — ${LOADER_TEXT[loader.mechanism]}`), ...overflowLine(analysis.loaders.length, MAX_ROWS, '  '));
@@ -685,12 +686,27 @@ export function renderB008HumanDetails(analysis: B008Analysis, agentReview?: Cri
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  if (missing.length && analysis.status === EvaluationStatus.MANUAL) {
-    lines.push('What to do:', '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.');
-  }
   if (analysis.runtime) lines.push(...runtimeLines(analysis.runtime));
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B008Analysis): string[] {
+  if (analysis.status === EvaluationStatus.PASS) return ['What to do: Nothing; every controlled vocabulary has reference data that tenant initialization loads.'];
+  if (analysis.basis === 'library') return ['What to do: Nothing; reference data belongs to the modules that store data, not to a shared library.'];
+  if (analysis.basis === 'no-storage') return ['What to do: Nothing; the tool found no storage, so the module keeps no data that needs reference values.'];
+  if (analysis.vocabularies.some(vocabulary => !vocabulary.sources.length)) {
+    return ['What to do:', '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.'];
+  }
+  if (analysis.basis === 'storage-unconfirmed') {
+    return ['What to do: Check whether the module stores data, and if so whether each controlled vocabulary has reference data that tenant initialization loads (the checklist below).'];
+  }
+  if (analysis.basis === 'no-descriptor') {
+    return ['What to do: Find the module descriptor template (see B001), and check whether the module has controlled vocabularies that need reference data (the checklist below).'];
+  }
+  return [analysis.vocabularies.length
+    ? 'What to do: Check whether the parts the tool could not read hold controlled vocabularies without reference data (the checklist below).'
+    : 'What to do: Check whether the module has controlled vocabularies that need a value after tenant initialization, starting with the checklist below.'];
 }
 
 function runtimeLines(runtime: B008Runtime): string[] {

@@ -70,6 +70,7 @@ describe('B008 reference data', () => {
       + 'A reviewer must check whether it needs a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      ...WHAT_TO_DO,
       'Code that loads reference data at tenant initialization:',
       '  - src/main/java/org/folio/rest/impl/TenantRefAPI.java:7 — RMB TenantLoading for the loadReference key',
       'Reference-data folders:',
@@ -80,7 +81,6 @@ describe('B008 reference data', () => {
       'Controlled vocabularies without reference data found:',
       '  - /proxy-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:21',
       '    - src/main/resources/ref-data/proxy-types — reference-data folder that no reference load path names',
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       CHECKLIST_TITLE,
       '    - Start with:',
@@ -129,6 +129,7 @@ describe('B008 reference data', () => {
       + 'A reviewer must check whether each needs a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      ...WHAT_TO_DO,
       'Code that loads reference data at tenant initialization:',
       `  - ${loader}:6 — RMB TenantLoading for the loadReference key`,
       'Reference-data folders:',
@@ -143,7 +144,6 @@ describe('B008 reference data', () => {
       'Reference-data load paths the tool could not read:',
       `  - ${loader}:14`,
       `  - ${loader}:18`,
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       CHECKLIST_TITLE,
       '    - Start with:',
@@ -173,6 +173,7 @@ describe('B008 reference data', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.details?.split('\n')).toEqual([
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      ...WHAT_TO_DO,
       'Code that loads reference data at tenant initialization:',
       '  - src/main/java/org/folio/example/ExampleTenantService.java:3 — loadReferenceData() override',
       'Reference-data folders:',
@@ -180,8 +181,6 @@ describe('B008 reference data', () => {
       'Controlled vocabularies without reference data found:',
       '  - /note-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:8',
       '    - src/main/resources/reference-data/note-types — reference-data folder; the tool does not read which folders loadReferenceData() loads',
-      'What to do:',
-      '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.',
       'Checklist for the reviewer:',
       '  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.',
       '    - Start with:',
@@ -239,6 +238,7 @@ describe('B008 reference data', () => {
       + 'A reviewer must check whether each needs a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      ...WHAT_TO_DO,
       'Liquibase inserts:',
       '  - src/main/resources/db/changelog/changelog-master.xml:4 — into b_type',
       '  - src/main/resources/db/changelog/changelog-master.xml:11 — into e_type',
@@ -253,8 +253,6 @@ describe('B008 reference data', () => {
       '  - /d-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:29',
       '  - /f-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:43',
       '  - /g-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:50',
-      'What to do:',
-      '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.',
       'Checklist for the reviewer:',
       '  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.',
       '    - Start with:',
@@ -291,6 +289,7 @@ describe('B008 reference data', () => {
       + 'from reference-data folders loaded by src/main/java/org/folio/rest/impl/TenantRefApi.java: /addresstypes and /loan-types.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      'What to do: Nothing; every controlled vocabulary has reference data that tenant initialization loads.',
       'Code that loads reference data at tenant initialization:',
       '  - src/main/java/org/folio/rest/impl/TenantRefApi.java:5 — RMB TenantLoading for the loadReference key',
       'Reference-data folders:',
@@ -348,6 +347,7 @@ describe('B008 reference data', () => {
       + 'A reviewer must check whether each needs a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      ...WHAT_TO_DO,
       'Liquibase inserts:',
       '  - src/main/resources/db/changelog/changelog-master.xml:4 — into type',
       '  - src/main/resources/db/changelog/more.yaml:5 — into hold_categories',
@@ -358,7 +358,6 @@ describe('B008 reference data', () => {
       'Controlled vocabularies without reference data found:',
       '  - /link-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:15',
       '  - /note-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:8',
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       CHECKLIST_TITLE,
       '    - Start with:',
@@ -409,6 +408,7 @@ describe('B008 reference data', () => {
       + 'Agreement.EventType, Agreement.ReasonForClosure, and Agreement.RenewalPriority. A reviewer must check whether each needs a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: Grails domain classes with a datasource in service/grails-app/conf/application.yml',
+      ...WHAT_TO_DO,
       'Controlled vocabularies with reference data:',
       `  - Agreement.AgreementStatus — @Defaults (2 values), ${domain}:14`,
       `  - Global.Yes_No — @Defaults (2 values), ${domain}:6`,
@@ -416,7 +416,6 @@ describe('B008 reference data', () => {
       `  - Agreement.EventType — Grails refdata category, ${domain}:17`,
       `  - Agreement.ReasonForClosure — Grails refdata category, ${domain}:15`,
       `  - Agreement.RenewalPriority — Grails refdata category, ${domain}:19`,
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       CHECKLIST_TITLE,
       '    - Start with:',
@@ -440,6 +439,7 @@ describe('B008 reference data', () => {
       + 'A reviewer must decide whether the module has controlled vocabularies that need a value after tenant initialization.');
     expect(result.details?.split('\n')).toEqual([
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      'What to do: Check whether the module has controlled vocabularies that need a value after tenant initialization, starting with the checklist below.',
       'Liquibase inserts:',
       '  - src/main/resources/db/changelog/changelog-master.xml:1 — into browse_config (2 inserts)',
       'Checklist for the reviewer:',
@@ -459,12 +459,15 @@ describe('B008 reference data', () => {
       'src/main/java/org/folio/Verticle.java': 'public class Verticle extends AbstractVerticle {}\n'
     }), EvaluationStatus.NOT_APPLICABLE, 'no-storage',
     'B008 not_applicable: The tool found no storage evidence (an RMB schema.json, PostgresClient or PgUtil use, a Liquibase changelog, a datasource, or Grails domain classes with a datasource), so the module keeps no data that needs reference values.', [
-      'Storage: none found'
+      'Storage: none found',
+      'What to do: Nothing; the tool found no storage, so the module keeps no data that needs reference values.'
     ]],
     ['a shared library with storage', () => repository({
       'pom.xml': pom('folio-spring-base'),
       'src/main/resources/db/changelog/changelog.xml': '<databaseChangeLog/>'
-    }), EvaluationStatus.NOT_APPLICABLE, 'library', 'B008 not_applicable: The repository is a shared library; reference data belongs to the modules that store data.', []],
+    }), EvaluationStatus.NOT_APPLICABLE, 'library', 'B008 not_applicable: The repository is a shared library; reference data belongs to the modules that store data.', [
+      'What to do: Nothing; reference data belongs to the modules that store data, not to a shared library.'
+    ]],
     ['no storage evidence in source read incompletely', () => repository({
       'pom.xml': pom('mod-example'),
       'descriptors/ModuleDescriptor-template.json': template([collection('/loan-types')]),
@@ -472,6 +475,7 @@ describe('B008 reference data', () => {
     }), EvaluationStatus.MANUAL, 'storage-unconfirmed',
     'B008 manual: The tool found no storage evidence, but the committed source was not read completely, so it could not rule storage out.', [
       'Storage: none found',
+      'What to do: Check whether the module stores data, and if so whether each controlled vocabulary has reference data that tenant initialization loads (the checklist below).',
       'What the tool could not read:',
       '  - src/main/resources/large.txt — Committed file exceeds the 1048576-byte per-file limit',
       'Checklist for the reviewer:',
@@ -486,6 +490,7 @@ describe('B008 reference data', () => {
     'B008 manual: No module descriptor template was found, so the module\'s endpoints, and the controlled vocabularies among them, are not known (see B001). '
       + 'A reviewer must decide whether the module has controlled vocabularies that need a value after tenant initialization.', [
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      'What to do: Find the module descriptor template (see B001), and check whether the module has controlled vocabularies that need reference data (the checklist below).',
       'Checklist for the reviewer:',
       '  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.',
       'Agent review:',
@@ -497,6 +502,7 @@ describe('B008 reference data', () => {
     }), EvaluationStatus.PASS, 'vocabularies-checked',
     'B008 pass: The controlled vocabulary /note-types has reference data loaded at tenant initialization, from Liquibase inserts.', [
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      'What to do: Nothing; every controlled vocabulary has reference data that tenant initialization loads.',
       'Liquibase inserts:',
       '  - src/main/resources/db/changelog/changelog-master.xml:1 — into type',
       'Controlled vocabularies with reference data:',
@@ -508,13 +514,12 @@ describe('B008 reference data', () => {
     }), EvaluationStatus.MANUAL, 'vocabularies-checked',
     'B008 manual: The controlled vocabulary /loan-types has no reference data the tool found. A reviewer must check whether it needs a value after tenant initialization.', [
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      ...WHAT_TO_DO,
       'Reference-data folders:',
       '  - reference-data/loan-types — not loaded as reference data',
       'Controlled vocabularies without reference data found:',
       '  - /loan-types — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:8',
       '    - reference-data/loan-types — reference-data folder, but no code that loads reference data at tenant initialization was found',
-      'What to do:',
-      '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.',
       'Checklist for the reviewer:',
       '  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.',
       '    - Start with:',
@@ -535,13 +540,12 @@ describe('B008 reference data', () => {
     }), EvaluationStatus.MANUAL, 'vocabularies-checked',
     'B008 manual: The controlled vocabulary /item-damaged-statuses has no reference data the tool found. A reviewer must check whether it needs a value after tenant initialization.', [
       'Storage: RMB database schema src/main/resources/templates/db_scripts/schema.json',
+      ...WHAT_TO_DO,
       'Code that loads reference data at tenant initialization:',
       '  - src/main/java/org/folio/rest/impl/TenantRefAPI.java:4 — RMB TenantLoading for the loadReference key',
       'Controlled vocabularies without reference data found:',
       '  - /item-damaged-statuses — collection endpoint named like a vocabulary, descriptors/ModuleDescriptor-template.json:8',
       '    - src/main/java/org/folio/rest/impl/TenantRefAPI.java:4 — loaded from item-damaged-statuses-1.0, but no ref-data/ or reference-data/ folder of that name holds files',
-      'What to do:',
-      '  - For each vocabulary listed under "Controlled vocabularies without reference data found" that needs a value, ship reference data that tenant initialization loads, or record why it needs none.',
       'Checklist for the reviewer:',
       '  - B008-C1 Each controlled vocabulary the module needs at least one value for has one after tenant initialization.',
       '    - Start with:',
@@ -558,6 +562,7 @@ describe('B008 reference data', () => {
     'B008 manual: The committed source was not read completely, so the tool may have missed reference data. '
       + 'A reviewer must check whether the parts the tool could not read hold controlled vocabularies without reference data.', [
       'Storage: Liquibase changelog src/main/resources/db/changelog/changelog-master.xml',
+      'What to do: Check whether the parts the tool could not read hold controlled vocabularies without reference data (the checklist below).',
       'Liquibase inserts:',
       '  - src/main/resources/db/changelog/changelog-master.xml:1 — into note_type',
       'Controlled vocabularies with reference data:',

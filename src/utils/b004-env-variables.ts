@@ -377,6 +377,24 @@ export function renderB004HumanDetails(analysis: B004Analysis, agentReview?: Cri
     kind, total: variables.filter(variable => variable.sources.some(source => source.kind === kind)).length
   })).filter(entry => entry.total);
   lines.push(`Variables used: ${variables.length}${kinds.length ? ` (${kinds.map(entry => `${entry.total} ${SOURCE_KIND_TEXT[entry.kind]}`).join(', ')})` : ''}`);
+  if (analysis.status === EvaluationStatus.FAIL) {
+    const c1Gap = !analysis.existingModule && analysis.documentationChecked
+      && (variables.some(variable => C1_GAPS.some(problem => variable.problems.includes(problem))));
+    const envGap = !analysis.existingModule && ['missing', 'empty', 'not-a-list'].includes(analysis.topLevelEnv);
+    lines.push('What to do:', ...[
+      ...(c1Gap ? ['Document every variable the module uses in ENV_VARS.md or a README table with its name, default (or empty), whether it is required, and a description (policy section 3).'] : []),
+      ...(envGap ? ['List every variable with a description in the descriptor template\'s top-level "env" (policy section 3.1).'] : []),
+      ...(having('required-with-default').length ? ['Document each variable that has a default as optional, or remove its default (policy section 4.1).'] : []),
+      ...(having('name-format').length ? ['Rename each variable to upper case letters, digits and underscores (policy section 2.1).'] : []),
+      ...(having('aws-prefix').length ? ['Support an S3_ variable alongside each AWS_ one, taking precedence over it, and document both (policy sections 2.1 and 5.1).'] : [])
+    ].map(line => `  - ${line}`));
+  } else if (analysis.status === EvaluationStatus.MANUAL) {
+    lines.push('What to do: Check each finding on the checklist below against the environment variable policy.');
+  } else {
+    lines.push(`What to do: Nothing; ${variables.length
+      ? 'every environment variable the module uses is documented and named as the policy requires'
+      : `the ${analysis.documentationChecked ? 'module' : 'repository'} uses no environment variables`}.`);
+  }
   const section = (heading: string, rows: string[]) => {
     if (rows.length) lines.push(`${heading}:`, ...rows);
   };
@@ -458,18 +476,6 @@ export function renderB004HumanDetails(analysis: B004Analysis, agentReview?: Cri
   if (analysis.sourceDiagnostics.length) {
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
-  }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    const c1Gap = !analysis.existingModule && analysis.documentationChecked
-      && (variables.some(variable => C1_GAPS.some(problem => variable.problems.includes(problem))));
-    const envGap = !analysis.existingModule && ['missing', 'empty', 'not-a-list'].includes(analysis.topLevelEnv);
-    lines.push('What to do:', ...[
-      ...(c1Gap ? ['Document every variable the module uses in ENV_VARS.md or a README table with its name, default (or empty), whether it is required, and a description (policy section 3).'] : []),
-      ...(envGap ? ['List every variable with a description in the descriptor template\'s top-level "env" (policy section 3.1).'] : []),
-      ...(having('required-with-default').length ? ['Document each variable that has a default as optional, or remove its default (policy section 4.1).'] : []),
-      ...(nameFormat.length ? ['Rename each variable to upper case letters, digits and underscores (policy section 2.1).'] : []),
-      ...(awsPrefix.length ? ['Support an S3_ variable alongside each AWS_ one, taking precedence over it, and document both (policy sections 2.1 and 5.1).'] : [])
-    ].map(line => `  - ${line}`));
   }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');

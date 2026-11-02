@@ -126,7 +126,7 @@ export function evaluateF005(s007: S007RunAnalysis, moduleKind: ModuleKindResult
 }
 
 export function renderF005HumanDetails(analysis: F005Analysis): string {
-  const lines: string[] = [];
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   if (analysis.stripesFindings.length > 0) {
     lines.push("S007's Stripes finding:", ...renderS007TechnologyRows(analysis.stripesFindings));
   }
@@ -148,6 +148,22 @@ export function renderF005HumanDetails(analysis: F005Analysis): string {
   }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: F005Analysis): string {
+  const listed = 'the Stripes version the officially supported technologies page lists';
+  switch (analysis.basis) {
+    case 's007-finding':
+      return analysis.status === EvaluationStatus.FAIL
+        ? `Update @folio/stripes in package.json to ${listed}${analysis.policyRule ? ` (${reportText(analysis.policyRule)})` : ''}.`
+        : analysis.status === EvaluationStatus.MANUAL
+          ? `Check that the module works with ${listed}, starting with the checklist below.`
+          : `Nothing; the module declares ${listed}.`;
+    case 'policy-unavailable': return 'Check the module\'s @folio/stripes version against the officially supported technologies page by hand (the checklist below).';
+    case 'manifest-unreadable': return `Check which Stripes version the module uses, and that it is ${listed}, starting with package.json (the checklist below).`;
+    case 'constituent-library': return `Check that this release of the library is part of, or compatible with, ${listed} (the checklist below).`;
+    case 'stripes-missing': return `Check which Stripes version the module uses, and that it is ${listed} (the checklist below).`;
+  }
 }
 
 // Fail wins over manual, and manual over pass, as in S007.

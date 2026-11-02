@@ -173,6 +173,17 @@ describe('F005 Stripes version', () => {
     expect(result.details).toContain('Problems with the officially supported technologies list:\n  - Unexpected token');
   });
 
+  it('says what to do when the evaluation stops with an error', async () => {
+    const [result] = await new FrontendEvaluator().evaluate(path.join(repoPath, 'missing'), ['F005']);
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toMatch(/^Evaluation failed: /);
+    expect(result.details?.split('\n')).toEqual([
+      'Manual review required due to evaluation error',
+      'What to do: Check this criterion by hand; the evaluator stopped with an error before it could decide.'
+    ]);
+  });
+
   function outside(): string {
     return `${repoPath}-outside-package.json`;
   }

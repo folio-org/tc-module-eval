@@ -66,6 +66,7 @@ describe('B013 tenant selection', () => {
       + `The tool found 2 caches without a tenant in the key, Kafka consumers in 1 file, and scheduled jobs or timers in 1 file. ${CONFIRM}`);
     expect(result.details?.split('\n')).toEqual([
       'Framework: Spring Boot',
+      ...WHAT_TO_DO,
       'Tenant taken from X-Okapi-Tenant:',
       '  - folio-spring-base\'s FolioExecutionContext — 1 reference in 1 file',
       'Possible tenant problems:',
@@ -74,7 +75,6 @@ describe('B013 tenant selection', () => {
       'Work outside requests:',
       '  - Kafka consumers — 1 reference in 1 file',
       '  - Scheduled jobs or timers — 1 reference in 1 file',
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       '  - B013-C1 Every request reads the tenant from X-Okapi-Tenant.',
       '    - Start with:',
@@ -144,6 +144,7 @@ describe('B013 tenant selection', () => {
       + `The tool found 4 tenants named in configuration and 2 static tenant fields. ${CONFIRM}`);
     expect(result.details?.split('\n')).toEqual([
       'Framework: RAML Module Builder (RMB)',
+      ...WHAT_TO_DO,
       'Tenant taken from X-Okapi-Tenant:',
       '  - RMB\'s TenantTool — 1 reference in 1 file',
       '  - RMB\'s PgUtil — 1 reference in 1 file',
@@ -157,7 +158,6 @@ describe('B013 tenant selection', () => {
       '  - src/main/resources/config.properties:4 — tenant from configuration: tenants=diku,college',
       'Work outside requests:',
       '  - none found',
-      ...WHAT_TO_DO,
       'Checklist for the reviewer:',
       '  - B013-C1 Every request reads the tenant from X-Okapi-Tenant.',
       '    - Start with:',
@@ -198,8 +198,9 @@ describe('B013 tenant selection', () => {
 
     expect(result.evidence).toBe('B013 manual: Requests use grails-okapi\'s OkapiTenantResolver with GORM\'s Tenants, which reads X-Okapi-Tenant. '
       + `The tool found 3 tenants named in configuration. ${CONFIRM}`);
-    expect(result.details?.split('\n').slice(0, 7)).toEqual([
+    expect(result.details?.split('\n').slice(0, 9)).toEqual([
       'Framework: Grails',
+      ...WHAT_TO_DO,
       'Tenant taken from X-Okapi-Tenant:',
       '  - grails-okapi\'s OkapiTenantResolver with GORM\'s Tenants — 1 reference in 1 file',
       'Possible tenant problems:',
@@ -273,7 +274,7 @@ describe('B013 tenant selection', () => {
 
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toBe('B013 not_applicable: The repository is a shared library, which serves no tenant requests of its own.');
-    expect(result.details).toBe('Framework: shared library');
+    expect(result.details?.split('\n')).toEqual(['Framework: shared library', 'What to do: Nothing; a shared library serves no tenant requests of its own.']);
     expect(analysis.checklist.items).toEqual([]);
   });
 
@@ -289,7 +290,7 @@ describe('B013 tenant selection', () => {
     expect(result.evidence).toBe('B013 manual: The tool found no code that takes the tenant from X-Okapi-Tenant. '
       + `The tool found no tenant from configuration, static tenant field, cache without a tenant key, Kafka consumer or scheduled job. ${CONFIRM} `
       + 'Not all committed source could be read, so the tool may have missed some of these.');
-    expect(result.details?.split('\n').slice(7, 9)).toEqual([
+    expect(result.details?.split('\n').slice(9, 11)).toEqual([
       'What the tool could not read:',
       '  - src/main/resources/application.properties — Committed file exceeds the 1048576-byte per-file limit'
     ]);

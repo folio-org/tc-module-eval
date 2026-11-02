@@ -55,6 +55,7 @@ describe('B007 endpoint permissions', () => {
     expect(result.details?.split('\n')).toEqual([
       'Endpoints: 4 in 2 interfaces of descriptors/ModuleDescriptor-template.json, without system interfaces',
       'Permissions defined in permissionSets: 7',
+      'What to do: Check that each endpoint\'s permissions fit what it does, item by item on the checklist below.',
       'Endpoints that require no permission:',
       '  - GET /public/lookup: permissionsRequired is empty — descriptors/ModuleDescriptor-template.json:52',
       '  - GET /public/other: permissionsRequired is missing — descriptors/ModuleDescriptor-template.json:59',
@@ -111,14 +112,14 @@ describe('B007 endpoint permissions', () => {
     expect(result.details?.split('\n').slice(0, 9)).toEqual([
       'Endpoints: 2 in 1 interface of descriptors/ModuleDescriptor-template.json, without system interfaces',
       'Permissions defined in permissionSets: 2',
+      'What to do:',
+      '  - Give each endpoint listed under "Endpoints that require a *.all permission" a permission for what it does, and define each permission listed under '
+        + '"Endpoints that require a permission no permission set defines" in permissionSets, or require a defined one.',
       'Endpoints that require a *.all permission:',
       '  - PUT, DELETE /users/{id} (users.all) — descriptors/ModuleDescriptor-template.json:30',
       'Endpoints that require a permission no permission set defines:',
       '  - PUT, DELETE /users/{id} (users.item.put) — descriptors/ModuleDescriptor-template.json:30',
-      'Module name for permission names: users (from pom.xml artifactId mod-users)',
-      'What to do:',
-      '  - Give each endpoint listed under "Endpoints that require a *.all permission" a permission for what it does, and define each permission listed under '
-        + '"Endpoints that require a permission no permission set defines" in permissionSets, or require a defined one.'
+      'Module name for permission names: users (from pom.xml artifactId mod-users)'
     ]);
     expect(analysis.checklist.items.flatMap(item => item.obligations).map(obligation => [obligation.id, obligation.flag])).toEqual([
       ['B007-C1#1', 'fail'], ['B007-C3#1', undefined]

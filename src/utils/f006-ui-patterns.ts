@@ -437,7 +437,8 @@ export function renderF006HumanDetails(analysis: F006Analysis, agentReview?: Cri
     return [
       'What the tool found:',
       `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root; none renders an HTML element or text`,
-      '  - Translations: no translations/ directory'
+      '  - Translations: no translations/ directory',
+      'What to do: Nothing; the module renders no user interface, so there is nothing to check against the UX guidelines.'
     ].join('\n');
   }
   const forms = analysis.forms;
@@ -466,13 +467,13 @@ export function renderF006HumanDetails(analysis: F006Analysis, agentReview?: Cri
       + `${count(analysis.uiFileCount, 'file')} ${analysis.uiFileCount === 1 ? 'renders' : 'render'} HTML elements or text`,
     `  - UX guidelines: ${guidelines.loaded ? `stripes-components ${reportText(guidelines.sourceDirectory ?? '')} at ${(guidelines.commit ?? '').slice(0, 7)} `
       + `(${(guidelines.committedAt ?? '').slice(0, 10)}), ${count(guidelines.fileCount, 'file')}` : reportText(guidelines.problem ?? 'not loaded')}`,
-    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    'What to do:', '  - Check each item below against the FOLIO UX guidelines (stripes-components guides/ux-guidelines, published on ux.folio.org); '
+      + 'F006 is always decided by a reviewer.'
   ];
   const unread = [...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(file => `  - ${reportPath(file)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  lines.push('What to do:', '  - Check each item below against the FOLIO UX guidelines (stripes-components guides/ux-guidelines, published on ux.folio.org); '
-    + 'F006 is always decided by a reviewer.');
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

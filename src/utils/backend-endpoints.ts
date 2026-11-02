@@ -1,4 +1,5 @@
 import { BackendEvidence } from '../types';
+import { lineCounter } from './backend-routes';
 import { providedInterfaces } from './descriptor-handlers';
 import { escapeRegExp } from './regexp';
 
@@ -39,12 +40,17 @@ export interface PathIndex<T extends PathItem> {
   entries: Array<{ item: T; path: string }>;
 }
 
-/** The libraries in the repository's build files that serve endpoints for the module, with the build file naming each. */
-export function endpointLibraries(evidence: BackendEvidence): Array<{ artifactId: string; path: RegExp; buildFile: string }> {
+/**
+ * The libraries in the repository's build files that serve endpoints for the module, with the build file naming each
+ * and the line there: of the Maven `<artifactId>` element, or else of the first mention.
+ */
+export function endpointLibraries(evidence: BackendEvidence): Array<{ artifactId: string; path: RegExp; buildFile: string; line: number }> {
   return ENDPOINT_LIBRARIES.flatMap(library => {
-    const buildFile = evidence.snapshot.files.find(file => /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/.test(file.path)
-      && new RegExp(`\\b${escapeRegExp(library.artifactId)}\\b`).test(file.content));
-    return buildFile ? [{ ...library, buildFile: buildFile.path }] : [];
+    const name = new RegExp(`\\b${escapeRegExp(library.artifactId)}\\b`);
+    const buildFile = evidence.snapshot.files.find(file => /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/.test(file.path) && name.test(file.content));
+    if (!buildFile) return [];
+    const element = buildFile.content.indexOf(`<artifactId>${library.artifactId}</artifactId>`);
+    return [{ ...library, buildFile: buildFile.path, line: lineCounter(buildFile.content)(element >= 0 ? element : name.exec(buildFile.content)!.index) }];
   });
 }
 

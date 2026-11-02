@@ -10,6 +10,7 @@ describe('S009 evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.findings.map(item => item.classification)).toEqual(['accepted', 'accepted']);
+    expect(renderS009HumanDetails(result).split('\n')[0]).toBe('What to do: Nothing; every FOLIO library the module depends on is approved.');
   });
 
   it('fails an official coordinate absent from the allowlist even when unrelated evidence is incomplete', () => {
@@ -108,6 +109,10 @@ describe('S009 evaluator', () => {
     none.hasDependencyProject = false;
     const result = evaluateS009({ ok: false, sourcePath: '', diagnostics: [] }, none);
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
+    expect(renderS009HumanDetails(result).split('\n')).toEqual([
+      'What to do: Nothing; the repository has no Maven, Gradle, npm, or Yarn project, so it has no library dependencies to check.',
+      'Project files: none found (pom.xml, build.gradle, build.gradle.kts, or package.json)'
+    ]);
   });
 
   it('renders file hashes, the approved list, and warnings merged by message', () => {

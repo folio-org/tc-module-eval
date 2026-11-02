@@ -177,6 +177,7 @@ export function renderB006HumanDetails(analysis: B006Analysis): string {
     `Framework: ${FRAMEWORK_LABELS[analysis.framework.name]}; RAML ${analysis.ramlAccepted ? 'counts' : 'does not count'} as documentation`
   ];
   if (analysis.endpointSource) lines.push(`Endpoints: ${analysis.endpoints.length} methods and paths from ${reportText(analysis.endpointSource)}`);
+  lines.push(...whatToDo(analysis));
   if (analysis.basis !== 'library') {
     lines.push(analysis.specs.length ? 'API specs:' : 'API specs: none found (OpenAPI or Swagger files with an openapi or swagger key, RAML root files)',
       ...analysis.specs.slice(0, MAX_ROWS).map(spec => `  - ${reportPath(spec.file)} — ${spec.format === 'raml' ? 'RAML' : 'OpenAPI'}${spec.version ? ` ${reportText(spec.version)}` : ''}, ${count(spec.operationCount, 'operation')}`),
@@ -212,14 +213,31 @@ export function renderB006HumanDetails(analysis: B006Analysis): string {
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    const raml = !analysis.ramlAccepted && analysis.endpoints.some(endpoint => endpoint.documentation === 'raml');
-    lines.push('What to do:', `  - Document ${raml ? 'every endpoint' : 'each endpoint listed above'} in an OpenAPI spec in the repository${raml
-      ? (analysis.existingModule ? ' (only an RMB module may keep RAML)' : ' (an RMB module evaluated as an existing module may keep RAML)')
-      : ''}.`);
-  }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B006Analysis): string[] {
+  if (analysis.status === EvaluationStatus.FAIL) {
+    const raml = !analysis.ramlAccepted && analysis.endpoints.some(endpoint => endpoint.documentation === 'raml');
+    return ['What to do:', `  - Document ${raml ? 'every endpoint' : 'each endpoint listed below'} in an OpenAPI spec in the repository${raml
+      ? (analysis.existingModule ? ' (only an RMB module may keep RAML)' : ' (an RMB module evaluated as an existing module may keep RAML)')
+      : ''}.`];
+  }
+  if (analysis.basis === 'library') return ['What to do: Nothing; a shared library serves no endpoints of its own.'];
+  if (analysis.basis === 'no-endpoints') return ['What to do: Nothing; the module descriptor provides no endpoints other than system interfaces.'];
+  if (analysis.basis === 'no-descriptor') {
+    return ['What to do: Find the module descriptor template (see B001), and check that each endpoint it provides is documented in an OpenAPI spec (the checklist below).'];
+  }
+  if (analysis.basis === 'no-routes') {
+    return ['What to do: Check which endpoints the edge module serves, and that each is documented in an OpenAPI spec, starting with the checklist below.'];
+  }
+  if (analysis.status === EvaluationStatus.MANUAL) {
+    return [`What to do: Check that each endpoint on the checklist below is documented in an OpenAPI spec${analysis.ramlAccepted ? ' or in RAML' : ''}, `
+      + 'or in the published spec of the library it comes from.'];
+  }
+  const raml = analysis.endpoints.some(endpoint => endpoint.documentation === 'raml');
+  return [`What to do: Nothing; every endpoint is documented in ${raml ? 'OpenAPI or, for this existing RMB module, RAML' : 'OpenAPI'}.`];
 }
 
 function endpointLabel(endpoint: B006Endpoint): string {

@@ -191,9 +191,11 @@ function staticB014(evidence: BackendEvidence): B014Analysis {
 }
 
 export function renderB014HumanDetails(analysis: B014Analysis): string {
-  if (analysis.basis === 'library') return ['Health check: not applicable to a shared library', ...runtimeLines(analysis.runtime)].join('\n');
+  if (analysis.basis === 'library') {
+    return ['Health check: not applicable to a shared library', `What to do: ${WHAT_TO_DO.library}`, ...runtimeLines(analysis.runtime)].join('\n');
+  }
   const lines = [`Health check: GET ${HEALTH_ROUTE} was ${analysis.endpointCalled ? 'called' : 'not called; the result comes from the committed files'}`,
-    ...runtimeLines(analysis.runtime)];
+    `What to do: ${WHAT_TO_DO[analysis.basis]}`, ...runtimeLines(analysis.runtime)];
   if (analysis.mechanisms.length) {
     lines.push('Found:', ...analysis.mechanisms.slice(0, MAX_ROWS).map(mechanism =>
       `  - ${MECHANISM_NAMES[mechanism.kind]}: ${location(mechanism.path, mechanism.line)} — ${reportText(mechanism.note)}`),
@@ -217,6 +219,15 @@ export function renderB014HumanDetails(analysis: B014Analysis): string {
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
 }
+
+const WHAT_TO_DO: Record<B014Basis, string> = {
+  library: 'Nothing; a shared library is not deployed on its own and serves no health check.',
+  ambiguous: `Check whether the repository is a module, and if so that it answers GET ${HEALTH_ROUTE} with 200 (the checklist below).`,
+  'mechanism-found': `Nothing; the module has a mechanism that serves GET ${HEALTH_ROUTE}.`,
+  'no-mechanism': `Check that the module answers GET ${HEALTH_ROUTE} with 200, starting with the checklist below.`,
+  'runtime-200': `Nothing; GET ${HEALTH_ROUTE} answered 200 when the module ran.`,
+  'runtime-not-200': `Check that GET ${HEALTH_ROUTE} answers 200 once the module's dependencies are available (the checklist below).`
+};
 
 function runtimeLines(runtime: B014Runtime | undefined): string[] {
   if (!runtime) return [];

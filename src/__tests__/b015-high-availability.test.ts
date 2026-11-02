@@ -169,7 +169,7 @@ describe('B015 high availability', () => {
 
     expect(result.evidence).toBe('B015 manual: No HTTP sessions found. 252 in-memory caches or maps and 2 scheduled jobs may hold state on one instance or run on every instance. A reviewer must check them. '
       + 'The committed source was not read completely, so the tool may have missed some.');
-    expect(result.details?.split('\n').slice(0, 10)).toEqual([
+    expect(result.details?.split('\n').slice(0, 11)).toEqual([
       'What the tool found:',
       '  - Source read: 3 Java, Groovy or Kotlin files in src/main and grails-app, without comments',
       '  - HTTP sessions: none found',
@@ -177,9 +177,10 @@ describe('B015 high availability', () => {
       '  - In-memory caches and maps: 252 in 2 files',
       '  - Scheduled jobs: 2 in 2 files',
       '  - Listed: the first 250 sites of each kind, 252 of 254',
+      'What to do:',
+      '  - Check each item below for a deployment of several instances behind a load balancer without session affinity; B015 is always decided by a reviewer.',
       'What the tool could not read:',
-      `  - ${JAVA}/Broken.java — Skipped binary committed content`,
-      'What to do:'
+      `  - ${JAVA}/Broken.java — Skipped binary committed content`
     ]);
     expect(analysis.checklist.items.map(item => [item.id, item.startingPoints.length, item.obligations.map(obligation => `${obligation.subject}:${obligation.line}`)])).toEqual([
       ['B015-C1', 0, ['undefined:undefined']],

@@ -83,6 +83,10 @@ describe('JavaEvaluator', () => {
         const failed = results.filter(r => r.evidence.startsWith('Evaluation failed:'));
         expect(failed.length).toBeGreaterThan(0);
         failed.forEach(result => expect(result.status).toBe(EvaluationStatus.MANUAL));
+        failed.filter(result => result.criterionId.startsWith('S')).forEach(result => expect(result.details!.split('\n')).toEqual([
+          'Manual review required due to evaluation error',
+          'What to do: Check this criterion by hand; the evaluator stopped with an error before it could decide.'
+        ]));
       } finally {
         realFs.rmSync(parent, { recursive: true, force: true });
       }

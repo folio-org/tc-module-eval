@@ -38,6 +38,7 @@ describe('B014 health check endpoint', () => {
       + 'The tool found the mechanism in configuration and did not call the endpoint.');
     expect(rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Nothing; the module has a mechanism that serves GET /admin/health.',
       'Found:',
       '  - Spring Boot actuator: src/main/resources/application.yml:6 — management.endpoints.web.base-path /admin; actuator serves health at /admin/health'
     ]);
@@ -66,6 +67,7 @@ describe('B014 health check endpoint', () => {
       + 'The tool found no RMB RestVerticle main verticle and no GET /admin/health route in the source. A reviewer must check that the module answers GET /admin/health with 200.');
     expect(rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Check that the module answers GET /admin/health with 200, starting with the checklist below.',
       'Actuator not counted for the Spring Boot application:',
       `  - ${APPLICATION} — management.endpoints.web.base-path is not set, so actuator serves health at /actuator/health`,
       'Checklist for the reviewer:',
@@ -141,6 +143,7 @@ describe('B014 health check endpoint', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(rows).toEqual([
       HEADER,
+      'What to do: Check that the module answers GET /admin/health with 200, starting with the checklist below.',
       'Actuator not counted for the Spring Boot application:',
       ...problems.map(([line, note]) => `  - ${at(line)} — ${note}`),
       'Checklist for the reviewer:',
@@ -202,6 +205,7 @@ describe('B014 health check endpoint', () => {
       + 'The tool found no RMB RestVerticle main verticle and no GET /admin/health route in the source. A reviewer must check that the module answers GET /admin/health with 200.');
     expect(rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Check that the module answers GET /admin/health with 200, starting with the checklist below.',
       'Actuator not counted for the Spring Boot application:',
       '  - src/main/resources/application.yml:9 — management.endpoints.web.exposure.include does not include health when spring.config.activate.on-profile is prod',
       '  - src/main/resources/application-k8s.properties:1 — management.server.port is 8082, so actuator does not listen on the module\'s port when the profile k8s is active',
@@ -425,6 +429,7 @@ describe('B014 health check endpoint', () => {
     expect(rmb.result.evidence).toBe('B014 pass: RMB\'s RestVerticle, the main verticle in pom.xml:1, serves GET /admin/health. The tool found the mechanism in the build file and did not call the endpoint.');
     expect(rmb.rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Nothing; the module has a mechanism that serves GET /admin/health.',
       'Found:',
       '  - RMB: pom.xml:1 — org.folio.rest.RestVerticle is the main verticle, and RMB serves GET /admin/health'
     ]);
@@ -432,6 +437,7 @@ describe('B014 health check endpoint', () => {
       + 'A reviewer must check that the module answers GET /admin/health with 200.');
     expect(schemaOnly.rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Check that the module answers GET /admin/health with 200, starting with the checklist below.',
       'Checklist for the reviewer:',
       CHECKLIST_TITLE
     ]);
@@ -453,6 +459,7 @@ describe('B014 health check endpoint', () => {
       + 'It could not read 1 route in the source, which may serve it. A reviewer must check that the module answers GET /admin/health with 200.');
     expect(other.rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Check that the module answers GET /admin/health with 200, starting with the checklist below.',
       'Routes the tool could not read:',
       '  - src/main/java/org/folio/edge/example/MainVerticle.java:5',
       'Checklist for the reviewer:',
@@ -470,6 +477,7 @@ describe('B014 health check endpoint', () => {
     expect(result.evidence).toBe('B014 pass: The source registers GET /admin/health (src/main/java/org/folio/example/HealthController.java:3). The tool found the mechanism in the source and did not call the endpoint.');
     expect(rows).toEqual([
       'Health check: GET /admin/health was not called; the result comes from the committed files',
+      'What to do: Nothing; the module has a mechanism that serves GET /admin/health.',
       'Found:',
       '  - Route: src/main/java/org/folio/example/HealthController.java:3 — GET /admin/health',
       'Actuator not counted for the Spring Boot application:',
@@ -483,7 +491,10 @@ describe('B014 health check endpoint', () => {
 
     expect(library.result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(library.result.evidence).toBe('B014 not_applicable: The repository is a shared library, which is not deployed on its own and serves no health check.');
-    expect(library.rows).toEqual(['Health check: not applicable to a shared library']);
+    expect(library.rows).toEqual([
+      'Health check: not applicable to a shared library',
+      'What to do: Nothing; a shared library is not deployed on its own and serves no health check.'
+    ]);
     expect(ambiguous.result.evidence).toBe('B014 manual: No module descriptor was found and the repository is not a known shared library, so the tool cannot tell whether it is a module that must serve GET /admin/health (see B001). '
       + 'It found RMB in pom.xml:1. A reviewer must check it.');
     expect(ambiguous.analysis.basis).toBe('ambiguous');

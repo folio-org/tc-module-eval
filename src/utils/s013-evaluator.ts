@@ -278,9 +278,7 @@ function technologyHalf(inputs: S013Inputs, area: 'frontend' | 'backend'): S013T
 }
 
 export function renderS013HumanDetails(analysis: S013Analysis): string {
-  const lines: string[] = [];
-  const action = whatToDo(analysis);
-  if (action) lines.push(`What to do: ${action}`);
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   lines.push(...coverageLines(analysis.coverage));
   if (analysis.coverageScope) lines.push(...coverageScopeLines(analysis.coverageScope));
 
@@ -376,8 +374,10 @@ function verdict(finding: S013TechnologyFinding): string {
   return `supported${finding.policyStatement ? ` ("${reportText(finding.policyStatement)}")` : ''}`;
 }
 
-function whatToDo(analysis: S013Analysis): string | undefined {
-  if (analysis.status === EvaluationStatus.PASS) return undefined;
+function whatToDo(analysis: S013Analysis): string {
+  if (analysis.status === EvaluationStatus.PASS) {
+    return `Nothing; SonarCloud's overall coverage is at least ${REQUIRED_COVERAGE}%, and the tests use officially supported technologies.`;
+  }
   const { coverage, technologies } = analysis;
   const actions: string[] = [];
   switch (coverage.reason) {
@@ -408,7 +408,7 @@ function whatToDo(analysis: S013Analysis): string | undefined {
         ? `Check which technologies the unit tests use and that they are officially supported (${supported}).`
         : 'Fix the supported-technologies list (problems below) and run the evaluation again.');
   }
-  return actions.join(' ') || undefined;
+  return actions.join(' ');
 }
 
 /** A SonarCloud percentage as reported: 77.5 reads 77.5%, 80 reads 80.0%, and 79.95 stays 79.95%, never rounded up to 80. */

@@ -124,7 +124,7 @@ export function determineComplianceStatus(
       criterionId,
       status: EvaluationStatus.PASS,
       evidence,
-      details: `Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every dependency that must be named in the README (Category B) is named.${warningInfo}`
+      details: `Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every dependency that must be named in the README (Category B) is named.\nWhat to do: Nothing; the ASF 3rd Party License Policy allows every dependency's license.${warningInfo}`
     };
   }
 

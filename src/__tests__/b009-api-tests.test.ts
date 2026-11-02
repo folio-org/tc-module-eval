@@ -69,6 +69,7 @@ describe('B009 API tests in a supported technology', () => {
     expect(details).toEqual([
       'Evaluated as: a backend module',
       'Policy: Karate (provisional) under backend-integration-testing',
+      'What to do: Nothing; the module\'s API tests use Karate, the framework the supported technologies page lists for backend API tests.',
       'API tests in the repository:',
       '  - none (no Karate or other .feature files, and no Postman, Bruno or Insomnia collections)',
       'folio-integration-tests (only a folder named after the module is searched):',
@@ -109,7 +110,7 @@ describe('B009 API tests in a supported technology', () => {
     expect(result.evidence).toBe('B009 manual: folio-integration-tests could not be checked: Neither the module descriptor, pom.xml nor the repository name gives a FOLIO module name. '
       + 'A reviewer must check the module\'s API tests.');
     expect(requested).toEqual([]);
-    expect(details.slice(4)).toEqual([
+    expect(details.slice(5)).toEqual([
       'folio-integration-tests (only a folder named after the module is searched):',
       '  - Not checked: Neither the module descriptor, pom.xml nor the repository name gives a FOLIO module name.',
       'Checklist for the reviewer:',
@@ -125,7 +126,7 @@ describe('B009 API tests in a supported technology', () => {
     const { result, rows: details } = await b009(root, { responses: INTEGRATION_TESTS, repositoryName: 'mod-agreements' });
 
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
-    expect(details.slice(4, 7)).toEqual([
+    expect(details.slice(5, 8)).toEqual([
       'folio-integration-tests (only a folder named after the module is searched):',
       '  - Module name: mod-agreements (the repository name)',
       '  - No folder named mod-agreements; tests kept under another name, such as erm/ for mod-agreements, are not seen'
@@ -142,13 +143,13 @@ describe('B009 API tests in a supported technology', () => {
     expect(details).toEqual([
       'Evaluated as: a backend module',
       'Policy: Karate (provisional) under backend-integration-testing',
+      'What to do:',
+      '  - Rerun with --allow-remote-lookups, or check folio-integration-tests by hand for the module\'s API tests.',
       'API tests in the repository:',
       '  - none (no Karate or other .feature files, and no Postman, Bruno or Insomnia collections)',
       'folio-integration-tests (only a folder named after the module is searched):',
       '  - Module name: mod-users (from descriptors/ModuleDescriptor-template.json)',
       '  - Not checked: remote lookups are off',
-      'What to do:',
-      '  - Rerun with --allow-remote-lookups, or check folio-integration-tests by hand for the module\'s API tests.',
       'Checklist for the reviewer:',
       '  - B009-C2 The module\'s API tests, in the repository or outside it (such as in folio-integration-tests, in a folder named mod-users or under another name), use Karate.'
     ]);
@@ -158,7 +159,7 @@ describe('B009 API tests in a supported technology', () => {
     const library = await b009(repository({ 'pom.xml': pom('folio-spring-base') }), { responses: INTEGRATION_TESTS });
     expect(library.result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(library.result.evidence).toBe('B009 not applicable: The repository is a shared library, which has no API of its own to test.');
-    expect(library.rows).toEqual(['Evaluated as: a shared library']);
+    expect(library.rows).toEqual(['Evaluated as: a shared library', 'What to do: Nothing; a shared library has no API of its own to test.']);
     expect(library.requested).toEqual([]);
 
     const ambiguous = await b009(repository({ 'pom.xml': pom('mod-users'), 'tests/users.postman_collection.json': '{}' }), { responses: INTEGRATION_TESTS });
@@ -183,6 +184,8 @@ describe('B009 API tests in a supported technology', () => {
     expect(details).toEqual([
       'Evaluated as: a backend module',
       'Policy: Karate (provisional) under backend-integration-testing',
+      'What to do:',
+      '  - Write the module\'s API tests in Karate, for example in folio-integration-tests, and remove the Postman and Bruno tests.',
       'API tests in the repository:',
       '  - Karate (on the supported technologies page): 1 .feature file',
       '    - src/test/resources/karate/users.feature',
@@ -195,8 +198,6 @@ describe('B009 API tests in a supported technology', () => {
       '  - Module name: mod-users (from descriptors/ModuleDescriptor-template.json)',
       '  - Karate (on the supported technologies page): 4 .feature files, with mod-users/src/main/resources/karate-config.js',
       ...MOD_USERS_FILES.map(file => `    - ${file}`),
-      'What to do:',
-      '  - Write the module\'s API tests in Karate, for example in folio-integration-tests, and remove the Postman and Bruno tests.',
       'Checklist for the reviewer:',
       '  - B009-C1 Each API test suite listed uses Karate, the framework the supported technologies page lists, or is not an API test suite.',
       '    - Start with:',
@@ -238,7 +239,7 @@ describe('B009 API tests in a supported technology', () => {
     expect(cucumber.result.status).toBe(EvaluationStatus.MANUAL);
     expect(cucumber.result.evidence).toBe('B009 manual: The repository has Karate API tests (1 .feature file). '
       + 'The repository has 1 .feature file without Karate syntax or a karate-config.js, which may be Cucumber or Karate tests. A reviewer must check which framework the API tests use.');
-    expect(cucumber.rows.slice(2, 7)).toEqual([
+    expect(cucumber.rows.slice(3, 8)).toEqual([
       'API tests in the repository:',
       '  - Karate (on the supported technologies page): 1 .feature file',
       '    - src/test/resources/users.feature',
@@ -269,7 +270,7 @@ describe('B009 API tests in a supported technology', () => {
     });
     expect(empty.result.status).toBe(EvaluationStatus.MANUAL);
     expect(empty.result.evidence).toBe('B009 manual: folio-integration-tests has a folder named mod-x, but it has no .feature files. A reviewer must check which framework the API tests use.');
-    expect(empty.rows.slice(4, 7)).toEqual([
+    expect(empty.rows.slice(5, 8)).toEqual([
       'folio-integration-tests (only a folder named after the module is searched):',
       '  - Module name: mod-x (from descriptors/ModuleDescriptor-template.json)',
       '  - mod-x/ has no .feature files'
@@ -368,7 +369,7 @@ describe('B009 on an edge module', () => {
     });
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(details.slice(0, 1).concat(details.slice(4, 8))).toEqual([
+    expect(details.slice(0, 1).concat(details.slice(5, 9))).toEqual([
       'Evaluated as: an edge module',
       'folio-integration-tests (only a folder named after the module is searched):',
       '  - Module name: edge-x (from pom.xml)',

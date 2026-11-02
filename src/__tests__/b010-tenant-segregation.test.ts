@@ -66,6 +66,7 @@ describe('B010 tenant data segregation', () => {
       'Storage: found',
       '  - RMB database schema src/main/resources/templates/db_scripts/schema.json',
       `  - PostgresClient or PgUtil used in ${ITEMS_API}`,
+      'What to do: Check that each tenant\'s data stays in its own schema, item by item on the checklist below.',
       'Tenant-schema mechanism: found',
       '  - src/main/resources/templates/db_scripts/schema.json — RMB database schema; RMB creates these tables in each tenant\'s own schema',
       `  - ${ITEMS_API}:4 — PostgresClient.getInstance with a tenant id: 1 call in 1 file`,
@@ -273,7 +274,7 @@ describe('B010 tenant data segregation', () => {
     expect(analysis.basis).toBe(basis);
     expect(result.evidence).toBe(evidence);
     if (status === EvaluationStatus.NOT_APPLICABLE) {
-      expect(result.details).toBe('Storage: none found');
+      expect(result.details?.split('\n')).toEqual(['Storage: none found', 'What to do: Nothing; the module stores no data, so there is no data to segregate by tenant.']);
       expect(analysis.checklist.items).toEqual([]);
     }
   });

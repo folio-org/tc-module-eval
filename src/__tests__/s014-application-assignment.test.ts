@@ -67,7 +67,10 @@ describe('S014 application assignment', () => {
 
       expect(result.status).toBe(EvaluationStatus.PASS);
       expect(result.evidence).toBe('S014 pass: mod-search is assigned to exactly one application on the FOLIO LSP platform, app-search, which is the application named for this evaluation.');
-      expect(result.details).toContain('Module name: mod-search (from the artifactId in pom.xml)');
+      expect(result.details!.split('\n').slice(0, 2)).toEqual([
+        'What to do: Nothing; the module is in exactly one platform application, the one named for this evaluation.',
+        'Module name: mod-search (from the artifactId in pom.xml)'
+      ]);
       expect(result.details).toContain([
         'Platform: folio-org/platform-lsp snapshot at f14ebae (R1-2027-SNAPSHOT.100200000003371)',
         'Applications checked: 41 (each read from FAR). Applications outside the platform, such as app-platform-full, are not counted.',
@@ -341,6 +344,7 @@ describe('S014 application assignment', () => {
         const result = await evaluate(repo, { responses, application: 'app-a' });
         expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
         expect(result.evidence).toBe('S014 not applicable: This repository is a FOLIO library, not a deployable module, so it is not assigned to an application.');
+        expect(result.details).toBe('What to do: Nothing; S014 does not apply to FOLIO libraries.\nRepository kind: library');
         expect(result.requested).toEqual([]);
       }
     });

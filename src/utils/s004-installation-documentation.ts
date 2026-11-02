@@ -161,6 +161,10 @@ export function formatS004Evidence(
   const classification = result.classification;
   const evidence = `S004 ${classification.status}: ${classification.reason}`;
   const lines: Array<string | undefined> = [
+    classification.status === EvaluationStatus.FAIL
+      ? 'What to do: Add a section to README.md that shows how to build, start, and configure the module, including any services it needs (such as PostgreSQL or Kafka).'
+      : 'What to do: Read the documentation examples below and confirm they are enough to build, configure, and run the module.',
+    '',
     'Documentation files checked:',
     ...(classification.filesConsidered.length
       ? classification.filesConsidered.map(file => `  - ${reportPath(file)}`)

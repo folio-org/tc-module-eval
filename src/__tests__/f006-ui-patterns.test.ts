@@ -272,7 +272,7 @@ describe('F006 UI layouts, patterns and norms', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toBe('F006 not applicable: This package renders no user interface.');
     expect(result.details).toBe('What the tool found:\n  - Production source: 1 file in src/, lib/ and the repository root; none renders an HTML element or text\n'
-      + '  - Translations: no translations/ directory');
+      + '  - Translations: no translations/ directory\nWhat to do: Nothing; the module renders no user interface, so there is nothing to check against the UX guidelines.');
     expect(analysis.checklist.items).toEqual([]);
   });
 
@@ -290,7 +290,7 @@ describe('F006 UI layouts, patterns and norms', () => {
       + '0 uses of Stripes components in 0 files; no stripesFinalForm or stripesForm forms; 0 confirmation modals; 0 raw HTML controls; 0 hex colors in CSS; '
       + '0 external links. Not all source files could be read.');
     expect(lines.slice(lines.indexOf('What the tool could not read:'), lines.indexOf('What the tool could not read:') + 3)).toEqual([
-      'What the tool could not read:', '  - src/Big.css — Committed file exceeds the 262144-byte per-file limit', 'What to do:']);
+      'What the tool could not read:', '  - src/Big.css — Committed file exceeds the 262144-byte per-file limit', 'Checklist for the reviewer:']);
   });
 
   it('vendors exactly the files its manifest lists: layout, forms, navigation, actions, the confirmation modal and the results list', () => {

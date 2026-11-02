@@ -41,6 +41,7 @@ describe('S010 deterministic evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.summary).toContain('library');
+    expect(renderS010HumanDetails(result).split('\n').slice(0, 2)).toEqual(['What to do: Nothing; S010 does not apply to FOLIO libraries.', 'What the tool checked:']);
   });
 
   it.each(['node', 'mixed', 'unknown'] as const)('keeps %s runtimes manual', runtimeKind => {
@@ -55,6 +56,7 @@ describe('S010 deterministic evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.findings[0]).toMatchObject({ outcome: 'satisfactory', dependencyId: 'dependency-scope' });
+    expect(renderS010HumanDetails(result).split('\n')[0]).toBe('What to do: Nothing; the module depends on no external services.');
   });
 
   it('keeps detector-empty incomplete evidence manual', () => {

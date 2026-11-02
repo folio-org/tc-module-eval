@@ -86,10 +86,10 @@ describe('F004 WCAG 2.1 AA accessibility', () => {
       '  - Hard-coded aria-label text: 1 (also listed by F003)',
       '  - Production source: 1 file in src/, lib/ and the repository root (tests, stories and examples excluded); 1 file renders HTML elements or text',
       '  - Accessibility guides: stripes-components guides/accessibility at ae9e5d7 (2026-10-28), 3 files',
-      'Runtime evidence:',
-      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin measure a running FOLIO UI with axe-core',
       'What to do:',
       '  - Run axe DevTools (current major version) on the module\'s main screens in a test or reference environment and check each item below; F004 is always decided by a reviewer.',
+      'Runtime evidence:',
+      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin measure a running FOLIO UI with axe-core',
       'Checklist for the reviewer:',
       '  - F004-C1 axe DevTools (current major version) finds no WCAG 2.1 AA violations caused by the module on its main screens.',
       '    - Start with:',
@@ -143,7 +143,7 @@ describe('F004 WCAG 2.1 AA accessibility', () => {
       '  - Console errors: 1 on 1 page; first: "Failed to load resource: the server responded with a status of 501 ()"',
       '  - Failed requests: 1; first: HTTP 501 GET https://folio-etesting-snapshot-kong.ci.folio.org/_/env',
       '  - Blocked requests: 1; first: GET https://eureka-customer-assets.s3.us-west-2.amazonaws.com/diku/logo.png (another origin)',
-      'What to do:'
+      'Checklist for the reviewer:',
     ]);
     expect(from('  - F004-C1 axe DevTools (current major version) finds no WCAG 2.1 AA violations caused by the module on its main screens.', 6)).toEqual([
       '  - F004-C1 axe DevTools (current major version) finds no WCAG 2.1 AA violations caused by the module on its main screens.',
@@ -188,7 +188,7 @@ describe('F004 WCAG 2.1 AA accessibility', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toBe('F004 not applicable: This package renders no user interface.');
     expect(result.details).toBe('What the tool found:\n  - Production source: 1 file in src/, lib/ and the repository root; none renders an HTML element or text\n'
-      + '  - Translations: no translations/ directory');
+      + '  - Translations: no translations/ directory\nWhat to do: Nothing; the module renders no user interface, so there is nothing to check for accessibility.');
     expect(analysis.checklist.items).toEqual([]);
     expect(probe.calls).toEqual([]);
   });

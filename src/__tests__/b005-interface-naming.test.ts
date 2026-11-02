@@ -52,6 +52,8 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 4 in descriptors/ModuleDescriptor-template.json, without the system interfaces _tenant, _jsonSchemas, and timer.x_y',
+      'What to do:',
+      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens, and give each interface listed under "Versions that are not major.minor" a major.minor version.',
       'Names with a dot or underscore:',
       '  - users.settings — a dot',
       '  - item_storage — an underscore',
@@ -62,8 +64,6 @@ describe('B005 interface naming', () => {
       'Names that differ from the first segment of their handler paths (information only):',
       '  - users.settings — /user',
       '  - item_storage — /item-storage',
-      'What to do:',
-      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens, and give each interface listed under "Versions that are not major.minor" a major.minor version.'
     ]);
     expect(analysis.checklist.items).toEqual([]);
   });
@@ -78,6 +78,7 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: an existing module (--existing-module)',
       'Interfaces: 4 in descriptors/ModuleDescriptor-template.json, without the system interfaces _tenant, _jsonSchemas, and timer.x_y',
+      'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.',
       'Names with a dot or underscore:',
       '  - users.settings — a dot',
       '  - item_storage — an underscore',
@@ -123,6 +124,7 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 4 in descriptors/ModuleDescriptor-template.json',
+      'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.',
       'Names with uppercase letters:',
       '  - Users-Settings',
       'Names not made of letters and digits joined by single hyphens:',
@@ -148,13 +150,13 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 1 in descriptors/ModuleDescriptor-template.json',
+      'What to do:',
+      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens.',
       'Names with a dot or underscore:',
       '  - Users.Settings — a dot',
       'Names with uppercase letters:',
       '  - Users.Settings',
       'Routes found in the source: 0',
-      'What to do:',
-      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens.',
       'Checklist for the reviewer:',
       '  - B005-C2 Each interface listed for review has a name of words joined by hyphens and a major.minor version, or a reason to keep the ones it has.',
       '    - Start with:',
@@ -170,10 +172,16 @@ describe('B005 interface naming', () => {
 
     expect(result.status).toBe(status);
     expect(result.evidence).toBe(evidence);
-    expect(result.details?.split('\n').slice(0, 4)).toEqual([
+    expect(result.details?.split('\n').slice(0, status === EvaluationStatus.FAIL ? 6 : 5)).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 1 in service/src/main/okapi/ModuleDescriptor-template.json',
-      ...(status === EvaluationStatus.FAIL ? ['Versions that are not major.minor:', `  - erm ${value}`] : [
+      ...(status === EvaluationStatus.FAIL ? [
+        'What to do:',
+        '  - Give each interface listed under "Versions that are not major.minor" a major.minor version.',
+        'Versions that are not major.minor:',
+        `  - erm ${value}`
+      ] : [
+        'What to do: Nothing; every interface the module provides has a name of words joined by hyphens and a major.minor version.',
         'Resolved from build properties:',
         `  - erm version ${value} from \${okapiInterfaceVersion} (service/gradle.properties)`
       ])
@@ -208,8 +216,9 @@ describe('B005 interface naming', () => {
     const { result, analysis } = await b005(root);
 
     expect(result.evidence).toBe('B005 manual: The tool could not check the version of "loans" (${loansVersion}), because the build properties do not define the build placeholder ${loansVersion}. A reviewer must check it.');
-    expect(result.details?.split('\n').slice(1, 6)).toEqual([
+    expect(result.details?.split('\n').slice(1, 7)).toEqual([
       'Interfaces: 2 in descriptors/ModuleDescriptor-template.json, without the system interface _tenant',
+      'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.',
       'Build placeholders the build properties do not define:',
       '  - loans — in the version ${loansVersion}',
       'Resolved from build properties:',
@@ -278,6 +287,7 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 1 in descriptors/ModuleDescriptor-template.json, without the system interface _tenant',
+      'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.',
       'Routes found in the source: 8',
       'Routes in no provided interface:',
       '  - DELETE /items/{id} — src/main/java/org/example/Routes.java:9',
@@ -314,7 +324,8 @@ describe('B005 interface naming', () => {
     expect(analysis.unmatchedRoutes).toHaveLength(unmatched);
     expect(result.evidence).toBe(`B005 manual: The descriptor's handlers and the source's routes are too many to match within the tool's limit, so it could not check whether ${unmatched} routes are in a provided interface: `
       + `${firstLabels}, and ${unmatched - 3} more. A reviewer must check them.`);
-    expect(result.details?.split('\n').slice(2, 5)).toEqual([
+    expect(result.details?.split('\n').slice(2, 6)).toEqual([
+      'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.',
       `Routes found in the source: ${routes.length}`,
       'Routes not matched against every handler (too many to match):',
       `  - ${firstLabels.split(', ')[0]} — src/main/java/org/example/Routes.java:${firstLine}`
@@ -334,11 +345,11 @@ describe('B005 interface naming', () => {
     expect(result.details?.split('\n')).toEqual([
       'Evaluated as: a new module (the default)',
       'Interfaces: 1 in descriptors/ModuleDescriptor-template.json',
+      'What to do:',
+      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens.',
       'Names with a dot or underscore:',
       '  - edge_example — an underscore',
       'Routes: not checked, because an edge module\'s routes serve clients outside FOLIO',
-      'What to do:',
-      '  - Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens.'
     ]);
   });
 

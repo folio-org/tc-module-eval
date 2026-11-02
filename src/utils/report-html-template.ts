@@ -92,7 +92,9 @@ function diagnosticLines(values: string[]): string[] {
   const seen = new Set<string>();
   // Review errors and warnings can quote repository text, so each stays on one row.
   return values
-    .map(value => reportText(value.trim().replace(/^[-•]\s*/, '').replace(/^Not applied:\s*/i, '')))
+    .map(value => reportText(value.trim().replace(/^[-•]\s*/, '').replace(/^(?:Not applied|Errors|Warnings):\s*/i, '')))
+    // The report names no adapter or model; the reason already says which run failed.
+    .filter(value => !/^(?:Adapter|Model label):/.test(value))
     .filter(value => value && !seen.has(value) && seen.add(value))
     .map(value => value.length > 500 ? `${value.slice(0, 497)}...` : value);
 }
@@ -106,13 +108,63 @@ function pinnedSourceBase(result: EvaluationResult): string | undefined {
 }
 
 // The rows from a "Heading:" row through its indented rows removed.
-function withoutSection(lines: string[], heading: string): string[] {
+function withoutSection(lines: string[], heading: string | ((row: string) => boolean)): string[] {
+  const matches = typeof heading === 'string' ? (row: string) => row.trim() === heading : heading;
   let inSection = false;
   return lines.filter(line => {
-    if (line.trim() === heading) inSection = true;
+    if (!/^\s/.test(line) && matches(line)) inSection = true;
     else if (inSection && line.trim() && !/^\s/.test(line)) inSection = false;
     return !inSection;
   });
+}
+
+// The end of the top-level row at `start` and its indented rows.
+function sectionEnd(lines: string[], start: number): number {
+  let end = start + 1;
+  while (end < lines.length && /^\s/.test(lines[end])) end++;
+  return end;
+}
+
+const AGENT_REVIEW_HEADING = 'Agent review (advisory):';
+const KEY_VALUE_ROW = /^[A-Z][A-Za-z0-9 ()\-/]{1,38}:\s/;
+
+// Sections the HTML report leaves out so the reviewer sees what to act on; the JSON report keeps them.
+const HTML_OMITTED_SECTIONS: Record<string, Array<string | ((row: string) => boolean)>> = {
+  S005: ['Artifact mechanics:', 'Disclosure form:', 'Evidence from the code:', 'Possible mismatches:'],
+  B005: [row => /^Routes found in the source: \d+$/.test(row),
+    'Names that differ from the first segment of their handler paths (information only):']
+};
+
+// The HTML report's rows: "What to do" right after the agent review and any opening sentence, and per-criterion
+// sections left out (see HTML_OMITTED_SECTIONS).
+function htmlDetailLines(criterion: EvaluationResult['criteria'][number]): string[] {
+  let lines = reportDetailLines(criterion);
+  const start = lines.findIndex(line => /^What to do:/.test(line));
+  if (start >= 0) {
+    const block = lines.slice(start, sectionEnd(lines, start));
+    const rest = [...lines.slice(0, start), ...lines.slice(start + block.length)];
+    let at = rest[0]?.trim() === AGENT_REVIEW_HEADING ? sectionEnd(rest, 0) : 0;
+    while (at < rest.length && rest[at].trim() && !/^\s/.test(rest[at]) && !rest[at].trim().endsWith(':')
+      && !KEY_VALUE_ROW.test(rest[at]) && !/^\s/.test(rest[at + 1] ?? '')) at++;
+    lines = [...rest.slice(0, at), ...block, ...rest.slice(at)];
+  }
+  for (const section of HTML_OMITTED_SECTIONS[criterion.criterionId] ?? []) lines = withoutSection(lines, section);
+  if (criterion.criterionId === 'S006') {
+    // Coverage and skipped files follow the strongest examples.
+    const examples = lines.findIndex(line => /^Strongest examples\b.*:$/.test(line));
+    if (examples >= 0) lines = lines.slice(0, sectionEnd(lines, examples));
+  }
+  if (criterion.criterionId === 'B015') {
+    // Only what the tool found, and whether it listed every site.
+    const found = lines.indexOf('What the tool found:');
+    if (found >= 0) {
+      const end = sectionEnd(lines, found);
+      const kept = lines.slice(found + 1, end).filter(line =>
+        !/^\s+- (?:Source read|Agent review scope): /.test(line) && !/^\s+- [^:]+: none found$/.test(line));
+      lines = [...lines.slice(0, found), ...(kept.length ? ['What the tool found:', ...kept] : []), ...lines.slice(end)];
+    }
+  }
+  return lines;
 }
 
 // Use structured advice as the HTML source of truth, not criterion-specific prose copies.
@@ -121,7 +173,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
   // Criteria with agent review write an "Agent review:" section even without a structured review; elsewhere such a
   // line can only come from repository text, so it stays an ordinary row.
   if (!criterion.agentReview && !AGENT_REVIEW_CRITERIA.has(criterion.criterionId)) return original;
-  // F and B criteria show what the tool found, then the checklist, then the agent review; S criteria put the review first.
+  // The agent review comes first for every criterion; F and B criteria then show what the tool found and the checklist.
   const checklist = frontendChecklistOf(criterion.criterionId, criterion.criterionDetails);
   let inReview = false;
   let hadReview = false;
@@ -156,22 +208,26 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
           : failed
             ? 'No usable advisory review was returned.'
             : 'Agent review was not run.';
-    const diagnosticDetails = skipped || !diagnostics.length ? [] : [
-      `  - Reason: ${diagnostics[0]}`,
-      ...(diagnostics.length > 1
-        ? ['  - Additional diagnostics:', ...diagnostics.slice(1, 6).map(value => `    - ${value}`)]
+    // The adapter's run diagnosis says why the run failed, so it gets its own row.
+    const diagnosis = diagnostics.find(value => value.startsWith('OpenCode run diagnosis: '));
+    const others = diagnostics.filter(value => value !== diagnosis);
+    const diagnosticDetails = skipped || !others.length ? [] : [
+      `  - Reason: ${others[0]}`,
+      ...(diagnosis ? [`  - Diagnosis: ${diagnosis.slice('OpenCode run diagnosis: '.length)}`] : []),
+      ...(others.length > 1
+        ? ['  - Additional diagnostics:', ...others.slice(1, 6).map(value => `    - ${value}`)]
         : []),
-      ...(diagnostics.length > 6 ? [`    - ... ${diagnostics.length - 6} more in the downloaded JSON report`] : [])
+      ...(others.length > 6 ? [`    - ... ${others.length - 6} more in the downloaded JSON report`] : [])
     ];
     const block = ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails];
-    return checklist ? [...details, ...block] : [...block, ...details];
+    return [...block, ...details];
   }
   if (checklist) {
     // Each checklist item carries the agent's results for its obligations; the review section keeps the rest.
     return [
+      ...renderFrontendAgentReviewLines(checklist, review),
       ...withoutSection(details, CHECKLIST_HEADING),
-      ...renderFrontendChecklistLines(checklist, review),
-      ...renderFrontendAgentReviewLines(checklist, review)
+      ...renderFrontendChecklistLines(checklist, review)
     ];
   }
   // The subject names each criterion's own report uses, so the rows match the rest of its details.
@@ -186,30 +242,6 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
           ? s011AgentReviewNames(criterion.criterionDetails as S011Analysis)
           : {};
   return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
-}
-
-// Structured reference lists (objects with `evidenceReferences`, plus `evidenceReferenceCount` when the list was
-// shortened) that the details text cites. A row's "(evidence: ...)" becomes a reference list only when it shows
-// one of these lists exactly, so repository text cannot invent references or omitted counts.
-function evidenceReferenceLists(
-  criterion: EvaluationResult['criteria'][number],
-  details: string[]
-): Array<{ references: string[]; count: number }> {
-  const lists: Array<{ references: string[]; count: number }> = [];
-  const collect = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      value.forEach(collect);
-    } else if (value && typeof value === 'object') {
-      const { evidenceReferences: references, evidenceReferenceCount: count } = value as Record<string, unknown>;
-      if (Array.isArray(references) && references.length && references.every(reference => typeof reference === 'string')) {
-        lists.push({ references, count: typeof count === 'number' ? count : references.length });
-      }
-      Object.values(value).forEach(collect);
-    }
-  };
-  collect(criterion.criterionDetails);
-  const text = details.join('\n');
-  return lists.filter(list => text.includes(`(evidence: ${list.references[0]}`));
 }
 
 // S003 dependencies grouped by license, from the structured dependency list rather than the evidence text,
@@ -255,14 +287,13 @@ export function createHtmlReport(result: EvaluationResult): string {
       citedSourcePaths
     },
     items: safeResult.criteria.map((criterion, index) => {
-      const details = reportDetailLines(criterion);
+      const details = htmlDetailLines(criterion);
       return {
         id: criterion.criterionId,
         title: criterionTitle(criterion.criterionId, criterion.evidence),
         status: criterion.status,
         evidence: criterion.evidence,
         details,
-        referenceLists: evidenceReferenceLists(criterion, details),
         dependencyLicenses: dependencyLicenses(criterion),
         // Rows link only to files this criterion cites in its structured data, so text copied from the
         // repository (build output, license names) cannot link to a file another criterion cites.
@@ -354,7 +385,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     }
     function category(id) { return {A:'Administrative',S:'Shared',B:'Backend',F:'Frontend'}[id.charAt(0)] || ''; }
 
-    function buildTree(lines, referenceLists) {
+    function buildTree(lines) {
       var rootNode = {children:[]};
       var stack = [{indent:-1,node:rootNode}];
       lines.forEach(function (raw) {
@@ -370,29 +401,6 @@ export function createHtmlReport(result: EvaluationResult): string {
         stack[stack.length - 1].node.children.push(node);
         stack.push({indent:indent,node:node});
       });
-      // A row's final "(evidence: ...)" becomes a reference list only when it shows one of the criterion's
-      // structured reference lists exactly; otherwise it is repository text and stays part of the row.
-      function evidenceChildren(node) {
-        node.children.forEach(function (child) {
-          var match = !child.children.length && child.text.match(/^(.*)\(evidence: (.+)\)\s*$/s);
-          if (match) {
-            var hidden = 0, listed = match[2].replace(/, \.\.\. (\d+) more$/, function (_all, count) { hidden = Number(count); return ''; });
-            // The listed text must be exactly the first (count - hidden) references of one structured list.
-            var refs = referenceLists.map(function (list) {
-              var shown = list.count - hidden;
-              return shown > 0 && shown <= list.references.length ? list.references.slice(0, shown) : [];
-            }).find(function (refs) { return refs.length && refs.join(', ') === listed; });
-            if (refs) {
-              child.text = match[1].trimEnd();
-              child.children = refs.map(function (text) { return {text:text,children:[]}; });
-              child.hidden = hidden || undefined;
-              child.unit = 'refs';
-            }
-          }
-          evidenceChildren(child);
-        });
-      }
-      evidenceChildren(rootNode);
       // "... N more" list markers become a hidden-item count on their parent instead of a fake list entry.
       (function collapseOverflow(node) {
         node.children = node.children.filter(function (child) {
@@ -409,7 +417,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       // Criteria without an automated check have exactly this details text; a prefix or evidence suffix could be repository text.
       var human = item.status === 'manual' && item.details.length === 1 && item.details[0] === 'This criterion requires manual evaluation by a human reviewer';
       var evidence = item.evidence.replace(/^[SFB]\d+ manual:\s*/,'');
-      var tree = human ? [] : buildTree(item.details, item.referenceLists || []);
+      var tree = human ? [] : buildTree(item.details);
       if (item.id === 'S007' || item.id === 'F005') {
         // F005 shows S007's Stripes rows under its own heading.
         var technologyFindings = tree.find(function (node) { return /^(?:Technology findings|S007's Stripes finding):?$/.test(node.text); });
@@ -434,13 +442,11 @@ export function createHtmlReport(result: EvaluationResult): string {
         checkItem.openByDefault = true; checkItem.hideCount = true;
         checkItem.children.forEach(function (node) { if (node.text === 'Start with:') { node.openByDefault = true; node.hideCount = true; } });
       });
-      // reportDetailLines puts the only real agent-review section first, or last for F and B criteria; a heading
-      // anywhere else is repository text.
-      var agentIndex = !tree.length ? -1
-        : tree[0].text === 'Agent review (advisory):' ? 0
-          : /^[FB]\d+$/.test(item.id) && tree[tree.length - 1].text === 'Agent review (advisory):' ? tree.length - 1 : -1;
+      // reportDetailLines puts the only real agent-review section first; a heading anywhere else is repository text.
+      var agentIndex = tree.length && tree[0].text === 'Agent review (advisory):' ? 0 : -1;
       if (agentIndex >= 0) {
-        tree[agentIndex].hideCount = true;
+        // Its rows are the review's fields, so none is hidden behind "Show more", as for a card's sections.
+        tree[agentIndex].hideCount = true; tree[agentIndex].showAll = true;
         tree[agentIndex].children.forEach(function (node) {
           var prose = node.text.match(/^(?:Summary|Rationale):\s+(.+)$/s);
           node.showFullText = !!prose && prose[1].trim().split(/\s+/).length <= 100;
@@ -586,14 +592,14 @@ export function createHtmlReport(result: EvaluationResult): string {
       var expanded=!!state.clamps[key],limit=220; container.appendChild(document.createTextNode(text.length>limit&&!expanded?text.slice(0,limit).trimEnd()+'…':text));
       if(text.length>limit){container.appendChild(document.createTextNode(' '));var more=h('button','link-button',expanded?'less':'more');more.type='button';focusKey(more,'clamp-'+key);more.addEventListener('click',function(event){event.stopPropagation();state.clamps[key]=!expanded;render();});container.appendChild(more);}
     }
-    function renderNodes(parent,nodes,depth,prefix,hidden) {
-      var cap=6,moreKey=prefix+'#more',showAll=!!state.nodes[moreKey]; var list=!showAll&&nodes.length>cap+2?nodes.slice(0,cap):nodes;
+    function renderNodes(parent,nodes,depth,prefix,hidden,uncapped) {
+      var cap=6,moreKey=prefix+'#more',showAll=!!state.nodes[moreKey]; var list=!showAll&&!uncapped&&depth>0&&nodes.length>cap+2?nodes.slice(0,cap):nodes;
       list.forEach(function (node,index) {
         var key=prefix+'/'+index,kids=node.children.length+(node.hidden||0),isSection=depth===0&&kids>0; var isOpen=Object.prototype.hasOwnProperty.call(state.nodes,key)?state.nodes[key]:isSection||!!node.openByDefault;
         if(isSection){var section=h('button','section-row');section.type='button';focusKey(section,'node-'+key);section.setAttribute('aria-expanded',String(isOpen));section.append(chevron(isOpen),h('span','section-label',node.text.replace(/:$/,'')));if(!node.hideCount)section.appendChild(h('span','count-chip',String(node.countText||kids)));section.appendChild(h('span','section-line'));section.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});parent.appendChild(section);}
         else if(depth===0){var topKv=node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);if(topKv){var kv=h('div','kv');kv.append(h('span','kv-key',topKv[1]));var value=h('span','kv-value');clampedText(value,topKv[2],key);kv.appendChild(value);parent.appendChild(kv);}else parent.appendChild(h('div','para',node.text));}
         else {var nestedKv=!kids&&node.text.match(/^([A-Z][A-Za-z0-9 ()\-/]{1,38}):\s+(.+)$/s);var indent=Math.max(0,depth-1)*22;if(nestedKv){var row=h('div','kv');row.style.marginLeft=indent+'px';row.append(h('span','kv-key',nestedKv[1]));var val=h('span','kv-value');clampedText(val,nestedKv[2],key,node.showFullText);row.appendChild(val);parent.appendChild(row);}else{var cited=citedById[prefix.split('/')[0]],parts=rowParts(node.text.replace(/:$/,kids?'':':'),cited);var item=h(kids?'button':'div','item-row'+(kids?' toggle':''));if(kids){item.type='button';focusKey(item,'node-'+key);}item.style.setProperty('--indent',indent+'px');item.appendChild(kids?chevron(isOpen):h('span','leaf'));var copy=h('span','item-copy');if(parts.lead){var href=rowHref(parts,cited);var lead=h(href?'a':'span','lead',parts.lead);if(href){lead.href=href;lead.target='_blank';lead.rel='noopener noreferrer';lead.addEventListener('click',function(event){event.stopPropagation();});}copy.appendChild(lead);}if(parts.tag)copy.appendChild(h('span','tag',parts.tag));var body=h('span','');clampedText(body,parts.text,key);copy.appendChild(body);if(kids&&!node.hideCount)copy.appendChild(h('span','nested-count',kids+(node.unit?' '+node.unit:'')));item.appendChild(copy);if(kids){item.setAttribute('aria-expanded',String(isOpen));item.addEventListener('click',function(){state.nodes[key]=!isOpen;render();});}parent.appendChild(item);}}
-        if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden);
+        if(kids&&isOpen)renderNodes(parent,node.children,depth+1,key,node.hidden,node.showAll);
       });
       if(hidden){var omitted=h('div','item-row');omitted.style.setProperty('--indent',Math.max(0,depth-1)*22+'px');omitted.append(h('span','leaf'),h('span','more-text',hidden+' more not included in the report'));parent.appendChild(omitted);}
       if(list.length<nodes.length){var show=h('button','list-more','Show '+(nodes.length-list.length)+' more');show.type='button';focusKey(show,'more-'+moreKey);show.addEventListener('click',function(){state.nodes[moreKey]=true;render();});parent.appendChild(show);}else if(showAll){var fewer=h('button','list-more','Show fewer');fewer.type='button';focusKey(fewer,'more-'+moreKey);fewer.addEventListener('click',function(){state.nodes[moreKey]=false;render();});parent.appendChild(fewer);}

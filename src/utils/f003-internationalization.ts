@@ -342,7 +342,8 @@ export function renderF003HumanDetails(analysis: F003Analysis, agentReview?: Cri
     return [
       'What the tool found:',
       `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root; none renders an HTML element or text`,
-      '  - Translations: no translations/ directory'
+      '  - Translations: no translations/ directory',
+      'What to do: Nothing; the module renders no user interface, so it has no text to translate.'
     ].join('\n');
   }
   const file = analysis.translationFile;
@@ -360,7 +361,13 @@ export function renderF003HumanDetails(analysis: F003Analysis, agentReview?: Cri
     `  - English texts: ${analysis.invalidTexts.length ? `${count(analysis.invalidTexts.length, 'invalid text')}` : file?.state === 'valid' ? 'all valid' : 'not checked'}`,
     `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root (tests, stories and examples excluded); `
       + `${count(analysis.uiFileCount, 'file')} ${analysis.uiFileCount === 1 ? 'renders' : 'render'} HTML elements or text`,
-    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    ...(analysis.status === EvaluationStatus.FAIL
+      ? ['What to do:', '  - Declare react-intl in dependencies or peerDependencies, render user-visible text with FormattedMessage or formatMessage, '
+        + 'and keep the English texts in translations/<namespace>/en.json, a JSON object of non-empty strings.']
+      : [analysis.status === EvaluationStatus.MANUAL
+        ? 'What to do: Check each item on the checklist below: each message id the code uses is in en.json, and each user-visible text goes through react-intl.'
+        : 'What to do: Nothing; the module renders its text with react-intl, and en.json has every message id it names.'])
   ];
   const siteRows = (heading: string, sites: Array<F003SourceSite & { note?: string }>): void => {
     if (!sites.length) return;
@@ -377,10 +384,6 @@ export function renderF003HumanDetails(analysis: F003Analysis, agentReview?: Cri
   const unread = [...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(path => `  - ${reportPath(path)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Declare react-intl in dependencies or peerDependencies, render user-visible text with FormattedMessage or formatMessage, '
-      + 'and keep the English texts in translations/<namespace>/en.json, a JSON object of non-empty strings.');
-  }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

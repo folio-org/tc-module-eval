@@ -179,10 +179,10 @@ describe('F007 works in the latest Chrome', () => {
       '    - src/setup.js:1 — whatwg-fetch (import)',
       '  - Production source: 3 files in src/, lib/ and the repository root (tests, stories and examples excluded); 1 file renders HTML elements or text',
       '  - Browser API list: config/f007-browser-apis.json, retrieved 2026-10-30, 13 removed APIs',
-      'Runtime evidence:',
-      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'What to do:',
       '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; F007 is always decided by a reviewer.',
+      'Runtime evidence:',
+      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'Checklist for the reviewer:',
       '  - F007-C1 The module\'s main screens load in the latest Chrome without console errors caused by the module.',
       '    - Start with:',
@@ -271,7 +271,7 @@ describe('F007 works in the latest Chrome', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toBe('F007 not applicable: This package renders no user interface.');
     expect(result.details).toBe('What the tool found:\n  - Production source: 1 file in src/, lib/ and the repository root; none renders an HTML element or text\n'
-      + '  - Translations: no translations/ directory');
+      + '  - Translations: no translations/ directory\nWhat to do: Nothing; the module renders no user interface, so there is nothing to check in Chrome.');
     expect(analysis.checklist.items).toEqual([]);
     expect(analysis.agentReviewUnavailableReason).toBeUndefined();
   });
@@ -325,7 +325,7 @@ describe('F007 works in the latest Chrome', () => {
       + '0 reads of navigator properties that identify the browser; 0 vendor-prefixed API uses; 0 uses of APIs Chrome removed; no browserslist override; '
       + '0 polyfills. Not all source files could be read.');
     const lines = (result.details ?? '').split('\n');
-    expect(lines.slice(lines.indexOf('What the tool could not read:'), lines.indexOf('What to do:'))).toEqual([
+    expect(lines.slice(lines.indexOf('What the tool could not read:'), lines.indexOf('Checklist for the reviewer:'))).toEqual([
       'What the tool could not read:', '  - package.json — does not parse cleanly']);
   });
 
@@ -348,10 +348,10 @@ describe('F007 works in the latest Chrome', () => {
       '    - package.json:1 — defaults',
       '  - Production source: 1 file in src/, lib/ and the repository root (tests, stories and examples excluded); 1 file renders HTML elements or text',
       '  - Browser API list: the browser API list could not be read: missing',
-      'Runtime evidence:',
-      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'What to do:',
       '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; F007 is always decided by a reviewer.',
+      'Runtime evidence:',
+      '  - Not collected; --ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       'Checklist for the reviewer:',
       '  - F007-C1 The module\'s main screens load in the latest Chrome without console errors caused by the module.',
       '  - F007-C2 No code path depends on another browser or a removed Chrome API.',

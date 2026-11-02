@@ -351,7 +351,7 @@ describe('S013 unit test coverage and test technologies', () => {
       expect(passing.status).toBe(EvaluationStatus.PASS);
       expect(passing.evidence).toBe('S013 pass: SonarCloud reports 85.0% test coverage, meeting the required 80%. The tests use JUnit, which is an officially supported technology.');
       expect(passing.details).toContain('  - JUnit (org.junit.jupiter:junit-jupiter in server/pom.xml, test scope): supported');
-      expect(passing.details).not.toContain('What to do');
+      expect(passing.details!.split('\n')[0]).toBe("What to do: Nothing; SonarCloud's overall coverage is at least 80%, and the tests use officially supported technologies.");
 
       const withTestNg = await evaluate(await repository('mod-y', {
         ...files,

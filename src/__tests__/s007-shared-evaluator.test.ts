@@ -408,7 +408,32 @@ describe('S007 shared evaluator', () => {
       expect(result.details).toContain('    - Why: Version 36.0.0 is not allowed by the policy rule "raml-module-builder 35 for existing modules only". '
         + 'It is newer than the rule allows: use a version the rule allows, or ask the Technical Council to update the policy.');
       expect(result.details).toContain('pom.xml — org.folio:domain-models-runtime, version 36.0.0');
+      expect(result.details!.split('\n')[1]).toBe('What to do: Change each technology marked "fails" below to a version the officially supported technologies list allows, or ask the Technical Council to update the list.');
     }
+  });
+
+  it.each([
+    [false, 'Evaluated as: a new module (the default)'],
+    [true, 'Evaluated as: an existing module (--existing-module)']
+  ])('states how the module was evaluated (existing module: %s) without changing the result', async (existingModule, evaluatedAs) => {
+    await write('pom.xml', `
+      <project>
+        <properties><java.version>21</java.version></properties>
+        <dependencies><dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>35.4.1</version></dependency></dependencies>
+      </project>
+    `);
+    const run = EvaluationRunUtils.createEvaluationRun({ repositoryPath: repoPath, language: 'java', criteriaFilter: ['S007'], existingModule });
+
+    const result = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, run);
+
+    expect(result.status).toBe(EvaluationStatus.PASS);
+    expect(result.details!.split('\n').slice(0, 3)).toEqual([
+      evaluatedAs,
+      'What to do: Nothing; every technology found is officially supported.',
+      'Technology findings:'
+    ]);
+    expect((result.criterionDetails as S007AnalysisResult).existingModule).toBe(existingModule);
+    expect(run.artifacts.s007Analysis?.analysis.existingModule).toBeUndefined();
   });
 
   it.each([

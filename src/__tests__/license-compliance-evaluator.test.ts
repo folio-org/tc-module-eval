@@ -99,7 +99,10 @@ describe('determineComplianceStatus', () => {
 
     expect(result.criterionId).toBe('S003');
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details).toContain('Every dependency has a license that the ASF 3rd Party License Policy allows');
+    expect(result.details!.split('\n')).toEqual([
+      'Every dependency has a license that the ASF 3rd Party License Policy allows. None is prohibited (Category X), and every dependency that must be named in the README (Category B) is named.',
+      "What to do: Nothing; the ASF 3rd Party License Policy allows every dependency's license."
+    ]);
   });
 
   it('should return FAIL when Category X violation is present', () => {

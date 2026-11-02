@@ -44,7 +44,9 @@ describe('S008 analyzer', () => {
 
   it('passes complete zero-interface declarations and keeps incomplete evidence manual', () => {
     const empty = declarations('users', '1.0'); empty.declarations = [];
-    expect(evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), empty).status).toBe(EvaluationStatus.PASS);
+    const passed = evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), empty);
+    expect(passed.status).toBe(EvaluationStatus.PASS);
+    expect(renderS008HumanDetails(passed).split('\n')[0]).toBe('What to do: Nothing; the module declares no interfaces from other modules.');
     empty.complete = false;
     expect(evaluateS008(kind, 'official', ok(ledger('approved-tcr')), ok(catalog('accepted', 'users', '1.0')), empty).status).toBe(EvaluationStatus.MANUAL);
   });
@@ -65,7 +67,9 @@ describe('S008 analyzer', () => {
 
   it('applies applicability before invalid policy and reports provenance', () => {
     const failed = { ok: false as const, sourcePath: 'missing', diagnostics: [{ code: 'policy_missing', message: 'missing' }] };
-    expect(evaluateS008({ kind: 'library', evidence: [], warnings: [] }, 'official', failed, failed, declarations('x', '1.0')).status).toBe(EvaluationStatus.NOT_APPLICABLE);
+    const library = evaluateS008({ kind: 'library', evidence: [], warnings: [] }, 'official', failed, failed, declarations('x', '1.0'));
+    expect(library.status).toBe(EvaluationStatus.NOT_APPLICABLE);
+    expect(renderS008HumanDetails(library).split('\n')).toEqual(['What to do: Nothing; S008 does not apply to FOLIO libraries.', 'Repository kind: library']);
     expect(evaluateS008({ kind: 'ambiguous', evidence: [], warnings: [] }, 'official', failed, failed, declarations('x', '1.0')).status).toBe(EvaluationStatus.MANUAL);
     const result = analyze('users', '1.2', 'approved-tcr');
     expect(renderS008HumanDetails(result)).toContain(`Platform release: R1 (folio-org/platform-lsp at commit ${'a'.repeat(40)})`);

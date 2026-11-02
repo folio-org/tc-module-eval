@@ -342,7 +342,14 @@ export function renderF001HumanDetails(analysis: F001Analysis, agentReview?: Cri
       ? `interface paths of ${reportText(analysis.index.descriptorVersion ?? '')} (platform-lsp ${(analysis.index.platformCommit ?? '').slice(0, 7)}), ${count(analysis.index.interfaceCount ?? 0, 'interface')}`
       : `not loaded: ${reportText(analysis.index.problem ?? '')}`}`,
     `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root (tests, stories and examples excluded)`,
-    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    ...(analysis.status === EvaluationStatus.FAIL
+      ? ['What to do:', '  - Add each interface to "okapiInterfaces" in package.json, or to "optionalOkapiInterfaces" when the code checks stripes.hasInterface first.']
+      : analysis.status === EvaluationStatus.MANUAL
+        ? ['What to do: Check that each request on the checklist below goes to an interface in "okapiInterfaces" or "optionalOkapiInterfaces" in package.json.']
+        : [analysis.siteCount
+          ? 'What to do: Nothing; package.json declares every interface the module\'s code sends requests to.'
+          : 'What to do: Nothing; the module\'s code sends no requests to FOLIO interfaces.'])
   ];
   const siteRow = (site: F001MappedSite, note: string) => `  - ${reportPath(site.path)}:${site.line} — ${reportText(note)}`;
   if (analysis.undeclared.length) {
@@ -362,9 +369,6 @@ export function renderF001HumanDetails(analysis: F001Analysis, agentReview?: Cri
     ...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(path => `  - ${reportPath(path)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Add each interface to "okapiInterfaces" in package.json, or to "optionalOkapiInterfaces" when the code checks stripes.hasInterface first.');
-  }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

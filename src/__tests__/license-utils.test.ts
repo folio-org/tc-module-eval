@@ -48,7 +48,10 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
 
       expect(result).toMatchObject({ criterionId: 'S001', status: EvaluationStatus.PASS });
       expect(result.evidence).toBe('The LICENSE file is the Apache License 2.0.');
-      expect(result.details).toBe('License file: LICENSE (Apache License 2.0)');
+      expect(result.details).toBe([
+        'What to do: Nothing; the LICENSE file is the Apache License 2.0.',
+        'License file: LICENSE (Apache License 2.0)'
+      ].join('\n'));
     });
 
     it('passes an Apache LICENSE file that appends third-party notices under other licenses', async () => {
@@ -71,7 +74,10 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
       expect(result.status).toBe(EvaluationStatus.FAIL);
       expect(result.evidence).toContain('The LICENSE file is not the Apache License 2.0.');
       expect(result.evidence).toContain('replace LICENSE with the Apache License 2.0 text');
-      expect(result.details).toBe('License file: LICENSE (not Apache 2.0; starts with "MIT License")');
+      expect(result.details).toBe([
+        'What to do: Replace LICENSE with the Apache License 2.0 text.',
+        'License file: LICENSE (not Apache 2.0; starts with "MIT License")'
+      ].join('\n'));
     });
 
     it('fails a LICENSE that starts with another Apache version and only mentions Apache-2.0 later', async () => {
@@ -107,7 +113,10 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
       const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.PASS);
-      expect(result.details).toBe('License file: LICENSE (Apache License 2.0)');
+      expect(result.details).toBe([
+        'What to do: Nothing; the LICENSE file is the Apache License 2.0.',
+        'License file: LICENSE (Apache License 2.0)'
+      ].join('\n'));
     });
 
     it('fails a COPYING file with another license and names it', async () => {
@@ -127,6 +136,7 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
       expect(result.status).toBe(EvaluationStatus.MANUAL);
       expect(result.evidence).toContain('The top-level license files disagree: LICENSE.md is the Apache License 2.0, but LICENSE is not.');
       expect(result.details).toBe([
+        'What to do: Decide which license applies. FOLIO modules must use Apache 2.0 only, so the module team must remove or replace LICENSE.',
         'License file: LICENSE (not Apache 2.0; starts with "MIT License")',
         'License file: LICENSE.md (Apache License 2.0)'
       ].join('\n'));
@@ -141,7 +151,11 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
 
       expect(result.status).toBe(EvaluationStatus.PASS);
       expect(result.evidence).toBe('pom.xml declares the Apache License 2.0. There is no top-level LICENSE file.');
-      expect(result.details).toContain('Build file: pom.xml declares Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)');
+      expect(result.details).toBe([
+        'What to do: Nothing; pom.xml declares the Apache License 2.0.',
+        'License file: none (looked for top-level LICENSE, LICENCE and COPYING files in any case, with any extension)',
+        'Build file: pom.xml declares Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)'
+      ].join('\n'));
     });
 
     it('fails a non-Apache license declared in pom.xml', async () => {
@@ -189,7 +203,7 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
       for (const line of result.details!.split('\n')) {
-        expect(line).toMatch(/^(License file|Build file): /);
+        expect(line).toMatch(/^(What to do|License file|Build file): /);
       }
       expect(`${result.evidence}\n${result.details}`).not.toContain('(evidence:');
       expect(result.details).toContain('Build file: pom.xml declares Apache License, Version 2.0 and MIT');
@@ -263,7 +277,10 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
       const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.details).toBe('License file: LICENSE (not read: it links outside the repository)');
+      expect(result.details).toBe([
+        'What to do: Check the license files that were not read by hand. The module needs one top-level LICENSE file containing the Apache License 2.0 text.',
+        'License file: LICENSE (not read: it links outside the repository)'
+      ].join('\n'));
       expect(`${result.evidence}\n${result.details}`).not.toContain('evaluator-secret-token-123');
     });
 
@@ -345,7 +362,7 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
       const result = await check();
 
       expect(result.status).toBe(EvaluationStatus.MANUAL);
-      expect(result.details!.split('\n')).toHaveLength(21);
+      expect(result.details!.split('\n')).toHaveLength(22);
       expect(result.details).toContain('License file: 5 more (not read: only the first 20 license files are read)');
     });
   });
@@ -365,6 +382,7 @@ describe('LicenseUtils.checkApache2License (S001)', () => {
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.evidence).toContain('could not run');
-    expect(result.details).toContain('Error: ENOENT');
+    expect(result.details!.split('\n')[0]).toMatch(/^Error: Error: ENOENT/);
+    expect(result.details!.split('\n')[1]).toBe('What to do: Check by hand that the repository has a top-level LICENSE file with the Apache License 2.0 text.');
   });
 });

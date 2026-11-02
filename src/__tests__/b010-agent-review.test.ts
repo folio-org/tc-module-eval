@@ -123,7 +123,7 @@ describe('B010 agent review', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.agentReview).toBeUndefined();
     expect((result.criterionDetails as B010Analysis).agentReviewUnavailableReason).toBeUndefined();
-    expect(result.details).toBe('Storage: none found');
+    expect(result.details?.split('\n')).toEqual(['Storage: none found', 'What to do: Nothing; the module stores no data, so there is no data to segregate by tenant.']);
   });
 
   it.each([

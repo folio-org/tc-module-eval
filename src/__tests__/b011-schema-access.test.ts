@@ -60,6 +60,7 @@ describe('B011 access to other modules\' database schemas', () => {
       `Storage: RMB database schema ${DB}/schema.json`,
       'Own schema: <tenant>_mod_example',
       'Files read: 2 SQL scripts, changelogs and sources, with comments removed',
+      'What to do: Check that each reference on the checklist below is unreachable, part of FQM, or an accepted one-time migration.',
       'Own-schema references (not counted): 1',
       'References in migrations:',
       `  - ${DB}/migrate.sql:3 — \${myuniversity}_mod_configuration.config_data`,
@@ -110,6 +111,8 @@ describe('B011 access to other modules\' database schemas', () => {
       `Storage: RMB database schema ${DB}/schema.json`,
       'Own schema: <tenant>_mod_example',
       'Files read: 5 SQL scripts, changelogs and sources, with comments removed',
+      'What to do:',
+      '  - Read the data of other modules through their APIs instead of their database schemas, for each reference in the module\'s code or in an RMB script that runs on every install and upgrade; a one-time copy belongs in a migration (an RMB script with fromModuleVersion, or a Liquibase changeset).',
       'References in the module\'s code:',
       '  - src/main/java/org/example/Repository.java:3 — "_mod_orders_storage',
       '  - src/main/java/org/example/Repository.java:2 — %s_mod_users.users',
@@ -121,8 +124,6 @@ describe('B011 access to other modules\' database schemas', () => {
       `  - ${DB}/migrate.sql:1 — \${myuniversity}_mod_configuration.config_data`,
       'How the migrations run:',
       `  - ${DB}/migrate.sql — an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`,
-      'What to do:',
-      '  - Read the data of other modules through their APIs instead of their database schemas, for each reference in the module\'s code or in an RMB script that runs on every install and upgrade; a one-time copy belongs in a migration (an RMB script with fromModuleVersion, or a Liquibase changeset).',
       'Checklist for the reviewer:',
       '  - B011-C1 Each reference to another module\'s database schema is unreachable, part of FQM, or an accepted one-time migration.',
       '    - Start with:',
@@ -229,9 +230,10 @@ describe('B011 access to other modules\' database schemas', () => {
     }));
 
     expect(result.status).toBe(EvaluationStatus.PASS);
-    expect(result.details?.split('\n').slice(1, 4)).toEqual([
+    expect(result.details?.split('\n').slice(1, 5)).toEqual([
       'Own schema: <tenant>_mod_example',
       'Files read: 2 SQL scripts, changelogs and sources, with comments removed',
+      'What to do: Nothing; the module refers to no other module\'s database schema.',
       'Own-schema references (not counted): 1'
     ]);
   });
@@ -403,7 +405,8 @@ describe('B011 access to other modules\' database schemas', () => {
       ...javaFile('  String schema(String tenantId, String module) { return tenantId + "_mod_" + module; }')
     }));
 
-    expect(result.details?.split('\n').slice(3, 14)).toEqual([
+    expect(result.details?.split('\n').slice(3, 15)).toEqual([
+      'What to do: Check that each reference on the checklist below is unreachable, part of FQM, or an accepted one-time migration.',
       'References in scripts no readable schema.json lists:',
       `  - ${DB}/rename.sql:1 — \${myuniversity}_mod_old`,
       'References in other files:',
@@ -431,6 +434,7 @@ describe('B011 access to other modules\' database schemas', () => {
     const { result } = await b011(rmbModule([], { 'src/main/resources/data.json': `"${'x'.repeat(1024 * 1024)}"` }));
 
     expect(result.details?.split('\n').slice(3)).toEqual([
+      'What to do: Check that each reference on the checklist below is unreachable, part of FQM, or an accepted one-time migration.',
       'What the tool could not read:',
       '  - src/main/resources/data.json — Committed file exceeds the 1048576-byte per-file limit',
       'Checklist for the reviewer:',

@@ -24,7 +24,7 @@ export function s002ArtifactFailureResult(artifact: ModuleDescriptorArtifact): C
     criterionId: 'S002',
     status: UNCERTAIN_ARTIFACT_STATUSES.has(artifact.status) ? EvaluationStatus.MANUAL : EvaluationStatus.FAIL,
     evidence: artifactFailureEvidence(artifact),
-    details: formatS002Details(artifact)
+    details: formatS002Details(artifact, artifactFailureAction(artifact))
   };
 }
 
@@ -33,7 +33,7 @@ export function s002MissingPathResult(artifact: ModuleDescriptorArtifact): Crite
     criterionId: 'S002',
     status: EvaluationStatus.FAIL,
     evidence: 'A module descriptor was reported as found, but its location was not recorded, so it could not be checked.',
-    details: formatS002Details(artifact)
+    details: formatS002Details(artifact, 'Rerun the evaluation, or check the module descriptor against the Okapi ModuleDescriptor schema by hand.')
   };
 }
 
@@ -42,7 +42,7 @@ export function s002ReadFailureResult(artifact: ModuleDescriptorArtifact, readEr
     criterionId: 'S002',
     status: EvaluationStatus.FAIL,
     evidence: `The module descriptor ${describeDescriptor(artifact)} could not be read, so it could not be checked against the Okapi schema.`,
-    details: formatS002Details(artifact, [`Read error: ${reportText(readError)}`])
+    details: formatS002Details(artifact, 'Make the module descriptor a readable file inside the repository and rerun the evaluation, or check it against the Okapi ModuleDescriptor schema by hand.', [`Read error: ${reportText(readError)}`])
   };
 }
 
@@ -56,7 +56,7 @@ export function s002ValidationResult(
       criterionId: 'S002',
       status: EvaluationStatus.PASS,
       evidence: `The module descriptor ${describeDescriptor(artifact)} matches the Okapi ModuleDescriptor schema.`,
-      details: formatS002Details(artifact, [checkedAgainst])
+      details: formatS002Details(artifact, 'Nothing; the module descriptor matches the Okapi ModuleDescriptor schema.', [checkedAgainst])
     };
   }
 
@@ -65,7 +65,7 @@ export function s002ValidationResult(
       criterionId: 'S002',
       status: EvaluationStatus.FAIL,
       evidence: `The module descriptor ${describeDescriptor(artifact)} is not valid JSON, so it could not be checked against the Okapi schema. Fix the syntax error under "JSON error" ${fixLocation(artifact)}.`,
-      details: formatS002Details(artifact, [checkedAgainst, `JSON error: ${reportText(validation.parseError)}`])
+      details: formatS002Details(artifact, `Fix the syntax error under "JSON error" ${reportText(fixLocation(artifact))}.`, [checkedAgainst, `JSON error: ${reportText(validation.parseError)}`])
     };
   }
 
@@ -74,7 +74,7 @@ export function s002ValidationResult(
     criterionId: 'S002',
     status: EvaluationStatus.FAIL,
     evidence: `The module descriptor ${describeDescriptor(artifact)} does not match the Okapi ModuleDescriptor schema: ${count} ${count === 1 ? 'problem' : 'problems'}, listed under "Schema problems". Fix ${count === 1 ? 'it' : 'them'} ${fixLocation(artifact)}.`,
-    details: formatS002Details(artifact, [
+    details: formatS002Details(artifact, `Fix the problems under "Schema problems" ${reportText(fixLocation(artifact))}.`, [
       checkedAgainst,
       'Schema problems:',
       ...validation.errors.map(error => `  - ${reportText(describeSchemaProblem(error))}`)
@@ -101,6 +101,31 @@ function artifactFailureEvidence(artifact: ModuleDescriptorArtifact): string {
   }
 }
 
+function artifactFailureAction(artifact: ModuleDescriptorArtifact): string {
+  switch (artifact.status) {
+    case 'unsafe-to-run':
+      return artifact.command?.status === 'blocked' && !artifact.command.localCommandsAllowed
+        ? 'Rerun the evaluation with --allow-local-commands on a trusted machine, or check the module descriptor against the Okapi ModuleDescriptor schema by hand.'
+        : 'Check the module descriptor against the Okapi ModuleDescriptor schema by hand.';
+    case 'command-failed':
+      return `Check by hand whether the ${buildName(artifact)} works and whether the descriptor it generates matches the Okapi ModuleDescriptor schema.`;
+    case 'ambiguous-candidates':
+      return "Pick the module's descriptor from the candidates and check it against the Okapi ModuleDescriptor schema by hand.";
+    case 'missing':
+    case 'invalid-candidate':
+      switch (artifact.strategy) {
+        case 'maven-generation':
+          return `Make the Maven build generate ${DESCRIPTOR_NAME} from the descriptor template (${MAVEN_TEMPLATE_HINT}).`;
+        case 'gradle-generation':
+          return `Make the Gradle build's processResources task generate ${DESCRIPTOR_NAME} from the descriptor template (${GRADLE_TEMPLATE_HINT}).`;
+        default:
+          return missingDescriptorFix(artifact);
+      }
+    default:
+      return 'Check the module descriptor against the Okapi ModuleDescriptor schema by hand.';
+  }
+}
+
 function sentence(text: string): string {
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }
@@ -118,8 +143,9 @@ function missingDescriptorFix(artifact: ModuleDescriptorArtifact): string {
   }
 }
 
-function formatS002Details(artifact: ModuleDescriptorArtifact, extraLines: string[] = []): string {
+function formatS002Details(artifact: ModuleDescriptorArtifact, whatToDo: string, extraLines: string[] = []): string {
   const lines: Array<string | undefined> = [
+    `What to do: ${whatToDo}`,
     artifact.descriptorPath ? `Descriptor: ${reportText(artifact.descriptorPath)}` : undefined,
     artifact.strategy ? `Source: ${sourceLabel(artifact)}` : undefined,
     artifact.command ? `Build command: ${reportText(formatCommand(artifact.command))}` : undefined,

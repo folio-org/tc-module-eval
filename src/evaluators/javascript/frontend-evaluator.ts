@@ -39,6 +39,11 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
     });
   }
 
+  protected createErrorResult(criterionId: string, error: unknown): CriterionResult {
+    const result = super.createErrorResult(criterionId, error);
+    return { ...result, details: `${result.details}\nWhat to do: Check this criterion by hand; the evaluator stopped with an error before it could decide.` };
+  }
+
   private async evaluateF001(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'F001', evaluationRun);
     const [source, sites] = await Promise.all([getFrontendSource(run, repoPath), getUiRequestSites(run, repoPath)]);

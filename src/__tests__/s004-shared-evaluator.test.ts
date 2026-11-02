@@ -46,6 +46,7 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling it for 
 
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toContain('library');
+    expect(result.details!.split('\n').slice(0, 2)).toEqual(['What to do: Nothing; S004 does not apply to FOLIO libraries.', 'Repository kind: library']);
   });
 
   it('does not invoke agent review for explicit library repositories', async () => {

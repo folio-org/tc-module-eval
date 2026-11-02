@@ -278,10 +278,10 @@ const KIND_LABELS: Record<BackendRepositoryKind, string> = {
 
 export function renderB009HumanDetails(analysis: B009Analysis): string {
   const lines = [`Evaluated as: ${KIND_LABELS[analysis.kind]}`];
-  if (analysis.kind === 'library') return lines.join('\n');
+  if (analysis.kind === 'library') return [...lines, ...whatToDo(analysis)].join('\n');
   lines.push(`Policy: ${analysis.policy.loaded
     ? `${reportText(analysis.policy.displayName ?? '')} (${reportText(analysis.policy.strength ?? '')}) under ${POLICY_SECTION}`
-    : `not loaded: ${reportText(analysis.policy.problem ?? '')}`}`);
+    : `not loaded: ${reportText(analysis.policy.problem ?? '')}`}`, ...whatToDo(analysis));
   const suiteLines = (suite: B009Suite) => [
     `  - ${suite.displayName} (${SUPPORT_LABELS[suite.support]}): ${fileCount(suite)}${suite.configFile ? `, with ${reportPath(suite.configFile)}` : ''}`,
     ...suite.files.map(path => `    - ${reportPath(path)}`),
@@ -312,13 +312,32 @@ export function renderB009HumanDetails(analysis: B009Analysis): string {
   if (analysis.unread.length) {
     lines.push('What the tool could not read:', ...analysis.unread.map(item => `  - ${item.path ? `${reportPath(item.path)} — ` : ''}${reportText(item.message)}`));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    const names = listText(analysis.suites.filter(suite => suite.support === 'unlisted').map(suite => suite.displayName));
-    lines.push('What to do:', `  - Write the module's API tests in Karate, for example in folio-integration-tests, and remove the ${names} tests.`);
-  } else if (analysis.basis === 'lookups-off') {
-    lines.push('What to do:', '  - Rerun with --allow-remote-lookups, or check folio-integration-tests by hand for the module\'s API tests.');
-  }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   if (analysis.remoteEvidence.length) lines.push('Sources:', ...analysis.remoteEvidence.map(sourceLine));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B009Analysis): string[] {
+  if (analysis.status === EvaluationStatus.FAIL) {
+    const names = listText(analysis.suites.filter(suite => suite.support === 'unlisted').map(suite => suite.displayName));
+    return ['What to do:', `  - Write the module's API tests in Karate, for example in folio-integration-tests, and remove the ${names} tests.`];
+  }
+  switch (analysis.basis) {
+    case 'lookups-off':
+      return ['What to do:', '  - Rerun with --allow-remote-lookups, or check folio-integration-tests by hand for the module\'s API tests.'];
+    case 'library':
+      return ['What to do: Nothing; a shared library has no API of its own to test.'];
+    case 'ambiguous':
+      return ['What to do: Check whether the repository is a module with an API of its own, and if so that its API tests use Karate (the checklist below).'];
+    case 'policy-unavailable':
+      return ['What to do: Check that each API test suite on the checklist below uses Karate, the framework the supported technologies page lists for backend API tests.'];
+    case 'unclear-suites':
+      return ['What to do: Check which framework each API test suite on the checklist below uses; only Karate is on the supported technologies page.'];
+    case 'incomplete':
+      return ['What to do: Check that the module\'s API tests use Karate, starting with the checklist below.'];
+    case 'karate':
+      return ['What to do: Nothing; the module\'s API tests use Karate, the framework the supported technologies page lists for backend API tests.'];
+    default:
+      return ['What to do: Nothing; the tool found no API tests to check, in the repository or in a folio-integration-tests folder named after the module.'];
+  }
 }

@@ -263,6 +263,7 @@ export function renderB007HumanDetails(analysis: B007Analysis, agentReview?: Cri
     lines.push(`Endpoints: ${analysis.endpoints.length} in ${count(interfaces, 'interface')} of ${reportPath(analysis.templatePath)}, without system interfaces`,
       `Permissions defined in permissionSets: ${analysis.definedPermissionCount}${analysis.definitionsChecked ? '' : ' (not all could be read)'}`);
   }
+  lines.push(...whatToDo(analysis));
   const section = (heading: string, problem: B007Problem, describe: (finding: B007Finding) => string) => {
     const list = analysis.findings.filter(finding => finding.problem === problem);
     if (!list.length) return;
@@ -286,16 +287,25 @@ export function renderB007HumanDetails(analysis: B007Analysis, agentReview?: Cri
     }
   }
   if (agentReview) lines.push(`Agent review scope: ${reportText(analysis.agentBrowseScope)}`);
+  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
+  return lines.join('\n');
+}
+
+function whatToDo(analysis: B007Analysis): string[] {
   if (analysis.status === EvaluationStatus.FAIL) {
     const all = analysis.findings.some(finding => finding.problem === 'all-required');
     const undefinedRequired = analysis.findings.some(finding => finding.problem === 'undefined-required');
-    lines.push('What to do:', `  - ${[
+    return ['What to do:', `  - ${[
       ...(all ? ['Give each endpoint listed under "Endpoints that require a *.all permission" a permission for what it does'] : []),
       ...(undefinedRequired ? [`${all ? 'define' : 'Define'} each permission listed under "Endpoints that require a permission no permission set defines" in permissionSets, or require a defined one`] : [])
-    ].join(', and ')}.`);
+    ].join(', and ')}.`];
   }
-  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
-  return lines.join('\n');
+  if (analysis.basis === 'library') return ['What to do: Nothing; a shared library provides no endpoints of its own.'];
+  if (analysis.basis === 'no-endpoints') return ['What to do: Nothing; the module descriptor provides no endpoints other than those of system interfaces.'];
+  if (analysis.basis === 'no-descriptor') {
+    return ['What to do: Find the module descriptor template (see B001), and check that each endpoint\'s permissions fit what it does (the checklist below).'];
+  }
+  return ['What to do: Check that each endpoint\'s permissions fit what it does, item by item on the checklist below.'];
 }
 
 /** The module name permission names start with: the root pom.xml artifactId, or Gradle's rootProject.name, without `mod-`. */

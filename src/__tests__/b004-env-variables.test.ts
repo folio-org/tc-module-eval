@@ -57,6 +57,9 @@ describe('B004 environment variables', () => {
       NEW_MODULE,
       POLICY,
       'Variables used: 2 (2 in launchDescriptor.env)',
+      'What to do:',
+      '  - Document every variable the module uses in ENV_VARS.md or a README table with its name, default (or empty), whether it is required, and a description (policy section 3).',
+      '  - List every variable with a description in the descriptor template\'s top-level "env" (policy section 3.1).',
       'Documentation: no ENV_VARS.md, no README.md; the descriptor\'s env lists do not count as documentation',
       'C1 Documentation:',
       `  - Top-level env: ${TEMPLATE} has no top-level "env" (policy section 3.1)`,
@@ -70,9 +73,6 @@ describe('B004 environment variables', () => {
       'C4 Startup behaviour:',
       '  - Not known for 2 variables, because the documentation does not say whether they are required',
       ...NO_SIGNALS,
-      'What to do:',
-      '  - Document every variable the module uses in ENV_VARS.md or a README table with its name, default (or empty), whether it is required, and a description (policy section 3).',
-      '  - List every variable with a description in the descriptor template\'s top-level "env" (policy section 3.1).',
       'Checklist for the reviewer:',
       C1_TITLE,
       '    - Start with:',
@@ -134,6 +134,7 @@ describe('B004 environment variables', () => {
       NEW_MODULE,
       POLICY,
       'Variables used: 2 (2 in the top-level env, 2 in launchDescriptor.env, 1 in Spring placeholders)',
+      'What to do: Nothing; every environment variable the module uses is documented and named as the policy requires.',
       'Documentation: ENV_VARS.md with 1 table, no README.md; the descriptor\'s env lists do not count as documentation',
       'C1 Documentation:',
       `  - Top-level env: present in ${TEMPLATE}`,
@@ -426,14 +427,14 @@ describe('B004 environment variables', () => {
     expect(library.analysis.topLevelEnv).toBe('not-checked');
     expect(library.rows.slice(2)).toEqual([
       'Variables used: 2 (2 read with System.getenv)',
+      'What to do:',
+      '  - Support an S3_ variable alongside each AWS_ one, taking precedence over it, and document both (policy sections 2.1 and 5.1).',
       'C3 Naming:',
       '  - AWS_ without an S3_ variable alongside (policy sections 2.1 and 5.1) (1):',
       '    - AWS_REGION — no S3_REGION',
       'C4 Startup behaviour:',
       '  - Not checked: a library\'s documentation is not read, so which variables are required is not known',
       ...NO_SIGNALS,
-      'What to do:',
-      '  - Support an S3_ variable alongside each AWS_ one, taking precedence over it, and document both (policy sections 2.1 and 5.1).',
       'Checklist for the reviewer:',
       '  - B004-C3 Each variable name is upper case letters, digits and underscores, and each AWS_ variable has an S3_ variable alongside it.',
       '    - Start with:',
@@ -463,7 +464,8 @@ describe('B004 environment variables', () => {
     expect(result.status).toBe(EvaluationStatus.PASS);
     expect(result.evidence).toBe('B004 pass: The environment variable the module uses is documented in a table with a default, required or optional, and a description. '
       + 'Their names follow the policy, none is documented as required, and no log statement in files that read configuration prints a secret-like value or the whole environment.');
-    expect(rows.slice(3, 7)).toEqual([
+    expect(rows.slice(3, 8)).toEqual([
+      'What to do: Nothing; every environment variable the module uses is documented and named as the policy requires.',
       'Documentation: no ENV_VARS.md, README.md with 1 table; the descriptor\'s env lists do not count as documentation',
       'C1 Documentation:',
       '  - Top-level env: not checked, because the edge module has no descriptor template (see B001).',
@@ -508,6 +510,7 @@ describe('B004 environment variables', () => {
         NEW_MODULE,
         POLICY,
         'Variables used: 4 (1 in the top-level env, 3 in launchDescriptor.env)',
+        'What to do: Nothing; every environment variable the module uses is documented and named as the policy requires.',
         'Documentation: ENV_VARS.md with 0 tables, README.md with 1 table; the descriptor\'s env lists do not count as documentation',
         'C1 Documentation:',
         `  - Top-level env: present in ${TEMPLATE}`,
@@ -537,6 +540,7 @@ describe('B004 environment variables', () => {
         NEW_MODULE,
         POLICY,
         'Variables used: 4 (1 in the top-level env, 3 in launchDescriptor.env)',
+        'What to do: Check each finding on the checklist below against the environment variable policy.',
         'Documentation: no ENV_VARS.md, README.md with 1 table; the descriptor\'s env lists do not count as documentation',
         'C1 Documentation:',
         `  - Top-level env: present in ${TEMPLATE}`,

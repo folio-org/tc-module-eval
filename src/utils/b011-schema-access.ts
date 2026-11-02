@@ -147,13 +147,14 @@ export function evaluateB011(evidence: BackendEvidence): B011Analysis {
 }
 
 export function renderB011HumanDetails(analysis: B011Analysis, agentReview?: CriterionAgentReviewResult): string {
-  if (analysis.basis === 'fqm') return 'Module: mod-fqm-manager, which the criterion excepts';
+  if (analysis.basis === 'fqm') return ['Module: mod-fqm-manager, which the criterion excepts', ...whatToDo(analysis)].join('\n');
   const lines = [`Storage: ${analysis.storage.present ? analysis.storage.evidence.map(reportText).join('; ') : 'none found'}`];
+  if (analysis.basis !== 'references-checked') lines.push(...whatToDo(analysis));
   if (analysis.basis === 'references-checked') {
     lines.push(`Own schema: ${analysis.ownSchemas.length
       ? listText(analysis.ownSchemas.map(schema => `<tenant>_${reportText(schema)}`))
       : 'not known (no pom.xml artifactId, descriptor id or Gradle project name)'}`,
-    `Files read: ${analysis.filesRead} SQL scripts, changelogs and sources, with comments removed`);
+    `Files read: ${analysis.filesRead} SQL scripts, changelogs and sources, with comments removed`, ...whatToDo(analysis));
     if (analysis.ownSchemaReferences) lines.push(`Own-schema references (not counted): ${analysis.ownSchemaReferences}`);
     const section = (heading: string, list: B011Reference[]) => {
       const rows = list.flatMap(reference => reference.occurrences.map(occurrence => `  - ${reportPath(reference.file)}:${occurrence.line} — ${reportText(occurrence.text)}`));
@@ -183,11 +184,22 @@ export function renderB011HumanDetails(analysis: B011Analysis, agentReview?: Cri
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.slice(0, MAX_ROWS).map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`), ...overflowLine(analysis.sourceDiagnostics.length, MAX_ROWS, '  '));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Read the data of other modules through their APIs instead of their database schemas, for each reference in the module\'s code or in an RMB script that runs on every install and upgrade; a one-time copy belongs in a migration (an RMB script with fromModuleVersion, or a Liquibase changeset).');
-  }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B011Analysis): string[] {
+  if (analysis.status === EvaluationStatus.FAIL) {
+    return ['What to do:', '  - Read the data of other modules through their APIs instead of their database schemas, for each reference in the module\'s code or in an RMB script that runs on every install and upgrade; a one-time copy belongs in a migration (an RMB script with fromModuleVersion, or a Liquibase changeset).'];
+  }
+  switch (analysis.basis) {
+    case 'fqm': return ['What to do: Nothing; the criterion excepts mod-fqm-manager (FQM).'];
+    case 'no-storage': return ['What to do: Nothing; the tool found no storage, so the module has no database schema of its own.'];
+    case 'storage-not-known': return ['What to do: Check that the files on the checklist below refer to no other module\'s database schema.'];
+    default: return [analysis.status === EvaluationStatus.MANUAL
+      ? 'What to do: Check that each reference on the checklist below is unreachable, part of FQM, or an accepted one-time migration.'
+      : 'What to do: Nothing; the module refers to no other module\'s database schema.'];
+  }
 }
 
 interface Scan {

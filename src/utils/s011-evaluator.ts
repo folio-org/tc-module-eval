@@ -194,7 +194,7 @@ function localSentence(scan: S011SuppressionScan): string {
 }
 
 export function renderS011HumanDetails(analysis: S011Analysis, agentReview?: CriterionAgentReviewResult): string {
-  const lines: string[] = [];
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   const snapshot = analysis.snapshot;
   if (snapshot?.analysis) lines.push(...analysisLines(analysis), ...findingLines(analysis));
   else if (snapshot) lines.push('SonarCloud analysis:', `  - Project: ${reportText(snapshot.projectKey)}${snapshot.projectFound === false ? ', not found' : ''}`);
@@ -205,8 +205,6 @@ export function renderS011HumanDetails(analysis: S011Analysis, agentReview?: Cri
   if (analysis.scan.diagnostics.length) {
     lines.push('Not scanned:', ...analysis.scan.diagnostics.map(item => `  - ${item.path ? `${reportPath(item.path)}: ` : ''}${reportText(item.message)}`));
   }
-  const action = whatToDo(analysis);
-  if (action) lines.push(`What to do: ${action}`);
   if (analysis.remoteEvidence.length) lines.push('Sources:', ...analysis.remoteEvidence.map(sourceLine));
   if (agentReview?.available) {
     lines.push(...renderAgentReviewLines(agentReview, s011AgentReviewNames(analysis)), '  - The automated result is unchanged.');
@@ -353,8 +351,10 @@ function hotspotText(query: SonarHotspotQuery): string {
   return groups ? `${query.total}${of}${groups}${of === ' (' ? ')' : ''}` : String(query.total);
 }
 
-function whatToDo(analysis: S011Analysis): string | undefined {
-  if (analysis.status === EvaluationStatus.PASS) return undefined;
+function whatToDo(analysis: S011Analysis): string {
+  if (analysis.status === EvaluationStatus.PASS) {
+    return 'Nothing; SonarCloud reports no violations on the evaluated commit, and nothing is ignored.';
+  }
   const link = analysis.projectKey ? ` (https://sonarcloud.io/project/overview?id=${encodeURIComponent(analysis.projectKey)})` : '';
   const suppressions = analysis.scan.suppressions.length || analysis.scan.scope.some(item => item.affectsS011)
     ? ' For each suppression, add a comment naming the rule and explaining why it does not apply, or remove it; justify or remove each exclusion.' : '';
@@ -367,7 +367,7 @@ function whatToDo(analysis: S011Analysis): string | undefined {
   if (analysis.status === EvaluationStatus.FAIL) {
     return `Fix or review the open security issues, high and blocker issues and security hotspots, and reduce duplication to 3% or less, in SonarCloud${link}.${suppressions}`;
   }
-  return `Decide whether each ignored rule and exclusion above is justified${analysis.snapshot?.settings.read ? '' : ', and check the project\'s Administration > Analysis Scope settings in SonarCloud'}${link}.${suppressions}`;
+  return `Decide whether each ignored rule and exclusion below is justified${analysis.snapshot?.settings.read ? '' : ', and check the project\'s Administration > Analysis Scope settings in SonarCloud'}${link}.${suppressions}`;
 }
 
 /** Names for the agent review's group IDs, matching the report's own wording. */

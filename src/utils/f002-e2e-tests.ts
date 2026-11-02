@@ -340,18 +340,23 @@ export function renderF002HumanDetails(analysis: F002Analysis, agentReview?: Cri
     ? `"${reportText(analysis.policy.sourceStatement ?? '')}" (${analysis.policy.strength}${analysis.policy.minimum ? `, minimum ${analysis.policy.minimum}` : ''}) under frontend-integration-testing`
     : `not loaded: ${reportText(analysis.policy.problem ?? '')}`}`);
   if (agentReview) lines.push(`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`);
+  lines.push(...WHAT_TO_DO[analysis.status]);
   if (analysis.frameworks.some(framework => framework.id === 'cypress') && analysis.policy.loaded && analysis.policy.strength === 'provisional') {
     lines.push('Policy note:', '  - The officially supported technologies page marks Cypress as pending verification (provisional). S007 treats provisional entries as manual; F002 passes Cypress at or above the minimum, as decided for this criterion.');
   }
   if (analysis.unread.length) {
     lines.push('What the tool could not read:', ...analysis.unread.map(item => `  - ${item.path ? `${reportPath(item.path)} — ` : ''}${reportText(item.message)}`));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Write end-to-end tests in Cypress 12.0 or later, or move them to stripes-testing, and remove the unsupported framework.');
-  }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }
+
+const WHAT_TO_DO: Record<EvaluationStatus, string[]> = {
+  [EvaluationStatus.FAIL]: ['What to do:', '  - Write end-to-end tests in Cypress 12.0 or later, or move them to stripes-testing, and remove the unsupported framework.'],
+  [EvaluationStatus.MANUAL]: ['What to do: Check that the repository\'s end-to-end tests, and those its CI runs, use Cypress at or above the minimum version, starting with the checklist below.'],
+  [EvaluationStatus.PASS]: ['What to do: Nothing; the end-to-end tests use Cypress at or above the minimum version the supported technologies page lists.'],
+  [EvaluationStatus.NOT_APPLICABLE]: ['What to do: Nothing; the repository has no end-to-end tests, and FOLIO\'s end-to-end tests for UI modules live in stripes-testing.']
+};
 
 const SUPPORT_LABELS: Record<F002Support, string> = {
   supported: 'on the supported technologies page',

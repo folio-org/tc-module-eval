@@ -163,10 +163,8 @@ const NAME_SOURCES: Record<NonNullable<S014ModuleName['source']>, string> = {
 };
 
 export function renderS014HumanDetails(analysis: S014Analysis): string {
-  const lines: string[] = [];
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   const name = analysis.moduleName?.name;
-  const action = whatToDo(analysis);
-  if (action) lines.push(`What to do: ${action}`);
   if (analysis.moduleKind === 'library') return [...lines, 'Repository kind: library'].join('\n');
 
   if (name) {
@@ -207,8 +205,11 @@ export function renderS014HumanDetails(analysis: S014Analysis): string {
   return lines.join('\n');
 }
 
-function whatToDo(analysis: S014Analysis): string | undefined {
-  if (analysis.status === EvaluationStatus.PASS || analysis.status === EvaluationStatus.NOT_APPLICABLE) return undefined;
+function whatToDo(analysis: S014Analysis): string {
+  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) return 'Nothing; S014 does not apply to FOLIO libraries.';
+  if (analysis.status === EvaluationStatus.PASS) {
+    return 'Nothing; the module is in exactly one platform application, the one named for this evaluation.';
+  }
   if (!analysis.remoteLookups) {
     return `${RERUN_HINT}${analysis.application ? '' : ' --application <the application the Jira task names>'} so the tool can read the platform-lsp descriptor and FAR, or check by hand that the module is in exactly one platform application and that it is the one the Jira task names.`;
   }

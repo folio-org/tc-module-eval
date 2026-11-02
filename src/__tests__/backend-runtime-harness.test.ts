@@ -615,6 +615,7 @@ describe('backend runtime evidence in the evaluation', () => {
     expect(result.evidence).toBe('B014 pass: GET /admin/health answered 200 when the tool ran the module in Docker.');
     expect(lines).toEqual([
       'Health check: GET /admin/health was called',
+      'What to do: Nothing; GET /admin/health answered 200 when the module ran.',
       'Runtime check:',
       '  - Docker 29.9.2, rootless',
       '  - GET /admin/health answered 200 after 3 attempts over 42 s',
@@ -635,6 +636,7 @@ describe('backend runtime evidence in the evaluation', () => {
       + 'PostgreSQL and Kafka beside it, so a reviewer must check that it answers 200 once the module\'s dependencies are available.');
     expect(lines).toEqual([
       'Health check: GET /admin/health was called',
+      'What to do: Check that GET /admin/health answers 200 once the module\'s dependencies are available (the checklist below).',
       'Runtime check:',
       '  - GET /admin/health answered 503 after 3 attempts over 42 s: {"status":"DOWN", ↵ "db":"DOWN"}',
       'Found:',
@@ -659,7 +661,7 @@ describe('backend runtime evidence in the evaluation', () => {
     expect([result.status, analysis.basis]).toEqual([EvaluationStatus.MANUAL, 'runtime-not-200']);
     expect(result.evidence).toBe('B014 manual: GET /admin/health got no response (connect ECONNREFUSED) when the tool ran the module in Docker. The tool starts no more than an Okapi stub, '
       + 'PostgreSQL and Kafka beside it, so a reviewer must check that it answers 200 once the module\'s dependencies are available.');
-    expect(lines[2]).toBe('  - GET /admin/health got no response (connect ECONNREFUSED) after 3 attempts over 420 s');
+    expect(lines[3]).toBe('  - GET /admin/health got no response (connect ECONNREFUSED) after 3 attempts over 420 s');
     expect(analysis.checklist.items.map(item => item.id)).toEqual(['B014-C1', 'B014-C2']);
   });
 
@@ -677,7 +679,7 @@ describe('backend runtime evidence in the evaluation', () => {
     expect(rest).toEqual(without.analysis);
     expect(result.evidence).toBe(without.result.evidence);
     expect(runtime).toEqual({ outcome, problem, cleanup: { remaining: [], problems: [] } });
-    expect(lines).toEqual([without.result.details!.split('\n')[0], 'Runtime check:', row, ...without.result.details!.split('\n').slice(1)]);
+    expect(lines).toEqual([...without.result.details!.split('\n').slice(0, 2), 'Runtime check:', row, ...without.result.details!.split('\n').slice(2)]);
   });
 
   it('decides B014 from a health answer recorded before a later step failed, and only 200 passes', async () => {
@@ -705,10 +707,12 @@ describe('backend runtime evidence in the evaluation', () => {
   it('notes on a shared library why the runtime check did not decide B014 or B013', async () => {
     const root = repository({ 'pom.xml': pom('folio-spring-base', restVerticleBuild) });
     const { lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({}));
-    expect(lines).toEqual(['Health check: not applicable to a shared library', 'Runtime check:',
+    expect(lines).toEqual(['Health check: not applicable to a shared library',
+      'What to do: Nothing; a shared library is not deployed on its own and serves no health check.', 'Runtime check:',
       '  - The runtime harness did not run: the repository is not a backend or edge module; the result comes from the committed files']);
     const b013 = await evaluate<B013Analysis>('B013', root, new CannedHarness({}));
-    expect([b013.result.status, ...b013.lines]).toEqual([EvaluationStatus.NOT_APPLICABLE, 'Framework: shared library', RUNTIME,
+    expect([b013.result.status, ...b013.lines]).toEqual([EvaluationStatus.NOT_APPLICABLE, 'Framework: shared library',
+      'What to do: Nothing; a shared library serves no tenant requests of its own.', RUNTIME,
       '  - The runtime harness did not run: the repository is not a backend or edge module']);
   });
 

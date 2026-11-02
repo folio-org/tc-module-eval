@@ -1,5 +1,6 @@
 import {
   CriterionAgentReviewResult,
+  EvaluationStatus,
   S007AnalysisResult,
   S007EvidenceDiagnostic,
   S007FindingClassification,
@@ -46,7 +47,10 @@ export function renderS007HumanDetails(
   analysis: S007AnalysisResult,
   agentReview?: CriterionAgentReviewResult
 ): string {
-  const lines: string[] = [];
+  const lines = [
+    `Evaluated as: ${analysis.existingModule ? 'an existing module (--existing-module)' : 'a new module (the default)'}`,
+    `What to do: ${whatToDo(analysis)}`
+  ];
 
   if (analysis.findings.length > 0) {
     lines.push('Technology findings:');
@@ -67,6 +71,17 @@ export function renderS007HumanDetails(
     lines.push('What the tool could not read:', ...diagnosticLines(analysis.evidenceDiagnostics, '  '));
   }
   return lines.join('\n');
+}
+
+function whatToDo(analysis: S007AnalysisResult): string {
+  if (analysis.status === EvaluationStatus.PASS) return 'Nothing; every technology found is officially supported.';
+  if (analysis.status === EvaluationStatus.FAIL) {
+    return 'Change each technology marked "fails" below to a version the officially supported technologies list allows, or ask the Technical Council to update the list.';
+  }
+  if (analysis.policyDiagnostics.length > 0) {
+    return "Fix the evaluator's officially supported technologies list (problems below) and run the evaluation again, or check the module's technologies by hand.";
+  }
+  return 'Check each item below that needs review against the officially supported technologies list, and decide whether the module meets it.';
 }
 
 /** One technology's findings as S007's "Technology findings" rows show them, for criteria that reuse them (F005). */

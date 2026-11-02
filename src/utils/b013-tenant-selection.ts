@@ -111,7 +111,10 @@ export function b013Runtime(runtime: BackendRuntimeEvidence): B013Runtime {
 
 export function renderB013HumanDetails(analysis: B013Analysis, agentReview?: CriterionAgentReviewResult): string {
   const lines = [`Framework: ${FRAMEWORK_LABELS[analysis.framework.name]}`];
-  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) return [...lines, ...(analysis.runtime ? runtimeLines(analysis.runtime) : [])].join('\n');
+  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) {
+    return [...lines, 'What to do: Nothing; a shared library serves no tenant requests of its own.', ...(analysis.runtime ? runtimeLines(analysis.runtime) : [])].join('\n');
+  }
+  lines.push('What to do:', `  - ${WHAT_TO_DO}`);
   const usesLine = (label: string, uses: B013Uses<string>) => `  - ${label} — ${count(uses.uses, 'reference')} in ${count(uses.fileCount, 'file')}`;
   lines.push('Tenant taken from X-Okapi-Tenant:', ...analysis.mechanisms.length
     ? analysis.mechanisms.map(uses => usesLine(MECHANISM_LABELS[uses.kind], uses))
@@ -127,7 +130,6 @@ export function renderB013HumanDetails(analysis: B013Analysis, agentReview?: Cri
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  lines.push('What to do:', `  - ${WHAT_TO_DO}`);
   if (analysis.runtime) lines.push(...runtimeLines(analysis.runtime));
   if (agentReview) lines.push(`Agent review scope: ${backendBrowse().scope}`);
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));

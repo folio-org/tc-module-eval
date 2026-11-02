@@ -72,17 +72,17 @@ describe('B003 endpoint implementations', () => {
       'Implementations: committed classes in org.folio.rest.impl that implement the interface RMB generates for each top-level RAML resource (for example, LoanStorage for /loan-storage), '
         + 'or routes registered in the source (Vert.x router, RouteRegistration, Spring mapping annotations, Grails URL mappings)',
       'Routes found in the source: 0',
+      'What to do:',
+      '  - Implement each endpoint listed under "In no API spec and served by no route", or remove its handler from the module descriptor.',
       'In no API spec and served by no route:',
       '  - DELETE /loan-storage/loans/{id} (interface example)',
       'In an API spec, but no committed class implements it through its generated interface:',
       '  - GET /request-storage/requests (interface example) — RequestStorage in ramls/requests.raml',
       'Implemented: 4 by classes implementing generated interfaces',
-      'What to do:',
-      '  - Implement each endpoint listed under "In no API spec and served by no route", or remove its handler from the module descriptor.',
       'Checklist for the reviewer:',
       '  - B003-C1 Each endpoint the tool could not match has an implementation that serves its methods.',
       '    - Start with:',
-      '      - descriptors/ModuleDescriptor-template.json — DELETE /loan-storage/loans/{id}: in no API spec and no route',
+      '      - descriptors/ModuleDescriptor-template.json:1 — DELETE /loan-storage/loans/{id}: in no API spec and no route',
       '      - ramls/requests.raml — GET /request-storage/requests: no committed class implements it through RequestStorage'
     ]);
     expect(analysis.endpoints.find(endpoint => endpoint.path === '/loan-storage/loans/{id}')).toMatchObject({
@@ -405,17 +405,36 @@ describe('B003 endpoint implementations', () => {
     expect(analysis.basis).toBe(basis);
   });
 
-  it('leaves endpoints a library serves to the reviewer', async () => {
+  it('leaves endpoints a library serves to the reviewer, starting at the dependency and handler lines', async () => {
     const root = repository({
-      'pom.xml': pom('mod-example', `<dependencies>${dependency('folio-custom-fields')}</dependencies>${restVerticleBuild}`),
-      'descriptors/ModuleDescriptor-template.json': descriptor([], [{ id: 'custom-fields', version: '3.0', handlers: [{ methods: ['GET'], pathPattern: '/custom-fields/{id}' }] }])
+      'pom.xml': pom('mod-example', `\n<properties><folio-custom-fields.version>1.0.0</folio-custom-fields.version></properties>\n`
+        + `<dependencies>${dependency('folio-custom-fields')}</dependencies>\n${restVerticleBuild}\n`),
+      'descriptors/ModuleDescriptor-template.json': JSON.stringify({
+        id: '${artifactId}-1.0.0',
+        provides: [
+          { id: '_tenant', version: '2.0', interfaceType: 'system', handlers: [{ methods: ['GET'], pathPattern: '/example/*' }] },
+          { id: 'example', version: '1.0', handlers: [{ methods: ['GET'], pathPattern: '/example/*' }] },
+          { id: 'custom-fields', version: '3.0', handlers: [{ methods: ['GET'], pathPattern: '/custom-fields/{id}' }] }
+        ]
+      }, null, 2)
     });
 
     const { result, analysis } = await b003(root);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
-    expect(result.evidence).toBe('B003 manual: The endpoint in the module descriptor comes from folio-custom-fields, which implements it: GET /custom-fields/{id}. A reviewer must check it.');
-    expect(analysis.checklist.items[0].startingPoints).toEqual([{ path: 'pom.xml', note: 'GET /custom-fields/{id}: served by folio-custom-fields' }]);
+    expect(result.evidence).toBe('B003 manual: 1 of the 2 endpoints in the module descriptor has a wildcard path, which the tool cannot match to an implementation: GET /example/*. '
+      + '1 of the 2 endpoints in the module descriptor comes from folio-custom-fields, which implements it: GET /custom-fields/{id}. A reviewer must check them.');
+    expect(analysis.checklist.items[0].startingPoints).toEqual([
+      { path: 'descriptors/ModuleDescriptor-template.json', line: 25, note: 'GET /example/*: a wildcard path' },
+      { path: 'pom.xml', line: 3, note: 'GET /custom-fields/{id}: served by folio-custom-fields' }
+    ]);
+    expect(result.details?.split('\n').slice(-5)).toEqual([
+      'Checklist for the reviewer:',
+      '  - B003-C1 Each endpoint the tool could not match has an implementation that serves its methods.',
+      '    - Start with:',
+      '      - descriptors/ModuleDescriptor-template.json:25 — GET /example/*: a wildcard path',
+      '      - pom.xml:3 — GET /custom-fields/{id}: served by folio-custom-fields'
+    ]);
   });
 
   it('reads implemented interfaces, Spring mappings and RouteRegistration in linear time', async () => {

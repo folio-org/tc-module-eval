@@ -72,7 +72,8 @@ describe('B002 consumed APIs declared in requires or optional', () => {
       '  - Declared and used: consortia, users',
       '  - Declared but not seen (not a problem): notes',
       '  - Handler index: interface paths of R1-2026.27 (platform-lsp 0a70fd2), 413 interfaces',
-      '  - Production source: 2 Java or Groovy files under src/main and grails-app'
+      '  - Production source: 2 Java or Groovy files under src/main and grails-app',
+      'What to do: Nothing; the descriptor declares every interface the module sends requests to in requires or optional.'
     ]);
     expect(analysis.declaredAndUsed.map(use => use.sites.map(site => [site.method, site.requestPath, site.pathPattern, site.line]))).toEqual([
       [['GET', 'consortia/{}/tenants', '/consortia/{consortiumId}/tenants', 5]],
@@ -112,12 +113,12 @@ describe('B002 consumed APIs declared in requires or optional', () => {
       '  - Declared but not seen (not a problem): users',
       '  - Handler index: interface paths of R1-2026.27 (platform-lsp 0a70fd2), 413 interfaces',
       '  - Production source: 1 Java or Groovy file under src/main and grails-app',
+      'What to do:',
+      '  - Add each interface under "Used but not declared" to requires, or to optional when the module works without it, unless the code that sends the request never runs.',
       'Used but not declared:',
       '  - configuration:',
       '    - src/main/java/org/folio/example/client/ConfigurationClient.java:8 — requests /configurations/entries',
       '    - src/main/java/org/folio/example/client/ConfigurationClient.java:12 — requests /configurations/entries/{}',
-      'What to do:',
-      '  - Add each interface under "Used but not declared" to requires, or to optional when the module works without it, unless the code that sends the request never runs.',
       'Checklist for the reviewer:',
       '  - B002-C1 Each interface under "Used but not declared" is called from code that runs, and is declared in requires, or in optional when the module works without it.',
       '    - Start with:',
@@ -242,10 +243,10 @@ describe('B002 consumed APIs declared in requires or optional', () => {
       '  - Requests: 1 request in production code (Spring HTTP clients 0, paths in code 1); 0 mapped to an interface; 3 requests to the module\'s own paths and 1 request to Okapi\'s own _/ endpoints not counted'
     ]);
     expect(result.details?.split('\n').slice(5)).toEqual([
+      'What to do:',
+      '  - Check that every request the module sends goes to an interface in requires or optional, starting with the checklist below.',
       'Requests the tool could not map to one interface:',
       '  - src/main/java/org/folio/example/NotesController.java:8 — prefix + "/item-storage/items": the path starts with a value the tool cannot read',
-      'What to do:',
-      '  - Check that each request listed above goes to an interface in requires or optional, starting with the checklist below.',
       'Checklist for the reviewer:',
       '  - B002-C2 Each request the tool could not map to one interface, or whose path is not in the handler index, goes to an interface the descriptor declares, or to a service outside FOLIO.',
       '    - Start with:',
@@ -285,14 +286,14 @@ describe('B002 consumed APIs declared in requires or optional', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.evidence).toBe('B002 manual: Every request the tool could map goes to an interface the module\'s descriptor declares, but 3 requests could not be mapped to one interface, 1 request goes to a path that is not in the handler index, and the module uses edge-common, which sends requests of its own the tool does not see.');
     expect(result.details?.split('\n').slice(6)).toEqual([
+      'What to do:',
+      '  - Check that every request the module sends goes to an interface in requires or optional, starting with the checklist below.',
       'Requests the tool could not map to one interface:',
       '  - src/main/java/org/folio/example/client/LocationsClient.java:5 — @GetExchange(accept = APPLICATION_JSON_VALUE): the method takes the request URI as an argument',
       '  - src/main/java/org/folio/example/client/LocationsClient.java:8 — @PostExchange("${folio.reindex.path}"): the path has a property placeholder',
       '  - src/main/java/org/folio/example/client/LocationsClient.java:11 — GET /{}/users: run-time parts could reach aggregator-settings, alternative-title-types, applications, and 81 more',
       'Paths not in the handler index:',
       '  - src/main/java/org/folio/example/client/KeycloakClient.java:5 — /realms/{}/protocol/openid-connect/certs',
-      'What to do:',
-      '  - Check that each request listed above goes to an interface in requires or optional, starting with the checklist below.',
       'Checklist for the reviewer:',
       '  - B002-C2 Each request the tool could not map to one interface, or whose path is not in the handler index, goes to an interface the descriptor declares, or to a service outside FOLIO.',
       '    - Start with:',

@@ -590,7 +590,8 @@ export function renderF007HumanDetails(analysis: F007Analysis, agentReview?: Cri
     return [
       'What the tool found:',
       `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root; none renders an HTML element or text`,
-      '  - Translations: no translations/ directory'
+      '  - Translations: no translations/ directory',
+      'What to do: Nothing; the module renders no user interface, so there is nothing to check in Chrome.'
     ].join('\n');
   }
   const app = analysis.app;
@@ -625,6 +626,8 @@ export function renderF007HumanDetails(analysis: F007Analysis, agentReview?: Cri
     `  - Browser API list: ${list.loaded ? `config/f007-browser-apis.json, retrieved ${list.retrievedAt}, ${count(list.removedApiCount, 'removed API')}`
       : reportText(list.problem ?? 'not loaded')}`,
     ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    'What to do:', '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; '
+      + 'F007 is always decided by a reviewer.',
     ...runtimeEvidenceLines(analysis.runtime, analysis.packageVersion, {
       notConfigured: '--ui-runtime-url and --ui-runtime-login-origin load the module\'s pages on a running FOLIO UI in Chrome and record its console errors',
       pageResult: page => `${pageCounts(page)}${page.source === 'about' ? '; read for the deployed version' : ''}`
@@ -633,8 +636,6 @@ export function renderF007HumanDetails(analysis: F007Analysis, agentReview?: Cri
   const unread = [...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(file => `  - ${reportPath(file)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  lines.push('What to do:', '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; '
-    + 'F007 is always decided by a reviewer.');
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

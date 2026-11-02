@@ -60,6 +60,11 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
     });
   }
 
+  protected createErrorResult(criterionId: string, error: unknown): CriterionResult {
+    const result = super.createErrorResult(criterionId, error);
+    return { ...result, details: `${result.details}\nWhat to do: Check this criterion by hand; the evaluator stopped with an error before it could decide.` };
+  }
+
   private async evaluateB001(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'B001', evaluationRun);
     // S002's generated descriptor, when S002 ran the build earlier in this evaluation; B001 does not start the build.

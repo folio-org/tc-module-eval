@@ -9,7 +9,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { analyzeS004Documentation, formatS004Evidence } from '../utils/s004-installation-documentation';
-import { analyzeS005PersonalDataDisclosure, buildS005CriterionDetails, formatS005Evidence } from '../utils/s005-personal-data-disclosure';
 import { s002ArtifactFailureResult } from '../utils/s002-module-descriptor-report';
 import { evaluateS009, renderS009HumanDetails } from '../utils/s009-evaluator';
 import { citedTrackedFiles } from '../module-evaluator';
@@ -207,19 +206,20 @@ describe('EvaluationReportRenderer', () => {
     const data = reportData(html);
     const details = data.items[0].details.join('\n');
     expect(Buffer.byteLength(report.criteria[0].details!, 'utf8')).toBeLessThanOrEqual(12000);
-    expect(details).toContain('Contradictions:');
-    expect(details).toContain('PERSONAL_DATA_DISCLOSURE.md:');
+    expect(report.criteria[0].details).toContain('Contradictions:');
     expect(details).toContain('RATIONALE_END');
     expect(details).not.toContain('synthetic-review-model');
-    expect(details.indexOf('Agent review (advisory):')).toBeLessThan(details.indexOf('Contradictions:'));
     expect(data.items[1].details.join('\n')).toContain('Status: Unavailable');
     expect(report.criteria[1].agentReview?.errors).toContain('OpenCode returned incomplete response (finish: missing)');
     expect(data.items.map((item: { status: string }) => item.status)).toEqual(['manual', 'manual']);
     // Execute the actual browser-side preparation, not only the serialized input.
     const items = preparedItems(html);
-    const sections = items[0].tree.map((node: { text: string }) => node.text);
-    expect(sections).toContain('Possible mismatches:');
-    expect(sections[0]).toBe('Agent review (advisory):');
+    // The HTML leaves out S005's form, code evidence and mismatches; the JSON report keeps them.
+    expect(items[0].tree.map((node: { text: string }) => node.text)).toEqual([
+      'Agent review (advisory):',
+      'What to do: Check that the answers in PERSONAL_DATA_DISCLOSURE.md match the personal data the module stores and processes.'
+    ]);
+    expect(JSON.parse(new EvaluationReportRenderer().renderJson(report)).criteria[0].details).toBe(report.criteria[0].details);
   });
 
   it('uses the same structured advisory section across criteria without exposing runtime metadata', () => {
@@ -683,28 +683,78 @@ describe('EvaluationReportRenderer', () => {
           'Warnings:',
           '  - first warning',
           '  - second warning',
-          '  - ... 14 more',
-          'Possible mismatches:',
-          '  - Mismatch signals:',
-          '    - likely_omission/name: Disclosure does not check name. (evidence: a.json:1 [direct_contract/strong/name], b.json:2 [direct_contract/strong/name], ... 8 more)'
-        ].join('\n'),
-        criterionDetails: { possibleMismatches: [{ evidenceReferenceCount: 10, evidenceReferences: [
-          'a.json:1 [direct_contract/strong/name]', 'b.json:2 [direct_contract/strong/name]', 'c.json:3 [direct_contract/strong/name]'
-        ] }] }
+          '  - ... 14 more'
+        ].join('\n')
       }]
     });
 
     const tree = preparedItems(html)[0].tree;
     const warnings = tree.find((node: any) => node.text === 'Warnings:');
-    const mismatch = tree.find((node: any) => node.text === 'Possible mismatches:').children[0].children[0];
 
     expect(warnings.children.map((node: any) => node.text)).toEqual(['first warning', 'second warning']);
     expect(warnings.hidden).toBe(14);
-    expect(mismatch.children.map((node: any) => node.text)).toEqual([
-      'a.json:1 [direct_contract/strong/name]',
-      'b.json:2 [direct_contract/strong/name]'
+  });
+
+  it('puts "What to do" after the review and opening sentence, and leaves out sections the reviewer does not act on', () => {
+    const criterion = (criterionId: string, details: string[]) =>
+      ({ criterionId, status: EvaluationStatus.MANUAL, evidence: `${criterionId} manual`, details: details.join('\n') });
+    const report: EvaluationResult = { ...result, criteria: [
+      criterion('S003', ['No prohibited licenses were found.', 'Build commands:', '  - Ran: mvn', 'What to do: Name them in the README.']),
+      criterion('B005', ['Evaluated as: a new module (the default)', 'Names with a dot or underscore:', '  - users.settings — a dot',
+        'Routes found in the source: 0', 'Names that differ from the first segment of their handler paths (information only):',
+        '  - users.settings — /user', 'What to do:', '  - Rename users.settings.']),
+      criterion('S006', ['What to do:', '  - Open each value.', 'Strongest examples (values hidden):', '  - pom.xml:470 [secret] Secret',
+        'Coverage:', '  - Complete: no', 'Skipped (does not affect the result):', '  - target']),
+      criterion('B015', ['What the tool found:', '  - Source read: 75 files', '  - HTTP sessions: none found',
+        '  - In-memory caches and maps: 1 in 1 file', '  - Agent review scope: src/main', 'What to do:', '  - Check each item.'])
+    ] };
+    const html = new EvaluationReportRenderer().renderHtml(report);
+
+    expect(reportData(html).items.map((item: { details: string[] }) => item.details)).toEqual([
+      ['No prohibited licenses were found.', 'What to do: Name them in the README.', 'Build commands:', '  - Ran: mvn'],
+      ['What to do:', '  - Rename users.settings.', 'Evaluated as: a new module (the default)', 'Names with a dot or underscore:', '  - users.settings — a dot'],
+      ['What to do:', '  - Open each value.', 'Strongest examples (values hidden):', '  - pom.xml:470 [secret] Secret'],
+      ['What to do:', '  - Check each item.', 'What the tool found:', '  - In-memory caches and maps: 1 in 1 file']
     ]);
-    expect(mismatch.hidden).toBe(8);
+    expect(JSON.parse(new EvaluationReportRenderer().renderJson(report)).criteria.map((item: { details: string }) => item.details))
+      .toEqual(report.criteria.map(item => item.details));
+  });
+
+  it('shows every row of the agent review, without "Show more"', () => {
+    // S006's review also states its scope, so its section has more than eight rows.
+    const review: CriterionAgentReviewResult = { available: true, criterionId: 'S006', recommendation: 'likely_sufficient',
+      confidence: 'medium', summary: 'Justified.', rationale: 'Read each suppression.', evidenceReferences: ['pom.xml'], warnings: [], errors: [],
+      reviewerActions: [{ action: 'Add comments.', evidenceReferences: ['pom.xml'] }],
+      assessments: Array.from({ length: 9 }, (_, index) => ({ technologyId: `group-${index}`, type: 'aligned_fact' as const,
+        summary: `Group ${index} is justified.`, evidenceReferences: ['pom.xml'], coverageDisposition: 'investigated' as const })) };
+    const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S006', status: EvaluationStatus.MANUAL,
+      evidence: 'S006 manual', details: 'Findings:\n  - Values to check: 1', agentReview: review }] });
+    const text = renderedText(html);
+
+    expect(text.match(/Show \d+ more/g)).toEqual(['Show 3 more']);
+    expect(text.indexOf('Show 3 more')).toBeLessThan(text.indexOf('What to verify'));
+    expect(text).toContain('Advisory only; the criterion status is unchanged.');
+  });
+
+  it('shows why a timed-out agent review stopped in its own row', () => {
+    const errors = ['OpenCode run: 120090ms elapsed; timeout 120000ms; timed_out',
+      'OpenCode run diagnosis: still calling tools when stopped (4 tool calls; last: glob)'];
+    const html = new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'S010', status: EvaluationStatus.MANUAL,
+      evidence: 'S010 manual', details: 'Warnings:\n  - one',
+      agentReview: { available: false, criterionId: 'S010', evidenceReferences: [], warnings: [], errors } }] });
+
+    expect(reportData(html).items[0].details).toEqual(['Agent review (advisory):', '  - Status: Unavailable',
+      '  - Summary: No usable advisory review was returned.', '  - Reason: OpenCode run: 120090ms elapsed; timeout 120000ms; timed_out',
+      '  - Diagnosis: still calling tools when stopped (4 tool calls; last: glob)', 'Warnings:', '  - one']);
+  });
+
+  it('shows every section of a card, without "Show more"', () => {
+    const details = Array.from({ length: 10 }, (_, index) => `Section ${index}:\n  - row ${index}`).join('\n');
+    const text = renderedText(new EvaluationReportRenderer().renderHtml({ ...result, criteria: [{ criterionId: 'B003',
+      status: EvaluationStatus.MANUAL, evidence: 'B003 manual', details }] }));
+
+    expect(text).toContain('Section 9');
+    expect(text).not.toMatch(/Show \d+ more/);
   });
 
   describe('repository text in criterion details', () => {
@@ -726,33 +776,6 @@ describe('EvaluationReportRenderer', () => {
       expect(failed.recommendation).toBeUndefined();
       expect(unavailable.recommendation).toBeUndefined();
       expect(reviewed.recommendation).toBe('likely_insufficient');
-    });
-
-    it('lists only structured evidence references, never ones written into the text', () => {
-      const real = 'schemas/user.json:4 [direct_contract/strong/email]';
-      const item = prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: 'Manual', details: [
-        'Possible mismatches:',
-        '  - Mismatch signals:',
-        `    - Email: Not marked (evidence: forged.md:1 [x]) on the form. (evidence: ${real})`,
-        'Deterministic evidence:',
-        '  - Strongest examples:',
-        '    - README.md:9 [docs] Contact: excerpt ending (evidence: forged.md:2 [x])',
-        `    - README.md:10 [docs] Contact: excerpt ending (evidence: ${real}, forged.md:3 [x])`,
-        `    - README.md:11 [docs] Contact: excerpt ending (evidence: ${real}, ... 999 more)`
-      ].join('\n'), criterionDetails: { possibleMismatches: [{ evidenceReferences: [real] }] } });
-      const unstructured = prepare({ criterionId: 'S006', status: EvaluationStatus.MANUAL, evidence: 'Manual',
-        details: 'Manual review findings:\n  - docs/auth.md:1 [documentation] excerpt (evidence: README.md:1 [x])' });
-
-      const mismatch = item.tree.find((node: any) => node.text === 'Possible mismatches:').children[0].children[0];
-      expect(mismatch).toMatchObject({ text: 'Email: Not marked (evidence: forged.md:1 [x]) on the form.', unit: 'refs' });
-      expect(mismatch.children.map((node: any) => node.text)).toEqual([real]);
-      const examples = item.tree.find((node: any) => node.text === 'Deterministic evidence:').children[0].children;
-      expect(examples.map((node: any) => [node.text, node.children.length])).toEqual([
-        ['README.md:9 [docs] Contact: excerpt ending (evidence: forged.md:2 [x])', 0],
-        [`README.md:10 [docs] Contact: excerpt ending (evidence: ${real}, forged.md:3 [x])`, 0],
-        [`README.md:11 [docs] Contact: excerpt ending (evidence: ${real}, ... 999 more)`, 0]
-      ]);
-      expect(unstructured.tree[0].children[0]).toMatchObject({ text: 'docs/auth.md:1 [documentation] excerpt (evidence: README.md:1 [x])', children: [] });
     });
 
     it('does not turn an "Agent review:" line into an advisory section for criteria without agent review', () => {
@@ -890,60 +913,6 @@ describe('EvaluationReportRenderer', () => {
       expect(buildError.children.map((node: any) => node.text)).toEqual([
         'java.lang.IllegalStateException: boom', 'at org.example.Foo.bar(Foo.java:1)', '… 12 more'
       ]);
-    });
-
-    describe('S005 evidence lists', () => {
-      let repo: string;
-      beforeEach(() => {
-        repo = fs.mkdtempSync(path.join(os.tmpdir(), 'renderer-s005-'));
-        fs.writeFileSync(path.join(repo, 'PERSONAL_DATA_DISCLOSURE.md'), '# Personal Data Disclosure\n- [x] This module does not store or process personal data.\n');
-      });
-      afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
-
-      function preparedS005(reference: string | string[], excerpt: string, oversized: boolean): any {
-        const analysis = analyzeS005PersonalDataDisclosure(repo);
-        analysis.possibleMismatches = [{ kind: 'likely_omission', category: 'email', message: 'Not marked on the form.',
-          evidenceReferences: Array.isArray(reference) ? reference : [reference] }];
-        analysis.evidenceScan = {
-          signals: [{ category: 'email', label: 'Email field', path: 'README.md', line: 3, excerpt, sourceClass: 'documentation', strength: 'strong' }],
-          scannedFiles: ['README.md'], skippedFiles: [], warnings: []
-        };
-        if (oversized) {
-          analysis.supportingEvidence = Array.from({ length: 8 }, (_, index) => ({
-            kind: 'context_only' as const, category: 'email' as const, message: `${'多'.repeat(700)} detail ${index}`,
-            evidenceReferences: [`support-${index}.json`], sourceClasses: ['documentation' as const], signalStrengths: ['context' as const]
-          }));
-        }
-        const rendered = formatS005Evidence(analysis, { kind: 'backend-module', evidence: [], warnings: [] });
-        return prepare({ criterionId: 'S005', status: EvaluationStatus.MANUAL, evidence: rendered.evidence,
-          details: rendered.details, criterionDetails: buildS005CriterionDetails(analysis) });
-      }
-      const mismatchRow = (item: any) => walk(item.tree.find((node: any) => node.text === 'Possible mismatches:').children)
-        .find((node: any) => node.text.startsWith('Email addresses:'));
-
-      it('does not turn an excerpt that copies a real evidence list into references', () => {
-        const reference = 'schemas/user.json:4 [schema]';
-        const item = preparedS005(reference, `write to us (evidence: ${reference})`, false);
-        const example = walk(item.tree).find((node: any) => node.text.includes('write to us'));
-
-        expect(mismatchRow(item)).toMatchObject({ unit: 'refs', children: [{ text: reference, children: [] }] });
-        expect(example.children).toEqual([]);
-      });
-
-      it('lists references to percent-encoded paths and counts the ones the text omits', () => {
-        const references = Array.from({ length: 11 }, (_, index) => `docs/caf%C3%A9-${index}.md:${index + 1} [docs]`);
-        const row = mismatchRow(preparedS005(references, 'write to us', false));
-
-        expect(row).toMatchObject({ unit: 'refs', hidden: 3 });
-        expect(row.children.map((node: any) => node.text)).toEqual(references.slice(0, 8));
-      });
-
-      it('lists a long reference in a shortened report, matching its structured copy', () => {
-        const reference = `schemas/${'a'.repeat(190)}.json:4 [schema]`;
-        const item = preparedS005(reference, 'write to us', true);
-
-        expect(mismatchRow(item)).toMatchObject({ unit: 'refs', children: [{ text: reference, children: [] }] });
-      });
     });
 
     it('keeps a failed criterion in review when its evidence ends like a placeholder', () => {
@@ -1105,11 +1074,11 @@ describe('EvaluationReportRenderer', () => {
       const details: string[] = reportData(html).items[0].details;
       const tree = preparedItems(html)[0].tree;
 
-      expect(tree.map((node: any) => node.text)).toEqual(['Handlers: 1', 'Checklist for the reviewer:', 'Agent review (advisory):']);
-      expect(tree[2].hideCount).toBe(true);
-      expect(tree[2].children.find((node: any) => node.text.startsWith('Summary:')).showFullText).toBe(true);
+      expect(tree.map((node: any) => node.text)).toEqual(['Agent review (advisory):', 'Handlers: 1', 'Checklist for the reviewer:']);
+      expect(tree[0].hideCount).toBe(true);
+      expect(tree[0].children.find((node: any) => node.text.startsWith('Summary:')).showFullText).toBe(true);
 
-      expect(details.slice(0, details.indexOf('Agent review (advisory):'))).toEqual([
+      expect(details.slice(details.indexOf('Handlers: 1'))).toEqual([
         'Handlers: 1',
         'Checklist for the reviewer:',
         '  - B007-C1 Each permission fits what its endpoint does.',
@@ -1123,16 +1092,16 @@ describe('EvaluationReportRenderer', () => {
       ['B007', 'agent review is not enabled for B007', ['  - Status: Skipped', '  - Summary: Skipped because agent review is not enabled for this criterion.']],
       ['B002', 'agent review for B002 runs only when listed in --criterion-agent-criteria',
         ['  - Status: Not run', '  - Summary: Agent review was not run.', '  - Reason: agent review for B002 runs only when listed in --criterion-agent-criteria']]
-    ])('keeps the checklist and shows why %s did not review after it', (criterionId, reason, rows) => {
+    ])('keeps the checklist and shows why %s did not review before it', (criterionId, reason, rows) => {
       const details: string[] = reportData(new EvaluationReportRenderer().renderHtml(backendResult(criterionId, reason))).items[0].details;
 
-      expect(details.slice(details.indexOf('Agent review (advisory):'))).toEqual(['Agent review (advisory):', ...rows]);
-      expect(details[1]).toBe('Checklist for the reviewer:');
+      expect(details.slice(0, rows.length + 1)).toEqual(['Agent review (advisory):', ...rows]);
+      expect(details.slice(rows.length + 1, rows.length + 3)).toEqual(['Handlers: 1', 'Checklist for the reviewer:']);
     });
   });
 
   describe('F criteria', () => {
-    // An F003-like result: what the tool found, then the checklist, then the agent review note.
+    // An F003-like result: what the tool found, then the checklist, then the agent review note; the HTML puts the review first.
     const checklist: FrontendChecklist = { items: [
       { id: 'F003-C1', title: 'Each listed id exists in en.json.', reviewerOnly: false,
         startingPoints: [{ path: 'src/Scan.js', line: 60, note: 'ui-checkin.statusModal.cancel' }],
@@ -1153,7 +1122,7 @@ describe('EvaluationReportRenderer', () => {
     const sources = ['      - Sources:', '        - src/Scan.js'];
     const investigated = '      - Coverage judgment: Investigated directly';
 
-    it('attaches agent results to checklist items and puts the review last', () => {
+    it('attaches agent results to checklist items and puts the review first', () => {
       const review: CriterionAgentReviewResult = { available: true, criterionId: 'F003', recommendation: 'needs_reviewer_judgment',
         confidence: 'medium', summary: 'One id lacks a fallback.', rationale: 'Checked the listed ids.', evidenceReferences: ['src/Scan.js'],
         assessments: [
@@ -1168,7 +1137,7 @@ describe('EvaluationReportRenderer', () => {
       const details: string[] = reportData(html).items[0].details;
       const item = preparedItems(html)[0];
 
-      expect(details.slice(0, details.indexOf('Agent review (advisory):'))).toEqual([
+      expect(details.slice(details.indexOf('What the tool found:'))).toEqual([
         'What the tool found:', '  - react-intl ^7.1.5',
         'Checklist for the reviewer:',
         '  - F003-C1 Each listed id exists in en.json.',
@@ -1182,8 +1151,8 @@ describe('EvaluationReportRenderer', () => {
         '    - Checked by the reviewer only'
       ]);
       expect(details).not.toContain('  - Not applied: stale note');
-      expect(item.tree.map((node: any) => node.text)).toEqual(['What the tool found:', 'Checklist for the reviewer:', 'Agent review (advisory):']);
-      const agent = item.tree[2];
+      expect(item.tree.map((node: any) => node.text)).toEqual(['Agent review (advisory):', 'What the tool found:', 'Checklist for the reviewer:']);
+      const agent = item.tree[0];
       expect(agent.hideCount).toBe(true);
       // Only the assessment that answers no checklist obligation stays in the review's findings.
       expect(agent.children.find((node: any) => node.text === 'Findings:').children.map((node: any) => node.text))
@@ -1195,12 +1164,12 @@ describe('EvaluationReportRenderer', () => {
     it.each([
       ['agent review is not enabled for F003', 'Skipped', 'Skipped because agent review is not enabled for this criterion.'],
       ['OpenCode timed out after 420000ms', 'Unavailable', 'No usable advisory review was returned.']
-    ])('keeps the checklist and shows "%s" after it', (reason, status, summary) => {
+    ])('keeps the checklist and shows "%s" before it', (reason, status, summary) => {
       const html = new EvaluationReportRenderer().renderHtml(frontendResult(reason));
       const details: string[] = reportData(html).items[0].details;
 
       expect(preparedItems(html)[0].tree.map((node: any) => node.text))
-        .toEqual(['What the tool found:', 'Checklist for the reviewer:', 'Agent review (advisory):']);
+        .toEqual(['Agent review (advisory):', 'What the tool found:', 'Checklist for the reviewer:']);
       expect(details).toEqual(expect.arrayContaining(['  - F003-C1 Each listed id exists in en.json.', `  - Status: ${status}`, `  - Summary: ${summary}`]));
       expect(details).not.toContain('    - Checked by the reviewer only');
     });

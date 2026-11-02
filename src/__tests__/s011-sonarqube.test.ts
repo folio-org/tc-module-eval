@@ -265,7 +265,8 @@ describe('S011 SonarQube findings', () => {
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.evidence).toBe('S011 manual: Not checked: remote lookups are off. Rerun with --allow-remote-lookups to read the module\'s SonarCloud analysis. The repository has 5 suppressions of Sonar rules, listed below for a reviewer.');
-    expect(result.details).toContain('What to do: Rerun with --allow-remote-lookups');
+    expect(result.details!.split('\n')[0]).toBe("What to do: Rerun with --allow-remote-lookups so the tool can read the module's SonarCloud analysis, or check it in SonarCloud by hand. "
+      + 'For each suppression, add a comment naming the rule and explaining why it does not apply, or remove it; justify or remove each exclusion.');
     expect(result.details).toContain('  - 1 suppression of squid:S2699 with no comment explaining why');
   });
 
@@ -454,6 +455,10 @@ it('fails on an open vulnerability even when no issue has a security impact', as
 
       expect(result.status).toBe(EvaluationStatus.PASS);
       expect(result.evidence).toBe('S011 pass: SonarCloud found no security issues, no high or blocker issues, no security hotspots to review and 0.0% duplication on the evaluated commit, and nothing is ignored in the repository, its CI or SonarCloud\'s project settings.');
+      expect(result.details!.split('\n').slice(0, 2)).toEqual([
+        'What to do: Nothing; SonarCloud reports no violations on the evaluated commit, and nothing is ignored.',
+        'SonarCloud analysis:'
+      ]);
     });
 
     it('is manual when the project settings exclude code', async () => {

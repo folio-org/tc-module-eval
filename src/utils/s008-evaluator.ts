@@ -219,7 +219,13 @@ function reviewAdvice(analysis: S008AnalysisResult): Array<string | undefined> {
   ];
 }
 
-function whatToDo(analysis: S008AnalysisResult): string | undefined {
+function whatToDo(analysis: S008AnalysisResult): string {
+  if (analysis.status === EvaluationStatus.NOT_APPLICABLE) return 'Nothing; S008 does not apply to FOLIO libraries.';
+  if (analysis.status === EvaluationStatus.PASS) {
+    return analysis.findings.length
+      ? 'Nothing; accepted modules provide every interface the module declares.'
+      : 'Nothing; the module declares no interfaces from other modules.';
+  }
   if (analysis.status === EvaluationStatus.FAIL) {
     const failures = analysis.findings.filter(item => effect(item) === 'fail');
     const has = (classification: S008Finding['classification']) => failures.some(item => item.classification === classification);
@@ -232,7 +238,6 @@ function whatToDo(analysis: S008AnalysisResult): string | undefined {
       analysis.declarations.complete ? undefined : 'Also fix the problems under "Declarations that could not be read", or check those interfaces by hand.'
     ].filter(Boolean).join(' ');
   }
-  if (analysis.status !== EvaluationStatus.MANUAL) return undefined;
   if (analysis.findings.some(item => effect(item) === 'review')) {
     return [
       ...reviewAdvice(analysis),
@@ -254,9 +259,7 @@ function diagnosticLine(item: { message: string }): string {
 
 export function renderS008HumanDetails(analysis: S008AnalysisResult): string {
   // The summary is the criterion's evidence line, which the report already shows above the details.
-  const lines: string[] = [];
-  const action = whatToDo(analysis);
-  if (action) lines.push(`What to do: ${action}`);
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   if (analysis.moduleKind.kind === 'library' || analysis.moduleKind.kind === 'ambiguous') {
     const reason = analysis.moduleKind.evidence.length ? ` (${analysis.moduleKind.evidence.join('; ')})` : '';
     lines.push(`Repository kind: ${analysis.moduleKind.kind === 'library' ? 'library' : 'could not be determined'}${reason}`);

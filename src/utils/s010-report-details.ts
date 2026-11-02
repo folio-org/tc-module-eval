@@ -1,6 +1,7 @@
 import * as path from 'path';
 import {
   CriterionAgentReviewResult,
+  EvaluationStatus,
   ModuleKind,
   S010Analysis,
   S010Coverage,
@@ -54,6 +55,7 @@ export function renderS010HumanDetails(
   agentReview?: CriterionAgentReviewResult
 ): string {
   const lines = [
+    `What to do: ${whatToDo(analysis)}`,
     'What the tool checked:',
     `  - Module type: ${MODULE_KIND_LABELS[analysis.evidence.moduleKind.kind]}`,
     `  - Code type: ${RUNTIME_LABELS[analysis.evidence.runtimeKind]}`,
@@ -83,6 +85,25 @@ export function renderS010HumanDetails(
     lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }
   return lines.join('\n');
+}
+
+function whatToDo(analysis: S010Analysis): string {
+  switch (analysis.status) {
+    case EvaluationStatus.NOT_APPLICABLE:
+      return 'Nothing; S010 does not apply to FOLIO libraries.';
+    case EvaluationStatus.PASS:
+      return analysis.findings.some(finding => finding.dependencyId === 'dependency-scope')
+        ? 'Nothing; the module depends on no external services.'
+        : 'Nothing; the module stops with a clear error or handles the failure when a service or setting it needs is missing or down.';
+    case EvaluationStatus.FAIL:
+      return 'For each item under "Problems found", make the module stop at startup with a clear error, or handle the failure in a controlled way, when that service or setting is missing or down.';
+  }
+  if (analysis.findings.some(finding => finding.statusDetermining && finding.dependencyId === 'runtime-support')) {
+    return 'Check by hand how the module behaves when the services and settings it depends on are missing or down.';
+  }
+  return analysis.findings.some(finding => finding.statusDetermining && s010ServiceName(finding))
+    ? 'Check each item under "Needs review" and decide whether the module stops with a clear error or handles the failure when that service or setting is missing or down.'
+    : 'Check the code the tool could not read or analyse (see Warnings) for services the module depends on, and how it behaves when they are missing or down.';
 }
 
 /**

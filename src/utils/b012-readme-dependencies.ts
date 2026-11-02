@@ -159,6 +159,19 @@ export function renderB012HumanDetails(analysis: B012Analysis, agentReview?: Cri
   const unreadable = listText(analysis.unreadableReadmePaths.map(reportPath));
   const lines = [`README: ${analysis.basis === 'readme-unreadable' ? `${readme ? `${readme}; ` : ''}could not read ${unreadable}`
     : analysis.basis === 'source-incomplete' ? 'not among the files read' : readme ?? 'no README.md at the repository root'}`];
+  if (analysis.status === EvaluationStatus.FAIL) {
+    const unnamed = analysis.infrastructure.filter(item => !item.namedAs && item.usage === 'required');
+    const list = listText(unnamed.map(item => reportText(item.name)));
+    lines.push('What to do:', readme
+      ? `  - Name ${list} in ${readme}, with what the module uses ${unnamed.length === 1 ? 'it' : 'each'} for.`
+      : `  - Add a README.md at the repository root that names ${list}, with what the module uses ${unnamed.length === 1 ? 'it' : 'each'} for.`);
+  } else if (analysis.status === EvaluationStatus.MANUAL) {
+    lines.push('What to do: Check the items listed under B012-C3 on the checklist below; the README must name each infrastructure the module uses.');
+  } else {
+    lines.push(analysis.infrastructure.some(item => item.usage === 'required')
+      ? 'What to do: Nothing; the README names all the infrastructure the module requires.'
+      : 'What to do: Nothing; the tool found no infrastructure the module requires.');
+  }
   lines.push(`Infrastructure the module uses (direct dependencies, configuration and storage):${analysis.infrastructure.length ? '' : ' none found'}`);
   for (const item of analysis.infrastructure) {
     const named = item.namedAs ? `named${item.namedAs !== item.name ? ` as "${reportText(item.namedAs)}"` : ''}`
@@ -171,13 +184,6 @@ export function renderB012HumanDetails(analysis: B012Analysis, agentReview?: Cri
     lines.push('What the tool could not read:', ...analysis.diagnostics.slice(0, MAX_ROWS).map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)}${diagnostic.line ? `:${diagnostic.line}` : ''} — ` : ''}${reportText(diagnostic.message)}`),
     ...overflowLine(analysis.diagnostics.length, MAX_ROWS, '  '));
-  }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    const unnamed = analysis.infrastructure.filter(item => !item.namedAs && item.usage === 'required');
-    const list = listText(unnamed.map(item => reportText(item.name)));
-    lines.push('What to do:', readme
-      ? `  - Name ${list} in ${readme}, with what the module uses ${unnamed.length === 1 ? 'it' : 'each'} for.`
-      : `  - Add a README.md at the repository root that names ${list}, with what the module uses ${unnamed.length === 1 ? 'it' : 'each'} for.`);
   }
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');

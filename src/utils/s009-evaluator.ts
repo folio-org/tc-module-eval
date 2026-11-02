@@ -135,7 +135,10 @@ const DECLARATION_KINDS: Record<string, string> = {
 const MAX_WARNING_PATHS = 5;
 
 export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
-  if (!analysis.evidence.hasDependencyProject) return 'Project files: none found (pom.xml, build.gradle, build.gradle.kts, or package.json)';
+  if (!analysis.evidence.hasDependencyProject) {
+    return 'What to do: Nothing; the repository has no Maven, Gradle, npm, or Yarn project, so it has no library dependencies to check.\n'
+      + 'Project files: none found (pom.xml, build.gradle, build.gradle.kts, or package.json)';
+  }
   const lines: string[] = [];
   const ledgerPath = analysis.ledger?.sourcePath ?? 'config/acceptance-ledger.json';
   const has = (classification: S009Finding['classification']) => analysis.findings.some(item => item.classification === classification);
@@ -149,6 +152,10 @@ export function renderS009HumanDetails(analysis: S009AnalysisResult): string {
     lines.push('What to do: Check that the build uses the copy built in this repository. To let the evaluator see this, declare a Maven module with the version of this build (for example ${project.version}), or an npm workspace with a workspace: or file: reference or a range its version satisfies.');
   } else if (incomplete) {
     lines.push('What to do: Check the declarations listed under Warnings by hand. They must not add a FOLIO library that is not approved.');
+  } else {
+    lines.push(analysis.findings.length
+      ? 'What to do: Nothing; every FOLIO library the module depends on is approved.'
+      : 'What to do: Nothing; the module declares no FOLIO library as a production dependency.');
   }
 
   if (analysis.findings.length) {

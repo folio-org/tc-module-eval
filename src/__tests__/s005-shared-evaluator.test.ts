@@ -31,6 +31,7 @@ describe('S005 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.evidence).toContain('Required top-level PERSONAL_DATA_DISCLOSURE.md was not found');
     expect(result.evidence).not.toContain('Near match');
+    expect(result.details!.split('\n')[0]).toBe('What to do: Add a completed PERSONAL_DATA_DISCLOSURE.md at the repository root, using the FOLIO personal data disclosure form.');
     expect(result.evidence).not.toContain('evaluation logic not yet implemented');
     expect(result.evidence).not.toContain('Version control and branching strategy');
   });
@@ -45,6 +46,7 @@ describe('S005 shared evaluator', () => {
     expect(result.status).toBe(EvaluationStatus.NOT_APPLICABLE);
     expect(result.evidence).toContain('library');
     expect(result.agentReview).toBeUndefined();
+    expect(result.details!.split('\n').slice(0, 2)).toEqual(['What to do: Nothing; S005 does not apply to FOLIO libraries.', 'Repository kind: library']);
     expect(result.details).toContain('Explicit allowlisted library marker');
   });
 
@@ -54,6 +56,7 @@ describe('S005 shared evaluator', () => {
     const result = await evaluator.evaluateCriterion('S005', tempRoot);
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.details!.split('\n')[0]).toBe('What to do: Check that the answers in PERSONAL_DATA_DISCLOSURE.md match the personal data the module stores and processes.');
     expect(result.criterionDetails).toBeDefined();
   });
 

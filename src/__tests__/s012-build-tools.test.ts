@@ -61,7 +61,11 @@ describe('S012 officially supported build tools', () => {
 
       expect(result.status).toBe(EvaluationStatus.PASS);
       expect(result.evidence).toBe("S012 pass: The module builds with Maven through FOLIO's shared GitHub Actions workflow, and Maven is an officially supported build tool.");
-      expect(result.details).toContain("  - Maven: pom.xml; built by FOLIO's maven.yml@v1 workflow (.github/workflows/maven.yml)");
+      expect(result.details!.split('\n').slice(0, 3)).toEqual([
+        'What to do: Nothing; the module builds with officially supported build tools.',
+        'Build tools found:',
+        "  - Maven: pom.xml; built by FOLIO's maven.yml@v1 workflow (.github/workflows/maven.yml)"
+      ]);
       expect(result.details).toContain('Maven 3.10.0 (actions/runner-images Ubuntu 24.04 image 20261012.334.1, recorded 2026-10-23). Meets "Maven 3.8 or later".');
       expect(result.details).toContain('  - Docker: Dockerfile (supported, advisory).');
       expect(result.details).toContain('  - Not used by community CI: Jenkinsfile-disabled.');

@@ -204,12 +204,13 @@ export class LicenseUtils {
   }
 
   private static licenseFileResult(criterionId: string, files: LicenseFileFinding[]): CriterionResult {
-    const details = files.map(file => file.notReadReason
+    const fileRows = files.map(file => file.notReadReason
       ? `License file: ${file.name} (not read: ${file.notReadReason})`
       : file.isApache2
         ? `License file: ${file.name} (Apache License 2.0)`
         : `License file: ${file.name} (not Apache 2.0; starts with "${file.firstLine || '(empty file)'}")`
-    ).join('\n');
+    );
+    const details = (whatToDo: string) => [`What to do: ${whatToDo}`, ...fileRows].join('\n');
     const apache = files.filter(file => file.isApache2).map(file => file.name);
     const other = files.filter(file => !file.isApache2 && !file.notReadReason).map(file => file.name);
     const unread = files.filter(file => file.notReadReason);
@@ -221,7 +222,7 @@ export class LicenseUtils {
         criterionId,
         status: EvaluationStatus.MANUAL,
         evidence: `Some top-level license files were not read (${reasons}). A reviewer must check the license; a FOLIO module needs one top-level LICENSE file containing the Apache License 2.0 text.`,
-        details
+        details: details('Check the license files that were not read by hand. The module needs one top-level LICENSE file containing the Apache License 2.0 text.')
       };
     }
 
@@ -232,7 +233,9 @@ export class LicenseUtils {
         evidence: apache.length === 1
           ? `The ${apache[0]} file is the Apache License 2.0.`
           : `The license files (${apache.join(', ')}) are all the Apache License 2.0.`,
-        details
+        details: details(apache.length === 1
+          ? `Nothing; the ${apache[0]} file is the Apache License 2.0.`
+          : `Nothing; the license files (${apache.join(', ')}) are all the Apache License 2.0.`)
       };
     }
 
@@ -243,7 +246,9 @@ export class LicenseUtils {
         evidence: other.length === 1
           ? `The ${other[0]} file is not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace ${other[0]} with the Apache License 2.0 text.`
           : `The license files (${other.join(', ')}) are not the Apache License 2.0. FOLIO modules must use Apache 2.0; replace them with a single LICENSE file containing the Apache License 2.0 text.`,
-        details
+        details: details(other.length === 1
+          ? `Replace ${other[0]} with the Apache License 2.0 text.`
+          : 'Replace the license files with a single LICENSE file containing the Apache License 2.0 text.')
       };
     }
 
@@ -251,12 +256,13 @@ export class LicenseUtils {
       criterionId,
       status: EvaluationStatus.MANUAL,
       evidence: `The top-level license files disagree: ${joinNames(apache)} ${apache.length === 1 ? 'is' : 'are'} the Apache License 2.0, but ${joinNames(other)} ${other.length === 1 ? 'is' : 'are'} not. A reviewer must decide which license applies; FOLIO modules must use Apache 2.0 only, so remove or replace the other ${other.length === 1 ? 'file' : 'files'}.`,
-      details
+      details: details(`Decide which license applies. FOLIO modules must use Apache 2.0 only, so the module team must remove or replace ${joinNames(other)}.`)
     };
   }
 
   private static buildFileResult(criterionId: string, buildFiles: BuildFileFinding[]): CriterionResult {
-    const details = [NO_LICENSE_FILE_ROW, ...buildFiles.map(finding => `Build file: ${describeBuildFile(finding)}`)].join('\n');
+    const details = (whatToDo: string) =>
+      [`What to do: ${whatToDo}`, NO_LICENSE_FILE_ROW, ...buildFiles.map(finding => `Build file: ${describeBuildFile(finding)}`)].join('\n');
     const declared = buildFiles.flatMap(finding => finding.status === 'declared' ? [finding] : []);
     const licenses = declared.flatMap(finding => finding.licenses);
 
@@ -266,7 +272,7 @@ export class LicenseUtils {
         criterionId,
         status: EvaluationStatus.PASS,
         evidence: `${joinNames(sources)} ${sources.length === 1 ? 'declares' : 'declare'} the Apache License 2.0. There is no top-level LICENSE file.`,
-        details
+        details: details(`Nothing; ${joinNames(sources)} ${sources.length === 1 ? 'declares' : 'declare'} the Apache License 2.0.`)
       };
     }
 
@@ -275,7 +281,7 @@ export class LicenseUtils {
         criterionId,
         status: EvaluationStatus.MANUAL,
         evidence: `There is no top-level LICENSE file, and the declared licenses disagree: ${declared.map(describeBuildFile).join('; ')}. A reviewer must decide which license applies; FOLIO modules must use Apache 2.0 only.`,
-        details
+        details: details('Decide which declared license applies; FOLIO modules must use Apache 2.0 only. The module team should add a top-level LICENSE file with the Apache License 2.0 text.')
       };
     }
 
@@ -285,7 +291,7 @@ export class LicenseUtils {
         criterionId,
         status: EvaluationStatus.FAIL,
         evidence: `There is no top-level LICENSE file, and ${joinNames(sources)} ${sources.length === 1 ? 'declares a license' : 'declare licenses'} other than Apache 2.0. Add a top-level LICENSE file with the Apache License 2.0 text and declare Apache 2.0 in ${joinNames(sources)}.`,
-        details
+        details: details(`Add a top-level LICENSE file with the Apache License 2.0 text, and declare Apache 2.0 in ${joinNames(sources)}.`)
       };
     }
 
@@ -295,7 +301,7 @@ export class LicenseUtils {
         criterionId,
         status: EvaluationStatus.MANUAL,
         evidence: `There is no top-level LICENSE file, and pom.xml declares no license, but its parent POM (${inheritingPom.parent}) may supply one. Check the parent POM's license, and add a top-level LICENSE file with the Apache License 2.0 text.`,
-        details
+        details: details("Check the license of the parent POM listed below by hand. The module team should add a top-level LICENSE file with the Apache License 2.0 text.")
       };
     }
 
@@ -304,7 +310,7 @@ export class LicenseUtils {
       criterionId,
       status: EvaluationStatus.FAIL,
       evidence: `No license found: there is no top-level LICENSE file${buildFileStates.map(state => `, and ${state}`).join('')}. Add a top-level LICENSE file with the Apache License 2.0 text.`,
-      details
+      details: details('Add a top-level LICENSE file with the Apache License 2.0 text.')
     };
   }
 
@@ -313,7 +319,7 @@ export class LicenseUtils {
       criterionId,
       status: EvaluationStatus.MANUAL,
       evidence: 'The license check could not run, so a reviewer must check the license by hand.',
-      details: `Error: ${errorText(error)}\nWhat to check: the repository has a top-level LICENSE file with the Apache License 2.0 text`
+      details: `Error: ${errorText(error)}\nWhat to do: Check by hand that the repository has a top-level LICENSE file with the Apache License 2.0 text.`
     };
   }
 }

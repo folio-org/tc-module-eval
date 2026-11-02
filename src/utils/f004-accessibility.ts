@@ -225,7 +225,8 @@ export function renderF004HumanDetails(analysis: F004Analysis, agentReview?: Cri
     return [
       'What the tool found:',
       `  - Production source: ${count(analysis.productionFileCount, 'file')} in src/, lib/ and the repository root; none renders an HTML element or text`,
-      '  - Translations: no translations/ directory'
+      '  - Translations: no translations/ directory',
+      'What to do: Nothing; the module renders no user interface, so there is nothing to check for accessibility.'
     ].join('\n');
   }
   const lint = analysis.lint;
@@ -248,13 +249,13 @@ export function renderF004HumanDetails(analysis: F004Analysis, agentReview?: Cri
     `  - Accessibility guides: ${guides.loaded ? `stripes-components ${reportText(guides.sourceDirectory ?? '')} at ${(guides.commit ?? '').slice(0, 7)} `
       + `(${(guides.committedAt ?? '').slice(0, 10)}), ${count(guides.fileCount, 'file')}` : reportText(guides.problem ?? 'not loaded')}`,
     ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    'What to do:', '  - Run axe DevTools (current major version) on the module\'s main screens in a test or reference environment and check each item below; '
+      + 'F004 is always decided by a reviewer.',
     ...runtimeLines(analysis)
   ];
   const unread = [...analysis.sourceDiagnostics.map(diagnostic => `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`),
     ...analysis.parseErrorFiles.map(file => `  - ${reportPath(file)} — does not parse cleanly`)];
   if (unread.length) lines.push('What the tool could not read:', ...unread);
-  lines.push('What to do:', '  - Run axe DevTools (current major version) on the module\'s main screens in a test or reference environment and check each item below; '
-    + 'F004 is always decided by a reviewer.');
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

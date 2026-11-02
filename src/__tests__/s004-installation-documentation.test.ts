@@ -451,6 +451,7 @@ mvn test
 
     expect(result.classification.status).toBe(EvaluationStatus.FAIL);
     expect(rendered.evidence).toContain('S004 fail: No README or other documentation files were found. To fix this,');
+    expect(rendered.details.split('\n')[0]).toBe('What to do: Add a section to README.md that shows how to build, start, and configure the module, including any services it needs (such as PostgreSQL or Kafka).');
     expect(rendered.details).toContain('  - none (looked for README.md, INSTALL.md, INSTALLATION.md, DEPLOYMENT.md, RUNNING.md, and Markdown files in docs/, doc/, deployment/)');
   });
 

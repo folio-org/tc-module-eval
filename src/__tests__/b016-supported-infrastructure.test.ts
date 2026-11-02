@@ -33,6 +33,7 @@ describe('B016 supported infrastructure', () => {
     expect(result.details?.split('\n')).toEqual([
       POLICY,
       CHECKED,
+      'What to do: Nothing; every infrastructure the module uses is on the Officially Supported Technologies list.',
       'On the list:',
       '  - PostgreSQL — "PostgreSQL 16" (required)',
       '    - storage evidence: RMB database schema src/main/resources/templates/db_scripts/schema.json',
@@ -70,6 +71,8 @@ describe('B016 supported infrastructure', () => {
       POLICY,
       'Checked: direct production dependencies in 2 build files (build.gradle and pom.xml), storage evidence, configuration keys and environment variables. '
         + 'Transitive dependencies are not visible without running the build, and server versions are not checked.',
+      'What to do:',
+      '  - Replace each infrastructure listed under "Not on the list, required" with one on the Officially Supported Technologies list, or ask the Technical Council to add it to the list.',
       'Not on the list, required:',
       '  - Redis',
       '    - pom.xml — dependency redis.clients:jedis',
@@ -80,8 +83,6 @@ describe('B016 supported infrastructure', () => {
       '    - src/main/resources/application.yml — configuration spring.rabbitmq.host',
       'What the tool could not read:',
       '  - build.gradle:2 — a dependency that is not a plain "group:name" string, such as a version catalog entry or a variable',
-      'What to do:',
-      '  - Replace each infrastructure listed under "Not on the list, required" with one on the Officially Supported Technologies list, or ask the Technical Council to add it to the list.',
       'Checklist for the reviewer:',
       '  - B016-C1 Each infrastructure the module requires is on the Officially Supported Technologies list, or the Technical Council has accepted it.',
       '    - Start with:',
@@ -108,6 +109,7 @@ describe('B016 supported infrastructure', () => {
     expect(result.evidence).toBe('B016 manual: The configuration names RabbitMQ (configuration spring.rabbitmq.host ↵   - forged row in src/main/resources/my%20config.yml), '
       + 'which is not on the Officially Supported Technologies list, but no client library for it is a direct dependency. A reviewer must check it.');
     expect(result.details?.split('\n').slice(2)).toEqual([
+      'What to do: Check each item on the checklist below against the Officially Supported Technologies list.',
       'Not on the list, named only in configuration:',
       '  - RabbitMQ',
       '    - src/main/resources/my%20config.yml — configuration spring.rabbitmq.host ↵   - forged row',
@@ -130,6 +132,7 @@ describe('B016 supported infrastructure', () => {
       + 'Officially Supported Technologies list, as options (edge-common secure store, chosen with secure_store; the default is Ephemeral). '
       + 'A reviewer must check them.');
     expect(result.details?.split('\n').slice(2)).toEqual([
+      'What to do: Check each item on the checklist below against the Officially Supported Technologies list.',
       'Not on the list, optional:',
       '  - AWS Systems Manager Parameter Store',
       '    - pom.xml — dependency software.amazon.awssdk:ssm (edge-common secure store, chosen with secure_store; the default is Ephemeral)',

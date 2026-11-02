@@ -266,6 +266,8 @@ export interface S007AnalysisResult {
   policyDiagnostics: S007PolicyDiagnostic[];
   evidenceDiagnostics: S007EvidenceDiagnostic[];
   agentReviewUnavailableReason?: string;
+  /** The run's --existing-module flag; set on S007's own result, not on the analysis shared with F005. */
+  existingModule?: boolean;
 }
 
 /** The policy S007 applied and its analysis, produced once per run and shared by S007 and F005. */

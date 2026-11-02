@@ -97,9 +97,10 @@ describe('F007 agent review', () => {
       + 'On the running UI (https://folio-etesting-snapshot-diku.ci.folio.org), Chrome 156.0.8078.47 loaded /example and /settings/example: '
       + '4 console errors, 1 failed request.');
     const lines = (result.details ?? '').split('\n');
-    const runtimeStart = lines.indexOf('Runtime evidence (informational):');
-    expect(lines.slice(runtimeStart - 1, lines.indexOf('What to do:'))).toEqual([
+    expect(lines.slice(lines.indexOf('What to do:') - 1, lines.indexOf('Checklist for the reviewer:'))).toEqual([
       '  - Agent review scope: source files under src/, lib/ and at the root (no tests, stories, examples, fixtures or mocks), CSS under src/ and lib/, package.json, .browserslistrc',
+      'What to do:',
+      '  - Open the module\'s main screens in the latest Chrome with the developer tools console open, and check the items below; F007 is always decided by a reviewer.',
       'Runtime evidence (informational):',
       '  - UI https://folio-etesting-snapshot-diku.ci.folio.org, login https://folio-etesting-snapshot-keycloak.ci.folio.org, API https://folio-etesting-snapshot-kong.ci.folio.org; '
         + 'Chrome 156.0.8078.47; took 14 s',

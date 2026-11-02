@@ -282,6 +282,7 @@ export function renderB005HumanDetails(analysis: B005Analysis): string {
       ? `, without the system ${analysis.systemInterfaces.length === 1 ? 'interface' : 'interfaces'} ${listText(analysis.systemInterfaces.map(reportText))}`
       : ''}`);
   }
+  lines.push(...whatToDo(analysis));
   const section = (heading: string, problems: B005Problem[], describe: (provided: B005Interface) => string) => {
     const list = analysis.interfaces.filter(provided => problems.some(problem => provided.problems.includes(problem)));
     if (!list.length) return;
@@ -335,16 +336,31 @@ export function renderB005HumanDetails(analysis: B005Analysis): string {
     lines.push('Names that differ from the first segment of their handler paths (information only):', ...differing.slice(0, MAX_ROWS).map(provided =>
       `  - ${name(provided)} — ${listText(provided.otherFirstSegments!.map(segment => `/${reportText(segment)}`))}`), ...overflowLine(differing.length, MAX_ROWS, '  '));
   }
+  lines.push(...renderFrontendChecklistLines(analysis.checklist));
+  return lines.join('\n');
+}
+
+function whatToDo(analysis: B005Analysis): string[] {
   if (analysis.status === EvaluationStatus.FAIL) {
     const separators = analysis.interfaces.some(provided => provided.problems.includes('dot') || provided.problems.includes('underscore'));
     const versions = analysis.interfaces.some(provided => provided.problems.includes('version-format'));
-    lines.push('What to do:', `  - ${[
+    return ['What to do:', `  - ${[
       ...(separators ? ['Rename each interface listed under "Names with a dot or underscore" to words joined by hyphens'] : []),
       ...(versions ? [`${separators ? 'give' : 'Give'} each interface listed under "Versions that are not major.minor" a major.minor version`] : [])
-    ].join(', and ')}.`);
+    ].join(', and ')}.`];
   }
-  lines.push(...renderFrontendChecklistLines(analysis.checklist));
-  return lines.join('\n');
+  if (analysis.basis === 'library') return ['What to do: Nothing; a shared library provides no interfaces of its own.'];
+  if (analysis.basis === 'no-descriptor') {
+    return ['What to do: Find the module descriptor template (see B001), and check that each interface it provides has a name of words joined by hyphens and a major.minor version (the checklist below).'];
+  }
+  if (analysis.status === EvaluationStatus.MANUAL) {
+    return [analysis.basis === 'no-interfaces'
+      ? 'What to do: Check that each route on the checklist below that other modules call is in a provided interface.'
+      : 'What to do: Check each item on the checklist below: each interface has a name of words joined by hyphens and a major.minor version, and each route other modules call is in a provided interface.'];
+  }
+  return [analysis.basis === 'no-interfaces'
+    ? 'What to do: Nothing; the module descriptor provides no interfaces other than system interfaces.'
+    : 'What to do: Nothing; every interface the module provides has a name of words joined by hyphens and a major.minor version.'];
 }
 
 const PROBLEM_NOTES: Record<B005Problem, string> = {

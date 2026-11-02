@@ -1,5 +1,5 @@
 import semver from 'semver';
-import { S012AnalysisResult, S012Finding, S012VersionCheck } from '../types';
+import { EvaluationStatus, S012AnalysisResult, S012Finding, S012VersionCheck } from '../types';
 import { reportPath, reportText } from './report-text';
 
 const MAX_WARNING_PATHS = 5;
@@ -12,7 +12,7 @@ const COMPARISONS: Record<S012VersionCheck['comparison'], string> = {
 };
 
 export function renderS012HumanDetails(analysis: S012AnalysisResult): string {
-  const lines: string[] = [];
+  const lines = [`What to do: ${whatToDo(analysis)}`];
   const tools = analysis.findings.filter(finding => finding.role !== 'coverage')
     .sort((left, right) => ROLE_ORDER[left.role] - ROLE_ORDER[right.role]);
   if (tools.length) {
@@ -53,6 +53,17 @@ export function renderS012HumanDetails(analysis: S012AnalysisResult): string {
     lines.push(`FOLIO shared workflows: folio-org/.github ${table.ref}, reviewed ${table.reviewedAt}, ${table.sourcePath}`);
   }
   return lines.join('\n');
+}
+
+function whatToDo(analysis: S012AnalysisResult): string {
+  if (analysis.status === EvaluationStatus.PASS) return 'Nothing; the module builds with officially supported build tools.';
+  if (analysis.status === EvaluationStatus.FAIL) {
+    return 'Change each build tool or version that is not allowed (listed below) to one the officially supported technologies list allows.';
+  }
+  if (analysis.policyDiagnostics.length) {
+    return "Fix the evaluator's configuration files (problems below) and run the evaluation again, or check the module's build tools by hand.";
+  }
+  return 'Check the build tools and versions below that need review against the officially supported technologies list.';
 }
 
 function versionLine(check: S012VersionCheck, judged: boolean): string {

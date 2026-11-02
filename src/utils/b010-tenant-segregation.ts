@@ -161,7 +161,11 @@ export function b010Runtime(runtime: BackendRuntimeEvidence): B010Runtime {
 }
 
 export function renderB010HumanDetails(analysis: B010Analysis, agentReview?: CriterionAgentReviewResult): string {
-  const lines = [`Storage: ${analysis.storage.present ? 'found' : 'none found'}`, ...analysis.storage.evidence.map(item => `  - ${reportText(item)}`)];
+  const lines = [`Storage: ${analysis.storage.present ? 'found' : 'none found'}`, ...analysis.storage.evidence.map(item => `  - ${reportText(item)}`),
+    analysis.status === EvaluationStatus.NOT_APPLICABLE ? 'What to do: Nothing; the module stores no data, so there is no data to segregate by tenant.'
+      : analysis.basis === 'storage-unconfirmed'
+        ? 'What to do: Check whether the module stores data, and if so that each tenant\'s data stays in its own schema (the checklist below).'
+        : 'What to do: Check that each tenant\'s data stays in its own schema, item by item on the checklist below.'];
   if (analysis.status !== EvaluationStatus.NOT_APPLICABLE) {
     const evidence = analysis.mechanisms.flatMap(mechanism => mechanism.evidence);
     lines.push(`Tenant-schema mechanism: ${evidence.length ? 'found' : 'none found'}`, ...evidence.map(item => `  - ${location(item)} — ${reportText(item.note)}`));

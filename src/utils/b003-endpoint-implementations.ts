@@ -7,6 +7,7 @@ import {
   BackendApiOperation,
   BackendApiSpec,
   BackendApiSpecs,
+  BackendDescriptorTemplate,
   BackendEvidence,
   BackendRuntimeEvidence,
   EvaluationStatus,
@@ -14,11 +15,13 @@ import {
 } from '../types';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
-import { SOURCE_FILE } from './backend-evidence';
+import { SOURCE_FILE, templateLineOf } from './backend-evidence';
 import { lineCounter, sourceRoutes, withoutComments } from './backend-routes';
 import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
+import { isSystemInterface } from './descriptor-handlers';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
+import { isRecord } from './type-guards';
 
 const MAX_ROWS = 20;
 const IMPLEMENTS = /\bimplements\b([^{;]{0,2000})/g;
@@ -190,16 +193,23 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   const startingPoints: FrontendChecklistItem['startingPoints'] = [];
   const point = (endpoint: B003Endpoint, path: string, note: string, line?: number) =>
     startingPoints.push({ path, ...(line ? { line } : {}), note: `${endpoint.method} ${endpoint.path}: ${note}` });
-  for (const endpoint of unspecified) point(endpoint, template.path, 'in no API spec and no route');
+  const templateLines = handlerLines(template);
+  const handlerLine = (endpoint: B003Endpoint) => templateLines.get(`${endpoint.method} ${endpoint.path}`);
+  for (const endpoint of unspecified) point(endpoint, template.path, 'in no API spec and no route', handlerLine(endpoint));
   for (const endpoint of noClass) point(endpoint, endpoint.specFiles[0], `no committed class implements it through ${listText(endpoint.generatedInterfaces!)}`);
   for (const endpoint of unrouted) point(endpoint, endpoint.specFiles[0], 'no route in the source serves it');
-  for (const endpoint of wildcards) point(endpoint, template.path, 'a wildcard path');
-  for (const endpoint of fromLibrary) point(endpoint, libraries.find(library => library.artifactId === endpoint.library)!.buildFile, `served by ${endpoint.library}`);
+  for (const endpoint of wildcards) point(endpoint, template.path, 'a wildcard path', handlerLine(endpoint));
+  for (const endpoint of fromLibrary) {
+    const library = libraries.find(candidate => candidate.artifactId === endpoint.library)!;
+    point(endpoint, library.buildFile, `served by ${endpoint.library}`, library.line);
+  }
   for (const endpoint of partial) {
     const at = endpoint.implementedBy?.[0];
     point(endpoint, endpoint.specFiles[0] ?? at!.file, 'found only for fixed values of a path parameter', endpoint.specFiles.length ? undefined : at!.line);
   }
-  for (const endpoint of unconfirmed) point(endpoint, endpoint.specFiles[0] ?? template.path, 'could not be checked');
+  for (const endpoint of unconfirmed) {
+    point(endpoint, endpoint.specFiles[0] ?? template.path, 'could not be checked', endpoint.specFiles.length ? undefined : handlerLine(endpoint));
+  }
   if (unconfirmed.length) startingPoints.push(...scan.unreadRoutes.map(route => ({ path: route.file, line: route.line, note: 'route whose path the tool could not read' })));
 
   return result(status, 'endpoints-checked', sentences.join(' '), startingPoints.length ? [checklistItem(startingPoints)] : [], {
@@ -210,6 +220,28 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
     unreadRoutes: scan.unreadRoutes,
     unreadRouteCount: scan.unreadRouteCount
   });
+}
+
+/** The template line of the pathPattern, or legacy path, of the first handler of each method and path, as descriptorEndpoints names them. */
+function handlerLines(template: BackendDescriptorTemplate): Map<string, number> {
+  const lineOf = templateLineOf(template);
+  const lines = new Map<string, number>();
+  const provides = isRecord(template.descriptor) && Array.isArray(template.descriptor.provides) ? template.descriptor.provides : [];
+  provides.forEach((provided: unknown, interfaceIndex) => {
+    if (!isRecord(provided) || isSystemInterface(provided) || !Array.isArray(provided.handlers)) return;
+    provided.handlers.forEach((handler: unknown, handlerIndex) => {
+      if (!isRecord(handler) || !Array.isArray(handler.methods)) return;
+      const key = typeof handler.pathPattern === 'string' ? 'pathPattern' : typeof handler.path === 'string' ? 'path' : undefined;
+      const line = key && lineOf(`/provides/${interfaceIndex}/handlers/${handlerIndex}/${key}`);
+      if (!line) return;
+      const path = key === 'pathPattern' ? handler.pathPattern : `${handler.path}*`;
+      for (const method of handler.methods.filter((item: unknown): item is string => typeof item === 'string')) {
+        const endpoint = `${method.toUpperCase()} ${path}`;
+        if (!lines.has(endpoint)) lines.set(endpoint, line);
+      }
+    });
+  });
+  return lines;
 }
 
 /** The runtime harness's GET requests in the first tenant, as B003's informational runtime evidence. */
@@ -231,6 +263,7 @@ export function renderB003HumanDetails(analysis: B003Analysis): string {
   const lines = [`Framework: ${FRAMEWORK_LABELS[analysis.framework.name]}`];
   if (analysis.endpointSource) lines.push(`Endpoints: ${analysis.endpoints.length} methods and paths from ${reportText(analysis.endpointSource)}`);
   if (analysis.implementationSource) lines.push(`Implementations: ${reportText(analysis.implementationSource)}`, `Routes found in the source: ${analysis.routeCount}`);
+  lines.push(...whatToDo(analysis));
   const section = (heading: string, list: B003Endpoint[], describe: (endpoint: B003Endpoint) => string = () => '') => {
     if (!list.length) return;
     lines.push(`${heading}:`, ...list.slice(0, MAX_ROWS).map(endpoint => `  - ${endpointLabel(endpoint)}${endpoint.interfaceId ? ` (interface ${reportText(endpoint.interfaceId)})` : ''}${describe(endpoint)}`),
@@ -269,12 +302,26 @@ export function renderB003HumanDetails(analysis: B003Analysis): string {
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  if (analysis.status === EvaluationStatus.FAIL) {
-    lines.push('What to do:', '  - Implement each endpoint listed under "In no API spec and served by no route", or remove its handler from the module descriptor.');
-  }
   lines.push(...runtimeLines(analysis.runtime));
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
+}
+
+function whatToDo(analysis: B003Analysis): string[] {
+  const edge = analysis.kind === 'edge-module';
+  if (analysis.status === EvaluationStatus.FAIL) {
+    return ['What to do:', '  - Implement each endpoint listed under "In no API spec and served by no route", or remove its handler from the module descriptor.'];
+  }
+  if (analysis.basis === 'library') return ['What to do: Nothing; a shared library provides no endpoints of its own.'];
+  if (analysis.basis === 'no-descriptor') {
+    return ['What to do: Find the module descriptor template (see B001), and check that each endpoint it provides has an implementation (the checklist below).'];
+  }
+  if (analysis.basis === 'no-endpoints') {
+    return [`What to do: Nothing; the module descriptor provides no endpoints other than system interfaces${edge ? ', and no API spec documents any' : ''}.`];
+  }
+  return [analysis.status === EvaluationStatus.MANUAL
+    ? 'What to do: Check that each endpoint on the checklist below has an implementation that serves its methods.'
+    : `What to do: Nothing; every endpoint ${edge ? 'the edge module provides or documents' : 'in the descriptor'} has an implementation.`];
 }
 
 function runtimeLines(runtime: B003Runtime | undefined): string[] {

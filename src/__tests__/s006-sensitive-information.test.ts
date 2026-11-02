@@ -1811,6 +1811,11 @@ describe('S006 report formatting and criterion details', () => {
     const details = buildS006CriterionDetails(analysis);
 
     expect(analysis.classification.status).toBe(EvaluationStatus.PASS);
+    expect(rendered.details.split('\n').slice(0, 3)).toEqual([
+      'What to do: Nothing; no secrets or environment-specific values were found.',
+      '',
+      'Findings:'
+    ]);
     expect(rendered.details).toContain('Gitleaks: ran and reported 0 possible secrets');
     expect(rendered.details).toContain(`Built-in scan: read ${MAX_S006_SCAN_CANDIDATE_FILES} of ${MAX_S006_SCAN_CANDIDATE_FILES + 3} files`);
     expect(rendered.details).toContain('Complete: no, but nothing left out affects the result; see Skipped');

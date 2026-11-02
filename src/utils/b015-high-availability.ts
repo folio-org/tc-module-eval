@@ -139,13 +139,13 @@ export function renderB015HumanDetails(analysis: B015Analysis, agentReview?: Cri
     row('In-memory caches and maps', 'in-memory-state'),
     row('Scheduled jobs', 'scheduler'),
     ...(total > analysis.signals.length ? [`  - Listed: the first ${MAX_SIGNALS_PER_KIND} sites of each kind, ${analysis.signals.length} of ${total}`] : []),
-    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : [])
+    ...(agentReview ? [`  - Agent review scope: ${reportText(analysis.agentBrowseScope)}`] : []),
+    'What to do:', '  - Check each item below for a deployment of several instances behind a load balancer without session affinity; B015 is always decided by a reviewer.'
   ];
   if (analysis.sourceDiagnostics.length) {
     lines.push('What the tool could not read:', ...analysis.sourceDiagnostics.map(diagnostic =>
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
-  lines.push('What to do:', '  - Check each item below for a deployment of several instances behind a load balancer without session affinity; B015 is always decided by a reviewer.');
   lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }

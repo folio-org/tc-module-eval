@@ -128,6 +128,7 @@ export function renderB001HumanDetails(analysis: B001Analysis): string {
   const lines: string[] = [];
   if (analysis.template) lines.push(`Descriptor template: ${reportPath(analysis.template.path)}`);
   if (analysis.schemaBaseline) lines.push(`Checked against: Okapi ModuleDescriptor schema (${analysis.schemaBaseline})`);
+  lines.push(`What to do: ${WHAT_TO_DO[analysis.basis]}`);
   if (analysis.parseError) lines.push(`JSON error: ${reportText(analysis.parseError)}`);
   const placeholders = analysis.template?.placeholders ?? [];
   if (placeholders.length) {
@@ -158,6 +159,18 @@ export function renderB001HumanDetails(analysis: B001Analysis): string {
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   return lines.join('\n');
 }
+
+const WHAT_TO_DO: Record<B001Basis, string> = {
+  library: 'Nothing; a shared library needs no module descriptor.',
+  'several-templates': 'Check which of the descriptor candidates the build uses, and check that one against the Okapi ModuleDescriptor schema, starting with the checklist below.',
+  'edge-without-template': 'Commit a module descriptor template at descriptors/ModuleDescriptor-template.json.',
+  'template-unreadable': 'Check the module\'s descriptor template against the Okapi ModuleDescriptor schema by hand, starting with the checklist below.',
+  'ambiguous-without-template': 'Check whether the repository is a shared library; if it is a module, it must commit its module descriptor template (see the checklist below).',
+  'template-placeholders-outside-strings': 'Check that the descriptor the build generates from the template is valid JSON and matches the Okapi ModuleDescriptor schema, starting with the checklist below.',
+  'template-invalid-json': 'Fix the JSON error in the descriptor template.',
+  'template-schema-errors': 'Fix each problem listed under "Schema problems" in the descriptor template.',
+  'template-valid': 'Nothing; the descriptor template matches the Okapi ModuleDescriptor schema.'
+};
 
 // " (checked with build placeholders such as ${artifactId} replaced)"
 function placeholderClause(placeholders: BackendPlaceholder[], preposition: 'with' | 'after'): string {

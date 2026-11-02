@@ -54,6 +54,8 @@ export function formatS005Evidence(
   const evidenceScan = analysis.evidenceScan;
   const disclosurePath = analysis.discovery.artifact?.path ?? REQUIRED_DISCLOSURE_FILENAME;
   const supportingLines: Array<string | undefined> = [
+    `What to do: ${whatToDo(analysis)}`,
+    '',
     'Artifact mechanics:',
     `  - Repository kind: ${moduleKind.kind}`,
     ...moduleKind.evidence.map(evidenceItem => `  - Module-kind evidence: ${reportText(evidenceItem)}`),
@@ -121,6 +123,21 @@ export function formatS005Evidence(
     evidence: boundS005Text(evidence, 700),
     details
   };
+}
+
+function whatToDo(analysis: S005PersonalDataDisclosureAnalysisResult): string {
+  if (analysis.classification.status !== EvaluationStatus.FAIL) {
+    return `Check that the answers in ${REQUIRED_DISCLOSURE_FILENAME} match the personal data the module stores and processes.`;
+  }
+  if (analysis.discovery.status === 'found') {
+    return `Complete the disclosure form in ${REQUIRED_DISCLOSURE_FILENAME}: check the answers that apply to the module and replace any placeholder values.`;
+  }
+  if (analysis.discovery.status === 'unreadable') {
+    return `Replace ${REQUIRED_DISCLOSURE_FILENAME} with a regular file inside the repository so it can be read, and make sure the form is complete.`;
+  }
+  return analysis.discovery.artifact
+    ? `Rename or move the near-match file to ${REQUIRED_DISCLOSURE_FILENAME} at the repository root, and complete the form if it is unfinished.`
+    : `Add a completed ${REQUIRED_DISCLOSURE_FILENAME} at the repository root, using the FOLIO personal data disclosure form.`;
 }
 
 function wholeLinePreview(lines: string[], maxBytes: number): string {
