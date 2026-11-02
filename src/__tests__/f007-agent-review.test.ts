@@ -190,6 +190,34 @@ describe('F007 agent review', () => {
     expect(lines.slice(-1)).toEqual(['  - Not applied: F007 agent review needs runtime evidence, and the probe of the running UI collected none (see "Runtime evidence")']);
   });
 
+  it('reviews a loaded page when axe fails, without enabling F004 review', async () => {
+    const runtime = { ...RUNTIME, pages: [
+      { ...RUNTIME.pages[0], axe: undefined, axeProblem: 'page.evaluate: Error: accessibility scan blocked' }, RUNTIME.pages[2]
+    ] };
+    const config = fakeConfig({ assessments: [holds('F007-C1#1')], reviewerActions: [action] });
+    config.enabledCriteria = ['F004', 'F007'];
+    const probe = new FakeProbe(runtime);
+    const run = createEvaluationRun({ repositoryPath: repoPath, language: 'javascript', agentReview: config, uiRuntime: probe });
+    const evaluator = new FrontendEvaluator();
+
+    const f007 = await evaluator.evaluateCriterion('F007', repoPath, run);
+    const f004 = await evaluator.evaluateCriterion('F004', repoPath, run);
+
+    expect(f007.agentReview?.available).toBe(true);
+    expect(f007.status).toBe(EvaluationStatus.MANUAL);
+    expect(f007.evidence).toBe('F007 manual: Whether the module works in the latest Chrome must be checked in the browser. The tool found '
+      + '1 read of navigator properties that identify the browser; 1 vendor-prefixed API use; 0 uses of APIs Chrome removed; 1 browserslist override; 0 polyfills. '
+      + 'On the running UI (https://folio-etesting-snapshot-diku.ci.folio.org), Chrome 156.0.8078.47 loaded /example: 1 console error, 1 failed request.');
+    const lines = (f007.details ?? '').split('\n');
+    expect(lines).toContain('  - /example (ended on https://folio-etesting-snapshot-diku.ci.folio.org/example?sort=name): '
+      + '1 console error, 1 failed request; axe-core did not finish: page.evaluate: Error: accessibility scan blocked');
+    expect(lines).toContain('      - /example — on the running UI: 1 console error, 1 failed request');
+    expect(f004.agentReview).toBeUndefined();
+    expect((f004.details ?? '').split('\n')).toContain('  - /example (ended on https://folio-etesting-snapshot-diku.ci.folio.org/example?sort=name): '
+      + 'not measured; axe-core did not finish: page.evaluate: Error: accessibility scan blocked');
+    expect(probe.calls).toHaveLength(1);
+  });
+
   it('sums up only the module pages that loaded', async () => {
     const runtime: UiRuntimeEvidence = { ...CONSOLE_RUNTIME, pages: [
       { ...CONSOLE_RUNTIME.pages[1], consoleErrors: [], failedRequests: [] },

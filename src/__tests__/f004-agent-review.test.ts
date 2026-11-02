@@ -44,7 +44,9 @@ describe('F004 agent review', () => {
   const action = { action: 'Check the contrast of the empty results message in the deployed theme.', evidenceReferences: ['src/Main.js'] };
 
   it('gives the agent the axe results, the accessibility guides, and the source and axe tests to browse', async () => {
-    const prepared = (await prepareCriterionAgentReviewEvidence(buildF004AgentReviewRequest(repoPath, await analyze(RUNTIME), guides))).request;
+    const runtime: UiRuntimeEvidence = { ...RUNTIME, pages: [RUNTIME.pages[0],
+      { ...RUNTIME.pages[1], axe: undefined, axeProblem: 'the accessibility scan did not finish within 30 s' }, RUNTIME.pages[2]] };
+    const prepared = (await prepareCriterionAgentReviewEvidence(buildF004AgentReviewRequest(repoPath, await analyze(runtime), guides))).request;
     const paths = prepared.files.map(file => file.repoRelativePath);
 
     expect(paths).toEqual(expect.arrayContaining(['src/Main.js', 'package.json', '.eslintrc', 'src/Main.test.js', AXE,
@@ -53,9 +55,10 @@ describe('F004 agent review', () => {
     const axe = JSON.parse(prepared.files.find(file => file.repoRelativePath === AXE)!.content);
     expect(axe.deployedModule).toEqual({ id: 'folio_example', version: '2.1.1099000000000453' });
     expect(axe.evaluatedPackageVersion).toBe('2.1.0');
-    expect(axe.pages.map((page: { path: string; violations?: Array<{ id: string; nodeCount: number }> }) =>
-      [page.path, page.violations?.map(violation => [violation.id, violation.nodeCount])])).toEqual([
-      ['/example', [['color-contrast', 2], ['aria-allowed-attr', 1]]], ['/settings/example', []], ['/settings/about', undefined]]);
+    expect(axe.pages.map((page: { path: string; violations?: Array<{ id: string; nodeCount: number }>; axeProblem?: string }) =>
+      [page.path, page.violations?.map(violation => [violation.id, violation.nodeCount]), page.axeProblem])).toEqual([
+      ['/example', [['color-contrast', 2], ['aria-allowed-attr', 1]], undefined],
+      ['/settings/example', undefined, 'the accessibility scan did not finish within 30 s'], ['/settings/about', undefined, undefined]]);
     const checklist = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/F004/checklist.json')!.content);
     expect(checklist.items.flatMap((item: { obligations: unknown[] }) => item.obligations)).toEqual([
       { id: 'F004-C1#1', subject: '/example: color-contrast' },

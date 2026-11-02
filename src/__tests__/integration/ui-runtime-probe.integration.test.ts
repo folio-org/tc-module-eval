@@ -136,11 +136,15 @@ describeWithChrome(chrome ? 'runtime UI probe against a loopback UI and login se
     return `(() => {
       if (!document.cookie.includes('session=1')) { location.href = ${JSON.stringify(loginPage)}; return; }
       const path = location.pathname;
-      if (path === '/busy') setTimeout(() => { for (;;) {} }, 300);
+      if (path === '/busy') { for (;;) {} }
       if (path === '/settings/about') { document.body.innerHTML = '<main><h1>About</h1><p>folio_example-1.2.3000</p><p>folio_example_other-9.9.9</p></main>'; return; }
       document.body.innerHTML = '<main><h1>Page ' + path + '</h1><img src="/a.png" data-user="${USERNAME}"></main>';
       console.error('boom on ' + path);
       fetch(${JSON.stringify(env.api.origin)} + '/users', { credentials: 'include', headers: { 'x-okapi-tenant': 'test' } });
+      if (path === '/axe-error' || path === '/axe-timeout') {
+        Object.defineProperty(window, 'axe', { get: () => ({ run: () => path === '/axe-error'
+          ? Promise.reject(new Error('accessibility scan blocked')) : new Promise(() => {}) }), set: () => {} });
+      }
       if (path === '/example') {
         fetch(${JSON.stringify(env.api.origin)} + '/authn/refresh', { method: 'POST', credentials: 'include', headers: { 'x-okapi-tenant': 'test' } }).catch(() => {});
         fetch('/authn/token', { method: 'POST', body: 'x' }).catch(() => {});
@@ -215,6 +219,23 @@ describeWithChrome(chrome ? 'runtime UI probe against a loopback UI and login se
       'GET http://host/popup (another origin)'
     ]));
     expect(JSON.stringify(evidence)).not.toContain(PASSWORD);
+  }, 60_000);
+
+  it.each([
+    ['/axe-error', 'page.evaluate: Error: accessibility scan blocked'],
+    ['/axe-timeout', 'the accessibility scan did not finish within 3 s']
+  ])('keeps the loaded page and console evidence when the accessibility scan fails on %s', async (route, problem) => {
+    await start();
+
+    const evidence = await probe({ pageTimeoutMs: 3_000 }).collect([{ path: route, source: 'route' }, { path: '/next', source: 'home' }], 'folio_example');
+
+    expect(evidence.outcome).toBe('collected');
+    expect(evidence.pages[0]).toMatchObject({ path: route, status: 200, consoleErrors: [`boom on ${route}`], axeProblem: problem });
+    expect(evidence.pages[0].problem).toBeUndefined();
+    expect(evidence.pages[0].axe).toBeUndefined();
+    expect(evidence.pages[1].path).toBe('/next');
+    expect(evidence.pages[1].problem).toBeUndefined();
+    expect(evidence.pages[1].axe).toBeDefined();
   }, 60_000);
 
   it('stops, and sends nothing further, when the login form redirects to a third origin', async () => {

@@ -4,12 +4,12 @@ import { f007BrowsePaths } from './f007-latest-chrome';
 import { boundedSummary, buildFrontendAgentReviewRequest, frontendBrowseInclude, givenObligations } from './frontend-agent-review';
 import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
-import { runtimeCollected } from './ui-runtime-report';
+import { runtimePageLoaded } from './ui-runtime-report';
 
 const F007_CONSOLE_PATH = '.criterion-agent/F007/console.json';
 
 export function hasF007AgentReviewMaterial(analysis: F007Analysis): boolean {
-  return runtimeCollected(analysis.runtime) && givenObligations(analysis.checklist).length > 0;
+  return analysis.runtime.pages.some(runtimePageLoaded) && givenObligations(analysis.checklist).length > 0;
 }
 
 export async function reviewF007WithAgent(

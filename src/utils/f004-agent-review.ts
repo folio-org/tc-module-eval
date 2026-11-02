@@ -48,6 +48,7 @@ export function buildF004AgentReviewRequest(repoPath: string, analysis: F004Anal
       path: page.path,
       ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
       ...(page.problem ? { problem: page.problem } : {}),
+      ...(page.axeProblem ? { axeProblem: page.axeProblem } : {}),
       ...(page.axe ? {
         passCount: page.axe.passCount,
         incompleteCount: page.axe.incompleteCount,

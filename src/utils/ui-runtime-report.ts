@@ -6,6 +6,10 @@ export function runtimeCollected(runtime: UiRuntimeEvidence): boolean {
   return runtime.pages.some(page => page.axe);
 }
 
+export function runtimePageLoaded(page: UiRuntimePage): boolean {
+  return page.source !== 'about' && !page.problem;
+}
+
 export function runtimeNotRunReason(criterionId: string, runtime: UiRuntimeEvidence): string {
   return runtime.outcome === 'not-configured'
     ? `${criterionId} agent review needs runtime evidence from a running FOLIO UI (--ui-runtime-url and --ui-runtime-login-origin), and none was given`
@@ -45,7 +49,7 @@ export function runtimeEvidenceLines(runtime: UiRuntimeEvidence, packageVersion:
     `  - Deployed module: ${deployed ? `${reportText(deployed.id)} ${reportText(deployed.version)} on /settings/about` : 'version not found on /settings/about'}`
       + `; package.json of this commit: ${reportText(packageVersion ?? 'no version')}`,
     ...runtime.pages.map(page => `  - ${reportText(page.path)}${page.finalUrl ? ` (ended on ${reportText(page.finalUrl)})` : ''}: ${page.problem
-      ? reportText(page.problem) : options.pageResult(page)}`),
+      ? reportText(page.problem) : options.pageResult(page) + (page.axeProblem ? `; axe-core did not finish: ${reportText(page.axeProblem)}` : '')}`),
     ...runtime.skippedPaths.map(skipped => `  - ${reportText(skipped.path)} (${SKIPPED_SOURCES[skipped.source]}): not visited — ${reportText(skipped.reason)}`),
     `  - Console errors: ${consoleTotal ? `${consoleTotal} on ${count(consolePages, 'page')}; first: `
       + consoleErrors.slice(0, 3).map(message => `"${reportText(message.replace(/\s+/g, ' ').slice(0, 160))}"`).join('; ') : 'none'}`,

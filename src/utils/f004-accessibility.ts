@@ -263,6 +263,7 @@ function runtimeLines(analysis: F004Analysis): string[] {
   return runtimeEvidenceLines(analysis.runtime, analysis.packageVersion, {
     notConfigured: '--ui-runtime-url and --ui-runtime-login-origin measure a running FOLIO UI with axe-core',
     tools: `, axe-core ${reportText(analysis.runtime.axeVersion ?? 'unknown')} (${AXE_TAGS.join(', ')})`,
-    pageResult: page => page.axe ? page.axe.violations.length ? reportText(violationList(page)) : 'no violations' : 'read for the deployed version'
+    pageResult: page => page.axe ? page.axe.violations.length ? reportText(violationList(page)) : 'no violations'
+      : page.axeProblem ? 'not measured' : 'read for the deployed version'
   });
 }

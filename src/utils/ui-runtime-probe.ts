@@ -335,6 +335,7 @@ export class PlaywrightUiRuntimeProbe implements UiRuntimeProbe {
         const record: UiRuntimePage = { ...target, url: `${this.uiOrigin}${target.path}`, durationMs: 0, consoleErrors: [], consoleErrorsCut: 0,
           failedRequests: [], failedRequestsCut: 0 };
         current = record;
+        let scanning = false;
         try {
           const response = await within(page.goto(record.url, { waitUntil: 'load', timeout: remaining(pageDeadline) + 1_000 }), remaining(pageDeadline));
           if (response) record.status = response.status();
@@ -347,15 +348,19 @@ export class PlaywrightUiRuntimeProbe implements UiRuntimeProbe {
             const version = moduleId ? deployedVersion(await within(page.evaluate('document.body ? document.body.innerText : ""').then(String), remaining(pageDeadline)), moduleId) : undefined;
             if (moduleId && version) evidence.deployedModule = { id: moduleId, version };
           } else {
+            scanning = true;
             record.axe = await within(this.runAxe(page), remaining(pageDeadline));
           }
         } catch (error) {
-          if (error instanceof ProbeStopped) record.problem = 'the probe stopped during this page';
+          let problem: string;
+          if (error instanceof ProbeStopped) problem = 'the probe stopped during this page';
           else if (error instanceof BudgetExceeded || Date.now() >= Math.min(pageDeadline, deadline)) {
-            record.problem = Date.now() >= deadline && deadline < pageDeadline
+            problem = Date.now() >= deadline && deadline < pageDeadline
               ? `the ${seconds(this.limits.totalTimeoutMs)} budget for the probe ran out during this page`
-              : `the page did not finish within ${seconds(this.limits.pageTimeoutMs)}`;
-          } else record.problem = firstLine(errorMessage(error));
+              : `the ${scanning ? 'accessibility scan' : 'page'} did not finish within ${seconds(this.limits.pageTimeoutMs)}`;
+          } else problem = firstLine(errorMessage(error));
+          if (scanning && !(error instanceof ProbeStopped)) record.axeProblem = problem;
+          else record.problem = problem;
         }
         current = undefined;
         record.durationMs = Date.now() - pageStarted;

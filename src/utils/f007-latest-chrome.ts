@@ -18,7 +18,7 @@ import { FRONTEND_BROWSE_SCOPE, numberObligations } from './frontend-agent-revie
 import { FrontendSource, FrontendSourceFile, frontendUiPresence, lineOf, RENDERS_NO_UI } from './frontend-source';
 import { count, overflowLine, reportPath, reportText } from './report-text';
 import { isRecord } from './type-guards';
-import { consoleErrorCount, failedRequestCount, runtimeCollected, runtimeEvidenceLines } from './ui-runtime-report';
+import { consoleErrorCount, failedRequestCount, runtimePageLoaded, runtimeEvidenceLines } from './ui-runtime-report';
 
 const DEFAULT_API_LIST_PATH = path.resolve(__dirname, '../../config/f007-browser-apis.json');
 const BROWSERSLIST_FILES = new Set(['.browserslistrc', 'browserslist']);
@@ -162,8 +162,8 @@ function summaryText(analysis: F007Analysis, incomplete: boolean): string {
 }
 
 function runtimeSummary(runtime: UiRuntimeEvidence): string {
-  if (!runtimeCollected(runtime)) return '';
-  const pages = runtime.pages.filter(page => page.axe);
+  const pages = runtime.pages.filter(runtimePageLoaded);
+  if (!pages.length) return '';
   const loaded = pages.map(page => reportText(page.path));
   const errors = consoleErrorCount(pages);
   const failed = failedRequestCount(pages);

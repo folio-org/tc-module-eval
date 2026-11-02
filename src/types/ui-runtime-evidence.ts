@@ -35,6 +35,7 @@ export interface UiRuntimePage extends UiRuntimeTarget {
   status?: number;
   durationMs: number;
   problem?: string;
+  axeProblem?: string;
   axe?: { violations: UiRuntimeAxeViolation[]; passCount: number; incompleteCount: number };
   consoleErrors: string[];
   consoleErrorsCut: number;
