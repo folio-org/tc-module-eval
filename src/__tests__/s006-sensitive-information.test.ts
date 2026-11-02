@@ -66,6 +66,140 @@ function hasRealGitleaksBinary(): boolean {
 
 const realGitleaksIt = hasRealGitleaksBinary() ? it : it.skip;
 
+describe('S006 email and URL domain review', () => {
+  let repoPath: string;
+  beforeEach(() => { repoPath = createTempRepo(); });
+  afterEach(() => { fs.rmSync(repoPath, { recursive: true, force: true }); });
+
+  it('groups occurrences and source files exactly without retaining mailbox names or URL payloads', async () => {
+    writeRepoFile(repoPath, 'src/main/resources/sample-data/users-15.4.0/a.json', JSON.stringify({
+      email: 'alpha+review@SHARED.example.invalid',
+      other: 'alpha+review@shared.example.invalid',
+      url: 'https://shared.example.invalid:8443/private-record?personal=hidden-value',
+      docs: 'FTP://Other.example.invalid./hidden-path'
+    }));
+    writeRepoFile(repoPath, 'docs/review notes.md', 'mailto:beta@shared.example.invalid. https://other.example.invalid/second');
+    writeRepoFile(repoPath, 'node_modules/ignored.json', 'ignored@excluded.invalid');
+    writeRepoFile(repoPath, 'src/main/resources/data.csv', 'ignored@excluded.invalid');
+    const result = await analyzeRepo(repoPath);
+    const expected = {
+      emailCount: 3, urlCount: 3, omittedOccurrences: 0,
+      domains: [
+        { domain: 'other.example.invalid', emailCount: 0, urlCount: 2, fileCount: 2, files: [
+          { path: 'src/main/resources/sample-data/users-15.4.0/a.json', emailCount: 0, urlCount: 1 },
+          { path: 'docs/review notes.md', emailCount: 0, urlCount: 1 }
+        ] },
+        { domain: 'shared.example.invalid', emailCount: 3, urlCount: 1, fileCount: 2, files: [
+          { path: 'src/main/resources/sample-data/users-15.4.0/a.json', emailCount: 2, urlCount: 1 },
+          { path: 'docs/review notes.md', emailCount: 1, urlCount: 0 }
+        ] }
+      ]
+    };
+    expect(result.domainReview).toEqual(expected);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.findings).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    const details = buildS006CriterionDetails(result);
+    expect(details.domainReview).toEqual(expected);
+    const rendered = formatS006Evidence(result);
+    expect(rendered.details.split('Email and URL domains (manual review only):\n')[1].split('\n\nAgent review:')[0].split('\n')).toEqual([
+      '  - Mailbox names, URL credentials, paths, and query strings are hidden. A domain alone never fails S006.',
+      '  - Occurrences in scanned text: 3 email addresses, 3 URLs',
+      '  - other.example.invalid: 0 email addresses, 2 URLs in 2 files',
+      '    - src/main/resources/sample-data/users-15.4.0/a.json: 0 email addresses, 1 URL',
+      '    - docs/review%20notes.md: 0 email addresses, 1 URL',
+      '  - shared.example.invalid: 3 email addresses, 1 URL in 2 files',
+      '    - src/main/resources/sample-data/users-15.4.0/a.json: 2 email addresses, 1 URL',
+      '    - docs/review%20notes.md: 1 email address, 0 URLs',
+      '  - Counts cover only the text the built-in scan read. The JSON report contains all retained source files.'
+    ]);
+    for (const value of ['alpha+review', 'beta@', 'private-record', 'hidden-value', 'hidden-path']) {
+      expect(JSON.stringify({ details, rendered })).not.toContain(value);
+    }
+  });
+
+  it('retains all 300 sample-file domains in an offline analogue of mod-users v19.6.2', async () => {
+    const expected = Array.from({ length: 300 }, (_, index) => {
+      const id = String(index).padStart(3, '0');
+      const path = `src/main/resources/sample-data/users-15.4.0/${id}.json`;
+      writeRepoFile(repoPath, path, JSON.stringify({ personal: { email: `sample-${id}@domain-${id}.example.invalid` } }));
+      return { domain: `domain-${id}.example.invalid`, emailCount: 1, urlCount: 0, fileCount: 1,
+        files: [{ path, emailCount: 1, urlCount: 0 }] };
+    });
+    const result = await analyzeRepo(repoPath);
+    expect(result.domainReview).toEqual({ emailCount: 300, urlCount: 0, omittedOccurrences: 0, domains: expected });
+    expect(result.warnings).toEqual([]);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.coverage.complete).toBe(true);
+  });
+
+  it('keeps collecting domains after the secret finding cap, without weakening a real secret failure', async () => {
+    writeRepoFile(repoPath, 'src/a.properties', 'url=https://deploy:Q8v2Z9r4@service.invalid/private\n' +
+      Array.from({ length: 101 }, (_, i) => `password=Q8v2Z9r4-${i}`).join('\n'));
+    writeRepoFile(repoPath, 'src/z.json', '{"email":"later@review.example.invalid"}');
+    const result = await analyzeRepo(repoPath);
+    expect(result.classification.status).toBe(EvaluationStatus.FAIL);
+    expect(result.findings).toHaveLength(MAX_S006_RETAINED_FINDINGS);
+    expect(result.domainReview).toEqual({ emailCount: 1, urlCount: 1, omittedOccurrences: 0, domains: [
+      { domain: 'review.example.invalid', emailCount: 1, urlCount: 0, fileCount: 1,
+        files: [{ path: 'src/z.json', emailCount: 1, urlCount: 0 }] },
+      { domain: 'service.invalid', emailCount: 0, urlCount: 1, fileCount: 1,
+        files: [{ path: 'src/a.properties', emailCount: 0, urlCount: 1 }] }
+    ] });
+  });
+
+  it('bounds retained domains while counting omitted occurrences and reporting a coverage gap', async () => {
+    writeRepoFile(repoPath, 'src/domains.txt', Array.from({ length: 1002 }, (_, i) => `a@d${i}.invalid`).join('\n'));
+    const result = await analyzeRepo(repoPath);
+    expect(result.domainReview).toMatchObject({ emailCount: 1002, urlCount: 0, omittedOccurrences: 2 });
+    expect(result.domainReview!.domains).toHaveLength(1000);
+    expect(result.warnings).toEqual([{
+      kind: 'domain-review-limit', path: undefined, materialToCoverage: true,
+      message: 'Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 2 occurrences have unlisted domains, 0 file entries are unlisted, and 0 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.'
+    }]);
+    expect(result.coverage.complete).toBe(false);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('bounds domain/file entries without losing occurrence or distinct-file counts', async () => {
+    for (let index = 0; index < 801; index++) {
+      writeRepoFile(repoPath, `src/${String(index).padStart(3, '0')}.json`, JSON.stringify(
+        Array.from({ length: 5 }, (_, domain) => `sample@d${domain}.invalid`)));
+    }
+    const result = await analyzeRepo(repoPath);
+    expect(result.domainReview).toMatchObject({ emailCount: 4005, urlCount: 0, omittedOccurrences: 0 });
+    expect(result.domainReview!.domains.map(group => ({ emails: group.emailCount, files: group.fileCount, retained: group.files.length })))
+      .toEqual(Array.from({ length: 5 }, () => ({ emails: 801, files: 801, retained: 800 })));
+    expect(result.warnings.map(warning => warning.message)).toEqual([
+      'Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 5 file entries are unlisted, and 0 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.'
+    ]);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it('reports rejected or cut-short candidates without printing their values', async () => {
+    writeRepoFile(repoPath, 'src/invalid.txt', `https://invalid:bad-port/private ${'x'.repeat(65)}@example.invalid https://valid.invalid/${'x'.repeat(8192)}`);
+    writeRepoFile(repoPath, 'src/cut.txt', `${' '.repeat(MAX_S006_SCAN_BYTES_PER_FILE - 20)}cut@partial.invalid.more-text`);
+    const result = await analyzeRepo(repoPath);
+    expect(result.domainReview).toBeUndefined();
+    expect(result.warnings.filter(warning => warning.kind === 'domain-review-limit').map(warning => warning.message)).toEqual([
+      'Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 0 file entries are unlisted, and 4 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.'
+    ]);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+  });
+
+  it.each(['long non-matches', 'dense repeated domains'])('collects %s in linear time', async mode => {
+    const result = await expectLinearTime(mode === 'long non-matches' ? 3000 : 200, size => mode === 'long non-matches'
+      ? `${'a.'.repeat(size)}@invalid ${'b'.repeat(size)}://invalid:bad-port ${'c'.repeat(size)}\na@valid.invalid`
+      : 'a@valid.invalid https://valid.invalid/private\n'.repeat(size), async text => {
+      writeRepoFile(repoPath, 'src/linear.txt', text);
+      return analyzeRepo(repoPath);
+    });
+    expect(result.domainReview).toMatchObject({ emailCount: mode === 'long non-matches' ? 1 : 800,
+      urlCount: mode === 'long non-matches' ? 0 : 800, omittedOccurrences: 0,
+      domains: [{ domain: 'valid.invalid', fileCount: 1 }] });
+  }, 60_000);
+});
+
 describe('S006 detector vocabulary', () => {
   it('models provider-shaped API keys with category, detector id, confidence, and the matched value', async () => {
     const detector = getS006DetectorById('provider-api-key');
@@ -745,7 +879,7 @@ describe('S006 sensitive information finding extraction', () => {
     expect(result.findings.find(finding => finding.detectorId === 'private-url')?.category).not.toBe('credential_url');
   });
 
-  it('ignores public localhost-adjacent domains that are not private URLs', async () => {
+  it('lists public localhost-adjacent domains for review without treating them as private URLs', async () => {
     repoPath = createTempRepo();
     writeRepoFile(
       repoPath,
@@ -756,7 +890,8 @@ describe('S006 sensitive information finding extraction', () => {
     const result = await analyzeRepo(repoPath);
 
     expect(result.findings.some(finding => finding.detectorId === 'private-url')).toBe(false);
-    expect(result.classification.status).toBe(EvaluationStatus.PASS);
+    expect(result.classification.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.domainReview?.domains.map(group => group.domain)).toEqual(['api.localhost.example.com', 'www.corporate.com']);
   });
 
   it('detects tenant endpoints while suppressing common public FOLIO documentation URLs', async () => {

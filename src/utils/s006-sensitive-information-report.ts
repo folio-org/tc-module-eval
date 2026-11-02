@@ -15,7 +15,7 @@ import {
 } from './s006-ranking';
 import { renderAgentReviewLines } from './agent-review-report';
 import { truncateToByteBudget } from './redaction';
-import { capitalize, overflowLine, reportPath, reportText } from './report-text';
+import { capitalize, count, overflowLine, reportPath, reportText } from './report-text';
 import {
   S006_CATEGORY_LABELS,
   S006_CONTEXT_LABELS_PLAIN,
@@ -66,8 +66,31 @@ export function formatS006Evidence(
   // and cutting it short would leave a truncation note inside the review section.
   return {
     evidence: truncateToByteBudget(`S006 ${analysis.classification.status}: ${analysis.classification.reason}`, 700),
-    details: truncateToByteBudget(join(lines), 12_000) + (reviewLines.length ? `\n${truncateToByteBudget(join(reviewLines), 24_000)}` : '')
+    details: truncateToByteBudget(join(lines), 12_000) +
+      (analysis.domainReview ? `\n\n${truncateToByteBudget(formatDomainReviewLines(analysis).join('\n'), 96_000)}` : '') +
+      (reviewLines.length ? `\n${truncateToByteBudget(join(reviewLines), 24_000)}` : '')
   };
+}
+
+function formatDomainReviewLines(analysis: S006SensitiveInformationAnalysisResult): string[] {
+  const review = analysis.domainReview!;
+  return [
+    'Email and URL domains (manual review only):',
+    '  - Mailbox names, URL credentials, paths, and query strings are hidden. A domain alone never fails S006.',
+    `  - Occurrences in scanned text: ${formatDomainCounts(review)}`,
+    ...review.domains.flatMap(group => [
+      `  - ${reportText(group.domain)}: ${formatDomainCounts(group)} in ${count(group.fileCount, 'file')}`,
+      ...group.files.slice(0, MAX_REPORT_LIST_ITEMS).map(file =>
+        `    - ${reportPath(file.path)}: ${formatDomainCounts(file)}`),
+      ...overflowLine(group.fileCount, Math.min(group.files.length, MAX_REPORT_LIST_ITEMS), '    ')
+    ]),
+    ...(review.omittedOccurrences ? [`  - ${review.omittedOccurrences} occurrences have unlisted domains; see Coverage gaps.`] : []),
+    '  - Counts cover only the text the built-in scan read. The JSON report contains all retained source files.'
+  ];
+}
+
+function formatDomainCounts(counts: { emailCount: number; urlCount: number }): string {
+  return `${counts.emailCount} email address${counts.emailCount === 1 ? '' : 'es'}, ${count(counts.urlCount, 'URL')}`;
 }
 
 function formatWhatToDoLines(analysis: S006SensitiveInformationAnalysisResult, failCount: number): string[] {
@@ -87,6 +110,9 @@ function formatWhatToDoLines(analysis: S006SensitiveInformationAnalysisResult, f
   }
   if (findings.some(finding => finding.context === 'local_docker_defaults')) {
     lines.push('  - Check that local Docker defaults are used only for local development.');
+  }
+  if (analysis.domainReview) {
+    lines.push('  - Review the email and URL domains and their source files for real personal or deployment data. Made-up examples are fine; names, phone numbers, and street addresses are not checked.');
   }
   if (analysis.coverage.materiallyWeakened) {
     lines.push('  - Check the files under Coverage gaps, which were not fully scanned.');

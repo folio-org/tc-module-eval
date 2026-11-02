@@ -160,7 +160,8 @@ export type S006ScanWarningKind =
   | 'unreadable-file'
   | 'unsupported-high-signal-file'
   | 'scanner-unavailable'
-  | 'finding-limit';
+  | 'finding-limit'
+  | 'domain-review-limit';
 
 export interface S006ScanWarning {
   kind: S006ScanWarningKind;
@@ -195,9 +196,23 @@ export interface S006DeterministicClassification {
   materiallyWeakenedCoverage: boolean;
 }
 
+export interface S006DomainReview {
+  emailCount: number;
+  urlCount: number;
+  omittedOccurrences: number;
+  domains: Array<{
+    domain: string;
+    emailCount: number;
+    urlCount: number;
+    fileCount: number;
+    files: Array<{ path: string; emailCount: number; urlCount: number }>;
+  }>;
+}
+
 export interface S006SensitiveInformationAnalysisResult {
   criterionId: 'S006';
   findings: S006SensitiveInformationFinding[];
+  domainReview?: S006DomainReview;
   scanner: S006SecretScannerSummary;
   coverage: S006ScanCoverage;
   classification: S006DeterministicClassification;
@@ -210,6 +225,7 @@ export interface S006ReportDetails {
   findingCount: number;
   retainedFindingCount: number;
   findings: S006ReportFinding[];
+  domainReview?: S006DomainReview;
   findingSummary: {
     confidenceRange?: { minimum: S006FindingConfidence; maximum: S006FindingConfidence };
     severityRange?: { minimum: S006FindingSeverity; maximum: S006FindingSeverity };

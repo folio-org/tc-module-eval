@@ -36,6 +36,7 @@ import {
   scanS006RepositoryCandidates,
   S006ScannedCandidateTextFile
 } from './s006-scanner';
+import { collectS006DomainReview } from './s006-domains';
 import { reportPath } from './report-text';
 
 export const S006_CONTEXT_LABELS: ReadonlyArray<S006FindingContext> = [
@@ -212,20 +213,22 @@ export async function analyzeS006SensitiveInformation(
   const scan = scanS006RepositoryCandidates(repoPath);
   const gitleaks = await gitleaksPromise;
   const extraction = extractS006SensitiveInformationFindings(scan.files, gitleaks.findings);
-  const warnings = [...scan.warnings, ...gitleaks.warnings, ...extraction.warnings];
+  const domains = collectS006DomainReview(scan.files);
+  const warnings = [...scan.warnings, ...gitleaks.warnings, ...extraction.warnings, ...domains.warnings];
   const scannerWarning = gitleaks.warnings.find(warning => warning.kind === 'scanner-unavailable');
-  const newWarningsAreMaterial = [...gitleaks.warnings, ...extraction.warnings].some(warning => warning.materialToCoverage);
+  const newWarningsAreMaterial = [...gitleaks.warnings, ...extraction.warnings, ...domains.warnings].some(warning => warning.materialToCoverage);
   const coverage = {
     ...scan.coverage,
     warnings: [...warnings],
     materiallyWeakened: scan.coverage.materiallyWeakened || newWarningsAreMaterial,
     complete: scan.coverage.complete && !newWarningsAreMaterial
   };
-  const classification = classifyS006DeterministicResult(extraction.findings, coverage, !scannerWarning);
+  const classification = classifyS006DeterministicResult(extraction.findings, coverage, !scannerWarning, Boolean(domains.domainReview));
 
   return {
     criterionId: 'S006',
     findings: extraction.findings,
+    ...(domains.domainReview ? { domainReview: domains.domainReview } : {}),
     scanner: {
       name: 'Gitleaks',
       status: scannerWarning ? 'unavailable' : 'completed',
@@ -816,7 +819,8 @@ function formatS006FindingReference(finding: S006SensitiveInformationFinding): s
 function classifyS006DeterministicResult(
   findings: S006SensitiveInformationFinding[],
   coverage: S006ScanCoverage,
-  scannerCompleted: boolean
+  scannerCompleted: boolean,
+  hasDomains: boolean
 ): S006SensitiveInformationAnalysisResult['classification'] {
   const findingReferences = findings.map(finding => formatS006FindingReference(finding));
   const failFindings = findings.filter(isS006DeterministicFailFinding);
@@ -836,6 +840,15 @@ function classifyS006DeterministicResult(
     return {
       status: EvaluationStatus.MANUAL,
       reason: `Found ${plural(findings.length, 'possible secret or environment-specific value', 'possible secrets or environment-specific values')}. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real.${coverage.materiallyWeakened ? ' Part of the repository was not fully scanned; see Coverage gaps.' : ''}`,
+      findingReferences,
+      materiallyWeakenedCoverage: coverage.materiallyWeakened
+    };
+  }
+
+  if (hasDomains) {
+    return {
+      status: EvaluationStatus.MANUAL,
+      reason: `Email addresses or URL domains were found. A reviewer must decide whether they belong to real people or deployments; their presence alone never fails S006.${coverage.materiallyWeakened ? ' Part of the repository was not fully scanned; see Coverage gaps.' : ''}`,
       findingReferences,
       materiallyWeakenedCoverage: coverage.materiallyWeakened
     };

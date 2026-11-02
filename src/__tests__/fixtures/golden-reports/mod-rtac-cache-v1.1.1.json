@@ -10,10 +10,16 @@
       "version": "1.0.0"
     },
     "citedSourcePaths": [
+      ".github/workflows/api-doc.yml",
+      ".github/workflows/api-lint.yml",
+      ".github/workflows/api-schema-lint.yml",
       ".github/workflows/maven.yml",
       ".github/workflows/postgres.yml",
+      "CONTRIBUTING.md",
       "Dockerfile",
       "Jenkinsfile-disabled",
+      "MODULE_SELF_EVALUATION.md",
+      "NEWS.md",
       "PERSONAL_DATA_DISCLOSURE.md",
       "README.md",
       "descriptors/ModuleDescriptor-template.json",
@@ -45,21 +51,64 @@
       "src/main/resources/application.yml",
       "src/main/resources/db/changelog/changelog-master.xml",
       "src/main/resources/db/changelog/changes/create-delete-old-holdings-all-tenants-function.sql",
+      "src/main/resources/db/changelog/changes/initial_schema.xml",
       "src/main/resources/swagger.api/examples/error.sample",
       "src/main/resources/swagger.api/examples/errors.sample",
       "src/main/resources/swagger.api/schemas/circulation/loan.json",
+      "src/main/resources/swagger.api/schemas/circulation/loans.json",
       "src/main/resources/swagger.api/schemas/circulation/request.json",
+      "src/main/resources/swagger.api/schemas/circulation/requests.json",
+      "src/main/resources/swagger.api/schemas/circulation/servicePoint.json",
+      "src/main/resources/swagger.api/schemas/consortia/consortiaTenants.json",
       "src/main/resources/swagger.api/schemas/error.json",
+      "src/main/resources/swagger.api/schemas/inventory/bound-with-part.json",
+      "src/main/resources/swagger.api/schemas/inventory/bound-with-parts.json",
       "src/main/resources/swagger.api/schemas/inventory/electronicAccessItem.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsNote.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsNoteType.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsNoteTypes.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsRecord.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsRecords.json",
+      "src/main/resources/swagger.api/schemas/inventory/holdingsStatement.json",
+      "src/main/resources/swagger.api/schemas/inventory/instance.json",
+      "src/main/resources/swagger.api/schemas/inventory/instances.json",
+      "src/main/resources/swagger.api/schemas/inventory/item.json",
+      "src/main/resources/swagger.api/schemas/inventory/items.json",
+      "src/main/resources/swagger.api/schemas/inventory/loanType.json",
+      "src/main/resources/swagger.api/schemas/inventory/loanTypes.json",
+      "src/main/resources/swagger.api/schemas/inventory/location.json",
+      "src/main/resources/swagger.api/schemas/inventory/locations.json",
+      "src/main/resources/swagger.api/schemas/inventory/loclib.json",
+      "src/main/resources/swagger.api/schemas/inventory/loclibs.json",
+      "src/main/resources/swagger.api/schemas/inventory/materialType.json",
+      "src/main/resources/swagger.api/schemas/inventory/materialTypes.json",
+      "src/main/resources/swagger.api/schemas/kafka/circulationEntityType.json",
+      "src/main/resources/swagger.api/schemas/kafka/circulationEventType.json",
+      "src/main/resources/swagger.api/schemas/kafka/circulationResourceEvent.json",
+      "src/main/resources/swagger.api/schemas/kafka/inventoryEntityType.json",
+      "src/main/resources/swagger.api/schemas/kafka/inventoryEventType.json",
+      "src/main/resources/swagger.api/schemas/kafka/inventoryResourceEvent.json",
+      "src/main/resources/swagger.api/schemas/kafka/pieceEventAction.json",
+      "src/main/resources/swagger.api/schemas/kafka/pieceResourceEvent.json",
       "src/main/resources/swagger.api/schemas/metadata.json",
+      "src/main/resources/swagger.api/schemas/orders/piece.json",
+      "src/main/resources/swagger.api/schemas/orders/pieceCollection.json",
+      "src/main/resources/swagger.api/schemas/orders/pieceFormat.json",
+      "src/main/resources/swagger.api/schemas/resultInfo.json",
+      "src/main/resources/swagger.api/schemas/rtacHoldingsStatement.json",
+      "src/main/resources/swagger.api/schemas/search/consortiumHoldings.json",
+      "src/main/resources/swagger.api/schemas/search/holdingsFacet.json",
+      "src/main/resources/swagger.api/schemas/tags.json",
       "src/main/resources/swagger.api/schemas/users/userTenants.json",
+      "src/main/resources/swagger.api/schemas/uuid.json",
       "src/test/java/org/folio/rtaccache/BaseEcsIntegrationTest.java",
       "src/test/java/org/folio/rtaccache/BaseIntegrationTest.java",
       "src/test/java/org/folio/rtaccache/configuration/KafkaIntegrationTestConfig.java",
       "src/test/java/org/folio/rtaccache/integration/KafkaMessageListenerIT.java",
       "src/test/java/org/folio/rtaccache/perf/EcsLoadedDataRepositoryPerfTest.java",
       "src/test/java/org/folio/rtaccache/perf/RtacPerfTenantSeeder.java",
-      "src/test/java/org/folio/rtaccache/repository/RtacHoldingBulkRepositoryTest.java"
+      "src/test/java/org/folio/rtaccache/repository/RtacHoldingBulkRepositoryTest.java",
+      "src/test/resources/application-test.yml"
     ]
   },
   "criteria": [
@@ -1658,7 +1707,7 @@
       "criterionId": "S006",
       "status": "manual",
       "evidence": "S006 manual: Found 1 possible secret or environment-specific value. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
-      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 1\n  - By type:\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n  - Data, stylesheet, sample, and disabled files in configuration folders:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Review the email and URL domains and their source files for real personal or deployment data. Made-up examples are fine; names, phone numbers, and street addresses are not checked.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 1\n  - By type:\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n  - Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 0 file entries are unlisted, and 5 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n  - Data, stylesheet, sample, and disabled files in configuration folders:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nEmail and URL domains (manual review only):\n  - Mailbox names, URL credentials, paths, and query strings are hidden. A domain alone never fails S006.\n  - Occurrences in scanned text: 2 email addresses, 147 URLs\n  - dev.folio.org: 0 email addresses, 7 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/uuid.json: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - CONTRIBUTING.md: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 1 URL\n  - ec.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - en.east-concord.com: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - eur-lex.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - folio-org.atlassian.net: 0 email addresses, 44 URLs in 2 files\n    - README.md: 0 email addresses, 2 URLs\n    - NEWS.md: 0 email addresses, 42 URLs\n  - github.com: 1 email address, 10 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - Dockerfile: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 3 URLs\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n    - pom.xml: 1 email address, 2 URLs\n  - ico.org.uk: 0 email addresses, 2 URLs in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 2 URLs\n  - jdbc.postgresql.org: 0 email addresses, 1 URL in 1 file\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n  - json-schema.org: 0 email addresses, 44 URLs in 44 files\n    - src/main/resources/swagger.api/schemas/circulation/loan.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/loans.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/request.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/requests.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/servicePoint.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/consortia/consortiaTenants.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-part.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-parts.json: 0 email addresses, 1 URL\n    - ... 36 more\n  - localhost: 0 email addresses, 4 URLs in 4 files\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n    - src/test/resources/application-test.yml: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - descriptors/ModuleDescriptor-template.json: 0 email addresses, 1 URL\n  - maven.apache.org: 0 email addresses, 3 URLs in 1 file\n    - pom.xml: 0 email addresses, 3 URLs\n  - oag.ca.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - pythonspeed.com: 0 email addresses, 1 URL in 1 file\n    - Dockerfile: 0 email addresses, 1 URL\n  - repository.folio.org: 0 email addresses, 4 URLs in 1 file\n    - pom.xml: 0 email addresses, 4 URLs\n  - v0.1.0: 1 email address, 0 URLs in 1 file\n    - .github/workflows/api-doc.yml: 1 email address, 0 URLs\n  - web.archive.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - wiki.folio.org: 0 email addresses, 8 URLs in 1 file\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 8 URLs\n  - www.apache.org: 0 email addresses, 1 URL in 1 file\n    - pom.xml: 0 email addresses, 1 URL\n  - www.dol.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.legislation.gov.uk: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.liquibase.org: 0 email addresses, 6 URLs in 2 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 3 URLs\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 3 URLs\n  - www.newamerica.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.prsindia.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.w3.org: 0 email addresses, 3 URLs in 3 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 1 URL\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 1 URL\n    - pom.xml: 0 email addresses, 1 URL\n  - Counts cover only the text the built-in scan read. The JSON report contains all retained source files.\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "criterionId": "S006",
         "findingCount": 1,
@@ -1686,6 +1735,635 @@
             "rationale": "A reviewer must decide whether this password or secret value in documentation is real."
           }
         ],
+        "domainReview": {
+          "emailCount": 2,
+          "urlCount": 147,
+          "omittedOccurrences": 0,
+          "domains": [
+            {
+              "domain": "dev.folio.org",
+              "emailCount": 0,
+              "urlCount": 7,
+              "fileCount": 7,
+              "files": [
+                {
+                  "path": ".github/workflows/api-doc.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": ".github/workflows/api-lint.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": ".github/workflows/api-schema-lint.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/uuid.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "README.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "CONTRIBUTING.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "MODULE_SELF_EVALUATION.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "ec.europa.eu",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "en.east-concord.com",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "eur-lex.europa.eu",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "folio-org.atlassian.net",
+              "emailCount": 0,
+              "urlCount": 44,
+              "fileCount": 2,
+              "files": [
+                {
+                  "path": "README.md",
+                  "emailCount": 0,
+                  "urlCount": 2
+                },
+                {
+                  "path": "NEWS.md",
+                  "emailCount": 0,
+                  "urlCount": 42
+                }
+              ]
+            },
+            {
+              "domain": "github.com",
+              "emailCount": 1,
+              "urlCount": 10,
+              "fileCount": 7,
+              "files": [
+                {
+                  "path": ".github/workflows/api-doc.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": ".github/workflows/api-lint.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": ".github/workflows/api-schema-lint.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "Dockerfile",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "MODULE_SELF_EVALUATION.md",
+                  "emailCount": 0,
+                  "urlCount": 3
+                },
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "pom.xml",
+                  "emailCount": 1,
+                  "urlCount": 2
+                }
+              ]
+            },
+            {
+              "domain": "ico.org.uk",
+              "emailCount": 0,
+              "urlCount": 2,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 2
+                }
+              ]
+            },
+            {
+              "domain": "jdbc.postgresql.org",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "src/main/resources/application.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "json-schema.org",
+              "emailCount": 0,
+              "urlCount": 44,
+              "fileCount": 44,
+              "files": [
+                {
+                  "path": "src/main/resources/swagger.api/schemas/circulation/loan.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/circulation/loans.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/circulation/request.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/circulation/requests.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/circulation/servicePoint.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/consortia/consortiaTenants.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/bound-with-part.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/bound-with-parts.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/electronicAccessItem.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsNote.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsNoteType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsNoteTypes.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsRecord.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsRecords.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/holdingsStatement.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/instance.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/instances.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/item.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/items.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/loanType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/loanTypes.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/location.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/locations.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/loclib.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/loclibs.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/materialType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/inventory/materialTypes.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/circulationEntityType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/circulationEventType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/circulationResourceEvent.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/inventoryEntityType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/inventoryEventType.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/inventoryResourceEvent.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/pieceEventAction.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/kafka/pieceResourceEvent.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/orders/piece.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/orders/pieceCollection.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/orders/pieceFormat.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/resultInfo.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/rtacHoldingsStatement.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/search/consortiumHoldings.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/search/holdingsFacet.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/tags.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/swagger.api/schemas/users/userTenants.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "localhost",
+              "emailCount": 0,
+              "urlCount": 4,
+              "fileCount": 4,
+              "files": [
+                {
+                  "path": "src/main/resources/application.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/test/resources/application-test.yml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "README.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "descriptors/ModuleDescriptor-template.json",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "maven.apache.org",
+              "emailCount": 0,
+              "urlCount": 3,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "pom.xml",
+                  "emailCount": 0,
+                  "urlCount": 3
+                }
+              ]
+            },
+            {
+              "domain": "oag.ca.gov",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "pythonspeed.com",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "repository.folio.org",
+              "emailCount": 0,
+              "urlCount": 4,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "pom.xml",
+                  "emailCount": 0,
+                  "urlCount": 4
+                }
+              ]
+            },
+            {
+              "domain": "v0.1.0",
+              "emailCount": 1,
+              "urlCount": 0,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": ".github/workflows/api-doc.yml",
+                  "emailCount": 1,
+                  "urlCount": 0
+                }
+              ]
+            },
+            {
+              "domain": "web.archive.org",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "wiki.folio.org",
+              "emailCount": 0,
+              "urlCount": 8,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "MODULE_SELF_EVALUATION.md",
+                  "emailCount": 0,
+                  "urlCount": 8
+                }
+              ]
+            },
+            {
+              "domain": "www.apache.org",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "pom.xml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "www.dol.gov",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "www.legislation.gov.uk",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "www.liquibase.org",
+              "emailCount": 0,
+              "urlCount": 6,
+              "fileCount": 2,
+              "files": [
+                {
+                  "path": "src/main/resources/db/changelog/changelog-master.xml",
+                  "emailCount": 0,
+                  "urlCount": 3
+                },
+                {
+                  "path": "src/main/resources/db/changelog/changes/initial_schema.xml",
+                  "emailCount": 0,
+                  "urlCount": 3
+                }
+              ]
+            },
+            {
+              "domain": "www.newamerica.org",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "www.prsindia.org",
+              "emailCount": 0,
+              "urlCount": 1,
+              "fileCount": 1,
+              "files": [
+                {
+                  "path": "PERSONAL_DATA_DISCLOSURE.md",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            },
+            {
+              "domain": "www.w3.org",
+              "emailCount": 0,
+              "urlCount": 3,
+              "fileCount": 3,
+              "files": [
+                {
+                  "path": "src/main/resources/db/changelog/changelog-master.xml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "src/main/resources/db/changelog/changes/initial_schema.xml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                },
+                {
+                  "path": "pom.xml",
+                  "emailCount": 0,
+                  "urlCount": 1
+                }
+              ]
+            }
+          ]
+        },
         "findingSummary": {
           "confidenceRange": {
             "minimum": "medium",
@@ -1739,6 +2417,11 @@
               "kind": "scanner-unavailable",
               "message": "Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.",
               "materialToCoverage": true
+            },
+            {
+              "kind": "domain-review-limit",
+              "message": "Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 0 file entries are unlisted, and 5 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.",
+              "materialToCoverage": true
             }
           ],
           "materiallyWeakened": true,
@@ -1747,13 +2430,19 @@
         "coverageSummary": {
           "skippedFileCount": 4,
           "materialSkippedFileCount": 0,
-          "warningCount": 1,
-          "materialWarningCount": 1,
+          "warningCount": 2,
+          "materialWarningCount": 2,
           "skippedFileReasonCounts": {
             "generated-artifact": 2,
             "unsupported-file": 2
           },
-          "scanLimitWarnings": []
+          "scanLimitWarnings": [
+            {
+              "kind": "domain-review-limit",
+              "message": "Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 0 file entries are unlisted, and 5 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.",
+              "materialToCoverage": true
+            }
+          ]
         },
         "classification": {
           "status": "manual",
@@ -1767,6 +2456,11 @@
           {
             "kind": "scanner-unavailable",
             "message": "Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.",
+            "materialToCoverage": true
+          },
+          {
+            "kind": "domain-review-limit",
+            "message": "Email and URL domain review retains at most 1000 domains and 4000 domain/file entries: 0 occurrences have unlisted domains, 0 file entries are unlisted, and 5 candidates could not be read (invalid, cut short, or a URL longer than 8192 characters). Counts cover only the text the built-in scan read.",
             "materialToCoverage": true
           }
         ],

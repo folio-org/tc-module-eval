@@ -81,6 +81,7 @@ export function buildS006CriterionDetails(
     findingCount: analysis.findings.length,
     retainedFindingCount: Math.min(analysis.findings.length, MAX_CRITERION_FINDINGS),
     findings: projectedFindings,
+    ...(analysis.domainReview ? { domainReview: analysis.domainReview } : {}),
     findingSummary: buildFindingSummary(analysis.findings),
     scanner: analysis.scanner,
     coverage: {
@@ -200,6 +201,7 @@ function isS006ScanLimitWarning(warning: S006ScanWarning): boolean {
     warning.kind === 'candidate-limit' ||
     warning.kind === 'byte-limit' ||
     warning.kind === 'file-truncated' ||
-    warning.kind === 'finding-limit'
+    warning.kind === 'finding-limit' ||
+    warning.kind === 'domain-review-limit'
   );
 }
