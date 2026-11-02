@@ -164,7 +164,11 @@ export class LocalCommandRunner implements CommandRunner {
         }
       };
 
+      let firstStdoutMs: number | undefined;
+      let lastStdoutMs: number | undefined;
       child.stdout?.on('data', chunk => {
+        lastStdoutMs = Date.now() - started;
+        firstStdoutMs ??= lastStdoutMs;
         if (keepStdoutTail) {
           appendTail(Buffer.from(chunk));
         } else {
@@ -232,6 +236,8 @@ export class LocalCommandRunner implements CommandRunner {
           stdoutDiagnostics: structured?.diagnostics,
           stdoutTruncated: stdoutBytes > maxOutputBytes || (structured?.truncated ?? Buffer.byteLength(stdout) > maxOutputBytes),
           stderrTruncated: stderrBytes > maxOutputBytes || Buffer.byteLength(stderr) > maxOutputBytes,
+          firstStdoutMs,
+          lastStdoutMs,
           errorMessage: status === 'timed_out'
             ? sanitizeCommandOutput(this.formatTimeoutMessage(started, request.timeoutMs ?? DEFAULT_TIMEOUT_MS, resolvedSignal, stderr), maxOutputBytes)
             : status === 'failed'
@@ -299,6 +305,8 @@ export class LocalCommandRunner implements CommandRunner {
       stdoutDiagnostics: values.stdoutDiagnostics,
       stdoutTruncated: values.stdoutTruncated,
       stderrTruncated: values.stderrTruncated,
+      firstStdoutMs: values.firstStdoutMs,
+      lastStdoutMs: values.lastStdoutMs,
       errorMessage: values.errorMessage,
       sanitized: true
     };

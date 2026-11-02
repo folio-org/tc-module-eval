@@ -906,6 +906,75 @@ else {
     expect(JSON.stringify(result)).not.toMatch(/fakeOpenRouterKey|DO_NOT_PUBLISH/);
   });
 
+  describe('OpenCode run diagnosis', () => {
+    // Event shapes from OpenCode v1.17.11 `run --format json`: tool_use when a call ends, text when a part ends.
+    const at = (timestamp: number, type: string, part: Record<string, unknown>) =>
+      JSON.stringify({ type, timestamp, sessionID: 'ses_1', part: { id: `prt_${timestamp}`, sessionID: 'ses_1', ...part } });
+    const stepStart = (timestamp: number, messageID: string) =>
+      at(timestamp, 'step_start', { messageID, type: 'step-start', snapshot: 'PRIVATE_SNAPSHOT' });
+    const tool = (timestamp: number, name: string, status = 'completed') => at(timestamp, 'tool_use', {
+      messageID: 'msg_1', type: 'tool', callID: `call_${timestamp}`, tool: name, state: {
+        status, input: { pattern: 'PRIVATE_INPUT', path: '/PRIVATE_PATH' }, output: 'PRIVATE_OUTPUT', error: 'PRIVATE_ERROR',
+        title: 'PRIVATE_TITLE', metadata: {}, time: { start: timestamp - 50, end: timestamp }
+      }
+    });
+    const stepFinish = (timestamp: number, messageID: string, reason: string) => at(timestamp, 'step_finish', {
+      messageID, type: 'step-finish', reason, snapshot: 'PRIVATE_SNAPSHOT', cost: 0.01,
+      tokens: { input: 15000, output: 300, reasoning: 120, cache: { read: 9000, write: 0 } }
+    });
+    const capture = (...events: string[]) =>
+      sanitizeStructuredOutput(events.join('\n'), 'opencode-json', 16 * 1024 * 1024, true, true).text;
+    const review = (stdout: string, overrides: Partial<CommandExecutionResult>) => runCriterionAgentReview({
+      criterionId: 'S010', repositoryPath: repoPath, instructions: 'PRIVATE_PROMPT',
+      files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), enabledCriteria: ['S010'], timeoutMs: 120000 }, new FakeRunner(undefined, undefined, stdout, { 3: overrides }));
+    const timedOut = { status: 'timed_out' as const, durationMs: 120090, signal: 'SIGTERM', stderrBytes: 0,
+      errorMessage: 'Command timed out after 120000ms (signal: SIGTERM)' };
+    const context = (stdoutBytes: number) =>
+      `OpenCode run: 120090ms elapsed; timeout 120000ms; model test-model; stdout ${stdoutBytes} bytes; stderr 0 bytes; timed_out; Command timed out after 120000ms (signal: SIGTERM)`;
+
+    it('reports a timed-out run that was still calling tools, without content', async () => {
+      const result = await review(capture(
+        stepStart(1000, 'msg_1'), tool(2000, 'grep'), tool(3000, 'read'), stepFinish(4000, 'msg_1', 'tool-calls'),
+        stepStart(5000, 'msg_2'), tool(6000, 'grep', 'error'), tool(7000, 'glob')
+      ), { ...timedOut, stdoutBytes: 901898, firstStdoutMs: 2400, lastStdoutMs: 119700 });
+
+      expect(result.errors).toEqual([
+        context(901898),
+        'OpenCode run diagnosis: still calling tools when stopped (4 tool calls; last: glob); first output after 2.4 s; last output 0.4 s before the stop; events 7; steps started 2, finished 1; tool calls grep 2, read 1, glob 1 (1 failed); no answer text; tokens input 15000, output 300, reasoning 120, cache read 9000; last event tool_use glob completed'
+      ]);
+      expect(result.metadata?.runDiagnosis).toEqual({
+        summary: 'still calling tools when stopped (4 tool calls; last: glob)', events: 7, stepsStarted: 2, stepsFinished: 1,
+        toolCalls: { grep: 2, read: 1, glob: 1 }, toolErrors: 1, answerTextParts: 0, lastEvent: 'tool_use glob completed',
+        firstOutputMs: 2400, silentMs: 390, outputTruncated: false, tokens: { input: 15000, output: 300, reasoning: 120, cacheRead: 9000 }
+      });
+      expect(JSON.stringify(result)).not.toMatch(/PRIVATE_|ses_1|msg_|call_/);
+    });
+
+    it.each([
+      ['no output', '', { ...timedOut, stdoutBytes: 0 }, [
+        context(0),
+        'OpenCode run diagnosis: no output from OpenCode before the timeout (likely provider or startup problem)'
+      ]],
+      ['a long silence after a step started', capture(stepStart(1000, 'msg_1'), tool(2000, 'list'), stepFinish(3000, 'msg_1', 'tool-calls'),
+        stepStart(4000, 'msg_2')), { ...timedOut, stdoutBytes: 2048, firstStdoutMs: 3100, lastStdoutMs: 25090 }, [
+        context(2048),
+        'OpenCode run diagnosis: silent for 95.0 s after the last event (likely waiting on the provider); first output after 3.1 s; last output 95.0 s before the stop; events 4; steps started 2, finished 1; tool calls list 1; no answer text; tokens input 15000, output 300, reasoning 120, cache read 9000; last event step_start'
+      ]],
+      ['a failed exit while writing the answer', capture(stepStart(1000, 'msg_1'),
+        at(2000, 'text', { messageID: 'msg_1', type: 'text', text: 'PRIVATE_ANSWER', time: { start: 1500, end: 2000 } })),
+      { status: 'failed' as const, exitCode: 1, durationMs: 41000, stdoutBytes: 700, stderrBytes: 0, errorMessage: 'Command exited with code 1',
+        firstStdoutMs: 1200, lastStdoutMs: 40800, stdoutTruncated: false }, [
+        'OpenCode run: 41000ms elapsed; timeout 120000ms; model test-model; stdout 700 bytes; stderr 0 bytes; failed; Command exited with code 1',
+        'OpenCode run diagnosis: writing the final answer when it exited; first output after 1.2 s; last output 0.2 s before exit; events 2; steps started 1, finished 0; no tool calls; answer text parts 1; last event text'
+      ]]
+    ] as Array<[string, string, Partial<CommandExecutionResult>, string[]]>)('explains a run that stopped with %s', async (_name, stdout, overrides, errors) => {
+      const result = await review(stdout, overrides);
+      expect(result.errors).toEqual(errors);
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+    });
+  });
+
   it('normalizes common off-schema OpenCode advisory fields', async () => {
     const runner = new FakeRunner(undefined, undefined, JSON.stringify({
       type: 'text',

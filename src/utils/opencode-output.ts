@@ -16,6 +16,9 @@ export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
   const status = state.status ?? event?.status;
   const start = number(time.start);
   const end = number(time.end);
+  // Accepts both a raw step_finish part and an earlier trace of one.
+  const reason = part.reason ?? event?.reason;
+  const tokens = isRecord(part.tokens) ? part.tokens : isRecord(event?.tokens) ? event.tokens : undefined;
   return {
     type,
     timestamp: number(event?.timestamp),
@@ -23,8 +26,26 @@ export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
       tool: ['read', 'glob', 'grep', 'list', 'bash', 'edit', 'write', 'webfetch', 'websearch', 'task', 'skill', 'todowrite'].includes(String(tool)) ? String(tool) : 'other',
       status: ['pending', 'running', 'completed', 'error'].includes(String(status)) ? String(status) : 'unknown',
       durationMs: start !== undefined && end !== undefined && end >= start ? end - start : number(event?.durationMs)
+    } : {}),
+    ...(type === 'step_finish' ? {
+      reason: reason === undefined ? undefined
+        : ['stop', 'tool-calls', 'length', 'content-filter', 'error', 'unknown'].includes(String(reason)) ? String(reason) : 'other',
+      ...(tokens ? { tokens: {
+        input: number(tokens.input), output: number(tokens.output), reasoning: number(tokens.reasoning),
+        cacheRead: number(asObject(tokens.cache).read ?? tokens.cacheRead)
+      } } : {})
     } : {})
   };
+}
+
+export type OpenCodeEventTrace = ReturnType<typeof openCodeEventTrace>;
+
+// Content-free traces of a sanitized review capture's records, from the runner's debugTrace when it added one.
+export function openCodeOutputTraces(stdout: string): OpenCodeEventTrace[] {
+  return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
+    const event = parseJsonObject(line);
+    return openCodeEventTrace(isRecord(event?.debugTrace) ? event.debugTrace : event);
+  });
 }
 
 export function sanitizeStructuredOutput(

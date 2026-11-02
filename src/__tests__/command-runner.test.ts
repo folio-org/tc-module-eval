@@ -168,6 +168,19 @@ describe('CommandRunner', () => {
     expect(result.errorMessage).toContain('Command timed out after 25ms');
   });
 
+  it('records when stdout first and last arrived', async () => {
+    const runner = new LocalCommandRunner(true);
+    const written = await runner.run({ command: 'node', cwd: process.cwd(),
+      args: ['-e', 'process.stdout.write("a"); setTimeout(() => process.stdout.write("b"), 50)'] });
+    const silent = await runner.run({ command: 'node', args: ['-e', ''], cwd: process.cwd() });
+
+    expect(written.stdout).toBe('ab');
+    expect(written.firstStdoutMs).toBeGreaterThanOrEqual(0);
+    expect(written.lastStdoutMs).toBeGreaterThanOrEqual(written.firstStdoutMs!);
+    expect(written.lastStdoutMs).toBeLessThanOrEqual(written.durationMs);
+    expect([silent.firstStdoutMs, silent.lastStdoutMs]).toEqual([undefined, undefined]);
+  });
+
   it('should force-complete timed out commands that ignore SIGTERM', async () => {
     const runner = new LocalCommandRunner(true);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'command-runner-'));

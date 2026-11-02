@@ -91,6 +91,9 @@ export interface CommandExecutionResult {
   stdoutDiagnostics?: string[];
   stdoutTruncated?: boolean;
   stderrTruncated?: boolean;
+  /** Milliseconds from the command's start until its first and its last stdout data arrived. */
+  firstStdoutMs?: number;
+  lastStdoutMs?: number;
   errorMessage?: string;
   sanitized: boolean;
 }
@@ -255,6 +258,26 @@ export interface CriterionAgentReviewMetadata {
   promptInputSanitized: boolean;
   reviewWorkspaceSanitized: boolean;
   retainedWorkspacePath?: string;
+  /** Content-free account of a failed or timed-out OpenCode review run, from its captured events. */
+  runDiagnosis?: CriterionAgentRunDiagnosis;
+}
+
+export interface CriterionAgentRunDiagnosis {
+  /** Where the run was when it stopped, in plain words. */
+  summary: string;
+  events: number;
+  stepsStarted: number;
+  stepsFinished: number;
+  /** Completed or failed tool calls by allowlisted tool name; unknown names count as `other`. */
+  toolCalls: Record<string, number>;
+  toolErrors: number;
+  answerTextParts: number;
+  lastEvent?: string;
+  firstOutputMs?: number;
+  /** Time between the last output and the end of the command. */
+  silentMs?: number;
+  outputTruncated: boolean;
+  tokens?: { input: number; output: number; reasoning: number; cacheRead: number };
 }
 
 export interface CriterionAgentReviewResult {
