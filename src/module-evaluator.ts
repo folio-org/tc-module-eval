@@ -106,7 +106,6 @@ export class ModuleEvaluator {
               credentials: { sonarToken: process.env.SONAR_TOKEN || undefined, githubToken: process.env.GITHUB_TOKEN || undefined }
             })
           : undefined),
-        s014Application: this.config.s014Application,
         s014PlatformRef: this.config.s014PlatformRef,
         existingModule: this.config.existingModule,
         uiRuntime: this.config.uiRuntimeProbe ?? (this.config.uiRuntime

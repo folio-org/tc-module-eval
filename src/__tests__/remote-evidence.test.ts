@@ -34,7 +34,7 @@ describe('remote evidence transport', () => {
     ['https://far.ci.folio.org/applications?query=x', true],
     ['https://sonarcloud.io/api/measures/component', true],
     ['https://raw.githubusercontent.com/folio-org/platform-lsp/abc/platform-descriptor.json', true],
-    ['https://raw.githubusercontent.com/folio-org/app-search/HEAD/app-search.template.json', true],
+    ['https://raw.githubusercontent.com/folio-org/app-search/HEAD/app-search.template.json', false],
     ['https://api.github.com/repos/folio-org/platform-lsp/commits', true],
     ['http://far.ci.folio.org/applications', false],
     ['https://far.ci.folio.org:8443/applications', false],

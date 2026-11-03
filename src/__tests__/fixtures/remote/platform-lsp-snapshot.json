@@ -1,6 +1,6 @@
 {
   "capturedAt": "2026-10-23T05:47:34.950Z",
-  "description": "folio-org/platform-lsp snapshot at f14ebaef59a40790dd43e8e9269ab1e228abdaa5 (R1-2027-SNAPSHOT.100200000003371), its applications from FAR, and the templates of app-edge-locate",
+  "description": "folio-org/platform-lsp snapshot at f14ebaef59a40790dd43e8e9269ab1e228abdaa5 (R1-2027-SNAPSHOT.100200000003371) and its applications from FAR",
   "responses": {
     "https://api.github.com/repos/folio-org/platform-lsp/commits?sha=snapshot&per_page=1": {
       "status": 200,
@@ -2226,36 +2226,6 @@
           }
         ],
         "totalRecords": 1
-      }
-    },
-    "https://raw.githubusercontent.com/folio-org/app-edge-locate/HEAD/app-edge-locate.template.json": {
-      "status": 200,
-      "body": {
-        "name": "${project.name}",
-        "version": "${project.version}",
-        "description": "${project.description}",
-        "platform": "complete",
-        "dependencies": [
-          {
-            "name": "app-platform-complete",
-            "version": "^2.1.0"
-          },
-          {
-            "name": "app-acquisitions",
-            "version": "^1.0.0"
-          }
-        ],
-        "modules": [
-          {
-            "name": "edge-inventory",
-            "version": "latest"
-          },
-          {
-            "name": "edge-users",
-            "version": "latest"
-          }
-        ],
-        "uiModules": []
       }
     },
     "https://raw.githubusercontent.com/folio-org/platform-lsp/f14ebaef59a40790dd43e8e9269ab1e228abdaa5/platform-descriptor.json": {

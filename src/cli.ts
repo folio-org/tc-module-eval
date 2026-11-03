@@ -5,7 +5,7 @@ import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
-import { DEFAULT_PLATFORM_REF, isValidPlatformRef, isValidRemoteName } from './utils/s014-application-assignment';
+import { DEFAULT_PLATFORM_REF, isValidPlatformRef } from './utils/s014-application-assignment';
 import { errorMessage } from './utils/type-guards';
 import { redactEvaluatorSecrets } from './utils/redaction';
 import { parseUiRuntimeOrigin } from './utils/ui-runtime-probe';
@@ -32,7 +32,6 @@ program
   .option('--allow-runtime-checks', 'Build the backend module and run it in Docker (needs --allow-local-commands) to decide B014 by GET /admin/health and to add informational evidence to B003, B008, B010 and B013. Docker access is root-equivalent on this host, so use it only for trusted repositories on a disposable host; a rootless Docker context is recommended')
   .option('--s008-catalog <channel>', 'Checked-in S008 provider catalog (official or development)', 'official')
   .option('--allow-remote-lookups', 'Allow read-only lookups of SonarCloud (S011, S013), folio-org/platform-lsp and FAR (S014), and folio-org/folio-integration-tests (B009)')
-  .option('--application <name>', 'Application named in the evaluation\'s Jira task (S014)')
   .option('--platform-ref <ref>', 'folio-org/platform-lsp branch, tag or commit S014 reads', DEFAULT_PLATFORM_REF)
   .option('--ui-runtime-url <origin>', 'Origin of a running FOLIO UI in a test or reference environment, never production, whose module pages F004 measures with axe-core and F007 checks for console errors; needs --ui-runtime-login-origin and a test account in FOLIO_UI_USERNAME and FOLIO_UI_PASSWORD')
   .option('--ui-runtime-login-origin <origin>', 'Origin of that UI\'s login page (Keycloak); the test account is typed only into a page there')
@@ -180,9 +179,6 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
   if (!['official', 'development'].includes(options.s008Catalog)) {
     throw new Error('Invalid S008 catalog. Use official or development.');
   }
-  if (options.application !== undefined && !isValidRemoteName(options.application)) {
-    throw new Error('Invalid --application. Use an application name such as app-search.');
-  }
   if (!isValidPlatformRef(options.platformRef)) {
     throw new Error('Invalid --platform-ref. Use a platform-lsp branch, tag or commit such as snapshot or R1-2026.');
   }
@@ -203,7 +199,6 @@ function buildEvaluationConfig(options: any, criteriaFilter?: string[]): Evaluat
     agentReview: buildCriterionAgentReviewConfig(options),
     s008CatalogChannel: options.s008Catalog,
     allowRemoteLookups: options.allowRemoteLookups === true,
-    s014Application: options.application,
     s014PlatformRef: options.platformRef,
     existingModule: options.existingModule === true,
     allowRuntimeChecks: options.allowRuntimeChecks === true,

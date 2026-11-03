@@ -47,11 +47,6 @@ on:
         required: false
         type: boolean
         default: false
-      application:
-        description: "Application named in the evaluation's Jira task, e.g. app-search (S014)"
-        required: false
-        type: string
-        default: ""
       platform_ref:
         description: "folio-org/platform-lsp branch, tag or commit for S014 (empty means snapshot)"
         required: false
@@ -80,6 +75,5 @@ jobs:
       node_version: ${{ inputs.node_version }}
       gitleaks_version: ${{ inputs.gitleaks_version }}
       allow_remote_lookups: ${{ inputs.allow_remote_lookups }}
-      application: ${{ inputs.application }}
       platform_ref: ${{ inputs.platform_ref }}
       existing_module: ${{ inputs.existing_module }}

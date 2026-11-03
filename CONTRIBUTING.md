@@ -102,7 +102,7 @@ folio-eval evaluate <repo-url> --criteria S001,S002,B005
 folio-eval evaluate <repo-url> --output ./my-reports
 folio-eval evaluate <repo-url> --json-only
 folio-eval evaluate <repo-url> --no-cleanup
-folio-eval evaluate <repo-url> --allow-remote-lookups --application app-search [--platform-ref snapshot]
+folio-eval evaluate <repo-url> --allow-remote-lookups [--platform-ref snapshot]
 folio-eval evaluate <repo-url> --existing-module
 
 # Other

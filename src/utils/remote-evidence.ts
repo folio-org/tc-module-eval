@@ -44,12 +44,11 @@ export interface RemoteEvidenceTransportOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const REPOSITORY = '(?:platform-lsp|app-[a-z0-9._-]+)';
 const ALLOWED_PATHS: Readonly<Record<string, RegExp>> = {
   'sonarcloud.io': /^\/api\//,
   'far.ci.folio.org': /^\/applications$/,
-  'raw.githubusercontent.com': new RegExp(`^/folio-org/${REPOSITORY}/`),
-  'api.github.com': new RegExp(`^/repos/folio-org/(?:${REPOSITORY}(?:/|$)|folio-integration-tests/(?:contents/|git/trees/[0-9a-f]{40})$)`)
+  'raw.githubusercontent.com': /^\/folio-org\/platform-lsp\//,
+  'api.github.com': /^\/repos\/folio-org\/(?:platform-lsp(?:\/|$)|folio-integration-tests\/(?:contents\/|git\/trees\/[0-9a-f]{40})$)/
 };
 const DEFAULT_RETRY_WAIT_MS = 1_000;
 const TOKEN_PATTERN = /^[\x21-\x7e]{1,1024}$/;

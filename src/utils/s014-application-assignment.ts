@@ -7,8 +7,7 @@ import {
   S014ApplicationTier,
   S014ModuleName,
   S014PlatformApplication,
-  S014PlatformSnapshot,
-  S014TemplateCheck
+  S014PlatformSnapshot
 } from '../types';
 import {
   parseApplicationModuleReference,
@@ -233,27 +232,4 @@ async function readFarApplication(
       : { ...application, modules },
     record
   };
-}
-
-/** Whether the named application's own repository template lists the module. */
-export async function checkApplicationTemplate(lookups: RemoteLookups, application: string, moduleName: string): Promise<{ check: S014TemplateCheck; record?: RemoteEvidenceRecord }> {
-  const url = `https://raw.githubusercontent.com/folio-org/${application}/HEAD/${application}.template.json`;
-  if (!application.startsWith('app-') || !isValidRemoteName(application)) {
-    return { check: { application, url, problem: 'Only folio-org app-* repositories are read.' } };
-  }
-  const result = await lookups.getJson(url);
-  if (!result.ok) return { check: { application, url, problem: `The template could not be read: ${result.record.error}` }, record: result.record };
-  const template = result.json as Record<string, unknown> | undefined;
-  const lists = [template?.modules, template?.uiModules].filter(list => list !== undefined);
-  if (!template || typeof template !== 'object' || !lists.length || !lists.every(Array.isArray)) {
-    return { check: { application, url, problem: 'The template has no readable modules or uiModules list.' }, record: result.record };
-  }
-  const names = (lists as unknown[][]).flat().map(entry =>
-    entry && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string' ? (entry as { name: string }).name : undefined);
-  if (names.includes(moduleName)) return { check: { application, url, listsModule: true }, record: result.record };
-  // An entry without a name might be the module, so "does not list it" needs every entry readable.
-  if (names.some(name => !name)) {
-    return { check: { application, url, problem: 'The template has module entries without a name.' }, record: result.record };
-  }
-  return { check: { application, url, listsModule: false }, record: result.record };
 }

@@ -383,10 +383,10 @@ SonarCloud, and S014 (assigned to exactly one application on the FOLIO LSP platf
 reads `folio-org/folio-integration-tests` when you do:
 
 ```bash
-folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups --application app-search
+folio-eval evaluate https://github.com/folio-org/mod-search --allow-remote-lookups
 ```
 
-`--application` is the application named in the evaluation's Jira task. `--platform-ref` picks the
+`--platform-ref` picks the
 platform-lsp branch, tag or commit (default `snapshot`). Remote reads are read-only, allowlisted and
 bounded, and each one is recorded in the report. An optional `SONAR_TOKEN` is sent to SonarCloud only;
 S011 reads SonarCloud's own project settings only when that token can administer the project. See
@@ -468,7 +468,6 @@ All inputs are optional:
 | `node_version` | Node.js version for npm builds | `20` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
 | `allow_remote_lookups` | Allow read-only lookups of SonarCloud, platform-lsp and FAR, needed for S011, S013 and S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
-| `application` | Application named in the evaluation's Jira task, e.g. `app-search` (S014) | none |
 | `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |
 | `existing_module` | Evaluate an existing module rather than a new one (passes `--existing-module`) | `false` |
 
@@ -539,7 +538,7 @@ To evaluate any repository without adding a workflow to it:
 
 1. In this tc-module-eval project, go to [Actions > Evaluate Remote Repository](https://github.com/folio-org/tc-module-eval/actions/workflows/evaluate-remote.yml).
 
-1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011, S013 and S014, and folio-integration-tests for B009, also tick remote lookups, and for S014 enter the application named in the evaluation's Jira task.
+1. Click Run Workflow, enter the GitHub URL of the module to evaluate, and click Run Workflow. To check S011, S013 and S014, and folio-integration-tests for B009, also tick remote lookups.
 
 1. Wait for the workflow to complete, then download the reports from Artifacts.
 

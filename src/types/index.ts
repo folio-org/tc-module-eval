@@ -165,8 +165,6 @@ export interface EvaluationRun {
   requestedBranch?: string;
   /** The remote-evidence transport; absent unless --allow-remote-lookups was given. */
   remoteLookups?: import('./remote-evidence').RemoteLookups;
-  /** The application the evaluation's Jira task names (--application). */
-  s014Application?: string;
   /** The platform-lsp branch, tag or commit S014 reads (--platform-ref). */
   s014PlatformRef?: string;
   /** Evaluate an existing module rather than a new one (--existing-module), which relaxes some new-module rules. */
@@ -202,7 +200,6 @@ export interface EvaluationConfig {
   allowRemoteLookups?: boolean;
   /** Replaces the remote-evidence transport, like commandRunner; implies remote lookups are allowed. */
   remoteLookups?: import('./remote-evidence').RemoteLookups;
-  s014Application?: string;
   s014PlatformRef?: string;
   /** Evaluate an existing module rather than a new one (--existing-module). */
   existingModule?: boolean;

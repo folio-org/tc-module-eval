@@ -48,11 +48,6 @@ on:
         required: false
         type: boolean
         default: false
-      application:
-        description: "Application named in the evaluation's Jira task, e.g. app-search (S014)"
-        required: false
-        type: string
-        default: ""
       platform_ref:
         description: "folio-org/platform-lsp branch, tag or commit S014 reads (empty uses the evaluator default, snapshot)"
         required: false
@@ -256,7 +251,6 @@ jobs:
           CRITERIA_FILTER: ${{ inputs.criteria_filter }}
           CLI_ARGS: ${{ steps.prepare-args.outputs.cli_args }}
           ALLOW_REMOTE_LOOKUPS: ${{ inputs.allow_remote_lookups }}
-          APPLICATION: ${{ inputs.application }}
           PLATFORM_REF: ${{ inputs.platform_ref }}
           # Read-only token for GitHub API lookups; the evaluator sends it only to api.github.com and never to
           # repository build commands. Set only when remote lookups are on.
@@ -272,9 +266,6 @@ jobs:
           REMOTE_ARGS=()
           if [ "$ALLOW_REMOTE_LOOKUPS" = "true" ]; then
             REMOTE_ARGS+=("--allow-remote-lookups")
-          fi
-          if [ -n "$APPLICATION" ]; then
-            REMOTE_ARGS+=("--application=$APPLICATION")
           fi
           if [ -n "$PLATFORM_REF" ]; then
             REMOTE_ARGS+=("--platform-ref=$PLATFORM_REF")

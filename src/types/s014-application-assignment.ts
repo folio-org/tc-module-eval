@@ -41,22 +41,12 @@ export interface S014Membership {
   moduleVersion: string;
 }
 
-/** The named application's own template, read only when the module is in no platform application. */
-export interface S014TemplateCheck {
-  application: string;
-  url: string;
-  listsModule?: boolean;
-  problem?: string;
-}
-
 export interface S014Analysis {
   criterionId: 'S014';
   status: EvaluationStatus;
   summary: string;
   moduleKind: ModuleKind;
   moduleName?: S014ModuleName;
-  /** The application named for this evaluation (--application). */
-  application?: string;
   remoteLookups: boolean;
   platform?: {
     ref: string;
@@ -68,8 +58,5 @@ export interface S014Analysis {
   memberships: S014Membership[];
   /** Platform applications that could not be read completely. */
   unresolvedApplications: Array<{ name: string; version?: string; tier?: S014ApplicationTier; problem: string }>;
-  /** Whether the named application is one of the platform's applications. */
-  applicationOnPlatform?: boolean;
-  namedApplicationTemplate?: S014TemplateCheck;
   remoteEvidence: RemoteEvidenceRecord[];
 }
