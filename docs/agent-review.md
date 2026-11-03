@@ -244,7 +244,7 @@ folio-eval evaluate <repo-url> \
   --criterion-agent-timeout-ms 420000
 ```
 
-The default timeout is 120,000 ms, or 420,000 ms for F criteria and 600,000 ms for B criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
+The default timeout is 600,000 ms, or 420,000 ms for F criteria. The timeout applies independently to each OpenCode command: debug configuration verification, debug agent verification, and the review run. Criteria execute sequentially, so one criterion review—and the complete evaluation—may take longer than the configured timeout. A longer timeout is only a ceiling; it does not guarantee a successful provider response. The evaluator does not retry agent commands, although OpenCode or the selected provider may have its own internal retry behavior.
 
 Advanced options:
 

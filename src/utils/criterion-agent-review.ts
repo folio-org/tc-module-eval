@@ -21,6 +21,8 @@ import { redactEvaluatorSecrets, truncateToByteBudget } from './redaction';
 import { errorMessage, isRecord } from './type-guards';
 
 const MAX_AGENT_REVIEW_FILE_BYTES = 96 * 1024;
+// An S010 review of mod-users needs more than 28 model steps, which takes longer than the command runner's 120 s default.
+const CRITERION_AGENT_TIMEOUT_MS = 600_000;
 
 /** A technologyId the agent adds for something the analyzer missed: discovered:<normalized-id>. */
 export const DISCOVERED_TECHNOLOGY_ID = /^discovered:[a-z0-9][a-z0-9._-]*$/;
@@ -166,8 +168,8 @@ export async function runCriterionAgentReview(
     return { ...unavailable, errors: [`Agent review is not enabled for ${request.criterionId}`] };
   }
 
-  if (config.timeoutMs === undefined && request.defaultTimeoutMs !== undefined) {
-    config = { ...config, timeoutMs: request.defaultTimeoutMs };
+  if (config.timeoutMs === undefined) {
+    config = { ...config, timeoutMs: request.defaultTimeoutMs ?? CRITERION_AGENT_TIMEOUT_MS };
   }
   const validationError = validateAgentReviewConfig(config, request.repositoryPath);
   if (validationError) {

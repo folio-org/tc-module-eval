@@ -810,6 +810,19 @@ describe('criterion agent review', () => {
     expect(result.errors.join('\n')).not.toContain('malformed');
   });
 
+  it.each([
+    [undefined, undefined, 600000],
+    [420000, undefined, 420000],
+    [420000, 90000, 90000]
+  ])('gives each OpenCode command a criterion default of %s and a run timeout of %s: %i ms', async (defaultTimeoutMs, timeoutMs, expected) => {
+    const runner = new FakeRunner();
+    await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath, defaultTimeoutMs,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), timeoutMs }, runner);
+
+    expect(runner.requests.map(request => request.timeoutMs)).toEqual([expected, expected, expected]);
+  });
+
   it.each([1, 2, 3])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
     const runner = new FakeRunner(undefined, undefined, undefined, {
       [stage]: { stdoutTruncated: true, stdoutBytes: 1048577 }
