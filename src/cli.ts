@@ -5,6 +5,7 @@ import { ModuleEvaluator } from './module-evaluator';
 import { ReportGenerator } from './utils/report-generator';
 import { EvaluationConfig, EvaluationResult, EvaluationStatus, ReportOptions } from './types';
 import { buildCriterionAgentReviewConfig } from './utils/agent-review-config';
+import { agentReviewRunCost } from './utils/agent-review-report';
 import { DEFAULT_PLATFORM_REF, isValidPlatformRef } from './utils/s014-application-assignment';
 import { errorMessage } from './utils/type-guards';
 import { redactEvaluatorSecrets } from './utils/redaction';
@@ -267,6 +268,10 @@ function printEvaluationSummary(result: EvaluationResult): void {
   console.log(`   ❌ Failed: ${stats.fail}`);
   console.log(`   ⚠️  Manual Review: ${stats.manual}`);
   console.log(`   ⚪ Not Applicable: ${stats.notApplicable}`);
+  const cost = agentReviewRunCost(result.criteria.map(criterion => criterion.agentReview));
+  if (cost) {
+    console.log(`   🤖 Agent review cost: $${cost.costUsd.toFixed(4)} for ${cost.reviews} ${cost.reviews === 1 ? 'review' : 'reviews'}${cost.unpriced ? ` (${cost.unpriced} not priced)` : ''}`);
+  }
 }
 
 if (process.argv.length === 2) {

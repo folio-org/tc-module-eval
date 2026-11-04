@@ -1,5 +1,5 @@
 import { EvaluationResult, S006ReportDetails, S007AnalysisResult, S010Analysis, S011Analysis } from '../types';
-import { renderAgentReviewLines } from './agent-review-report';
+import { agentReviewRunCost, agentReviewUsageText, renderAgentReviewLines } from './agent-review-report';
 import { redactEvaluatorSecretsInValue } from './redaction';
 import { reportText } from './report-text';
 import { s010AgentReviewNames } from './s010-report-details';
@@ -190,6 +190,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
   });
   const review = criterion.agentReview;
   if (!review && !hadReview) return original;
+  const usage = review?.metadata?.usage ? [`  - Cost: ${agentReviewUsageText(review.metadata.usage)}`] : [];
   if (!review?.available) {
     const diagnostics = diagnosticLines([...(review?.errors ?? []), ...(review?.warnings ?? []), ...legacyReview]);
     const reason = diagnostics.join(' ');
@@ -219,13 +220,14 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
         : []),
       ...(others.length > 6 ? [`    - ... ${others.length - 6} more in the downloaded JSON report`] : [])
     ];
-    const block = ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails];
+    const block = ['Agent review (advisory):', `  - Status: ${status}`, `  - Summary: ${explanation}`, ...diagnosticDetails, ...usage];
     return [...block, ...details];
   }
   if (checklist) {
     // Each checklist item carries the agent's results for its obligations; the review section keeps the rest.
     return [
       ...renderFrontendAgentReviewLines(checklist, review),
+      ...usage,
       ...withoutSection(details, CHECKLIST_HEADING),
       ...renderFrontendChecklistLines(checklist, review)
     ];
@@ -241,7 +243,7 @@ function reportDetailLines(criterion: EvaluationResult['criteria'][number]): str
         : criterion.criterionId === 'S011' && criterion.criterionDetails
           ? s011AgentReviewNames(criterion.criterionDetails as S011Analysis)
           : {};
-  return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...details];
+  return [...renderAgentReviewLines(review, names), '  - Advisory only; the criterion status is unchanged.', ...usage, ...details];
 }
 
 // S003 dependencies grouped by license, from the structured dependency list rather than the evidence text,
@@ -283,6 +285,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       commit: safeResult.provenance?.repositoryCommit,
       evaluator: safeResult.provenance?.evaluator,
       agentReviewModel: safeResult.provenance?.agentReviewModel,
+      agentReviewCost: (cost => cost && `$${cost.costUsd.toFixed(2)} for ${cost.reviews} ${cost.reviews === 1 ? 'review' : 'reviews'}${cost.unpriced ? `, ${cost.unpriced} not priced` : ''}`)(agentReviewRunCost(safeResult.criteria.map(criterion => criterion.agentReview))),
       sourceBase: pinnedSourceBase(safeResult),
       citedSourcePaths
     },
@@ -553,7 +556,7 @@ export function createHtmlReport(result: EvaluationResult): string {
 
     function renderHeader(main) {
       var header=h('header','report-header'); var titleRow=h('div','title-row'); var titleBlock=h('div'); titleBlock.appendChild(h('h1','',data.meta.module));
-      var meta=h('div','meta'); meta.appendChild(h('span','',data.meta.language)); var repo=h('a','repo',data.meta.repo.replace(/^https?:\/\//,'')); repo.href=data.meta.repo; repo.target='_blank'; repo.rel='noopener noreferrer'; focusKey(repo,'repo'); meta.append(repo,h('span','','Evaluated '+data.meta.evaluatedAt));if(data.meta.commit)meta.appendChild(h('span','repo','Commit '+data.meta.commit.slice(0,12)));if(data.meta.evaluator)meta.appendChild(h('span','','Evaluator '+data.meta.evaluator.name+' '+data.meta.evaluator.version));if(data.meta.agentReviewModel)meta.appendChild(h('span','repo','Agent '+data.meta.agentReviewModel));titleBlock.appendChild(meta);
+      var meta=h('div','meta'); meta.appendChild(h('span','',data.meta.language)); var repo=h('a','repo',data.meta.repo.replace(/^https?:\/\//,'')); repo.href=data.meta.repo; repo.target='_blank'; repo.rel='noopener noreferrer'; focusKey(repo,'repo'); meta.append(repo,h('span','','Evaluated '+data.meta.evaluatedAt));if(data.meta.commit)meta.appendChild(h('span','repo','Commit '+data.meta.commit.slice(0,12)));if(data.meta.evaluator)meta.appendChild(h('span','','Evaluator '+data.meta.evaluator.name+' '+data.meta.evaluator.version));if(data.meta.agentReviewModel)meta.appendChild(h('span','repo','Agent '+data.meta.agentReviewModel));if(data.meta.agentReviewCost)meta.appendChild(h('span','','Agent cost '+data.meta.agentReviewCost));titleBlock.appendChild(meta);
       var actions=h('div','actions');var download=h('button','action','Download JSON');download.type='button';focusKey(download,'download-json');download.addEventListener('click',function(){var blob=new Blob([downloadData],{type:'application/json'});var url=URL.createObjectURL(blob);var link=document.createElement('a');link.href=url;link.download=data.meta.module+'-evaluation.json';link.click();setTimeout(function(){URL.revokeObjectURL(url);},0);});var expand=h('button','action','Expand criteria'); expand.type='button'; focusKey(expand,'expand-all'); expand.addEventListener('click',function () { items.forEach(function (item) { if(item.triage!=='human') state.cards[item.id]=true; }); state.groups={}; render(); });
       var collapse=h('button','action','Collapse criteria'); collapse.type='button'; focusKey(collapse,'collapse-all'); collapse.addEventListener('click',function () { state.cards={}; state.nodes={}; render(); }); actions.append(download,expand,collapse); titleRow.append(titleBlock,actions); header.appendChild(titleRow);
       var summary=h('div','summary'); var bar=h('div','bar'); var counts=countsByStatus(); var total=items.length || 1;

@@ -793,7 +793,7 @@ describe('criterion agent review', () => {
       files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
       schemaDescription: 'schema'
     }, opencodeConfig(), new FakeRunner(undefined, undefined, 'not json', {
-      3: { stdoutDiagnostics: ['record 1: other; Invalid framing'] }
+      4: { stdoutDiagnostics: ['record 1: other; Invalid framing'] }
     }));
 
     expect(result.available).toBe(false);
@@ -833,7 +833,7 @@ describe('criterion agent review', () => {
     expect(result.summary).toBe('Stray brace summary.');
   });
 
-  it.each([1, 2, 3])('stops at timed-out stage %i without retrying', async stage => {
+  it.each([1, 2, 4])('stops at timed-out stage %i without retrying', async stage => {
     const runner = new FakeRunner(undefined, undefined, undefined, {
       [stage]: { status: 'timed_out', durationMs: 180000 }
     });
@@ -857,10 +857,10 @@ describe('criterion agent review', () => {
       instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
     }, { ...opencodeConfig(), timeoutMs }, runner);
 
-    expect(runner.requests.map(request => request.timeoutMs)).toEqual([expected, expected, expected]);
+    expect(runner.requests.map(request => request.timeoutMs)).toEqual([expected, expected, expected, expected]);
   });
 
-  it.each([1, 2, 3])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
+  it.each([1, 2, 4])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
     const runner = new FakeRunner(undefined, undefined, undefined, {
       [stage]: { stdoutTruncated: true, stdoutBytes: 1048577 }
     });
@@ -910,7 +910,7 @@ else {
     }
   }, 30_000);
 
-  it.each([1, 2, 3])('retains content-free debug records after timeout at stage %i', async stage => {
+  it.each([1, 2, 4])('retains content-free debug records after timeout at stage %i', async stage => {
     const output = sanitizeStructuredOutput(JSON.stringify({ type: 'tool_use', timestamp: 1500, part: {
       tool: 'read', state: { status: 'completed', time: { start: 1200, end: 1400 },
         input: { filePath: 'PRIVATE_PATH' }, output: 'PRIVATE_CONTENT' }
@@ -928,10 +928,10 @@ else {
       const trace = JSON.parse(text);
       expect(result.available).toBe(false);
       expect(trace.timeoutMs).toBe(180000);
-      if (stage === 3) expect(runner.requests[2].captureDebugTrace).toBe(true);
+      if (stage === 4) expect(runner.requests[3].captureDebugTrace).toBe(true);
       expect(trace.stages).toHaveLength(stage);
       expect(trace.stages[stage - 1]).toMatchObject({ status: 'timed_out', durationMs: 180000, signal: 'SIGTERM', stdoutBytes: 900 });
-      if (stage === 3) expect(trace.stages[2].events).toEqual([
+      if (stage === 4) expect(trace.stages[3].events).toEqual([
         { record: 1, type: 'tool_use', timestamp: 1500, tool: 'read', status: 'completed', durationMs: 200 }
       ]);
       expect(text).not.toMatch(/PRIVATE_|README|apiKey|authorization|test-model/);
@@ -947,7 +947,7 @@ else {
       message: `Rate limit for key ${EVALUATOR_SECRETS.OPENROUTER_API_KEY}`, statusCode: 429,
       responseBody: 'DO_NOT_PUBLISH', headers: { authorization: 'DO_NOT_PUBLISH' }
     } } });
-    const runner = new FakeRunner(undefined, undefined, stdout, { 3: { status: 'failed', exitCode: 1 } });
+    const runner = new FakeRunner(undefined, undefined, stdout, { 4: { status: 'failed', exitCode: 1 } });
     const result = await withEvaluatorSecrets(() => runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
       instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
     }, opencodeConfig(), runner));
@@ -977,7 +977,7 @@ else {
     const review = (stdout: string, overrides: Partial<CommandExecutionResult>) => runCriterionAgentReview({
       criterionId: 'S010', repositoryPath: repoPath, instructions: 'PRIVATE_PROMPT',
       files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
-    }, { ...opencodeConfig(), enabledCriteria: ['S010'], timeoutMs: 120000 }, new FakeRunner(undefined, undefined, stdout, { 3: overrides }));
+    }, { ...opencodeConfig(), enabledCriteria: ['S010'], timeoutMs: 120000 }, new FakeRunner(undefined, undefined, stdout, { 4: overrides }));
     const timedOut = { status: 'timed_out' as const, durationMs: 120090, signal: 'SIGTERM', stderrBytes: 0,
       errorMessage: 'Command timed out after 120000ms (signal: SIGTERM)' };
     const context = (stdoutBytes: number) =>
@@ -1022,6 +1022,25 @@ else {
       const result = await review(stdout, overrides);
       expect(result.errors).toEqual(errors);
       expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+    });
+
+    it.each([
+      ['refreshed', {}, { durationMs: 120090, modelSteps: 2, tokens: { input: 1500, output: 70, reasoning: 0, cacheRead: 900 }, costUsd: 0.03 }],
+      ['could not be refreshed', { status: 'failed' as const, exitCode: 1 }, { durationMs: 120090, modelSteps: 2, tokens: { input: 1500, output: 70, reasoning: 0, cacheRead: 900 } }]
+    ])('records the run\'s usage, with its cost only when the models.dev catalog %s', async (_name, refresh, usage) => {
+      const step = (timestamp: number, cost: number, input: number, output: number) => at(timestamp, 'step_finish', {
+        messageID: `msg_${timestamp}`, type: 'step-finish', reason: 'tool-calls', cost, tokens: { input, output, reasoning: 0, cache: { read: 450, write: 0 } }
+      });
+      const runner = new FakeRunner(undefined, undefined, capture(step(1000, 0.01, 1000, 50), step(2000, 0.02, 500, 20)), {
+        3: refresh, 4: { ...timedOut, stdoutBytes: 600 }
+      });
+      const result = await runCriterionAgentReview({
+        criterionId: 'S010', repositoryPath: repoPath, instructions: 'review',
+        files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+      }, { ...opencodeConfig(), modelLabel: 'openrouter/deepseek/deepseek-v4.1-flash-1017', enabledCriteria: ['S010'], timeoutMs: 120000 }, runner);
+
+      expect(runner.requests[2].args).toEqual(['models', 'openrouter', '--refresh']);
+      expect(result.metadata?.usage).toEqual(usage);
     });
   });
 
@@ -1528,6 +1547,7 @@ else {
       const generatedAuth = JSON.parse(fs.readFileSync(generatedAuthPath, 'utf-8'));
 
       expect(generatedConfig.model).toBe('openrouter/openrouter/free');
+      expect(generatedConfig.small_model).toBe('openrouter/openrouter/free');
       expect(generatedConfig.provider.openrouter.models['openrouter/free']).toEqual({});
       expect(generatedConfig.agent.reviewer.permission).toEqual(expect.objectContaining({
         read: 'allow',

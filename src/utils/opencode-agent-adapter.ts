@@ -8,6 +8,7 @@ import {
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
   CriterionAgentRunDiagnosis,
+  CriterionAgentUsage,
   EvaluationStatus
 } from '../types';
 import {
@@ -16,7 +17,7 @@ import {
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactEvaluatorSecrets } from './redaction';
-import { decodeOpenCodeOutput, OpenCodeOutput, openCodeOutputTraces, parseJsonObject } from './opencode-output';
+import { decodeOpenCodeOutput, OpenCodeEventTrace, OpenCodeOutput, openCodeOutputTraces, parseJsonObject } from './opencode-output';
 import { errorMessage } from './type-guards';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
@@ -103,7 +104,7 @@ export async function runOpenCodeAgentReview(
     command: 'opencode',
     args: ['debug', 'config'],
     cwd: workspace.rootPath,
-    env: invocation.env,
+    env: invocation.debugEnv,
     timeoutMs: config.timeoutMs,
     stdoutFormat: 'json'
   });
@@ -115,7 +116,7 @@ export async function runOpenCodeAgentReview(
     command: 'opencode',
     args: ['debug', 'agent', config.readOnlyAgentName],
     cwd: workspace.rootPath,
-    env: invocation.env,
+    env: invocation.debugEnv,
     timeoutMs: config.timeoutMs,
     stdoutFormat: 'json'
   });
@@ -127,6 +128,15 @@ export async function runOpenCodeAgentReview(
   if (permissionError) {
     return baseUnavailable(permissionError);
   }
+
+  // OpenCode prices each step from its models.dev catalog; a run that starts before the catalog is cached reports a cost of 0.
+  const catalog = await runStage('models-refresh', {
+    command: 'opencode',
+    args: ['models', config.modelLabel.split('/')[0], '--refresh'],
+    cwd: workspace.rootPath,
+    env: invocation.debugEnv,
+    timeoutMs: config.timeoutMs
+  });
 
   const run = await runStage('review', {
     command: 'opencode',
@@ -166,17 +176,21 @@ export async function runOpenCodeAgentReview(
 
   const cut = run.stdoutTruncated === true;
   const decoded = decodeOpenCodeOutput(run.stdout, cut);
+  const events = openCodeOutputTraces(run.stdout);
+  const usage = openCodeRunUsage(events, run.durationMs, catalog.status === 'success');
   if (run.status !== 'success' || (cut && !decoded.payload)) {
     const unavailable = baseUnavailable(commandFailure('run', run, config, decoded));
+    unavailable.metadata = { ...unavailable.metadata!, usage };
     if (run.status === 'failed' || run.status === 'timed_out') {
-      const diagnosis = diagnoseOpenCodeRun(run);
+      const diagnosis = diagnoseOpenCodeRun(run, events);
       unavailable.errors.push(redactEvaluatorSecrets(diagnosis.line, 600));
-      unavailable.metadata = { ...unavailable.metadata!, runDiagnosis: diagnosis.diagnosis };
+      unavailable.metadata.runDiagnosis = diagnosis.diagnosis;
     }
     return unavailable;
   }
 
   const result = normalizeOpenCodeResult(decoded, request, workspace, config);
+  result.metadata = { ...result.metadata!, usage };
   if (cut) {
     result.warnings.push(`OpenCode run output exceeded the ${OPENCODE_RUN_MAX_OUTPUT_BYTES}-byte capture limit (stdout ${run.stdoutBytes ?? 'unknown'} bytes); earlier output was dropped and the review was read from the end of the output`);
   }
@@ -202,9 +216,24 @@ function commandFailure(stage: string, run: CommandExecutionResult, config: Crit
   return `${commandContext(stage, run, config)}; ${reason}${run.stdoutTruncated && run.status !== 'success' ? '; capture truncated' : ''}${detail ? `; ${detail}` : ''}`;
 }
 
+function openCodeRunUsage(events: OpenCodeEventTrace[], durationMs: number, priced: boolean): CriterionAgentUsage {
+  const tokens = { input: 0, output: 0, reasoning: 0, cacheRead: 0 };
+  let modelSteps = 0;
+  let costUsd: number | undefined;
+  for (const event of events) {
+    if (event.type !== 'step_finish') continue;
+    modelSteps += 1;
+    tokens.input += event.tokens?.input ?? 0;
+    tokens.output += event.tokens?.output ?? 0;
+    tokens.reasoning += event.tokens?.reasoning ?? 0;
+    tokens.cacheRead += event.tokens?.cacheRead ?? 0;
+    if (event.cost !== undefined) costUsd = (costUsd ?? 0) + event.cost;
+  }
+  return { durationMs, modelSteps, tokens, ...(priced && costUsd !== undefined ? { costUsd } : {}) };
+}
+
 // OpenCode emits tool_use when a tool call ends and text when a text part ends, so a step in progress shows only its step_start.
-function diagnoseOpenCodeRun(run: CommandExecutionResult): { line: string; diagnosis: CriterionAgentRunDiagnosis } {
-  const events = openCodeOutputTraces(run.stdout);
+function diagnoseOpenCodeRun(run: CommandExecutionResult, events: OpenCodeEventTrace[]): { line: string; diagnosis: CriterionAgentRunDiagnosis } {
   const toolCalls: Record<string, number> = {};
   const tokens = { input: 0, output: 0, reasoning: 0, cacheRead: 0 };
   let tokensReported = false;
@@ -326,6 +355,9 @@ export function materializeOpenCodeInvocation(
 
   return {
     env,
+    // OpenCode's preparatory commands leave lock directories in their state directory, which keep the review run from
+    // reading the refreshed models.dev catalog, so it would not know the model's price.
+    debugEnv: { ...env, XDG_STATE_HOME: path.join(opencodeRoot, 'debug-state') },
     runtimeRootPath: opencodeRoot,
     provenancePaths: [
       config.trustedConfigPath,
@@ -352,6 +384,7 @@ export function removeOpenCodeRuntimeCredentials(workspace: PreparedCriterionRev
 
 interface OpenCodeInvocation {
   env: Record<string, string | undefined>;
+  debugEnv: Record<string, string | undefined>;
   runtimeRootPath: string;
   provenancePaths: string[];
 }
@@ -367,6 +400,9 @@ function buildGeneratedOpenCodeConfig(config: CriterionAgentReviewConfig): Recor
 
   if (modelLabel) {
     generated.model = modelLabel;
+    // OpenCode titles each session with its small model, by default a provider's own pick (claude-haiku on OpenRouter),
+    // whose cost the run's steps do not report.
+    generated.small_model = modelLabel;
   }
 
   if (config.generatedProvider) {

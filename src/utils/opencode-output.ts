@@ -19,6 +19,7 @@ export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
   // Accepts both a raw step_finish part and an earlier trace of one.
   const reason = part.reason ?? event?.reason;
   const tokens = isRecord(part.tokens) ? part.tokens : isRecord(event?.tokens) ? event.tokens : undefined;
+  const cost = number(part.cost ?? event?.cost);
   return {
     type,
     timestamp: number(event?.timestamp),
@@ -33,7 +34,8 @@ export function openCodeEventTrace(event: Record<string, unknown> | undefined) {
       ...(tokens ? { tokens: {
         input: number(tokens.input), output: number(tokens.output), reasoning: number(tokens.reasoning),
         cacheRead: number(asObject(tokens.cache).read ?? tokens.cacheRead)
-      } } : {})
+      } } : {}),
+      ...(cost !== undefined ? { cost } : {})
     } : {})
   };
 }

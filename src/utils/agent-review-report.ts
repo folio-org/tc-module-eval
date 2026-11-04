@@ -1,4 +1,4 @@
-import { CriterionAgentReviewResult } from '../types';
+import { CriterionAgentReviewResult, CriterionAgentUsage } from '../types';
 import { S006_FINDING_SUMMARY_PATH } from './criterion-agent-review';
 import { reportPath, reportText } from './report-text';
 
@@ -28,6 +28,23 @@ const SUBJECT_NAMES: Record<string, string> = {
   'folio-interfaces': 'FOLIO interfaces',
   'spring-boot': 'Spring Boot', lombok: 'Lombok'
 };
+
+/** One review's OpenCode usage, such as "$0.0089 (11 model steps in 36.5 s)". */
+export function agentReviewUsageText(usage: CriterionAgentUsage): string {
+  const steps = `${usage.modelSteps} model ${usage.modelSteps === 1 ? 'step' : 'steps'} in ${(usage.durationMs / 1000).toFixed(1)} s`;
+  return usage.costUsd === undefined ? `not reported (${steps})` : `$${usage.costUsd.toFixed(4)} (${steps})`;
+}
+
+/** The run's agent review cost: the sum over the reviews whose cost was reported, and how many reviews ran. */
+export function agentReviewRunCost(reviews: Array<CriterionAgentReviewResult | undefined>): { costUsd: number; reviews: number; unpriced: number } | undefined {
+  const usages = reviews.flatMap(review => review?.metadata?.usage ? [review.metadata.usage] : []);
+  if (!usages.length) return undefined;
+  return {
+    costUsd: usages.reduce((sum, usage) => sum + (usage.costUsd ?? 0), 0),
+    reviews: usages.length,
+    unpriced: usages.filter(usage => usage.costUsd === undefined).length
+  };
+}
 
 // Details use indentation as structure. Model-authored newlines must stay prose.
 export function prose(value: string | undefined): string {

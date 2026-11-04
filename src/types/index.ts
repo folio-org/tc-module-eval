@@ -257,6 +257,16 @@ export interface CriterionAgentReviewMetadata {
   retainedWorkspacePath?: string;
   /** Content-free account of a failed or timed-out OpenCode review run, from its captured events. */
   runDiagnosis?: CriterionAgentRunDiagnosis;
+  /** What the OpenCode review run used, summed over its finished model steps. */
+  usage?: CriterionAgentUsage;
+}
+
+export interface CriterionAgentUsage {
+  durationMs: number;
+  modelSteps: number;
+  tokens: { input: number; output: number; reasoning: number; cacheRead: number };
+  /** As OpenCode reports it from its models.dev pricing; absent when the catalog could not be refreshed or no step reported a cost. */
+  costUsd?: number;
 }
 
 export interface CriterionAgentRunDiagnosis {
@@ -274,7 +284,7 @@ export interface CriterionAgentRunDiagnosis {
   /** Time between the last output and the end of the command. */
   silentMs?: number;
   outputTruncated: boolean;
-  tokens?: { input: number; output: number; reasoning: number; cacheRead: number };
+  tokens?: CriterionAgentUsage['tokens'];
 }
 
 export interface CriterionAgentReviewResult {
