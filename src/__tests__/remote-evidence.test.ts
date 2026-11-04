@@ -221,7 +221,7 @@ describe('remote evidence transport', () => {
     ]);
   });
 
-  it('stops once 120 s have passed since the first remote read, including a response that completes after it', async () => {
+  it('stops once the remote reads have taken 120 s, including a response that completes after it', async () => {
     let now = 1_000_000;
     const { remote, calls } = transport(() => {
       now += 11_000;
@@ -231,6 +231,23 @@ describe('remote evidence transport', () => {
     const results = [];
     for (let index = 0; index < 12; index++) results.push(await remote.getJson(FAR));
     // Ten reads end by 110 s; the eleventh starts with 10 s left and ends at 121 s, and the twelfth is not sent.
+    expect(results.map(result => result.ok ? 'ok' : result.reason)).toEqual([...Array(10).fill('ok'), 'budget-time', 'budget-time']);
+    expect(calls).toHaveLength(11);
+  });
+
+  it('does not count time between remote reads against the 120 s limit', async () => {
+    let now = 1_000_000;
+    const { remote, calls } = transport(() => {
+      now += 11_000;
+      return json({});
+    }, { now: () => now });
+
+    const results = [];
+    for (let index = 0; index < 12; index++) {
+      results.push(await remote.getJson(FAR));
+      now += 600_000;
+    }
+    // Ten minutes pass between reads; only the 11 s each read takes counts, so the outcome matches back-to-back reads.
     expect(results.map(result => result.ok ? 'ok' : result.reason)).toEqual([...Array(10).fill('ok'), 'budget-time', 'budget-time']);
     expect(calls).toHaveLength(11);
   });
