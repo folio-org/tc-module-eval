@@ -105,7 +105,7 @@ describe('F001 agent review', () => {
     expect(dropped < 0 ? [] : lines.slice(dropped, lines.indexOf('  - Sources:'))).toEqual(droppedRows);
   });
 
-  it('never reviews a fail, and says so when agent review is enabled', async () => {
+  it('reviews a fail only when something beyond the undeclared interfaces, which the reviewer confirms, is left', async () => {
     write('src/Requests.js', "export const useSessions = () => useOkapiKy().post('circulation/end-patron-action-session');\n");
     commit();
     const config = fakeConfig({ assessments: [], reviewerActions: [action] });
@@ -115,7 +115,7 @@ describe('F001 agent review', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.agentReview).toBeUndefined();
-    expect(result.details).toContain('Agent review:\n  - Not applied: agent review runs only for manual results; the reviewer confirms each undeclared interface (F001-C1)');
+    expect(result.details?.split('\n').slice(-2)).toEqual(['Agent review:', '  - Not applied: every request was mapped to an interface; what remains is for the reviewer']);
   });
 
   function patterns() {

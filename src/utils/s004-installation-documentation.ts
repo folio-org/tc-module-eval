@@ -193,7 +193,7 @@ export function formatS004Evidence(
       agentReview.metadata?.modelLabel ? `  - Model label: ${agentReview.metadata.modelLabel}` : undefined,
       agentReview.available && agentReview.errors.length ? `  - Errors: ${reportText(agentReview.errors.join('; '))}` : undefined
     );
-  } else if (classification.status === EvaluationStatus.MANUAL) {
+  } else if (classification.status === EvaluationStatus.MANUAL || classification.status === EvaluationStatus.FAIL) {
     lines.push('', 'Agent review:', `  - Not applied: ${reportText(result.agentReviewUnavailableReason ?? 'agent review is disabled or unconfigured')}`);
   }
 

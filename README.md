@@ -208,7 +208,8 @@ spec and a committed class must implement the interface named after its RAML res
 any module's endpoint is also implemented by a route in the source (Vert.x router, Spring mapping
 annotations, Grails URL mappings). It fails when an RMB or Spring endpoint is in no spec and no route,
 and leaves missing implementing classes, wildcard handlers, library endpoints and unreadable evidence
-to the reviewer. See [Criterion Notes](docs/criterion-notes.md#b003-endpoint-implementations).
+to the reviewer. When agent review is enabled, the agent looks for the code serving each endpoint the
+tool could not match, except library endpoints. See [Criterion Notes](docs/criterion-notes.md#b003-endpoint-implementations).
 
 ### B004 Environment Variables
 
@@ -223,8 +224,7 @@ alongside. With `--existing-module`, documentation gaps are left to the reviewer
 applies. A variable that RMB, folio-spring-base or the FOLIO Java base image documents (listed with
 pinned sources in the same directory) needs no documentation of its own when README.md or ENV_VARS.md links to
 that documentation, and goes to the reviewer when it does not. Required variables without fail-fast evidence
-and log statements that may print secrets also go to the reviewer, and, for a manual result, to the
-agent review. See [Criterion Notes](docs/criterion-notes.md#b004-environment-variables).
+and log statements that may print secrets also go to the reviewer and to the agent review. See [Criterion Notes](docs/criterion-notes.md#b004-environment-variables).
 
 ### B005 Interface Naming
 
@@ -367,7 +367,7 @@ run and removed afterwards, also on Ctrl-C. It needs a reachable Docker daemon. 
 
 ### Agent Review
 
-Some criteria can optionally add advisory OpenCode review to manual results. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
+Some criteria can optionally add advisory OpenCode review to manual and failed results; for a fail, the agent explains each failure in plain words. See [Agent Review Configuration](docs/agent-review.md) for provider setup, CLI flags, supported criteria, and GitHub Actions notes.
 
 S010 third-party resilience uses conservative committed-source checks for Java and
 Stripes/React modules. Difficult static cases remain manual and can use the optional

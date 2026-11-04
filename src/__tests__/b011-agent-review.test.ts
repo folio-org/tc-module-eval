@@ -134,15 +134,12 @@ describe('B011 agent review', () => {
     expect(result.agentReview?.available).toBe(true);
   });
 
-  it('does not run for a fail and says why', async () => {
+  it('reviews a fail, keeping the status', async () => {
     const { result } = await evaluateWith(module('class SettingsService { String sql = String.format("SELECT * FROM %s_mod_users.users", tenantId); }\n'),
       fakeConfig({ assessments: [configuration(), settings()], reviewerActions: [action] }));
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(rowsFrom(result.details, 'Agent review:')).toEqual([
-      'Agent review:',
-      '  - Not applied: agent review runs only for manual results; the reviewer confirms each reference in code or in an every-install script (B011-C1)'
-    ]);
+    expect(result.agentReview?.available).toBe(true);
+    expect(result.details?.split('\n')).toContain('Agent review (advisory):');
   });
 });

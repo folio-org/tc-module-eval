@@ -1,4 +1,4 @@
-import { CriterionResult, EvaluationRun, EvaluationStatus } from '../../types';
+import { CriterionResult, EvaluationRun } from '../../types';
 import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { reviewCriterionWithAgent } from '../../utils/criterion-agent-review';
 import { hasF001AgentReviewMaterial, reviewF001WithAgent } from '../../utils/f001-agent-review';
@@ -60,9 +60,6 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewF001WithAgent(repoPath, analysis, index.loaded ? index.patterns : [], config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
-      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the reviewer confirms each undeclared interface (F001-C1)';
-    }
     return {
       criterionId: 'F001',
       status: analysis.status,
@@ -84,9 +81,6 @@ export class FrontendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewF002WithAgent(repoPath, analysis, config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
-      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results';
-    }
     return {
       criterionId: 'F002',
       status: analysis.status,

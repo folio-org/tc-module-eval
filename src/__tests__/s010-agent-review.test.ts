@@ -272,10 +272,9 @@ describe('S010 advisory agent review', () => {
     expect(review.metadata?.adapter).toBe('fake');
   });
 
-  it('gates review to deterministic manual non-library results', () => {
+  it('gives a library no review material', () => {
     const manual = analysis();
     expect(hasS010AgentReviewMaterial(manual)).toBe(true);
-    expect(hasS010AgentReviewMaterial({ ...manual, status: EvaluationStatus.PASS })).toBe(false);
     expect(hasS010AgentReviewMaterial({
       ...manual,
       evidence: { ...manual.evidence, moduleKind: { kind: 'library', evidence: [], warnings: [] } }

@@ -7,7 +7,8 @@ import {
   CommandRunner,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
-  CriterionAgentRunDiagnosis
+  CriterionAgentRunDiagnosis,
+  EvaluationStatus
 } from '../types';
 import {
   CriterionAgentReviewRequest,
@@ -23,6 +24,7 @@ const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 // the newest output so large modules still produce a review.
 const OPENCODE_RUN_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const OPENCODE_SILENCE_MS = 30_000;
+const FAIL_INSTRUCTION = 'The tool failed this criterion on its own findings, and that status stands. For each failure, explain in plain words what the module does, which rule it breaks, and what the module team must change, so a reviewer who has not read the code can follow it. Confirm each failure from the source; when one looks like an analyzer mistake, say so and cite the evidence. Use likely_sufficient only when every failure looks like an analyzer mistake.';
 
 export async function runOpenCodeAgentReview(
   request: CriterionAgentReviewRequest,
@@ -138,6 +140,7 @@ export async function runOpenCodeAgentReview(
       'json',
       [
         request.instructions,
+        ...(config.deterministicStatus === EvaluationStatus.FAIL ? [FAIL_INSTRUCTION] : []),
         'Writing style for all report prose: write for a Technical Council decision-maker, not an implementation debugger. Use plain English, short sentences, and concrete outcomes. Lead with the conclusion and its operational impact.',
         'Summary: at most two short sentences, targeting 45 words total. State the overall judgment and the main risk or remaining decision. Do not list every dependency or repeat the recommendation label.',
         'Rationale: at most three short sentences, targeting 70 words total. Explain the decisive evidence, scope actually investigated, and material uncertainty without repeating the summary or narrating your investigation.',

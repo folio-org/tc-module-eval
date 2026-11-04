@@ -67,7 +67,9 @@ describe('B012 dependencies declared in README', () => {
       '    - org.folio:folio-s3-client in pom.xml',
       'Checklist for the reviewer:',
       ...C1(),
-      ...C2('README.md', ['      - pom.xml — Apache Kafka: org.folio:folio-kafka-wrapper'])
+      ...C2('README.md', ['      - pom.xml — Apache Kafka: org.folio:folio-kafka-wrapper']),
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.checklist.items.map(item => [item.id, item.reviewerOnly, item.obligations])).toEqual([
       ['B012-C1', false, [{ id: 'B012-C1#1' }]],
@@ -154,7 +156,9 @@ describe('B012 dependencies declared in README', () => {
       '  - pom.xml — the dependency ${lettuce.group}:lettuce[evidence: x) uses a property the tool could not resolve',
       'Checklist for the reviewer:',
       ...C1(),
-      ...C2('README.md', ['      - src/main/resources/application.yml — Apache Kafka: spring.kafka.a\\u0001b'])
+      ...C2('README.md', ['      - src/main/resources/application.yml — Apache Kafka: spring.kafka.a\\u0001b']),
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
   });
 
@@ -177,7 +181,9 @@ describe('B012 dependencies declared in README', () => {
       '  - B012-C1 Each external service the module calls, other than FOLIO interfaces and the infrastructure listed, is named in README.md.',
       '  - B012-C2 Each Kafka topic the module consumes from or produces for other modules is named in README.md.',
       '    - Start with:',
-      '      - pom.xml — Apache Kafka: org.folio:folio-kafka-wrapper'
+      '      - pom.xml — Apache Kafka: org.folio:folio-kafka-wrapper',
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
   });
 
@@ -351,12 +357,12 @@ describe('B012 dependencies declared in README', () => {
       expect(rows!.slice(-2)).toEqual(['Agent review:', '  - Not applied: agent review for B012 runs only when listed in --criterion-agent-criteria']);
     });
 
-    it('does not review a pass or a fail, even when listed', async () => {
+    it('reviews a fail but not a pass when listed', async () => {
       const pass = await b012(edgeModule('`AwsSsm`, `Vault`'), fakeConfig(['B012']));
       const fail = await b012(rmbModule({ 'README.md': 'Nothing.\n' }), fakeConfig(['B012']));
 
       expect([pass.result.status, pass.result.agentReview, fail.result.status, fail.result.agentReview])
-        .toEqual([EvaluationStatus.PASS, undefined, EvaluationStatus.FAIL, undefined]);
+        .toEqual([EvaluationStatus.PASS, undefined, EvaluationStatus.FAIL, expect.objectContaining({ available: true })]);
       expect(pass.rows!.some(row => row.startsWith('Agent review'))).toBe(false);
     });
 

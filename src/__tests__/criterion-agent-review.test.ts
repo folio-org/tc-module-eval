@@ -24,6 +24,8 @@ import { LocalCommandRunner } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
 
+const FAIL_PROMPT = 'The tool failed this criterion on its own findings, and that status stands. For each failure, explain in plain words what the module does, which rule it breaks, and what the module team must change, so a reviewer who has not read the code can follow it. Confirm each failure from the source; when one looks like an analyzer mistake, say so and cite the evidence. Use likely_sufficient only when every failure looks like an analyzer mistake.';
+
 class FakeRunner implements CommandRunner {
   requests: CommandExecutionRequest[] = [];
 
@@ -381,6 +383,23 @@ describe('criterion agent review', () => {
     expect(review).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [EvaluationStatus.MANUAL, true],
+    [EvaluationStatus.FAIL, true],
+    [EvaluationStatus.PASS, false],
+    [EvaluationStatus.NOT_APPLICABLE, false]
+  ])('reviews a %s result: %s, telling the review the status the tool decided', async (status, reviewed) => {
+    const review = jest.fn(async (config: CriterionAgentReviewConfig) => ({ available: true, criterionId: 'F004', evidenceReferences: [], warnings: [], errors: [], summary: config.deterministicStatus }));
+    const result = await reviewCriterionWithAgent({
+      criterionId: 'F004',
+      status,
+      hasReviewMaterial: true,
+      evaluationRun: createEvaluationRun({ repositoryPath: repoPath, language: 'javascript', agentReview: { enabled: true, adapter: 'fake' } }),
+      review
+    });
+    expect(result).toEqual(reviewed ? { agentReview: expect.objectContaining({ summary: status }) } : {});
+  });
+
   it('converts unexpected optional review exceptions into unavailable results', async () => {
     const result = await withEvaluatorSecrets(() => reviewCriterionWithAgent({
       criterionId: 'S005',
@@ -590,6 +609,24 @@ describe('criterion agent review', () => {
     expect(runRequest?.env?.OPENCODE_CONFIG_DIR).toBeDefined();
     expect(runRequest?.maxOutputBytes).toBe(16 * 1024 * 1024);
     expect(runRequest?.keepStdoutTail).toBe(true);
+  });
+
+  it.each([
+    [EvaluationStatus.FAIL, ['review', FAIL_PROMPT, 'Writing style']],
+    [EvaluationStatus.MANUAL, ['review', 'Writing style']]
+  ])('asks the agent to explain the failures of a %s result in plain words, only for a fail', async (deterministicStatus, opening) => {
+    const runner = new FakeRunner();
+    await runCriterionAgentReview({
+      criterionId: 'S004',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
+      schemaDescription: 'schema'
+    }, { ...opencodeConfig(), deterministicStatus }, runner);
+
+    const runRequest = runner.requests.find(request => request.args?.[0] === 'run')!;
+    const prompt = runRequest.args![runRequest.args!.indexOf('--file') - 1];
+    expect(prompt.split('\n').slice(0, opening.length).map(line => line.startsWith('Writing style') ? 'Writing style' : line)).toEqual(opening);
   });
 
   it('removes external OpenCode runtime data after normal runs', async () => {

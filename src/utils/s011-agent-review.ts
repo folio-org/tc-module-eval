@@ -1,13 +1,12 @@
-import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, EvaluationStatus, S011Analysis } from '../types';
+import { CommandRunner, CriterionAgentReviewConfig, CriterionAgentReviewResult, S011Analysis } from '../types';
 import { CriterionAgentReviewRequest, runCriterionAgentReview, unavailableResult } from './criterion-agent-review';
 import { redactEvaluatorSecrets } from './redaction';
 import { errorMessage } from './type-guards';
 
 const SUMMARY_BYTES = 64 * 1024;
 
-/** Reviews run only for a deterministic manual result with something in the repository to judge. */
 export function hasS011AgentReviewMaterial(analysis: S011Analysis): boolean {
-  return analysis.status === EvaluationStatus.MANUAL && analysis.reviewGroups.length > 0;
+  return analysis.reviewGroups.length > 0;
 }
 
 export async function reviewS011WithAgent(

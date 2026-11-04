@@ -10,16 +10,19 @@ import {
   BackendDescriptorTemplate,
   BackendEvidence,
   BackendRuntimeEvidence,
+  CriterionAgentReviewResult,
   EvaluationStatus,
   FrontendChecklistItem
 } from '../types';
+import { backendBrowse, numberBackendObligations } from './backend-agent-review';
+import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
 import { SOURCE_FILE, templateLineOf } from './backend-evidence';
 import { lineCounter, sourceRoutes, withoutComments } from './backend-routes';
 import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { isSystemInterface } from './descriptor-handlers';
-import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
+import { frontendChecklist, frontendReviewLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText, unique } from './report-text';
 import { isRecord } from './type-guards';
 
@@ -50,16 +53,11 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   const { kind, framework, template } = evidence;
   const sourceDiagnostics = evidence.snapshot.diagnostics.filter(diagnostic => diagnostic.material);
   const gaps = [...apiSpecs.specs.flatMap(spec => spec.gaps), ...apiSpecs.unreadSources];
-  const base = { criterionId: 'B003' as const, kind, framework, endpoints: [], routeCount: 0, unreadRoutes: [], unreadRouteCount: 0, gaps, sourceDiagnostics };
+  const base = { criterionId: 'B003' as const, kind, framework, endpoints: [], routeCount: 0, unreadRoutes: [], unreadRouteCount: 0, gaps, sourceDiagnostics,
+    agentBrowseScope: backendBrowse().scope };
   const result = (status: EvaluationStatus, basis: B003Basis, summary: string, items: FrontendChecklistItem[], extra: Partial<B003Analysis> = {}): B003Analysis =>
     ({ ...base, ...extra, status, basis, summary: `B003 ${status}: ${summary}`, checklist: frontendChecklist(status, items) });
-  const checklistItem = (startingPoints: FrontendChecklistItem['startingPoints']): FrontendChecklistItem => ({
-    id: 'B003-C1',
-    title: 'Each endpoint the tool could not match has an implementation that serves its methods.',
-    startingPoints,
-    reviewerOnly: true,
-    obligations: []
-  });
+  const IMPLEMENTED_TITLE = 'Each endpoint the tool could not match has an implementation that serves its methods.';
 
   if (kind === 'library') {
     return result(EvaluationStatus.NOT_APPLICABLE, 'library', 'The repository is a shared library, which provides no endpoints of its own.', []);
@@ -67,7 +65,7 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   if (!template?.descriptor) {
     return result(EvaluationStatus.MANUAL, 'no-descriptor',
       `${kind === 'ambiguous' ? 'No module descriptor template was found' : 'The module descriptor template could not be read'}, so the module's endpoints are not known (see B001).`,
-      [checklistItem([])]);
+      [{ id: 'B003-C1', title: IMPLEMENTED_TITLE, startingPoints: [], reviewerOnly: true, obligations: [] }]);
   }
 
   const handlers: Endpoint[] = descriptorEndpoints(template.descriptor);
@@ -191,8 +189,13 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   }
 
   const startingPoints: FrontendChecklistItem['startingPoints'] = [];
-  const point = (endpoint: B003Endpoint, path: string, note: string, line?: number) =>
-    startingPoints.push({ path, ...(line ? { line } : {}), note: `${endpoint.method} ${endpoint.path}: ${note}` });
+  const subjects: FrontendChecklistItemDraft['subjects'] = [];
+  const libraryPoints: FrontendChecklistItem['startingPoints'] = [];
+  const point = (endpoint: B003Endpoint, path: string, note: string, line?: number) => {
+    const at = { path, ...(line ? { line } : {}) };
+    startingPoints.push({ ...at, note: `${endpoint.method} ${endpoint.path}: ${note}` });
+    subjects.push({ subject: `${endpoint.method} ${endpoint.path}`, ...at, flag: endpoint.implementation === 'not-found' && fails ? 'fail' : 'manual' });
+  };
   const templateLines = handlerLines(template);
   const handlerLine = (endpoint: B003Endpoint) => templateLines.get(`${endpoint.method} ${endpoint.path}`);
   for (const endpoint of unspecified) point(endpoint, template.path, 'in no API spec and no route', handlerLine(endpoint));
@@ -201,7 +204,7 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   for (const endpoint of wildcards) point(endpoint, template.path, 'a wildcard path', handlerLine(endpoint));
   for (const endpoint of fromLibrary) {
     const library = libraries.find(candidate => candidate.artifactId === endpoint.library)!;
-    point(endpoint, library.buildFile, `served by ${endpoint.library}`, library.line);
+    libraryPoints.push({ path: library.buildFile, ...(library.line ? { line: library.line } : {}), note: `${endpoint.method} ${endpoint.path}: served by ${endpoint.library}` });
   }
   for (const endpoint of partial) {
     const at = endpoint.implementedBy?.[0];
@@ -212,7 +215,12 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   }
   if (unconfirmed.length) startingPoints.push(...scan.unreadRoutes.map(route => ({ path: route.file, line: route.line, note: 'route whose path the tool could not read' })));
 
-  return result(status, 'endpoints-checked', sentences.join(' '), startingPoints.length ? [checklistItem(startingPoints)] : [], {
+  const items: FrontendChecklistItemDraft[] = [
+    ...(startingPoints.length ? [{ id: 'B003-C1', title: IMPLEMENTED_TITLE, startingPoints, reviewerOnly: !subjects.length, obligations: [], subjects }] : []),
+    ...(libraryPoints.length ? [{ id: 'B003-C2', title: 'Each endpoint a library serves is implemented by the version of that library the build declares.',
+      startingPoints: libraryPoints, reviewerOnly: true, obligations: [], subjects: [] }] : [])
+  ];
+  return result(status, 'endpoints-checked', sentences.join(' '), numberBackendObligations(items), {
     endpointSource,
     implementationSource: implementationSource(framework.name, useTags, defaultMethods),
     endpoints,
@@ -259,7 +267,7 @@ export function b003Runtime(runtime: BackendRuntimeEvidence): B003Runtime {
   };
 }
 
-export function renderB003HumanDetails(analysis: B003Analysis): string {
+export function renderB003HumanDetails(analysis: B003Analysis, agentReview?: CriterionAgentReviewResult): string {
   const lines = [`Framework: ${FRAMEWORK_LABELS[analysis.framework.name]}`];
   if (analysis.endpointSource) lines.push(`Endpoints: ${analysis.endpoints.length} methods and paths from ${reportText(analysis.endpointSource)}`);
   if (analysis.implementationSource) lines.push(`Implementations: ${reportText(analysis.implementationSource)}`, `Routes found in the source: ${analysis.routeCount}`);
@@ -303,7 +311,8 @@ export function renderB003HumanDetails(analysis: B003Analysis): string {
       `  - ${diagnostic.path ? `${reportPath(diagnostic.path)} — ` : ''}${reportText(diagnostic.message)}`));
   }
   lines.push(...runtimeLines(analysis.runtime));
-  lines.push(...renderFrontendChecklistLines(analysis.checklist));
+  if (agentReview) lines.push(`Agent review scope: ${reportText(analysis.agentBrowseScope)}`);
+  lines.push(...frontendReviewLines(analysis.checklist, agentReview, analysis.agentReviewUnavailableReason));
   return lines.join('\n');
 }
 

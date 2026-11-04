@@ -193,7 +193,7 @@ describe('S006 shared evaluator', () => {
     expect(Object.keys(names)).toEqual(['finding:0']);
     expect(names['finding:0']).toMatch(/^\S+:\d+$/);
     expect(result.details).toContain(`    - ${names['finding:0']} — Needs verification:`);
-    expect(result.details).toContain('  - Advisory only; the S006 result stays Manual review.');
+    expect(result.details).toContain('  - Advisory only; the criterion status is unchanged.');
     expect(result.details).not.toContain('Evidence references:');
     expect(result.details).not.toContain('.criterion-agent/S006/excerpts/');
   });
@@ -223,15 +223,15 @@ describe('S006 shared evaluator', () => {
     expect(result.details).toContain(expected);
   });
 
-  it('does not invoke agent review for deterministic S006 failures', async () => {
+  it('reviews a deterministic S006 failure, keeping the status', async () => {
     const rawKey = 'sk-proj-prod1234567890abcdefghijklmnopqrstuvwxyz';
     writeRepoFile('src/main/resources/application.yml', `OPENAI_API_KEY=${rawKey}\n`);
 
     const result = await evaluator.evaluateCriterion('S006', tempRoot, createRunWithAgent(fakeAgentConfig()));
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(result.details).not.toContain('Agent review');
+    expect(result.details?.split('\n').slice(-2)).toEqual(['Agent review:',
+      '  - Not applied: S006 requires exactly one coverage disposition for every supplied review obligation.']);
   });
 
   it('does not invoke agent review for deterministic S006 passes', async () => {
@@ -334,14 +334,14 @@ describe('S006 shared evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.agentReview?.available).toBe(true);
-    expect(lines.slice(lines.indexOf('  - What to verify:'), lines.indexOf('  - Advisory only; the S006 result stays Manual review.') + 1)).toEqual([
+    expect(lines.slice(lines.indexOf('  - What to verify:'), lines.indexOf('  - Advisory only; the criterion status is unchanged.') + 1)).toEqual([
       '  - What to verify:',
       '    - Obtain deployment usage for this value.',
       '      - Sources:',
       '        - docs/secrets.md',
       '  - Dropped from this review:',
       '    - The review\'s own sources: None of them is a repository file.',
-      '  - Advisory only; the S006 result stays Manual review.'
+      '  - Advisory only; the criterion status is unchanged.'
     ]);
   });
 

@@ -136,16 +136,16 @@ describe('B004 agent review', () => {
     expect(rows).toContain('    - Agent result dropped — DB_HOST: It is marked as investigated directly but does not cite the file it is about.');
   });
 
-  it('does not run for a fail and says why', async () => {
+  it('reviews a fail, keeping the status', async () => {
     const root = repository({
       'pom.xml': pom('mod-example', restVerticleBuild),
       [TEMPLATE]: JSON.stringify({ id: 'mod-example-1.0.0', launchDescriptor: { env: [{ name: 'AWS_URL' }] } })
     });
-    const { result, rows } = await evaluateWith(root, fakeConfig({ assessments: [], reviewerActions: [] }));
+    const { result, rows } = await evaluateWith(root, fakeConfig({ evidenceReferences: [TEMPLATE], assessments: [], reviewerActions: [] }));
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(rows.slice(-2)).toEqual(['Agent review:', '  - Not applied: agent review runs only for manual results; the failures above are what the tool found on its own']);
+    expect(result.agentReview?.available).toBe(true);
+    expect(rows).toContain('Agent review (advisory):');
   });
 
   it('times each OpenCode command out after the backend default of 600 s', async () => {

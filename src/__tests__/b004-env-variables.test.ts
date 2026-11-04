@@ -82,7 +82,9 @@ describe('B004 environment variables', () => {
       C4_TITLE,
       '    - Start with:',
       `      - ${TEMPLATE}:5 — CACHE_HOST: not documented as required or optional`,
-      `      - ${TEMPLATE}:9 — JAVA_OPTIONS: not documented as required or optional`
+      `      - ${TEMPLATE}:9 — JAVA_OPTIONS: not documented as required or optional`,
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.variables.map(variable => [variable.name, variable.problems])).toEqual([['CACHE_HOST', ['undocumented']], ['JAVA_OPTIONS', ['undocumented']]]);
   });
@@ -442,7 +444,9 @@ describe('B004 environment variables', () => {
       C4_TITLE,
       '    - Start with:',
       '      - src/main/java/org/folio/spring/Envs.java:1 — ENV: required or optional not known',
-      '      - src/main/java/org/folio/spring/Envs.java:1 — AWS_REGION: required or optional not known'
+      '      - src/main/java/org/folio/spring/Envs.java:1 — AWS_REGION: required or optional not known',
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(ambiguous.result.evidence).toBe('B004 fail: AWS_REGION uses the AWS_ prefix without an S3_ variable alongside (policy sections 2.1 and 5.1). '
       + 'The repository has no module descriptor, so B004 treats it as a library (see B001): its documentation is not checked, so the tool cannot tell which of its 2 environment variables are required.');

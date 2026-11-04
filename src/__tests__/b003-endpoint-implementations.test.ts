@@ -1,11 +1,13 @@
 import { BackendEvaluator } from '../evaluators/java/backend-evaluator';
-import { B003Analysis, EvaluationStatus } from '../types';
+import { B003Analysis, CriterionAgentReviewConfig, EvaluationStatus } from '../types';
+import { buildB003AgentReviewRequest } from '../utils/b003-agent-review';
+import { prepareCriterionAgentReviewEvidence } from '../utils/criterion-agent-review';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { dependency, pom, repository, restVerticleBuild } from './helpers/backend-repository';
 import { expectLinearTime } from './helpers/linear-time';
 
-async function b003(root: string) {
-  const run = createEvaluationRun({ repositoryPath: root, language: 'java' });
+async function b003(root: string, agentReview?: CriterionAgentReviewConfig) {
+  const run = createEvaluationRun({ repositoryPath: root, language: 'java', ...(agentReview ? { agentReview } : {}) });
   const result = await new BackendEvaluator().evaluateCriterion('B003', root, run);
   return { result, analysis: result.criterionDetails as B003Analysis };
 }
@@ -83,7 +85,9 @@ describe('B003 endpoint implementations', () => {
       '  - B003-C1 Each endpoint the tool could not match has an implementation that serves its methods.',
       '    - Start with:',
       '      - descriptors/ModuleDescriptor-template.json:1 — DELETE /loan-storage/loans/{id}: in no API spec and no route',
-      '      - ramls/requests.raml — GET /request-storage/requests: no committed class implements it through RequestStorage'
+      '      - ramls/requests.raml — GET /request-storage/requests: no committed class implements it through RequestStorage',
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.endpoints.find(endpoint => endpoint.path === '/loan-storage/loans/{id}')).toMatchObject({
       generatedInterfaces: ['LoanStorage'], implementedBy: [{ file: 'src/main/java/org/folio/rest/impl/LoansAPI.java', line: 2 }]
@@ -424,16 +428,20 @@ describe('B003 endpoint implementations', () => {
     expect(result.status).toBe(EvaluationStatus.MANUAL);
     expect(result.evidence).toBe('B003 manual: 1 of the 2 endpoints in the module descriptor has a wildcard path, which the tool cannot match to an implementation: GET /example/*. '
       + '1 of the 2 endpoints in the module descriptor comes from folio-custom-fields, which implements it: GET /custom-fields/{id}. A reviewer must check them.');
-    expect(analysis.checklist.items[0].startingPoints).toEqual([
-      { path: 'descriptors/ModuleDescriptor-template.json', line: 25, note: 'GET /example/*: a wildcard path' },
-      { path: 'pom.xml', line: 3, note: 'GET /custom-fields/{id}: served by folio-custom-fields' }
+    expect(analysis.checklist.items.map(item => [item.id, item.reviewerOnly, item.startingPoints])).toEqual([
+      ['B003-C1', false, [{ path: 'descriptors/ModuleDescriptor-template.json', line: 25, note: 'GET /example/*: a wildcard path' }]],
+      ['B003-C2', true, [{ path: 'pom.xml', line: 3, note: 'GET /custom-fields/{id}: served by folio-custom-fields' }]]
     ]);
-    expect(result.details?.split('\n').slice(-5)).toEqual([
+    expect(result.details?.split('\n').slice(-9)).toEqual([
       'Checklist for the reviewer:',
       '  - B003-C1 Each endpoint the tool could not match has an implementation that serves its methods.',
       '    - Start with:',
       '      - descriptors/ModuleDescriptor-template.json:25 — GET /example/*: a wildcard path',
-      '      - pom.xml:3 — GET /custom-fields/{id}: served by folio-custom-fields'
+      '  - B003-C2 Each endpoint a library serves is implemented by the version of that library the build declares.',
+      '    - Start with:',
+      '      - pom.xml:3 — GET /custom-fields/{id}: served by folio-custom-fields',
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
   });
 
@@ -498,4 +506,80 @@ describe('B003 endpoint implementations', () => {
 
     expect(implementations(analysis)).toEqual({ 'GET /m0': 'route' });
   }, 120_000);
+
+  describe('agent review', () => {
+    const TEMPLATE = 'descriptors/ModuleDescriptor-template.json';
+    const fakeConfig = (fields: Record<string, unknown> = {}): CriterionAgentReviewConfig => ({
+      enabled: true, adapter: 'fake', modelLabel: 'fake-model', fakeResult: {
+        available: true, criterionId: 'B003', recommendation: 'needs_reviewer_judgment', confidence: 'medium', summary: 'One endpoint has no implementation.',
+        rationale: 'Read the RAML and the resource classes.', evidenceReferences: [TEMPLATE], warnings: [], errors: [], reviewerActions: [], ...fields
+      } as CriterionAgentReviewConfig['fakeResult']
+    });
+    const module = (handlers: object[], files: Record<string, string> = {}) => repository({
+      'pom.xml': pom('mod-example', `\n<dependencies>${dependency('folio-custom-fields')}</dependencies>\n${restVerticleBuild}\n`),
+      [TEMPLATE]: JSON.stringify({ id: '${artifactId}-1.0.0', provides: handlers }, null, 2),
+      ...files
+    });
+    const customFields = { id: 'custom-fields', version: '3.0', handlers: [{ methods: ['GET'], pathPattern: '/custom-fields' }] };
+    const items = { id: 'items', version: '1.0', handlers: [{ methods: ['GET'], pathPattern: '/items' }, { methods: ['GET'], pathPattern: '/items/*' }] };
+    const raml = { 'ramls/items.raml': '#%RAML 1.0\ntitle: Items\n/items:\n  get:\n' };
+
+    it('runs by default on a manual result, with one obligation per endpoint the tool could not match, keeping the status', async () => {
+      const { result } = await b003(module([items, customFields], raml), fakeConfig({ assessments: [
+        { technologyId: 'B003-C1#1', type: 'substantive_concern', summary: 'No class implements the Items interface.', evidenceReferences: ['ramls/items.raml'], coverageDisposition: 'investigated' },
+        { technologyId: 'B003-C1#2', type: 'aligned_fact', summary: 'Only GET /items exists under the wildcard.', evidenceReferences: [TEMPLATE, 'ramls/items.raml'], coverageDisposition: 'investigated' }
+      ] }));
+
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.agentReview?.available).toBe(true);
+      const details = result.details!.split('\n');
+      expect(details.slice(details.indexOf('Checklist for the reviewer:') - 1, details.indexOf('Agent review (advisory):'))).toEqual([
+        `Agent review scope: ${(result.criterionDetails as B003Analysis).agentBrowseScope}`,
+        'Checklist for the reviewer:',
+        '  - B003-C1 Each endpoint the tool could not match has an implementation that serves its methods.',
+        '    - Start with:',
+        '      - ramls/items.raml — GET /items: no committed class implements it through Items',
+        `      - ${TEMPLATE}:18 — GET /items/*: a wildcard path`,
+        '    - Agent: Potential problem — GET /items: No class implements the Items interface.',
+        '      - Sources:', '        - ramls/items.raml', '      - Coverage judgment: Investigated directly',
+        '    - Agent: Supported by evidence — GET /items/*: Only GET /items exists under the wildcard.',
+        '      - Sources:', `        - ${TEMPLATE}`, '        - ramls/items.raml', '      - Coverage judgment: Investigated directly',
+        '  - B003-C2 Each endpoint a library serves is implemented by the version of that library the build declares.',
+        '    - Start with:',
+        '      - pom.xml:2 — GET /custom-fields: served by folio-custom-fields',
+        '    - Checked by the reviewer only'
+      ]);
+    });
+
+    it('does not run when every endpoint it could not match is served by a library, and says why', async () => {
+      const { result } = await b003(module([customFields]), fakeConfig());
+      expect(result.status).toBe(EvaluationStatus.MANUAL);
+      expect(result.agentReview).toBeUndefined();
+      expect(result.details?.split('\n').slice(-2)).toEqual(['Agent review:',
+        '  - Not applied: every endpoint the tool could not match is served by a library, whose source is not in the repository']);
+    });
+
+    it('reviews a fail, giving the agent the failing endpoint flagged as a fail and keeping the status', async () => {
+      const { result, analysis } = await b003(module([{ id: 'items', version: '1.0', handlers: [{ methods: ['GET'], pathPattern: '/items' }] }]), fakeConfig());
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.agentReview?.available).toBe(true);
+      expect(analysis.checklist.items[0].obligations).toEqual([
+        { id: 'B003-C1#1', subject: 'GET /items', path: TEMPLATE, line: 12, flag: 'fail' }
+      ]);
+    });
+
+    it('gives the agent each endpoint it could not match, without those a library serves', async () => {
+      const root = module([items, customFields], raml);
+      const { analysis } = await b003(root);
+      const prepared = await prepareCriterionAgentReviewEvidence(buildB003AgentReviewRequest(root, analysis));
+      const summary = JSON.parse(prepared.request.files.find(file => file.repoRelativePath === '.criterion-agent/B003/evidence-summary.json')!.content);
+
+      expect(summary.unmatchedEndpoints).toEqual({ items: [
+        { method: 'GET', path: '/items', interfaceId: 'items', implementation: 'no-implementing-class', specFiles: ['ramls/items.raml'], generatedInterfaces: ['Items'] },
+        { method: 'GET', path: '/items/*', interfaceId: 'items', implementation: 'wildcard', specFiles: [] }
+      ] });
+      expect([...prepared.availableSourcePaths].sort()).toEqual([TEMPLATE, 'pom.xml', 'ramls/items.raml']);
+      expect(prepared.request.defaultTimeoutMs).toBe(600_000);
+    });
+  });
 });

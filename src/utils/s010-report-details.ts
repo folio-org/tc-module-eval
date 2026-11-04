@@ -80,7 +80,7 @@ export function renderS010HumanDetails(
   lines.push(...warningLines(analysis.diagnostics));
   if (agentReview?.available) {
     lines.push(...renderAgentReviewLines(agentReview, s010AgentReviewNames(analysis)));
-    lines.push('  - The automated result stays Manual review.');
+    lines.push('  - Advisory only; the criterion status is unchanged.');
   } else if (analysis.agentReviewUnavailableReason) {
     lines.push('Agent review:', `  - Not applied: ${reportText(analysis.agentReviewUnavailableReason)}`);
   }

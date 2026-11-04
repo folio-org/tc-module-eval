@@ -1,9 +1,10 @@
-import { CriterionResult, EvaluationRun, EvaluationStatus } from '../../types';
+import { CriterionResult, EvaluationRun } from '../../types';
 import { CatalogSectionEvaluator } from '../base/catalog-section-evaluator';
 import { evaluateB001, renderB001HumanDetails } from '../../utils/b001-descriptor-template';
 import { hasB002AgentReviewMaterial, reviewB002WithAgent } from '../../utils/b002-agent-review';
 import { evaluateB002, renderB002HumanDetails } from '../../utils/b002-consumed-apis';
 import { b003Runtime, evaluateB003, renderB003HumanDetails } from '../../utils/b003-endpoint-implementations';
+import { hasB003AgentReviewMaterial, reviewB003WithAgent } from '../../utils/b003-agent-review';
 import { hasB004AgentReviewMaterial, reviewB004WithAgent } from '../../utils/b004-agent-review';
 import { B004Policy, evaluateB004, loadB004Policy, renderB004HumanDetails } from '../../utils/b004-env-variables';
 import { evaluateB005, renderB005HumanDetails } from '../../utils/b005-interface-naming';
@@ -107,12 +108,22 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
     const run = this.runFor(repoPath, 'B003', evaluationRun);
     const staticAnalysis = evaluateB003(await getBackendEvidence(run, repoPath), await getBackendApiSpecs(run, repoPath));
     const analysis = run.backendRuntime ? { ...staticAnalysis, runtime: b003Runtime(await getBackendRuntimeEvidence(run, repoPath)) } : staticAnalysis;
+    const { agentReview, unavailableReason } = await reviewCriterionWithAgent({
+      criterionId: 'B003',
+      status: analysis.status,
+      hasReviewMaterial: hasB003AgentReviewMaterial(analysis),
+      notRunReason: 'every endpoint the tool could not match is served by a library, whose source is not in the repository',
+      evaluationRun: run,
+      review: (config, commandRunner) => reviewB003WithAgent(repoPath, analysis, config, commandRunner)
+    });
+    if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
     return {
       criterionId: 'B003',
       status: analysis.status,
       evidence: analysis.summary,
-      details: renderB003HumanDetails(analysis),
-      criterionDetails: analysis
+      details: renderB003HumanDetails(analysis, agentReview),
+      criterionDetails: analysis,
+      agentReview
     };
   }
 
@@ -134,9 +145,6 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewB004WithAgent(repoPath, analysis, 'problem' in policy ? undefined : policy, config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
-      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the failures above are what the tool found on its own';
-    }
     return {
       criterionId: 'B004',
       status: analysis.status,
@@ -185,9 +193,6 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
         b007Implementations(evaluateB003(evidence, await getBackendApiSpecs(run, repoPath))), config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
-      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; each *.all or undefined permission an endpoint requires must be replaced first';
-    }
     return {
       criterionId: 'B007',
       status: analysis.status,
@@ -335,9 +340,6 @@ export class BackendEvaluator extends CatalogSectionEvaluator {
       review: (config, commandRunner) => reviewB011WithAgent(repoPath, analysis, config, commandRunner)
     });
     if (unavailableReason) analysis.agentReviewUnavailableReason = unavailableReason;
-    else if (analysis.status === EvaluationStatus.FAIL && run.agentReview?.enabled) {
-      analysis.agentReviewUnavailableReason = 'agent review runs only for manual results; the reviewer confirms each reference in code or in an every-install script (B011-C1)';
-    }
     return {
       criterionId: 'B011',
       status: analysis.status,

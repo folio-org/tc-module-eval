@@ -184,7 +184,7 @@ an exception or connect timeout alone does not prove a bounded failure path.
 
 Optional dependencies may use feature isolation or controlled module-wide degradation,
 but loss must remain bounded and must not make the module unready. Tests strengthen
-evidence but are not mandatory. For deterministic manual results, optional S010 agent
+evidence but are not mandatory. For deterministic manual and failed results, optional S010 agent
 review browses the eligible committed source tree and follows cross-file references,
 using deterministic findings as starting points rather than a file-selection boundary.
 Workspace safety ceilings and the review timeout still apply. Its cited advice
@@ -363,7 +363,7 @@ Declared interfaces no request maps to are listed for information only.
 
 Checklist items, shown for fail and manual: **F001-C1** (reviewer only) each interface under "Used but not declared" is declared, in `optionalOkapiInterfaces` when the code checks `stripes.hasInterface`; **F001-C2** each unresolved request goes to a declared interface; **F001-C3** each path not in the handler index belongs to a declared interface; **F001-C4** (reviewer only) requests made through shared-library hooks (`use…` imported from `@folio` packages other than stripes itself) go to declared interfaces.
 
-F001 has agent review, which runs by default for a manual result when agent review is enabled (Q6), so it never sees a fail. See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+F001 has agent review, which runs by default for a manual or failed result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
 ## F002 End-to-End Tests
 
@@ -387,7 +387,7 @@ F002 checks "if E2E tests are provided, they use a supported technology". The of
 
 Checklist items, shown for fail and manual: **F002-C1** each browser test suite found is a component test, or an end-to-end test in a supported framework (one obligation per tool found, at its configuration file, else the first file it was seen in); **F002-C2** CI runs end-to-end tests only with a supported framework (starting points: the CI lines found, or the CI files read).
 
-F002 has agent review, which runs by default for a manual result when agent review is enabled (Q6), so it never sees a fail. See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+F002 has agent review, which runs by default for a manual or failed result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
 ## F003 Internationalization
 
@@ -402,7 +402,7 @@ The namespace is the only directory under `translations/` (ui-checkin's package 
 
 Checklist items, shown for fail and manual: **F003-C1** each listed id exists in `en.json`, or the code supplies English fallback text; **F003-C2** no user-visible text is hard-coded; **F003-C3** computed message ids resolve to keys in `en.json`; **F003-C4** every `en.json` value has valid ICU syntax. An item appears when it has something to check: C1 and C2 also when source could not be read, C1 also for an unclear namespace.
 
-F003 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+F003 has agent review, which runs by default for a manual or failed result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
 ## F004 WCAG 2.1 AA Accessibility
 
@@ -466,7 +466,7 @@ Checklist items, all phrased as the desired state: **F006-C1** screens use the s
 
 **UX guidelines.** `config/f006-ux-guidelines/` holds a pinned copy of stripes-components' `guides/ux-guidelines` (the source of ux.folio.org): `layout/`, `forms/`, `navigation/`, `actions/` (confirmation wording, buttons and action language), `feedback/ConfirmationModalPattern.mdx` and `data-display/MultiColumnListGuidelines.mdx`, about 78 KB (Q9, plus the button and results-list pages that F006-C2, C5 and C6 are measured against). `source.json` records the repository, commit and commit date, and lists the files; the report shows the commit. To refresh it, copy the same files from a newer stripes-components commit and update `source.json`.
 
-F006 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
+F006 has agent review, which runs by default for a manual or failed result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#f00x-frontend-criteria-review).
 
 ## F007 Works in the Latest Chrome
 
@@ -532,7 +532,7 @@ Declared interfaces no request maps to are listed for information only. S008 rea
 
 Checklist items: **B002-C1** each interface under "Used but not declared" is called from code that runs and is declared; **B002-C2** each request the tool could not map, or whose path is not in the handler index, goes to a declared interface or to a service outside FOLIO, starting also from unread and Kotlin files; **B002-C3** (reviewer only) requests made through those FOLIO libraries go to declared interfaces; **B002-C4** (reviewer only) the descriptor declares every interface the module calls, when it or some of its entries could not be read.
 
-B002 has agent review for a manual result, which runs only when `--criterion-agent-criteria` lists B002 (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
+B002 has agent review for a manual or failed result, which runs only when `--criterion-agent-criteria` lists B002 (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
 
 ## B003 Endpoint Implementations
 
@@ -549,7 +549,7 @@ B003 checks that every endpoint the module provides has an executable implementa
 - `manual`: an endpoint whose generated interface no committed class implements; a wildcard handler (`/groups*`); an endpoint served by a library (`/custom-fields` from folio-custom-fields); an endpoint found only for fixed values of a path parameter; in a Vert.x, Grails or edge module, an endpoint no route serves; an endpoint not found where part of a spec, a spec submodule, a route (its path or method is not a literal or constant, or a Grails statement of another form) or the committed source could not be read; or a repository with no readable descriptor template.
 - `not_applicable`: a shared library; a module that provides only system interfaces; an edge module whose descriptor provides nothing and whose API specs document nothing.
 
-The checklist has B003-C1: each endpoint the tool could not match has an implementation that serves its methods, starting from the spec, descriptor, build file or route of each. B003 has no agent review yet.
+The checklist has B003-C1: each endpoint the tool could not match has an implementation that serves its methods, starting from the spec, descriptor or route of each; and B003-C2, reviewer-only: each endpoint a library serves is implemented by the version of that library the build declares, starting from the dependency's line in the build file. Agent review runs for a manual or failed result with one obligation per B003-C1 endpoint (see [Agent Review](agent-review.md#b00x-backend-criteria-review)); it does not run when every unmatched endpoint is served by a library.
 
 With `--allow-runtime-checks`, the report adds "Runtime evidence (informational; it does not change the status)": the status of `GET` on each provided path without parameters in the first test tenant, where 404 or 405 means no implementation answered, or why the [backend runtime harness](#backend-runtime-harness) collected none (`criterionDetails.runtime`). Without the flag, B003's report and details are unchanged.
 
@@ -613,7 +613,7 @@ B007 checks that every endpoint the module provides is protected with an appropr
 
 Checklist items, shown for fail and manual: **B007-C1** each endpoint's permission fits what it does (read or write, item or collection), one agent obligation per interface; **B007-C2** each endpoint without a permission is meant to be public, one obligation per interface that has one; **B007-C3** each endpoint's `modulePermissions` cover every interface its implementation calls, without `*.all`, one obligation per interface; **B007-C4** (reviewer only) permission names follow the guidelines, listing the deviations. Interfaces the tool flagged come first under the limit of 25.
 
-B007 has agent review, which runs by default for a manual result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
+B007 has agent review, which runs by default for a manual or failed result when agent review is enabled (Q6). See [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
 
 ## B008 Reference Data
 
@@ -631,7 +631,7 @@ B008 checks that a module that stores data ships the reference data its controll
 
 The checklist has B008-C1: each controlled vocabulary the module needs at least one value for has one after tenant initialization, with one obligation per vocabulary without reference data (at its handler's line in the descriptor template, or its domain class), or one for the whole item when no vocabulary was found or the source was not read completely.
 
-B008's agent review is opt-in: with `--criterion-agent-opencode`, it runs for a manual result only when `--criterion-agent-criteria` lists B008 (see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review)). The agent decides, for each vocabulary given to it, whether the module needs a value and whether tenant initialization creates one, and reports vocabularies the tool did not find as `discovered:vocabulary:<n>`. It browses the shared backend scope and a listing of the files in `ref-data/` and `reference-data/` folders, not their contents. Its advice never changes the status.
+B008's agent review is opt-in: with `--criterion-agent-opencode`, it runs for a manual or failed result only when `--criterion-agent-criteria` lists B008 (see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review)). The agent decides, for each vocabulary given to it, whether the module needs a value and whether tenant initialization creates one, and reports vocabularies the tool did not find as `discovered:vocabulary:<n>`. It browses the shared backend scope and a listing of the files in `ref-data/` and `reference-data/` folders, not their contents. Its advice never changes the status.
 
 With `--allow-runtime-checks`, the report adds "Runtime evidence (informational; it does not change the status)": the answer to `POST /_/tenant` with `loadReference=true` in each test tenant (and whether the tenant job completed or failed), and the records each provided `GET` path without parameters returned afterwards in each tenant, or why the [backend runtime harness](#backend-runtime-harness) collected none (`criterionDetails.runtime`). Record counts show what tenant initialization loaded; they do not show which vocabulary needs values. Without the flag, B008's report and details are unchanged.
 
@@ -666,7 +666,7 @@ B010 checks that each tenant's data is kept apart at the storage layer. It reads
 - `manual`: the repository has storage evidence (modules, libraries such as folio-spring-base, and repositories that are neither), or none was found but the committed source was not read completely.
 - `not_applicable`: no storage evidence in completely read committed source, as in edge modules and mod-circulation.
 
-The checklist has B010-C1 (every table the module writes is in a per-tenant schema, starting from the mechanism), B010-C2 (each place listed stores no tenant data in a schema, table or connection that tenants share; one obligation per file; C1 and C3 are always given to the agent, so at most 23 files are) and B010-C3 (caches and files that hold tenant data are keyed by tenant, which B015 also covers). Agent review runs by default for a manual result; see [B00x Backend Criteria Review](agent-review.md#b00x-backend-criteria-review).
+The checklist has B010-C1 (every table the module writes is in a per-tenant schema, starting from the mechanism), B010-C2 (each place listed stores no tenant data in a schema, table or connection that tenants share; one obligation per file; C1 and C3 are always given to the agent, so at most 23 files are) and B010-C3 (caches and files that hold tenant data are keyed by tenant, which B015 also covers). Agent review runs by default for a manual or failed result; see [B00x Backend Criteria Review](agent-review.md#b00x-backend-criteria-review).
 
 With `--allow-runtime-checks`, the report adds "Runtime evidence (informational; it does not change the status)": the PostgreSQL schemas with their table counts and the tables in `public` after the [backend runtime harness](#backend-runtime-harness) sent `POST /_/tenant` for its two tenants (B008 shows whether that succeeded), or why it collected none (`criterionDetails.runtime`). A table in `public` is a starting point for B010-C2, not a finding. Without the flag, B010's report and details are unchanged.
 
@@ -700,7 +700,7 @@ B012 checks that the root `README.md` (in any case, such as `README.MD`) names t
 - `fail`: README.md does not name an infrastructure the module requires (a direct production dependency that is neither optional nor supplied by the runtime, or storage evidence), or there is no README.md and the module requires any infrastructure. Its "What to do" row says what the module team must change.
 - `manual`: README.md does not name an infrastructure that is optional or selectable (a Maven `<optional>`, profile or `provided` dependency, a Gradle `compileOnly` one, edge-common's secure stores) or found only in configuration; README.md could not be read, or the committed source was cut short before the tool reached it (more than 2,000 candidate files), so whether it names the infrastructure is unknown; or build, configuration or source files could not be read, so infrastructure may have been missed. A failure takes precedence over all of these, except a README.md the tool did not read. The report lists at most 20 files the tool could not read.
 
-The checklist has B012-C1 (each external service the module calls, outside FOLIO interfaces and the infrastructure listed, is named in README.md), B012-C2 (each Kafka topic the module consumes from or produces for other modules is named in README.md; such topics never fail B012) and, for a manual result, B012-C3 (each infrastructure listed as not named or not checked, and any in files the tool could not read, is named if the module uses it), which is for the reviewer only. Agent review runs only for a manual result, and only when `--criterion-agent-criteria` lists B012; see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
+The checklist has B012-C1 (each external service the module calls, outside FOLIO interfaces and the infrastructure listed, is named in README.md), B012-C2 (each Kafka topic the module consumes from or produces for other modules is named in README.md; such topics never fail B012) and, for a manual result, B012-C3 (each infrastructure listed as not named or not checked, and any in files the tool could not read, is named if the module uses it), which is for the reviewer only. Agent review runs for a manual or failed result only when `--criterion-agent-criteria` lists B012; see [Agent Review Configuration](agent-review.md#b00x-backend-criteria-review).
 
 ## B013 Tenant Selection
 

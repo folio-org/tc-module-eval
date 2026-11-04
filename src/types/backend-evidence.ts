@@ -308,6 +308,8 @@ export interface B003Analysis {
   checklist: FrontendChecklist;
   /** Only with --allow-runtime-checks. */
   runtime?: B003Runtime;
+  agentBrowseScope: string;
+  agentReviewUnavailableReason?: string;
 }
 
 /**

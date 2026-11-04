@@ -2,7 +2,6 @@ import {
   CommandRunner,
   CriterionAgentReviewConfig,
   CriterionAgentReviewResult,
-  EvaluationStatus,
   S010Analysis,
   S010ScenarioEvidence
 } from '../types';
@@ -26,7 +25,7 @@ function candidateIds(analysis: S010Analysis): Set<string> {
 }
 
 export function hasS010AgentReviewMaterial(analysis: S010Analysis): boolean {
-  return analysis.status === EvaluationStatus.MANUAL && analysis.evidence.moduleKind.kind !== 'library';
+  return analysis.evidence.moduleKind.kind !== 'library';
 }
 
 export async function reviewS010WithAgent(

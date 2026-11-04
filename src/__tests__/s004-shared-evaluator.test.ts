@@ -67,15 +67,14 @@ Install the module by posting the ModuleDescriptor to Okapi and enabling it for 
     expect(result.status).toBe(EvaluationStatus.FAIL);
   });
 
-  it('does not invoke agent review for deterministic S004 failures', async () => {
+  it('reviews a deterministic S004 failure, keeping the status', async () => {
     writeFile('README.md', '## Build\nmvn test');
     const run = createRunWithFakeAgent(['S004']);
 
     const result = await evaluator.evaluateCriterion('S004', tempRoot, run);
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(result.details).not.toContain('Agent review');
+    expect(result.agentReview?.available).toBe(true);
   });
 
   it('uses fake criterion-agent review only for ambiguous S004 cases', async () => {

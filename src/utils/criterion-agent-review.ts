@@ -100,14 +100,14 @@ export interface OptionalCriterionAgentReviewResult {
  */
 export const AGENT_REVIEW_CRITERIA: ReadonlyMap<string, { optInOnly: boolean }> = new Map([
   ...['S004', 'S005', 'S006', 'S007', 'S010', 'S011', 'F001', 'F002', 'F003', 'F004', 'F006', 'F007',
-    'B004', 'B007', 'B010', 'B011', 'B013', 'B015'].map((id): [string, { optInOnly: boolean }] => [id, { optInOnly: false }]),
+    'B003', 'B004', 'B007', 'B010', 'B011', 'B013', 'B015'].map((id): [string, { optInOnly: boolean }] => [id, { optInOnly: false }]),
   ...['B002', 'B008', 'B012'].map((id): [string, { optInOnly: boolean }] => [id, { optInOnly: true }])
 ]);
 
 export async function reviewCriterionWithAgent(
   request: OptionalCriterionAgentReviewRequest
 ): Promise<OptionalCriterionAgentReviewResult> {
-  if (request.status !== EvaluationStatus.MANUAL) {
+  if (request.status !== EvaluationStatus.MANUAL && request.status !== EvaluationStatus.FAIL) {
     return {};
   }
   if (!request.hasReviewMaterial) {
@@ -127,6 +127,7 @@ export async function reviewCriterionWithAgent(
   const run = request.evaluationRun;
   const config: CriterionAgentReviewConfig = {
     ...request.evaluationRun.agentReview,
+    deterministicStatus: request.status,
     readRepositorySnapshot: () => run.getOrCreateArtifact('agentReviewSnapshot', () => readRepositorySnapshot(run.repositoryPath))
   };
   let agentReview: CriterionAgentReviewResult;

@@ -290,15 +290,15 @@ describe('F002 end-to-end tests', () => {
       expect(lines.slice(item + 1, next).filter(line => /^ {4}- (?!Start with:)/.test(line))).toEqual(rows);
     });
 
-    it('never reviews a fail, and says so', async () => {
+    it('reviews a fail, keeping the status', async () => {
       writePackage({ devDependencies: { '@playwright/test': '^1.40.0' } });
       commit();
 
       const result = await evaluateWith(fakeConfig({ assessments: [], reviewerActions: [action] }));
 
       expect(result.status).toBe(EvaluationStatus.FAIL);
-      expect(result.agentReview).toBeUndefined();
-      expect(result.details).toContain('Agent review:\n  - Not applied: agent review runs only for manual results');
+      expect(result.agentReview?.available).toBe(true);
+      expect(result.details?.split('\n')).toContain('Agent review (advisory):');
     });
 
     async function evaluateWith(config: CriterionAgentReviewConfig): Promise<CriterionResult> {

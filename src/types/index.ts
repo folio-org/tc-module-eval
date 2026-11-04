@@ -347,6 +347,8 @@ export interface CriterionAgentReviewConfig {
   fakeResult?: CriterionAgentReviewResult;
   generatedProvider?: CriterionAgentGeneratedProvider;
   providerConfigError?: string;
+  /** Set by reviewCriterionWithAgent to the status the tool decided. */
+  deterministicStatus?: EvaluationStatus;
   /** Set per run by reviewCriterionWithAgent so a run's reviews share one committed-source read. */
   readRepositorySnapshot?: () => Promise<import('../utils/committed-source').CommittedSourceSnapshot>;
 }

@@ -143,8 +143,7 @@ Last Updated: 2026-06-12
     const details = result.criterionDetails as S005PersonalDataDisclosureAnalysisResult;
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(result.details).not.toContain('Agent review:');
+    expect(result.agentReview?.available).toBe(true);
     expect(details.classification.parseState).toBe('incomplete');
     expect(result.evidence).toContain('Analyzed it anyway');
     expect(result.evidence).toContain('It also fails on its own: No checked disclosure answers');
@@ -354,7 +353,7 @@ Last Reviewed: 2026-06-12
     expect(result.details).toContain(`Not applied: ${expected}`);
   });
 
-  it('does not invoke agent review for deterministic S005 failures', async () => {
+  it('reviews a deterministic S005 failure, keeping the status', async () => {
     writeFile('PERSONAL_DATA_DISCLOSURE.md', `
 # Personal Data Disclosure
 Last Updated: YYYY-MM-DD
@@ -366,8 +365,7 @@ Last Reviewed: YYYY-MM-DD
     const result = await evaluator.evaluateCriterion('S005', tempRoot, createRunWithFakeAgent(['S005']));
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
-    expect(result.agentReview).toBeUndefined();
-    expect(result.details).not.toContain('Agent review');
+    expect(result.agentReview?.available).toBe(true);
   });
 
   function createRunWithFakeAgent(

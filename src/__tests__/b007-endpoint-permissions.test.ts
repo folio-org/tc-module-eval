@@ -273,12 +273,11 @@ describe('B007 endpoint permissions', () => {
       expect(details).toContain(`Agent review scope: ${result.criterionDetails && (result.criterionDetails as B007Analysis).agentBrowseScope}`);
     });
 
-    it('does not run for a fail, and says why', async () => {
+    it('reviews a fail, keeping the status', async () => {
       const { result } = await b007(rmbModule({ id: 'mod-users-1.0.0', provides: [{ id: 'users', version: '1.0', handlers: [
         { methods: ['GET'], pathPattern: '/users', permissionsRequired: ['users.all'] }] }], permissionSets: [set('users.all')] }), fakeConfig({}));
-      expect(result.agentReview).toBeUndefined();
-      expect(result.details?.split('\n').slice(-2)).toEqual(['Agent review:',
-        '  - Not applied: agent review runs only for manual results; each *.all or undefined permission an endpoint requires must be replaced first']);
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(result.agentReview?.available).toBe(true);
     });
 
     it('does not run when the list names other criteria', async () => {

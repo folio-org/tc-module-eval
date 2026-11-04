@@ -271,11 +271,11 @@ function appendAgentReviewLines(
   agentReview?: CriterionAgentReviewResult
 ): void {
   if (agentReview?.available) {
-    lines.push('', ...renderAgentReviewLines(agentReview, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the S006 result stays Manual review.');
+    lines.push('', ...renderAgentReviewLines(agentReview, s006AgentReviewSubjectNames(analysis, agentReview)), '  - Advisory only; the criterion status is unchanged.');
     return;
   }
 
-  if (analysis.classification.status !== EvaluationStatus.MANUAL) {
+  if (analysis.classification.status !== EvaluationStatus.MANUAL && analysis.classification.status !== EvaluationStatus.FAIL) {
     return;
   }
 

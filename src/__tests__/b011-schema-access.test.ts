@@ -132,7 +132,9 @@ describe('B011 access to other modules\' database schemas', () => {
       `      - ${DB}/functions.sql:2 — \${myuniversity}_mod_users.users at line 2: in an RMB script that runs on every install and upgrade`,
       `      - ${DB}/views.sql:1 — %_mod_inventory_storage at line 1: in an RMB script that runs on every install and upgrade`,
       `      - ${DB}/views.sql:2 — '_mod_orders_storage at line 2: in an RMB script that runs on every install and upgrade`,
-      `      - ${DB}/migrate.sql:1 — \${myuniversity}_mod_configuration.config_data at line 1: an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`
+      `      - ${DB}/migrate.sql:1 — \${myuniversity}_mod_configuration.config_data at line 1: an RMB script that runs on a tenant's first install and on upgrades from versions before 17.5.0`,
+      'Agent review:',
+      '  - Not applied: agent review is disabled or unconfigured'
     ]);
     expect(analysis.references.map(reference => [reference.file.split('/').pop(), reference.schema, reference.location, reference.failing])).toEqual([
       ['Repository.java', 'mod_orders_storage', 'code', true],

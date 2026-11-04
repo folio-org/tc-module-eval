@@ -208,7 +208,7 @@ function formatBoundedAgentReview(
     ];
   }
 
-  if ((analysis.nearMatchStatus ?? analysis.classification.status) !== EvaluationStatus.MANUAL) {
+  if (analysis.classification.status !== EvaluationStatus.MANUAL && analysis.classification.status !== EvaluationStatus.FAIL) {
     return [];
   }
 
@@ -447,7 +447,7 @@ function appendAgentReviewLines(
     return;
   }
 
-  if ((analysis.nearMatchStatus ?? analysis.classification.status) !== EvaluationStatus.MANUAL) {
+  if (analysis.classification.status !== EvaluationStatus.MANUAL && analysis.classification.status !== EvaluationStatus.FAIL) {
     return;
   }
 
