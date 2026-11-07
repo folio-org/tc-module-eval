@@ -94,7 +94,7 @@ describe('B008 agent review', () => {
       { id: 'B008-C1#1', subject: '/block-reasons', path: TEMPLATE, line: 6, flag: 'manual' },
       { id: 'B008-C1#2', subject: '/proxy-types', path: TEMPLATE, line: 5, flag: 'manual' }
     ]);
-    expect(prepared.defaultTimeoutMs).toBe(600_000);
+    expect(prepared.defaultTimeoutMs).toBe(900_000);
   });
 
   it('keeps the evidence summary within its limit when one vocabulary has many load paths', async () => {

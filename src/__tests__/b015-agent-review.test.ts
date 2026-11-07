@@ -61,7 +61,7 @@ describe('B015 agent review', () => {
     const prepared = (await prepareCriterionAgentReviewEvidence(request)).request;
     const paths = prepared.files.map(file => file.repoRelativePath);
 
-    expect(request.defaultTimeoutMs).toBe(600_000);
+    expect(request.defaultTimeoutMs).toBe(900_000);
     expect(paths).toEqual(expect.arrayContaining([JOBS, CACHES, 'pom.xml', 'descriptors/ModuleDescriptor-template.json']));
     expect(paths.filter(file => file.startsWith('src/test/') || file.startsWith('reference-data/'))).toEqual([]);
     const checklist = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/B015/checklist.json')!.content);

@@ -302,7 +302,7 @@ describe('B007 endpoint permissions', () => {
         implementedBy: ['src/main/java/org/folio/rest/impl/UsersAPI.java:2']
       }] } }]);
       expect([...prepared.availableSourcePaths].sort()).toEqual([TEMPLATE, 'pom.xml', 'ramls/users.raml', 'src/main/java/org/folio/rest/impl/UsersAPI.java']);
-      expect(prepared.request.defaultTimeoutMs).toBe(600_000);
+      expect(prepared.request.defaultTimeoutMs).toBe(900_000);
     });
   });
 });

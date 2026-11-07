@@ -56,6 +56,12 @@ export function formatS005Evidence(
   const supportingLines: Array<string | undefined> = [
     `What to do: ${whatToDo(analysis)}`,
     '',
+    ...(analysis.nearMatchStatus ? [
+      'Checks:',
+      `  - File name: fail. ${REQUIRED_DISCLOSURE_FILENAME} is missing; ${reportText(disclosurePath)} was analyzed in its place.`,
+      `  - Content: ${analysis.nearMatchStatus === EvaluationStatus.FAIL ? 'fail' : 'needs review'} (${reportText(disclosurePath)}).`,
+      ''
+    ] : []),
     'Artifact mechanics:',
     `  - Repository kind: ${moduleKind.kind}`,
     ...moduleKind.evidence.map(evidenceItem => `  - Module-kind evidence: ${reportText(evidenceItem)}`),

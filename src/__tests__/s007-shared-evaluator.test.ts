@@ -71,7 +71,7 @@ describe('S007 shared evaluator', () => {
   it('evaluates the current policy for Java and JavaScript without a policy selector', async () => {
     await write('pom.xml', `
       <project><properties><java.version>21</java.version></properties>
-      <dependencies><dependency><groupId>org.folio</groupId><artifactId>raml-module-builder</artifactId><version>35.1.0</version></dependency></dependencies></project>
+      <dependencies><dependency><groupId>org.folio</groupId><artifactId>raml-module-builder</artifactId><version>36.1.0</version></dependency></dependencies></project>
     `);
     const javaResult = await new TestJavaSharedEvaluator().evaluateCriterion('S007', repoPath, createRun('java'));
 
@@ -384,8 +384,8 @@ describe('S007 shared evaluator', () => {
   });
 
   it.each([
-    ['36.0.0', EvaluationStatus.FAIL],
-    ['35.4.1', EvaluationStatus.PASS]
+    ['37.0.0', EvaluationStatus.FAIL],
+    ['36.4.1', EvaluationStatus.PASS]
   ])('recognizes RMB %s from its domain-models artifacts', async (version, expected) => {
     await write('pom.xml', `
       <project>
@@ -402,12 +402,12 @@ describe('S007 shared evaluator', () => {
 
     expect(result.status).toBe(expected);
     if (expected === EvaluationStatus.FAIL) {
-      expect(result.evidence).toBe('S007 fail: raml-module-builder 36.0.0 in pom.xml (the policy allows "raml-module-builder 35 for existing modules only") '
+      expect(result.evidence).toBe('S007 fail: raml-module-builder 37.0.0 in pom.xml (the policy allows "raml-module-builder 36 for existing modules only") '
         + 'is not an officially supported version. It is newer than the policy allows: use a version the policy allows, '
         + 'or ask the Technical Council to update the policy.');
-      expect(result.details).toContain('    - Why: Version 36.0.0 is not allowed by the policy rule "raml-module-builder 35 for existing modules only". '
+      expect(result.details).toContain('    - Why: Version 37.0.0 is not allowed by the policy rule "raml-module-builder 36 for existing modules only". '
         + 'It is newer than the rule allows: use a version the rule allows, or ask the Technical Council to update the policy.');
-      expect(result.details).toContain('pom.xml — org.folio:domain-models-runtime, version 36.0.0');
+      expect(result.details).toContain('pom.xml — org.folio:domain-models-runtime, version 37.0.0');
       expect(result.details!.split('\n')[1]).toBe('What to do: Change each technology marked "fails" below to a version the officially supported technologies list allows, or ask the Technical Council to update the list.');
     }
   });
@@ -419,7 +419,7 @@ describe('S007 shared evaluator', () => {
     await write('pom.xml', `
       <project>
         <properties><java.version>21</java.version></properties>
-        <dependencies><dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>35.4.1</version></dependency></dependencies>
+        <dependencies><dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>36.4.1</version></dependency></dependencies>
       </project>
     `);
     const run = EvaluationRunUtils.createEvaluationRun({ repositoryPath: repoPath, language: 'java', criteriaFilter: ['S007'], existingModule });
@@ -437,8 +437,8 @@ describe('S007 shared evaluator', () => {
   });
 
   it.each([
-    ['fails when every declared version breaks the rule', '36.0.0', '36.0.1', EvaluationStatus.FAIL],
-    ['needs review when one declared version meets the rule', '35.4.1', '36.0.0', EvaluationStatus.MANUAL]
+    ['fails when every declared version breaks the rule', '37.0.0', '37.0.1', EvaluationStatus.FAIL],
+    ['needs review when one declared version meets the rule', '36.4.1', '37.0.0', EvaluationStatus.MANUAL]
   ])('with different RMB versions declared, %s', async (_name, first, second, expected) => {
     await write('pom.xml', `
       <project>
@@ -460,7 +460,7 @@ describe('S007 shared evaluator', () => {
       <project>
         <properties><java.version>21</java.version></properties>
         <dependencies>
-          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>(36.0.0,36.0.1)</version></dependency>
+          <dependency><groupId>org.folio</groupId><artifactId>domain-models-runtime</artifactId><version>(37.0.0,37.0.1)</version></dependency>
         </dependencies>
       </project>
     `);

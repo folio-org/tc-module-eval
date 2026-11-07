@@ -17,7 +17,7 @@ import {
 import { backendBrowse, numberBackendObligations } from './backend-agent-review';
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
-import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
+import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, MAX_WILDCARD_WORK, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
 import { SOURCE_FILE, templateLineOf } from './backend-evidence';
 import { lineCounter, sourceRoutes, withoutComments } from './backend-routes';
 import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
@@ -27,6 +27,8 @@ import { count, listText, overflowLine, reportPath, reportText, unique } from '.
 import { isRecord } from './type-guards';
 
 const MAX_ROWS = 20;
+// A wildcard right after the root (`/*`, `/{id}*`) covers the whole API, so any operation would count as its implementation.
+const WHOLE_API = /^\/(?:\{[^{}/]*\})?\*/;
 const IMPLEMENTS = /\bimplements\b([^{;]{0,2000})/g;
 const BUILD_FILE = /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/;
 // openapi-generator's `useTags` option, in a Maven <configOptions> or a Gradle configOptions map.
@@ -100,6 +102,12 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   const implementing = (entry: Entry) => generated(entry).flatMap(name => (implementations.get(name) ?? []).filter(implementation =>
     (framework.name !== 'rmb' || RMB_IMPLEMENTATION.test(implementation.file))
     && (!defaultMethods || (entry.operation.operationId !== undefined && declares(implementation.file, entry.operation.operationId)))));
+  const length = (paths: string[]) => paths.reduce((total, item) => total + item.length, 0);
+  const wildcardPaths = matchers.filter(matcher => matcher.wildcard && !WHOLE_API.test(matcher.endpoint.path)).map(matcher => matcher.endpoint.path);
+  const wildcardsMatched = length(wildcardPaths) * length([...specIndex.entries, ...routeIndex.entries].map(entry => entry.path)) <= MAX_WILDCARD_WORK;
+  const routeServed = new Map<Entry, boolean>();
+  const served = (entry: Entry) => implementing(entry).length > 0
+    || (routeServed.get(entry) ?? routeServed.set(entry, lookup(routeIndex, endpointMatcher(entry)).documented.length > 0).get(entry)!);
   const reasons = new Map<B003Endpoint, string[]>();
   const libraries = endpointLibraries(evidence);
   const unreadSpecFiles = apiSpecs.unreadSources.map(gap => gap.file);
@@ -110,17 +118,26 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
       ({ method, path: endpointPath, ...(interfaceId ? { interfaceId } : {}), implementation, specFiles, ...extra });
     const location = (item: { file: string; line: number }) => ({ file: item.file, line: item.line });
 
-    if (matcher.wildcard) return found('wildcard', []);
+    if (matcher.wildcard && WHOLE_API.test(endpointPath)) return found('wildcard', [], { unmatchedWildcard: 'whole-api' });
+    if (matcher.wildcard && !wildcardsMatched) return found('wildcard', [], { unmatchedWildcard: 'work-limit' });
     const spec = lookup(specIndex, matcher);
     const specFiles = unique([...(specFile ? [specFile] : []), ...spec.documented.map(entry => entry.file)]);
     const names = unique(spec.documented.flatMap(generated));
     const classes = [...new Map(spec.documented.flatMap(implementing).map(implementation => [`${implementation.file}:${implementation.line}`, implementation])).values()];
-    if (classes.length) return found('interface', specFiles, { generatedInterfaces: names, implementedBy: classes });
+    // Each spec operation under a wildcard handler is a request it routes to the module, so each needs its own implementation.
+    const unimplemented = matcher.wildcard ? unique(spec.documented.filter(entry => !served(entry)).map(entry => `${entry.method} ${entry.path}`)) : [];
+    const implemented = (implementation: B003Implementation, implementedBy: Array<{ file: string; line: number }>, extra: Partial<B003Endpoint> = {}) =>
+      unimplemented.length
+        ? found('wildcard', specFiles, { unimplementedOperations: unimplemented, implementedBy })
+        : found(implementation, specFiles, { ...extra, implementedBy });
+    if (classes.length) return implemented('interface', classes, { generatedInterfaces: names });
     const routes = lookup(routeIndex, matcher);
-    if (routes.documented.length) return found('route', specFiles, { implementedBy: routes.documented.map(location) });
+    if (routes.documented.length) return implemented('route', routes.documented.map(location));
     if (names.length) return found('no-implementing-class', specFiles, { generatedInterfaces: names });
     const library = libraries.find(candidate => candidate.path.test(endpointPath));
     if (library) return found('library', specFiles, { library: library.artifactId });
+    // A wildcard handler with nothing under it is not a fail.
+    if (matcher.wildcard) return found('wildcard', specFiles);
     if (spec.partial.length || (routes.partial.length && !scan.unreadRouteCount)) {
       return found('partial', unique(spec.partial.map(entry => entry.file)), routes.partial.length ? { implementedBy: routes.partial.map(location) } : {});
     }
@@ -160,12 +177,20 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   if (unrouted.length) {
     sentences.push(`${share(unrouted.length)} ${verb(unrouted.length)} in an API spec, but no route in the source serves ${unrouted.length === 1 ? 'it' : 'them'}: ${labels(unrouted)}.`);
   }
-  if (wildcards.length) {
-    sentences.push(`${share(wildcards.length)} ${wildcards.length === 1 ? 'has a wildcard path' : 'have wildcard paths'}, which the tool cannot match to an implementation: ${labels(wildcards)}.`);
+  const partlyImplemented = wildcards.filter(endpoint => endpoint.unimplementedOperations);
+  const untied = wildcards.filter(endpoint => !endpoint.unimplementedOperations);
+  if (untied.length) {
+    sentences.push(`${share(untied.length)} ${untied.length === 1 ? 'has a wildcard path' : 'have wildcard paths'} that the tool could not tie to an implementation: ${labels(untied)}.`);
+  }
+  if (partlyImplemented.length) {
+    sentences.push(`${share(partlyImplemented.length)} ${partlyImplemented.length === 1 ? 'has a wildcard path' : 'have wildcard paths'} under which the tool found API spec operations `
+      + `that no committed class or route implements: ${labels(partlyImplemented)}.`);
   }
   if (fromLibrary.length) {
     const names = unique(fromLibrary.map(endpoint => endpoint.library!));
-    sentences.push(`${share(fromLibrary.length)} ${fromLibrary.length === 1 ? 'comes' : 'come'} from ${listText(names)}, which implements ${fromLibrary.length === 1 ? 'it' : 'them'}: ${labels(fromLibrary)}.`);
+    sentences.push(`${share(fromLibrary.length)} ${fromLibrary.length === 1 ? 'comes' : 'come'} from ${listText(names)}. The tool does not look inside `
+      + `${names.length === 1 ? 'that library' : 'those libraries'}, so it cannot confirm that the version the module uses implements `
+      + `${fromLibrary.length === 1 ? 'it' : 'them'}: ${labels(fromLibrary)}.`);
   }
   if (partial.length) {
     sentences.push(`${share(partial.length)} ${verb(partial.length)} found only for fixed values of a path parameter: ${labels(partial)}.`);
@@ -201,7 +226,13 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   for (const endpoint of unspecified) point(endpoint, template.path, 'in no API spec and no route', handlerLine(endpoint));
   for (const endpoint of noClass) point(endpoint, endpoint.specFiles[0], `no committed class implements it through ${listText(endpoint.generatedInterfaces!)}`);
   for (const endpoint of unrouted) point(endpoint, endpoint.specFiles[0], 'no route in the source serves it');
-  for (const endpoint of wildcards) point(endpoint, template.path, 'a wildcard path', handlerLine(endpoint));
+  for (const endpoint of wildcards) {
+    const why = endpoint.unimplementedOperations ? `under which no committed class or route implements ${listText(endpoint.unimplementedOperations)}`
+      : endpoint.unmatchedWildcard === 'whole-api' ? 'that covers the whole API'
+      : endpoint.unmatchedWildcard === 'work-limit' ? 'not matched, because the API specs and routes have too many paths to match it against'
+        : 'with no API spec operation or route under it';
+    point(endpoint, template.path, `a wildcard path ${why}`, handlerLine(endpoint));
+  }
   for (const endpoint of fromLibrary) {
     const library = libraries.find(candidate => candidate.artifactId === endpoint.library)!;
     libraryPoints.push({ path: library.buildFile, ...(library.line ? { line: library.line } : {}), note: `${endpoint.method} ${endpoint.path}: served by ${endpoint.library}` });

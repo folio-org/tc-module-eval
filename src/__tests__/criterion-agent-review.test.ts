@@ -23,6 +23,8 @@ import { sanitizeStructuredOutput } from '../utils/opencode-output';
 import { LocalCommandRunner } from '../utils/command-runner';
 import { createEvaluationRun } from '../utils/evaluation-run';
 import { EVALUATOR_SECRETS, withEvaluatorSecrets } from './helpers/evaluator-secrets';
+import { resetLogger, setLogger } from '../utils/logger';
+import { expectLinearTime } from './helpers/linear-time';
 
 const FAIL_PROMPT = 'The tool failed this criterion on its own findings, and that status stands. For each failure, explain in plain words what the module does, which rule it breaks, and what the module team must change, so a reviewer who has not read the code can follow it. Confirm each failure from the source; when one looks like an analyzer mistake, say so and cite the evidence. Use likely_sufficient only when every failure looks like an analyzer mistake.';
 
@@ -851,13 +853,108 @@ describe('criterion agent review', () => {
     [undefined, undefined, 600000],
     [420000, undefined, 420000],
     [420000, 90000, 90000]
-  ])('gives each OpenCode command a criterion default of %s and a run timeout of %s: %i ms', async (defaultTimeoutMs, timeoutMs, expected) => {
+  ])('gives the review run a criterion default of %s and a run timeout of %s: %i ms, and each setup command at most 120 s', async (defaultTimeoutMs, timeoutMs, expected) => {
     const runner = new FakeRunner();
     await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath, defaultTimeoutMs,
       instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
     }, { ...opencodeConfig(), timeoutMs }, runner);
 
-    expect(runner.requests.map(request => request.timeoutMs)).toEqual([expected, expected, expected, expected]);
+    const setup = Math.min(expected, 120_000);
+    expect(runner.requests.map(request => request.timeoutMs)).toEqual([setup, setup, setup, expected]);
+  });
+
+  it('stops a review that writes nothing for 5 minutes and says it stalled', async () => {
+    const runner = new FakeRunner(undefined, undefined, undefined, {
+      4: { status: 'timed_out', idleTimedOut: true, durationMs: 300_412, stdout: '{"type":"step_start"}\n', stdoutBytes: 22, firstStdoutMs: 300, lastStdoutMs: 412,
+        errorMessage: 'Command wrote no output for 300000ms, so it was stopped before its 600000ms timeout' }
+    });
+    const result = await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), runner);
+
+    expect(runner.requests.map(request => [request.timeoutMs, request.idleTimeoutMs])).toEqual([[120_000, undefined], [120_000, undefined], [120_000, undefined], [600_000, 300_000]]);
+    expect(result.available).toBe(false);
+    expect(result.errors).toEqual(['OpenCode run: 300412ms elapsed; timeout 600000ms; model test-model; stdout 22 bytes; stderr unknown bytes; stalled; '
+      + 'Command wrote no output for 300000ms, so it was stopped before its 600000ms timeout',
+      'OpenCode run diagnosis: silent for 300.0 s after the last event (likely waiting on the provider); first output after 0.3 s; last output 300.0 s before the stop; '
+        + 'events 1; steps started 1, finished 0; no tool calls; no answer text; last event step_start']);
+  });
+
+  it.each([
+    [{ timeoutMs: 60_000 }, [[60_000, undefined], [60_000, undefined], [60_000, undefined], [60_000, 60_000]]],
+    [{ timeoutMs: 900_000, idleTimeoutMs: 45_000 }, [[120_000, undefined], [120_000, undefined], [120_000, undefined], [900_000, 45_000]]]
+  ])('caps the idle limit and setup commands at the timeout, and takes a configured idle limit (%o)', async (limits, expected) => {
+    const runner = new FakeRunner();
+    await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, { ...opencodeConfig(), ...limits }, runner);
+
+    expect(runner.requests.map(request => [request.timeoutMs, request.idleTimeoutMs])).toEqual(expected);
+  });
+
+  it('counts heartbeat events in time linear in the output, including a line longer than the held limit', async () => {
+    setLogger({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} });
+    class StreamingRunner extends FakeRunner {
+      constructor(private readonly chunks: Buffer[]) { super(); }
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        for (const chunk of request.onStdout ? this.chunks : []) request.onStdout!(chunk);
+        return super.run(request);
+      }
+    }
+    const review = (chunks: Buffer[]) => runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+      instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+    }, opencodeConfig(), new StreamingRunner(chunks));
+    try {
+      await expectLinearTime(1, size => {
+        const events = Buffer.from('{"type":"tool_use","part":{"tool":"read","state":{"status":"completed"}}}\n'.repeat(20_000 * size));
+        const longLine = Buffer.alloc(8 * 1024 * 1024 * size, 'x');
+        const output = Buffer.concat([events, longLine, Buffer.from('\n')]);
+        const chunks: Buffer[] = [];
+        for (let offset = 0; offset < output.length; offset += 64 * 1024) chunks.push(output.subarray(offset, offset + 64 * 1024));
+        return chunks;
+      }, review);
+    } finally {
+      resetLogger();
+    }
+  });
+
+  it('logs a heartbeat of the review\'s steps and tool calls while it runs, and none after it ends', async () => {
+    const logged: string[] = [];
+    setLogger({ info: (...args) => logged.push(args.join(' ')), warn: () => {}, error: () => {}, debug: () => {} });
+    jest.useFakeTimers();
+    class StreamingRunner extends FakeRunner {
+      async run(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+        if (request.onStdout) {
+          const events = Buffer.from([
+            '{"type":"step_start"}',
+            '{"type":"tool_use","part":{"tool":"read","state":{"status":"completed","title":"café"}}}',
+            '{"type":"tool_use","part":{"tool":"read","state":{"status":"completed"}}}',
+            '{"type":"step_finish"}',
+            '{"type":"step_start"}',
+            '{"type":"tool_use","part":{"tool":"grep","state":{"status":"completed"}}}',
+            ''
+          ].join('\n'));
+          // Chunks split inside the two-byte "é" and inside a line.
+          const split = events.indexOf(Buffer.from('é')) + 1;
+          request.onStdout(events.subarray(0, split));
+          request.onStdout(events.subarray(split, split + 40));
+          request.onStdout(events.subarray(split + 40));
+          jest.advanceTimersByTime(30_000);
+        }
+        return super.run(request);
+      }
+    }
+    try {
+      await runCriterionAgentReview({ criterionId: 'S004', repositoryPath: repoPath,
+        instructions: 'review', files: [{ repoRelativePath: 'README.md', content: 'Evidence' }], schemaDescription: 'schema'
+      }, { ...opencodeConfig(), timeoutMs: 180000 }, new StreamingRunner());
+      jest.advanceTimersByTime(90_000);
+    } finally {
+      jest.useRealTimers();
+      resetLogger();
+    }
+
+    expect(logged).toEqual(['   ⏳ S004 agent review: 30s of 3m 00s; 2 model steps, 3 tool calls (last: grep); last output 30s ago']);
   });
 
   it.each([1, 2, 4])('rejects capture truncation at stage %i even with a valid prefix', async stage => {
@@ -1005,6 +1102,11 @@ else {
       ['no output', '', { ...timedOut, stdoutBytes: 0 }, [
         context(0),
         'OpenCode run diagnosis: no output from OpenCode before the timeout (likely provider or startup problem)'
+      ]],
+      ['no output before the idle limit', '', { ...timedOut, stdoutBytes: 0, durationMs: 60090, idleTimedOut: true,
+        errorMessage: 'Command wrote no output for 60000ms, so it was stopped before its 120000ms timeout' }, [
+        'OpenCode run: 60090ms elapsed; timeout 120000ms; model test-model; stdout 0 bytes; stderr 0 bytes; stalled; Command wrote no output for 60000ms, so it was stopped before its 120000ms timeout',
+        'OpenCode run diagnosis: no output from OpenCode before the idle limit (likely provider or startup problem)'
       ]],
       ['a long silence after a step started', capture(stepStart(1000, 'msg_1'), tool(2000, 'list'), stepFinish(3000, 'msg_1', 'tool-calls'),
         stepStart(4000, 'msg_2')), { ...timedOut, stdoutBytes: 2048, firstStdoutMs: 3100, lastStdoutMs: 25090 }, [

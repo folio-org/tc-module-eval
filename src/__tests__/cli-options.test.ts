@@ -26,6 +26,7 @@ describe('criterion-agent CLI option parsing', () => {
       criterionAgentModel: 'openai/gpt-test',
       criterionAgentReadOnlyAgent: 'plan',
       criterionAgentTimeoutMs: '12000',
+      criterionAgentIdleTimeoutMs: '9000',
       criterionAgentProviderEnv: 'OPENAI_API_KEY,ANTHROPIC_API_KEY',
       criterionAgentProxyEnv: 'HTTPS_PROXY',
       criterionAgentEndpoint: 'https://api.example.test',
@@ -39,6 +40,7 @@ describe('criterion-agent CLI option parsing', () => {
       modelLabel: 'openai/gpt-test',
       readOnlyAgentName: 'plan',
       timeoutMs: 12000,
+      idleTimeoutMs: 9000,
       providerEnvAllowlist: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'],
       proxyEnvAllowlist: ['HTTPS_PROXY']
     }));

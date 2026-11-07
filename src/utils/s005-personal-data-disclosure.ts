@@ -491,20 +491,17 @@ export function analyzeS005PersonalDataDisclosure(repoPath: string): S005Persona
     if (!artifact) {
       return unparsedS005DisclosureResult(discovery, `${nearMatchReason} ${nearMatches[0]} could not be read.`, discovery.warnings);
     }
-    const analyzedName = nearMatches.length > 1 ? artifact.path : 'it';
-
     // The exact file is still required, so S005 fails, but reviewers get the full analysis of the near match.
     const analysis = analyzeS005DisclosureArtifact(repoPath, { ...discovery, artifact });
-    const nearMatchFailure = analysis.classification.status === EvaluationStatus.FAIL
-      ? ` It also fails on its own: ${analysis.classification.reason}`
-      : '';
+    const contentResult = analysis.classification.status === EvaluationStatus.FAIL ? 'fail' : 'needs review';
     return {
       ...analysis,
       nearMatchStatus: analysis.classification.status,
       classification: {
         status: EvaluationStatus.FAIL,
         parseState: analysis.classification.parseState,
-        reason: `${nearMatchReason} Analyzed ${analyzedName} anyway; rename or move it to fix this failure.${nearMatchFailure}`
+        reason: `${nearMatchReason} File name check: fail; rename or move ${reportPath(artifact.path)} to fix this failure.\n\n`
+          + `Content check of ${reportPath(artifact.path)}: ${contentResult}. ${analysis.classification.reason}`
       }
     };
   }

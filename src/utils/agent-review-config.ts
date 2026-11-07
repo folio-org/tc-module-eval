@@ -18,6 +18,7 @@ export interface CriterionAgentCliOptions {
   criterionAgentModel?: string;
   criterionAgentReadOnlyAgent?: string;
   criterionAgentTimeoutMs?: string;
+  criterionAgentIdleTimeoutMs?: string;
   criterionAgentTrustedConfig?: string;
   criterionAgentAuthStore?: string;
   criterionAgentProviderEnv?: string;
@@ -82,6 +83,7 @@ export function buildCriterionAgentReviewConfig(options: CriterionAgentCliOption
     modelLabel: providerResolution.explicitModel ?? generatedProvider?.modelSelector,
     readOnlyAgentName: options.criterionAgentReadOnlyAgent ?? 'reviewer',
     timeoutMs: options.criterionAgentTimeoutMs ? parsePositiveInteger(options.criterionAgentTimeoutMs, 'criterion-agent-timeout-ms') : undefined,
+    idleTimeoutMs: options.criterionAgentIdleTimeoutMs ? parsePositiveInteger(options.criterionAgentIdleTimeoutMs, 'criterion-agent-idle-timeout-ms') : undefined,
     trustedConfigPath: options.criterionAgentTrustedConfig,
     trustedAuthStorePath: options.criterionAgentAuthStore,
     providerEnvAllowlist,

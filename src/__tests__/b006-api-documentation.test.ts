@@ -311,8 +311,8 @@ describe('B006 API documentation', () => {
       const fresh = await b006(root, false);
 
       expect(existing.result.status).toBe(EvaluationStatus.MANUAL);
-      expect(existing.result.evidence).toBe('B006 manual: 1 of the 6 endpoints in the module descriptor comes from folio-custom-fields, '
-        + 'whose own spec documents it: GET /custom-fields/{id}. A reviewer must check it.');
+      expect(existing.result.evidence).toBe('B006 manual: 1 of the 6 endpoints in the module descriptor comes from folio-custom-fields. '
+        + 'The tool does not read that library\'s spec, so it cannot confirm that the version the module uses documents it: GET /custom-fields/{id}. A reviewer must check it.');
       expect(existing.analysis.checklist.items).toEqual([expect.objectContaining({
         id: 'B006-C1', startingPoints: [{ path: 'pom.xml', note: 'depends on folio-custom-fields' }]
       })]);

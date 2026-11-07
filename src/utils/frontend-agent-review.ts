@@ -10,8 +10,8 @@ import { CriterionAgentReviewRequest } from './criterion-agent-review';
 import { FRONTEND_AGENT_OBLIGATION_LIMIT, SHOWN_STARTING_POINTS } from './frontend-checklist';
 import { isComponentCssPath, isProductionSourcePath } from './frontend-source';
 
-/** F00x reviews wait for the model longer than the shared 120 s default; ui-checkin's S010 review took 158 s. */
-export const FRONTEND_AGENT_TIMEOUT_MS = 420_000;
+/** F00x reviews wait for the model longer than the shared 600 s default. */
+export const FRONTEND_AGENT_TIMEOUT_MS = 900_000;
 
 const EVIDENCE_SUMMARY_BYTES = 48 * 1024;
 
@@ -81,7 +81,7 @@ export interface FrontendAgentReviewOptions {
   /** The criterion's own rule for one assessment, applied after the shared ones: why to drop it, or undefined to keep it. */
   criterionRule?: (assessment: CriterionAgentAssessment) => string | undefined;
   generatedEvidencePaths?: CriterionAgentReviewRequest['generatedEvidencePaths'];
-  /** 420 s unless given. */
+  /** 900 s unless given. */
   defaultTimeoutMs?: number;
   /** Two repository paths for the example response, the second for a discovered finding. */
   examplePaths?: [string, string];
@@ -89,7 +89,7 @@ export interface FrontendAgentReviewOptions {
 
 /**
  * An F00x agent review request: the checklist with its obligations, the deterministic evidence capped at 48 KB, a
- * complete example response, the browse scope, the 420 s default timeout, and the shared F00x validation.
+ * complete example response, the browse scope, the 900 s default timeout, and the shared F00x validation.
  */
 export function buildFrontendAgentReviewRequest(options: FrontendAgentReviewOptions): CriterionAgentReviewRequest {
   const { criterionId, checklist, discoveredKinds } = options;

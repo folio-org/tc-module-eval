@@ -58,11 +58,15 @@ export interface CommandExecutionRequest {
   args?: string[];
   cwd: string;
   timeoutMs?: number;
+  /** Stops the command when it writes nothing to stdout or stderr for this long; ignored unless shorter than timeoutMs. */
+  idleTimeoutMs?: number;
   maxOutputBytes?: number;
   /** When stdout exceeds maxOutputBytes, keep its last complete lines instead of its first bytes. */
   keepStdoutTail?: boolean;
   stdoutFormat?: 'text' | 'json' | 'opencode-json';
   captureDebugTrace?: boolean;
+  /** Receives stdout as it arrives, before redaction; not part of the command's identity. */
+  onStdout?: (chunk: Buffer) => void;
   env?: Record<string, string | undefined>;
   requiresIsolation?: boolean;
   networkPolicy?: CommandNetworkPolicy;
@@ -81,6 +85,8 @@ export interface CommandExecutionResult {
   commandExecutionEnvironment: CommandExecutionEnvironment;
   localCommandsAllowed: boolean;
   status: 'success' | 'failed' | 'timed_out' | 'blocked';
+  /** With status timed_out: stopped by idleTimeoutMs, not by timeoutMs. */
+  idleTimedOut?: boolean;
   exitCode?: number | null;
   signal?: string | null;
   durationMs: number;
@@ -346,6 +352,8 @@ export interface CriterionAgentReviewConfig {
   modelLabel?: string;
   readOnlyAgentName?: string;
   timeoutMs?: number;
+  /** Stops a review run that writes no output for this long (--criterion-agent-idle-timeout-ms); 300 s unless given. */
+  idleTimeoutMs?: number;
   trustedConfigPath?: string;
   trustedAuthStorePath?: string;
   providerEnvAllowlist?: string[];

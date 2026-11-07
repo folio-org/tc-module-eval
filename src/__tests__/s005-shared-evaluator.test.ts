@@ -69,8 +69,19 @@ describe('S005 shared evaluator', () => {
 
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.evidence).toBe(
-      'S005 fail: Required top-level PERSONAL_DATA_DISCLOSURE.md was not found. Near match found: PERSONAL_DATA_DISCOSURE.md (missing "L" in "DISCLOSURE"). Analyzed it anyway; rename or move it to fix this failure.'
+      'S005 fail: Required top-level PERSONAL_DATA_DISCLOSURE.md was not found. Near match found: PERSONAL_DATA_DISCOSURE.md (missing "L" in "DISCLOSURE"). '
+        + 'File name check: fail; rename or move PERSONAL_DATA_DISCOSURE.md to fix this failure.\n\nContent check of PERSONAL_DATA_DISCOSURE.md: needs review. '
+        + 'The disclosure form is complete and needs a reviewer to judge whether it is accurate. The automated checks only flag missing or unfinished forms and possible mismatches with the code.'
     );
+    expect(result.details?.startsWith([
+      'What to do: Rename or move the near-match file to PERSONAL_DATA_DISCLOSURE.md at the repository root, and complete the form if it is unfinished.',
+      '',
+      'Checks:',
+      '  - File name: fail. PERSONAL_DATA_DISCLOSURE.md is missing; PERSONAL_DATA_DISCOSURE.md was analyzed in its place.',
+      '  - Content: needs review (PERSONAL_DATA_DISCOSURE.md).',
+      '',
+      'Artifact mechanics:'
+    ].join('\n'))).toBe(true);
     expect(details.discovery.status).toBe('missing');
     expect(details.discovery.attempts).toEqual([
       { path: 'PERSONAL_DATA_DISCOSURE.md', reason: 'root-near-match' }
@@ -145,8 +156,10 @@ Last Updated: 2026-06-12
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.agentReview?.available).toBe(true);
     expect(details.classification.parseState).toBe('incomplete');
-    expect(result.evidence).toContain('Analyzed it anyway');
-    expect(result.evidence).toContain('It also fails on its own: No checked disclosure answers');
+    expect(result.evidence).toBe('S005 fail: Required top-level PERSONAL_DATA_DISCLOSURE.md was not found. Near match found: PERSONAL_DATA_DISCOSURE.md (missing "L" in "DISCLOSURE"). '
+      + 'File name check: fail; rename or move PERSONAL_DATA_DISCOSURE.md to fix this failure.\n\nContent check of PERSONAL_DATA_DISCOSURE.md: fail. '
+      + 'No checked disclosure answers were found for personal-data or processing questions.');
+    expect(result.details).toContain('  - Content: fail (PERSONAL_DATA_DISCOSURE.md).\n');
   });
 
   it('treats an unchecked "does not store any PD" row as disclosing storage', async () => {

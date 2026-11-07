@@ -117,7 +117,9 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   }
   if (fromLibrary.length) {
     const names = unique(fromLibrary.map(endpoint => endpoint.library!));
-    sentences.push(`${share(fromLibrary.length)} ${fromLibrary.length === 1 ? 'comes' : 'come'} from ${listText(names)}, whose own spec documents ${fromLibrary.length === 1 ? 'it' : 'them'}: ${labels(fromLibrary)}.`);
+    sentences.push(`${share(fromLibrary.length)} ${fromLibrary.length === 1 ? 'comes' : 'come'} from ${listText(names)}. The tool does not read `
+      + `${names.length === 1 ? 'that library\'s spec' : 'those libraries\' specs'}, so it cannot confirm that the version the module uses documents `
+      + `${fromLibrary.length === 1 ? 'it' : 'them'}: ${labels(fromLibrary)}.`);
   }
   if (partial.length) {
     sentences.push(`${share(partial.length)} ${verb(partial.length)} documented only for fixed values of a path parameter: ${labels(partial)}.`);
@@ -150,7 +152,7 @@ export function evaluateB006(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   if (fromLibrary.length) {
     items.push({
       id: 'B006-C1',
-      title: 'Each endpoint listed as coming from a library is documented in that library\'s published spec.',
+      title: 'Each endpoint listed as coming from a library is documented in the spec of the library version the module uses.',
       startingPoints: libraries.filter(library => fromLibrary.some(endpoint => endpoint.library === library.artifactId))
         .map(library => ({ path: library.buildFile, note: `depends on ${library.artifactId}` })),
       reviewerOnly: true,

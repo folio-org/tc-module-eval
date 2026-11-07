@@ -175,7 +175,7 @@ export interface BackendApiSpecs {
  * Where B006 found an endpoint:
  * - `openapi`: in an OpenAPI or Swagger spec;
  * - `raml`: only in a RAML spec;
- * - `library`: not in the repository's specs, and served by a library whose own spec documents it;
+ * - `library`: not in the repository's specs, and served by a library, whose spec the tool does not read;
  * - `partial`: documented only for fixed values of a path parameter, such as `/erm/jobs/packageImport` for
  *   `/erm/jobs/{type}`;
  * - `unconfirmed`: not found, but part of a spec, or the source, could not be read;
@@ -236,7 +236,7 @@ export interface B006Analysis {
  * - `interface`: in an API spec, and a committed class implements the interface the build generates for it;
  * - `route`: a route the source registers serves it;
  * - `no-implementing-class`: in an API spec, but no committed class implements the interface the build generates;
- * - `wildcard`: a handler path with Okapi's `*`, whose paths the tool cannot list;
+ * - `wildcard`: a handler path with Okapi's `*` that no API spec operation or route falls under, or that covers the whole API;
  * - `library`: served by a library;
  * - `partial`: found only for fixed values of a path parameter, such as `/erm/jobs/packageImport` for `/erm/jobs/{type}`;
  * - `unconfirmed`: not found, but part of a spec, a route or the source could not be read;
@@ -259,6 +259,13 @@ export interface B003Endpoint {
   implementedBy?: Array<{ file: string; line: number }>;
   /** The library that serves it (`library`). */
   library?: string;
+  /**
+   * Why the tool did not match a `wildcard` to the operations and routes under it: it starts right after the root
+   * (`/*`), or matching every wildcard would exceed the work limit.
+   */
+  unmatchedWildcard?: 'whole-api' | 'work-limit';
+  /** The spec operations under a `wildcard` that no committed class or route implements, when others under it are implemented. */
+  unimplementedOperations?: string[];
 }
 
 /**

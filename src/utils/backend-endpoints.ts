@@ -73,6 +73,9 @@ export function uniqueEndpoints<T extends PathItem>(endpoints: T[]): T[] {
   });
 }
 
+/** The most wildcard matching may do: the summed lengths of the wildcard paths times the summed lengths of the paths they are matched against. */
+export const MAX_WILDCARD_WORK = 50_000_000;
+
 // Parameters match whatever their names: `{id}` and `{noteId}` are both `{}`.
 function normalize(apiPath: string): string {
   return apiPath.replace(/\{[^{}/]*\}/g, '{}').replace(/(.)\/+$/, '$1');

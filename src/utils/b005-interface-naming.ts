@@ -7,7 +7,7 @@ import {
   EvaluationStatus,
   FrontendChecklistItem
 } from '../types';
-import { descriptorEndpoints, endpointMatcher, lookup, pathIndex } from './backend-endpoints';
+import { descriptorEndpoints, endpointMatcher, lookup, MAX_WILDCARD_WORK, pathIndex } from './backend-endpoints';
 import { PLACEHOLDER } from './backend-evidence';
 import { HEALTH_ROUTE, sourceRoutes } from './backend-routes';
 import { isSystemInterface } from './descriptor-handlers';
@@ -20,7 +20,6 @@ const MAJOR_MINOR = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const HYPHENATED_WORDS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const UPPERCASE = /\p{Lu}/u;
 const VIOLATIONS: B005Problem[] = ['dot', 'underscore', 'version-format'];
-const MAX_WILDCARD_WORK = 50_000_000;
 const MAX_LOOKUP_VISITS = 2_000_000;
 
 /**

@@ -148,7 +148,7 @@ describe('B004 agent review', () => {
     expect(rows).toContain('Agent review (advisory):');
   });
 
-  it('times each OpenCode command out after the backend default of 600 s', async () => {
+  it('caps the first OpenCode command, a local debug check, at 120 s under the backend default', async () => {
     const root = module();
     const runner = new TimedOutRunner();
     const review = await reviewB004WithAgent(root, await analyze(root), loadB004Policy(), {
@@ -157,7 +157,7 @@ describe('B004 agent review', () => {
     }, runner);
 
     expect(review.available).toBe(false);
-    expect(runner.timeouts).toEqual([600_000]);
+    expect(runner.timeouts).toEqual([120_000]);
   });
 });
 

@@ -43,6 +43,7 @@ program
   .option('--criterion-agent-model <label>', 'Provider-neutral OpenCode model label')
   .option('--criterion-agent-read-only-agent <name>', 'OpenCode read-only agent name', 'reviewer')
   .option('--criterion-agent-timeout-ms <ms>', 'Criterion-agent command timeout in milliseconds')
+  .option('--criterion-agent-idle-timeout-ms <ms>', 'Stop a criterion-agent review that writes no output for this long, in milliseconds (default: 300000; applies only when shorter than the timeout)')
   .option('--criterion-agent-trusted-config <path>', 'Trusted OpenCode config path outside the evaluated repository')
   .option('--criterion-agent-auth-store <path>', 'Trusted OpenCode auth-store path outside the evaluated repository')
   .option('--criterion-agent-provider-env <names>', 'Comma-separated provider credential env vars to pass to OpenCode')

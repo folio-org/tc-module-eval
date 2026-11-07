@@ -295,7 +295,7 @@ describe('S007 deterministic evaluator', () => {
   it('passes the existing-module raml-module-builder exception and retains deprecation advice', () => {
     const result = evaluateS007(policy, evidence([
       observation('java', '21', '21'),
-      observation('raml-module-builder', '35.1.0', '35.1.0')
+      observation('raml-module-builder', '36.1.0', '36.1.0')
     ]), 'java');
 
     expect(result.status).toBe(EvaluationStatus.PASS);

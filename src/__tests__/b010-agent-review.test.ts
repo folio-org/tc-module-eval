@@ -64,7 +64,7 @@ describe('B010 agent review', () => {
       ['B010-C3', [{ id: 'B010-C3#1' }]]
     ]);
     expect(prepared.instructions).toContain('templates/db_scripts/ in any module folder, and every file the checklist lists.');
-    expect(prepared.defaultTimeoutMs).toBe(600_000);
+    expect(prepared.defaultTimeoutMs).toBe(900_000);
   });
 
   it('runs by default for a manual result and attaches the results to the checklist items, leaving the status unchanged', async () => {
@@ -127,9 +127,9 @@ describe('B010 agent review', () => {
   });
 
   it.each([
-    [undefined, 600_000],
+    [undefined, 120_000],
     [90_000, 90_000]
-  ])('times each OpenCode command out after the backend default unless a timeout is given (%s)', async (timeoutMs, expected) => {
+  ])('caps the first OpenCode command, a local debug check, at 120 s or a shorter given timeout (%s)', async (timeoutMs, expected) => {
     const root = rmbModule();
     const analysis = evaluateB010(await getBackendEvidence(createEvaluationRun({ repositoryPath: root, language: 'java' }), root));
     const runner = new TimedOutRunner();

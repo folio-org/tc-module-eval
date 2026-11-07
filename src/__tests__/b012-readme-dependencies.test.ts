@@ -376,7 +376,7 @@ describe('B012 dependencies declared in README', () => {
       expect(paths).not.toContain('src/test/java/MainTest.java');
       const checklist = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/B012/checklist.json')!.content);
       expect(checklist.items.flatMap((item: { obligations: unknown[] }) => item.obligations)).toEqual([{ id: 'B012-C1#1' }, { id: 'B012-C2#1' }]);
-      expect(prepared.defaultTimeoutMs).toBe(600_000);
+      expect(prepared.defaultTimeoutMs).toBe(900_000);
     });
 
     it('attaches the agent\'s results to C1 and C2, keeps discovered services and topics in the review, and drops an invalid item on its own', async () => {

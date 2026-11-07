@@ -63,7 +63,7 @@ describe('B011 agent review', () => {
     const prepared = (await prepareCriterionAgentReviewEvidence(request)).request;
     const paths = prepared.files.map(file => file.repoRelativePath);
 
-    expect(request.defaultTimeoutMs).toBe(600_000);
+    expect(request.defaultTimeoutMs).toBe(900_000);
     expect(paths).toEqual(expect.arrayContaining([MIGRATE, `${DB}/schema.json`, SERVICE, 'pom.xml']));
     expect(paths).not.toContain('src/test/java/org/example/SettingsServiceTest.java');
     const checklist = JSON.parse(prepared.files.find(file => file.repoRelativePath === '.criterion-agent/B011/checklist.json')!.content);

@@ -12,12 +12,14 @@ import {
   EvaluationStatus
 } from '../types';
 import {
+  CRITERION_AGENT_TIMEOUT_MS,
   CriterionAgentReviewRequest,
   normalizeCriterionAgentAdvisoryPayload,
   PreparedCriterionReviewWorkspace
 } from './criterion-agent-review';
 import { redactEvaluatorSecrets } from './redaction';
-import { decodeOpenCodeOutput, OpenCodeEventTrace, OpenCodeOutput, openCodeOutputTraces, parseJsonObject } from './opencode-output';
+import { getLogger } from './logger';
+import { decodeOpenCodeOutput, openCodeEventTrace, OpenCodeEventTrace, OpenCodeOutput, openCodeOutputTraces, parseJsonObject } from './opencode-output';
 import { errorMessage } from './type-guards';
 
 const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
@@ -26,6 +28,11 @@ const REQUIRED_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
 const OPENCODE_RUN_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const OPENCODE_SILENCE_MS = 30_000;
 const FAIL_INSTRUCTION = 'The tool failed this criterion on its own findings, and that status stands. For each failure, explain in plain words what the module does, which rule it breaks, and what the module team must change, so a reviewer who has not read the code can follow it. Confirm each failure from the source; when one looks like an analyzer mistake, say so and cite the evidence. Use likely_sufficient only when every failure looks like an analyzer mistake.';
+const HEARTBEAT_INTERVAL_MS = 30_000;
+// A review that writes nothing for this long is treated as stalled, however much of its timeout remains.
+const REVIEW_IDLE_TIMEOUT_MS = 300_000;
+// opencode debug config, debug agent and models --refresh check the setup and fetch the price catalog; none runs the review.
+const SETUP_STAGE_TIMEOUT_MS = 120_000;
 
 export async function runOpenCodeAgentReview(
   request: CriterionAgentReviewRequest,
@@ -33,6 +40,8 @@ export async function runOpenCodeAgentReview(
   config: CriterionAgentReviewConfig,
   commandRunner: CommandRunner
 ): Promise<CriterionAgentReviewResult> {
+  const timeoutMs = config.timeoutMs ?? CRITERION_AGENT_TIMEOUT_MS;
+  config = { ...config, timeoutMs };
   const baseUnavailable = (error: string): CriterionAgentReviewResult => ({
     available: false,
     criterionId: request.criterionId,
@@ -46,7 +55,7 @@ export async function runOpenCodeAgentReview(
   const saveTrace = () => {
     if (config.debugRetainWorkspace) {
       fs.writeFileSync(path.join(workspace.rootPath, 'agent-debug.json'), JSON.stringify({
-        version: 1, timeoutMs: config.timeoutMs ?? 120000, stages
+        version: 1, timeoutMs: config.timeoutMs, stages
       }, null, 2), { mode: 0o600 });
     }
   };
@@ -105,7 +114,7 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'config'],
     cwd: workspace.rootPath,
     env: invocation.debugEnv,
-    timeoutMs: config.timeoutMs,
+    timeoutMs: Math.min(SETUP_STAGE_TIMEOUT_MS, timeoutMs),
     stdoutFormat: 'json'
   });
   if (configDebug.status !== 'success' || configDebug.stdoutTruncated) {
@@ -117,7 +126,7 @@ export async function runOpenCodeAgentReview(
     args: ['debug', 'agent', config.readOnlyAgentName],
     cwd: workspace.rootPath,
     env: invocation.debugEnv,
-    timeoutMs: config.timeoutMs,
+    timeoutMs: Math.min(SETUP_STAGE_TIMEOUT_MS, timeoutMs),
     stdoutFormat: 'json'
   });
   if (agentDebug.status !== 'success' || agentDebug.stdoutTruncated) {
@@ -135,9 +144,10 @@ export async function runOpenCodeAgentReview(
     args: ['models', config.modelLabel.split('/')[0], '--refresh'],
     cwd: workspace.rootPath,
     env: invocation.debugEnv,
-    timeoutMs: config.timeoutMs
+    timeoutMs: Math.min(SETUP_STAGE_TIMEOUT_MS, timeoutMs)
   });
 
+  const heartbeat = reviewHeartbeat(request.criterionId, timeoutMs);
   const run = await runStage('review', {
     command: 'opencode',
     args: [
@@ -168,11 +178,13 @@ export async function runOpenCodeAgentReview(
     cwd: workspace.rootPath,
     env: invocation.env,
     timeoutMs: config.timeoutMs,
+    idleTimeoutMs: Math.min(config.idleTimeoutMs ?? REVIEW_IDLE_TIMEOUT_MS, timeoutMs),
     stdoutFormat: 'opencode-json',
     maxOutputBytes: OPENCODE_RUN_MAX_OUTPUT_BYTES,
     keepStdoutTail: true,
-    captureDebugTrace: true
-  });
+    captureDebugTrace: true,
+    onStdout: heartbeat.onStdout
+  }).finally(heartbeat.stop);
 
   const cut = run.stdoutTruncated === true;
   const decoded = decodeOpenCodeOutput(run.stdout, cut);
@@ -202,12 +214,55 @@ export async function runOpenCodeAgentReview(
   return result;
 }
 
+/**
+ * Logs every HEARTBEAT_INTERVAL_MS how long the review has run and what the agent has done: its model steps and tool
+ * calls from OpenCode's JSON events, and how long ago it last wrote output. Only counts and allowlisted tool names
+ * are logged, never repository content or agent text.
+ */
+function reviewHeartbeat(criterionId: string, timeoutMs: number): { onStdout: (chunk: Buffer) => void; stop: () => void } {
+  const started = Date.now();
+  let lastOutput = started;
+  let pending = '';
+  let steps = 0;
+  let toolCalls = 0;
+  let lastTool: string | undefined;
+  const onStdout = (chunk: Buffer) => {
+    lastOutput = Date.now();
+    // A character split across chunks decodes to replacement characters inside a JSON string, which counting ignores.
+    const lines = (pending + chunk.toString('utf8')).split('\n');
+    pending = lines.pop() ?? '';
+    // A line too long to be an event header is not worth holding; its event is not counted.
+    if (pending.length > 1024 * 1024) pending = '';
+    for (const line of lines) {
+      const event = openCodeEventTrace(parseJsonObject(line));
+      if (event.type === 'step_start') steps++;
+      if (event.type === 'tool_use') {
+        toolCalls++;
+        lastTool = event.tool;
+      }
+    }
+  };
+  const timer = setInterval(() => {
+    const now = Date.now();
+    getLogger().info(`   ⏳ ${criterionId} agent review: ${minutes(now - started)} of ${minutes(timeoutMs)}; `
+      + `${steps} model ${steps === 1 ? 'step' : 'steps'}, ${toolCalls} tool ${toolCalls === 1 ? 'call' : 'calls'}${lastTool ? ` (last: ${lastTool})` : ''}; `
+      + `last output ${minutes(now - lastOutput)} ago`);
+  }, HEARTBEAT_INTERVAL_MS);
+  timer.unref();
+  return { onStdout, stop: () => clearInterval(timer) };
+}
+
+function minutes(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
+}
+
 function commandContext(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig): string {
-  return redactEvaluatorSecrets(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs ?? 120000}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
+  return redactEvaluatorSecrets(`OpenCode ${stage}: ${run.durationMs}ms elapsed; timeout ${config.timeoutMs}ms; model ${config.modelLabel}; stdout ${run.stdoutBytes ?? 'unknown'} bytes; stderr ${run.stderrBytes ?? 'unknown'} bytes`, 600);
 }
 
 function commandFailure(stage: string, run: CommandExecutionResult, config: CriterionAgentReviewConfig, decoded?: OpenCodeOutput): string {
-  const reason = run.status === 'success' ? 'capture truncated' : run.status;
+  const reason = run.status === 'success' ? 'capture truncated' : run.idleTimedOut ? 'stalled' : run.status;
   const provider = decoded?.providerError;
   const detail = provider ? [provider.name, provider.statusCode, provider.message].filter(value => value !== undefined).join(': ')
     : decoded?.diagnostic === 'final assistant message start not captured'
@@ -268,7 +323,7 @@ function diagnoseOpenCodeRun(run: CommandExecutionResult, events: OpenCodeEventT
   const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
   const summary = !last
     ? run.stdoutBytes ? 'no OpenCode events in the kept output'
-      : `no output from OpenCode before ${timedOut ? 'the timeout (likely provider or startup problem)' : 'it exited'}`
+      : `no output from OpenCode before ${timedOut ? `${run.idleTimedOut ? 'the idle limit' : 'the timeout'} (likely provider or startup problem)` : 'it exited'}`
     : last.type === 'error' ? 'OpenCode reported an error'
       : last.type === 'step_finish' && last.reason === 'stop'
         ? `the model finished its answer, but OpenCode ${timedOut ? 'did not exit' : 'then failed'}`

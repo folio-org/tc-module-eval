@@ -37,6 +37,7 @@ export function normalizeCommandRequest(
     args,
     cwd: path.resolve(request.cwd),
     timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    ...(request.idleTimeoutMs ? { idleTimeoutMs: request.idleTimeoutMs } : {}),
     maxOutputBytes: request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     ...(request.keepStdoutTail ? { keepStdoutTail: true } : {}),
     stdoutFormat: request.stdoutFormat ?? 'text',
@@ -135,6 +136,8 @@ export class LocalCommandRunner implements CommandRunner {
       let stdoutRetainedBytes = 0;
       const keepStdoutTail = request.keepStdoutTail === true;
       let timedOut = false;
+      let idleTimedOut = false;
+      let idleTimeout: NodeJS.Timeout | undefined;
       let completed = false;
       let forceKillTimeout: NodeJS.Timeout | undefined;
       let forcedSignal: string | undefined;
@@ -164,9 +167,31 @@ export class LocalCommandRunner implements CommandRunner {
         }
       };
 
+      const stop = (): void => {
+        clearTimeout(idleTimeout);
+        child.kill('SIGTERM');
+        forceKillTimeout = setTimeout(() => {
+          forcedSignal = 'SIGKILL';
+          child.kill('SIGKILL');
+        }, FORCE_KILL_GRACE_MS);
+      };
+      const resetIdle = (): void => {
+        if (!request.idleTimeoutMs || request.idleTimeoutMs >= (request.timeoutMs ?? DEFAULT_TIMEOUT_MS) || timedOut) return;
+        clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(() => {
+          if (timedOut) return;
+          timedOut = true;
+          idleTimedOut = true;
+          stop();
+        }, request.idleTimeoutMs);
+      };
+      resetIdle();
+
       let firstStdoutMs: number | undefined;
       let lastStdoutMs: number | undefined;
       child.stdout?.on('data', chunk => {
+        resetIdle();
+        request.onStdout?.(Buffer.from(chunk));
         lastStdoutMs = Date.now() - started;
         firstStdoutMs ??= lastStdoutMs;
         if (keepStdoutTail) {
@@ -176,6 +201,7 @@ export class LocalCommandRunner implements CommandRunner {
         }
       });
       child.stderr?.on('data', chunk => {
+        resetIdle();
         stderrBytes = appendBounded(stderrChunks, stderrBytes, Buffer.from(chunk));
       });
 
@@ -185,6 +211,7 @@ export class LocalCommandRunner implements CommandRunner {
         }
         completed = true;
         clearTimeout(timeout);
+        clearTimeout(idleTimeout);
         if (forceKillTimeout) {
           clearTimeout(forceKillTimeout);
         }
@@ -192,12 +219,9 @@ export class LocalCommandRunner implements CommandRunner {
       };
 
       const timeout = setTimeout(() => {
+        if (timedOut) return;
         timedOut = true;
-        child.kill('SIGTERM');
-        forceKillTimeout = setTimeout(() => {
-          forcedSignal = 'SIGKILL';
-          child.kill('SIGKILL');
-        }, FORCE_KILL_GRACE_MS);
+        stop();
       }, request.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
       child.on('error', error => {
@@ -209,6 +233,7 @@ export class LocalCommandRunner implements CommandRunner {
 
       child.on('close', (code, signal) => {
         clearTimeout(timeout);
+        clearTimeout(idleTimeout);
         let captured = Buffer.concat(stdoutChunks);
         const cutStart = keepStdoutTail && stdoutBytes > maxOutputBytes;
         if (cutStart && stdoutLastDroppedByte !== 10) {
@@ -227,6 +252,7 @@ export class LocalCommandRunner implements CommandRunner {
         const resolvedSignal = signal ?? forcedSignal;
         finish({
           status,
+          ...(idleTimedOut ? { idleTimedOut } : {}),
           exitCode: code,
           signal: resolvedSignal,
           stdout,
@@ -238,7 +264,9 @@ export class LocalCommandRunner implements CommandRunner {
           stderrTruncated: stderrBytes > maxOutputBytes || Buffer.byteLength(stderr) > maxOutputBytes,
           firstStdoutMs,
           lastStdoutMs,
-          errorMessage: status === 'timed_out'
+          errorMessage: idleTimedOut
+            ? sanitizeCommandOutput(`Command wrote no output for ${request.idleTimeoutMs}ms, so it was stopped before its ${request.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms timeout${stderr ? `: ${stderr}` : ''}`, maxOutputBytes)
+            : status === 'timed_out'
             ? sanitizeCommandOutput(this.formatTimeoutMessage(started, request.timeoutMs ?? DEFAULT_TIMEOUT_MS, resolvedSignal, stderr), maxOutputBytes)
             : status === 'failed'
               ? sanitizeCommandOutput(`Command exited with code ${code ?? 'unknown'}${stderr ? `: ${stderr}` : ''}`, maxOutputBytes)
@@ -295,6 +323,7 @@ export class LocalCommandRunner implements CommandRunner {
       commandExecutionEnvironment: this.commandExecutionEnvironment,
       localCommandsAllowed: this.allowLocalCommands,
       status: values.status,
+      ...(values.idleTimedOut ? { idleTimedOut: true } : {}),
       exitCode: values.exitCode,
       signal: values.signal,
       durationMs: Date.now() - started,
