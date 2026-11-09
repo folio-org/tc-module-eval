@@ -1,6 +1,6 @@
 # FOLIO Module Evaluator
 
-A CLI for evaluating FOLIO modules against technical council criteria.
+A CLI for evaluating FOLIO modules against technical council criteria. Requires Node.js 24 or later.
 
 Copyright (C) 2025-2027 The Open Library Foundation
 
@@ -438,7 +438,7 @@ on:
         description: 'Node.js version'
         required: false
         type: string
-        default: '20'
+        default: '24'
 
 jobs:
   evaluate:
@@ -465,7 +465,7 @@ All inputs are optional:
 | `output_format` | Report format: `both`, `json-only`, or `html-only` | `both` |
 | `criteria_filter` | Comma-separated criterion IDs to evaluate (e.g., `S001,S002,B005`) | All criteria |
 | `java_version` | Java version for Maven/Gradle builds | `21` |
-| `node_version` | Node.js version for npm builds | `20` |
+| `node_version` | Node.js version for npm builds | `24` |
 | `evaluator_ref` | tc-module-eval branch/tag to use | `master` |
 | `allow_remote_lookups` | Allow read-only lookups of SonarCloud, platform-lsp and FAR, needed for S011, S013 and S014 (the job's read-only `GITHUB_TOKEN` is then sent to api.github.com only) | `false` |
 | `platform_ref` | platform-lsp branch, tag or commit S014 reads | `snapshot` |

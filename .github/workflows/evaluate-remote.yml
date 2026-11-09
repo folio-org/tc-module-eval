@@ -36,7 +36,7 @@ on:
         description: "Node.js version"
         required: false
         type: string
-        default: "20"
+        default: "24"
       gitleaks_version:
         description: "Gitleaks version"
         required: false

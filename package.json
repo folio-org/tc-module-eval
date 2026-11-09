@@ -26,6 +26,9 @@
     "typescript"
   ],
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.0.0",
