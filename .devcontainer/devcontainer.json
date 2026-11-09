@@ -55,6 +55,7 @@
   },
   "remoteUser": "node",
   "mounts": [
+    "source=folio-eval-node-modules-${devcontainerId},target=/workspace/node_modules,type=volume",
     "source=folio-eval-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=folio-eval-yarn-cache-${devcontainerId},target=/home/node/.yarn,type=volume",
     "source=folio-eval-maven-cache-${devcontainerId},target=/home/node/.m2,type=volume"
@@ -68,6 +69,6 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "yarn install && mkdir -p /home/node/.m2 && cp /workspace/.devcontainer/maven-settings.xml /home/node/.m2/settings.xml",
+  "postCreateCommand": "yarn install --frozen-lockfile && mkdir -p /home/node/.m2 && cp /workspace/.devcontainer/maven-settings.xml /home/node/.m2/settings.xml",
   "postStartCommand": "mkdir -p /home/node/.m2/repository"
 }

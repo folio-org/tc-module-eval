@@ -84,7 +84,7 @@ RUN mkdir -p /home/node/.m2 && \
 ENV DEVCONTAINER=true
 
 # Create workspace directory and set permissions
-RUN mkdir -p /workspace && \
+RUN mkdir -p /workspace/node_modules && \
   chown -R node:node /workspace
 
 WORKDIR /workspace
