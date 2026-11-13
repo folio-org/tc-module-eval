@@ -1,8 +1,8 @@
 /**
  * Centralized definitions of all FOLIO technical council acceptance criteria
- * This file serves as the single source of truth for all criterion IDs and their organization
+ * This catalog provides criterion IDs, summaries, and organization for the evaluator
  *
- * Source: https://raw.githubusercontent.com/folio-org/tech-council/refs/heads/criteria-ids/MODULE_ACCEPTANCE_CRITERIA.MD
+ * Source: ../MODULE_ACCEPTANCE_CRITERIA.MD
  */
 
 import { CriterionResult, EvaluationStatus } from './types';
