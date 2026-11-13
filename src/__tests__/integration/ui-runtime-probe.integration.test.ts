@@ -14,7 +14,11 @@ const PASSWORD = 'probe-test-secret-9431';
 function chromePath(): string | undefined {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   const browsers = path.join(os.homedir(), '.agent-browser', 'browsers');
-  return fs.existsSync(browsers) ? fs.readdirSync(browsers).map(name => path.join(browsers, name, 'chrome')).find(file => fs.existsSync(file)) : undefined;
+  try {
+    return fs.readdirSync(browsers).map(name => path.join(browsers, name, 'chrome')).find(file => fs.existsSync(file));
+  } catch {
+    return undefined;
+  }
 }
 
 const chrome = chromePath();

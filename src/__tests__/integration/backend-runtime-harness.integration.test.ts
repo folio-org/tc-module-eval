@@ -7,7 +7,8 @@ import { createEvaluationRun } from '../../utils/evaluation-run';
 import { pom, repository } from '../helpers/backend-repository';
 
 const docker = (...args: string[]) => spawnSync('docker', args, { encoding: 'utf8', timeout: 60_000 });
-const DOCKER_AVAILABLE = docker('info', '--format', '{{.ServerVersion}}').status === 0;
+const dockerInfo = docker('info', '--format', '{{.ServerVersion}}');
+const DOCKER_AVAILABLE = dockerInfo.status === 0 && Boolean(dockerInfo.stdout.trim());
 const describeWithDocker = DOCKER_AVAILABLE ? describe : describe.skip;
 if (!DOCKER_AVAILABLE) {
   console.warn('Skipping the backend runtime harness Docker tests: the Docker daemon is not reachable (docker info failed). Start Docker and give this user access to it to run them.');

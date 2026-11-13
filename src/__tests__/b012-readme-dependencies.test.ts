@@ -193,8 +193,10 @@ describe('B012 dependencies declared in README', () => {
       'README.md': 'Uses Kafka.\n',
       'docs/other.md': 'Redis\n'
     });
-    fs.symlinkSync('docs/other.md', path.join(root, 'README.MD'));
-    git(root, 'add', '.');
+    const target = path.join(root, '.git', 'readme-link-target');
+    fs.writeFileSync(target, 'docs/other.md');
+    const oid = git(root, 'hash-object', '-w', target);
+    git(root, '-c', 'core.ignorecase=false', 'update-index', '--add', '--cacheinfo', `120000,${oid},README.MD`);
     git(root, 'commit', '-qm', 'link');
     const { result, rows } = await b012(root);
 
