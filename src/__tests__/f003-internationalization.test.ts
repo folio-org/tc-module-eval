@@ -229,6 +229,21 @@ describe('F003 internationalization', () => {
       ['nested', 'not a string but an object']
     ]);
     expect(analysis.checklist.items.map(item => item.id)).toEqual(['F003-C4']);
+    expect(result.evidence).toBe('F003 manual: The module uses react-intl and has translations/ui-example/en.json (4 texts), '
+      + 'but 3 texts in en.json are empty, not strings, or not valid ICU messages.');
+  });
+
+  it('does not call a whitespace-only text an invalid ICU message', async () => {
+    writePackage();
+    write('translations/ui-example/en.json', JSON.stringify({ ok: 'OK', blank: ' ' }));
+    write('src/Page.js', "import { FormattedMessage } from 'react-intl';\nexport default () => <FormattedMessage id=\"ui-example.ok\" />;\n");
+    commit();
+
+    const { result } = await evaluate();
+
+    expect(result.status).toBe(EvaluationStatus.MANUAL);
+    expect(result.evidence).toBe('F003 manual: The module uses react-intl and has translations/ui-example/en.json (2 texts), '
+      + 'but 1 text in en.json is empty, not a string, or not a valid ICU message.');
   });
 
   it.each([

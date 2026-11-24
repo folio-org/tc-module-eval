@@ -86,7 +86,10 @@ export function evaluateF003(source: FrontendSource): F003Analysis {
       + (missingIds.length > missingIdCount ? ` (in ${missingIds.length} places)` : ''));
   }
   if (scan.hardCodedText.length) reasons.push(`${count(scan.hardCodedText.length, 'text')} in the code ${scan.hardCodedText.length === 1 ? 'looks' : 'look'} hard-coded`);
-  if (base.invalidTexts.length) reasons.push(`${count(base.invalidTexts.length, 'text')} in en.json ${base.invalidTexts.length === 1 ? 'is' : 'are'} not valid ICU messages`);
+  if (base.invalidTexts.length) {
+    reasons.push(`${count(base.invalidTexts.length, 'text')} in en.json ${base.invalidTexts.length === 1
+      ? 'is empty, not a string, or not a valid ICU message' : 'are empty, not strings, or not valid ICU messages'}`);
+  }
   if (basis === 'ambiguous') reasons.push(`the translation namespace is unclear (${listText(translationDirectories)})`);
   if (translationFile?.record.state === 'unreadable') reasons.push(`${translationFile.record.path} could not be read`);
   if (incomplete) reasons.push('not all production source could be read');
