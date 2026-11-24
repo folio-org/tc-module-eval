@@ -44,8 +44,9 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
+import { CommandExecutionResult, CommandRunner, Dependency, DependencyExtractionResult, DependencyExtractionError, EvaluationRun } from '../../types';
 import { normalizeLicenseName } from '../license-policy';
 import { errorMessage, isNonEmptyString, isRecord, isValidDependency } from '../type-guards';
 import { commandError, validateRepoPath } from './common';
@@ -79,8 +80,7 @@ export function writeFolioNpmrcIfMissing(repoPath: string): boolean {
   }
 }
 
-function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
-  const npmToolDir = path.join(repoPath, '.folio-eval-npm');
+function createNpmToolEnv(npmToolDir: string): NodeJS.ProcessEnv {
   const npmPrefix = path.join(npmToolDir, 'prefix');
   const npmCache = path.join(npmToolDir, 'cache');
 
@@ -264,10 +264,11 @@ export async function getNpmDependencies(
     // --ignore-engines bypasses Node.js engine compatibility checks that can cause
     // failures when transitive dependencies require newer Node versions (e.g., @formatjs/cli
     // requiring Node >= 20). Engine compat is irrelevant for license extraction.
+    // --pure-lockfile keeps yarn from writing a yarn.lock that other criteria would read as committed.
     getLogger().info('Running yarn install...');
     const installResult = await commandRunner.run({
       command: 'yarn',
-      args: ['install', '--production', '--ignore-scripts', '--ignore-engines'],
+      args: ['install', '--production', '--ignore-scripts', '--ignore-engines', '--pure-lockfile'],
       cwd: validatedPath,
       timeoutMs: INSTALL_TIMEOUT,
       requiresIsolation: true,
@@ -280,16 +281,22 @@ export async function getNpmDependencies(
 
     // Use npx with pinned version to ensure consistency across environments
     getLogger().info('Running license-checker-rseidelsohn...');
-    const checkerResult = await commandRunner.run({
-      command: 'npx',
-      args: ['--yes', 'license-checker-rseidelsohn@4.4.2', '--json', '--production'],
-      cwd: validatedPath,
-      env: createNpmToolEnv(validatedPath) as Record<string, string | undefined>,
-      timeoutMs: LICENSE_CHECK_TIMEOUT,
-      maxOutputBytes: LICENSE_CHECK_MAX_OUTPUT,
-      requiresIsolation: true,
-      networkPolicy: NPM_NETWORK_POLICY
-    }, evaluationRun);
+    const npmToolDir = fs.mkdtempSync(path.join(os.tmpdir(), 'folio-eval-npm-'));
+    let checkerResult: CommandExecutionResult;
+    try {
+      checkerResult = await commandRunner.run({
+        command: 'npx',
+        args: ['--yes', 'license-checker-rseidelsohn@4.4.2', '--json', '--production'],
+        cwd: validatedPath,
+        env: createNpmToolEnv(npmToolDir) as Record<string, string | undefined>,
+        timeoutMs: LICENSE_CHECK_TIMEOUT,
+        maxOutputBytes: LICENSE_CHECK_MAX_OUTPUT,
+        requiresIsolation: true,
+        networkPolicy: NPM_NETWORK_POLICY
+      }, evaluationRun);
+    } finally {
+      fs.rmSync(npmToolDir, { recursive: true, force: true });
+    }
 
     if (checkerResult.status !== 'success') {
       return { dependencies: [], errors: [commandError('npm-parser', 'npm', checkerResult)], warnings };

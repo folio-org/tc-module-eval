@@ -73,6 +73,8 @@ describe('npm-dependency-parser', () => {
     (mockFs.writeFileSync as jest.Mock).mockReset();
     (mockFs.readFileSync as jest.Mock).mockReset();
     (mockFs.mkdirSync as jest.Mock).mockReset();
+    (mockFs.mkdtempSync as jest.Mock).mockReset().mockReturnValue('/tmp/folio-eval-npm-abc');
+    (mockFs.rmSync as jest.Mock).mockReset();
   });
 
   afterEach(() => {
@@ -141,11 +143,14 @@ describe('npm-dependency-parser', () => {
 
       expect(runner.calls[0]).toMatchObject({
         command: 'yarn',
-        args: ['install', '--production', '--ignore-scripts', '--ignore-engines'],
+        args: ['install', '--production', '--ignore-scripts', '--ignore-engines', '--pure-lockfile'],
         cwd: '/test/repo',
         requiresIsolation: true,
         networkPolicy: expect.objectContaining({ default: 'deny' })
       });
+      expect(runner.calls[1].env).toMatchObject({ NPM_CONFIG_PREFIX: '/tmp/folio-eval-npm-abc/prefix', NPM_CONFIG_CACHE: '/tmp/folio-eval-npm-abc/cache' });
+      expect(mockFs.mkdtempSync).toHaveBeenCalledWith(expect.not.stringContaining('/test/repo'));
+      expect(mockFs.rmSync).toHaveBeenCalledWith('/tmp/folio-eval-npm-abc', { recursive: true, force: true });
       expect(result.dependencies).toHaveLength(3);
 
       const express = result.dependencies.find(d => d.name === 'express');

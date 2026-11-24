@@ -413,6 +413,13 @@ describe('ThirdPartyLicenseEvaluator', () => {
       expect(fs.readFileSync(path.join(repo, '.npmrc'), 'utf-8')).toContain('@folio:registry=');
     });
 
+    it.each(['README.MD', 'Readme.md', 'readme.markdown'])('should read a README named %s', name => {
+      fs.writeFileSync(path.join(repo, name), 'Uses org.mozilla:rhino.');
+      fs.writeFileSync(path.join(repo, 'README-template.md'), 'Not the README.');
+
+      expect(findReadmeContent(repo)).toBe('Uses org.mozilla:rhino.');
+    });
+
     it('should not read a README that links outside the repository', () => {
       fs.writeFileSync(path.join(outside, 'secret.md'), 'org.mozilla:rhino');
       fs.symlinkSync(path.join(outside, 'secret.md'), path.join(repo, 'README.md'));

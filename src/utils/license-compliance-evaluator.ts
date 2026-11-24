@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import {
   CommandExecutionResult,
   CriterionResult,
@@ -25,6 +26,8 @@ export interface ThirdPartyLicenseEvaluatorAdapters {
 }
 
 const MAX_README_BYTES = 1024 * 1024;
+const README_NAME = /^readme(?:\.(?:md|txt|markdown))?$/i;
+const README_ORDER = ['readme.md', 'readme.txt', 'readme.markdown', 'readme'];
 
 const TOOL_TAGS: Record<string, string> = {
   'maven-parser': 'maven',
@@ -90,7 +93,14 @@ const ISSUE_GROUPS: Array<{ type: LicenseIssueType; title: string; action: strin
 ];
 
 export function findReadmeContent(repoPath: string): string {
-  const readmeFiles = ['README.md', 'README.txt', 'README', 'readme.md', 'readme.txt'];
+  let readmeFiles: string[];
+  try {
+    readmeFiles = fs.readdirSync(repoPath).filter(name => README_NAME.test(name));
+  } catch {
+    return '';
+  }
+  const rank = (name: string) => README_ORDER.indexOf(name.toLowerCase());
+  readmeFiles.sort((left, right) => rank(left) - rank(right) || (left < right ? -1 : left > right ? 1 : 0));
 
   for (const readmeFile of readmeFiles) {
     const content = readRepoTextFile(repoPath, readmeFile, MAX_README_BYTES);
