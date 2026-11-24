@@ -58,6 +58,8 @@ export interface B009Analysis {
   integrationTests?: B009IntegrationTestsLookup;
   policy: { loaded: boolean; displayName?: string; strength?: string; provisional?: boolean; problem?: string };
   unread: Array<{ path?: string; message: string }>;
+  /** JSON files under postman/ or collections/ too large or binary to check for a Postman schema; they do not affect the status. */
+  skipped?: Array<{ path: string; message: string }>;
   remoteEvidence: RemoteEvidenceRecord[];
   checklist: FrontendChecklist;
 }

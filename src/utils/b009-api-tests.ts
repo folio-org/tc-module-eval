@@ -15,7 +15,7 @@ import {
   S014ModuleName
 } from '../types';
 import { getBackendEvidence } from './backend-evidence';
-import { CommittedSourceSnapshot, readCommittedSource } from './committed-source';
+import { CommittedSourceDiagnostic, CommittedSourceSnapshot, readCommittedSource } from './committed-source';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { sourceLine } from './remote-evidence';
 import { count, listText, overflowLine, reportPath, reportText } from './report-text';
@@ -39,6 +39,10 @@ const COLLECTIONS: Array<{ id: B009FrameworkId; displayName: string; path: RegEx
   { id: 'bruno', displayName: 'Bruno', path: /(?:^|\/)bruno\.json$|\.bru$/i },
   { id: 'insomnia', displayName: 'Insomnia', path: /(?:^|\/)\.insomnia\/|(?:^|\/)insomnia[^/]*\.(?:json|ya?ml)$/i }
 ];
+const POSTMAN_NAME = COLLECTIONS[0].path;
+const POSTMAN_FOLDER = /(?:^|\/)(?:postman|collections)\//i;
+const POSTMAN_SCHEMA = /^https?:\/\/schema\.(?:get)?postman\.com\/json\/collection\//i;
+const isPostmanCandidate = (path: string) => /\.json$/i.test(path) && POSTMAN_FOLDER.test(path) && !POSTMAN_NAME.test(path);
 
 export interface B009Inputs {
   kind: BackendRepositoryKind;
@@ -55,7 +59,7 @@ export async function analyzeB009(repoPath: string, run: EvaluationRun): Promise
   const inputs: B009Inputs = { kind, remoteLookups: Boolean(run.remoteLookups), remoteEvidence: [] };
   if (kind === 'library') return evaluateB009(inputs);
   [inputs.snapshot, inputs.policyLoad] = await Promise.all([readCommittedSource(repoPath, {
-    include: path => FEATURE.test(path),
+    include: path => FEATURE.test(path) || isPostmanCandidate(path),
     list: path => KARATE_CONFIG.test(path) || COLLECTIONS.some(rule => rule.path.test(path)),
     maxTreeBytes: 16 * 1024 * 1024,
     maxEntries: 50_000,
@@ -110,8 +114,14 @@ export async function lookUpIntegrationTests(lookups: RemoteLookups, folder: str
 export function evaluateB009(inputs: B009Inputs): B009Analysis {
   const { kind, snapshot, integrationTests } = inputs;
   const policy = karatePolicy(inputs.policyLoad);
-  const unread = (snapshot?.diagnostics ?? []).filter(diagnostic => diagnostic.material)
-    .map(diagnostic => ({ ...(diagnostic.path ? { path: diagnostic.path } : {}), message: diagnostic.message }));
+  const diagnostics = snapshot?.diagnostics ?? [];
+  const unread = [
+    ...diagnostics.filter(diagnostic => diagnostic.material && !isSkippedCandidate(diagnostic))
+      .map(diagnostic => ({ ...(diagnostic.path ? { path: diagnostic.path } : {}), message: diagnostic.message })),
+    ...(snapshot?.files ?? []).filter(file => isPostmanCandidate(file.path) && postmanSchema(file.content) === undefined)
+      .map(file => ({ path: file.path, message: 'Is not valid JSON, so the tool could not tell whether it is a Postman collection.' }))
+  ];
+  const skipped = diagnostics.filter(isSkippedCandidate).map(diagnostic => ({ path: diagnostic.path!, message: diagnostic.message }));
   const suites = [...repositorySuites(snapshot, policy), ...integrationTestSuites(integrationTests, policy)];
   const base = {
     criterionId: 'B009' as const, kind, remoteLookups: inputs.remoteLookups, ...(inputs.moduleName ? { moduleName: inputs.moduleName } : {}),
@@ -119,7 +129,7 @@ export function evaluateB009(inputs: B009Inputs): B009Analysis {
     policy: policy.loaded
       ? { loaded: true, displayName: policy.entry.displayName, strength: policy.entry.strength, provisional: policy.provisional }
       : { loaded: false, ...(policy.problem ? { problem: policy.problem } : {}) },
-    unread, remoteEvidence: inputs.remoteEvidence
+    unread, ...(skipped.length ? { skipped } : {}), remoteEvidence: inputs.remoteEvidence
   };
   const folder = integrationTests?.folder || inputs.moduleName?.name;
   const karateName = policy.loaded ? reportText(policy.entry.displayName) : 'Karate';
@@ -230,9 +240,29 @@ function repositorySuites(snapshot: CommittedSourceSnapshot | undefined, policy:
   return [
     ...suite('karate', 'Karate', karate.map(file => file.path), configFile && karate.length ? { configFile } : {}),
     ...suite('feature-files', 'Gherkin', other.map(file => file.path)),
-    ...COLLECTIONS.flatMap(rule => suite(rule.id, rule.displayName, listed.filter(path => rule.path.test(path))))
+    ...COLLECTIONS.flatMap(rule => suite(rule.id, rule.displayName, listed.filter(path => rule.path.test(path))
+      .concat(rule.id === 'postman' ? postmanCollections(snapshot.files) : []).sort()))
   ];
 }
+
+function postmanCollections(files: CommittedSourceSnapshot['files']): string[] {
+  return files.filter(file => isPostmanCandidate(file.path) && POSTMAN_SCHEMA.test(postmanSchema(file.content) ?? '')).map(file => file.path);
+}
+
+/** The collection's `info.schema`, '' when it has none, or undefined when the file is not valid JSON. */
+function postmanSchema(content: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    const info = isRecord(parsed) ? parsed.info : undefined;
+    return isRecord(info) && typeof info.schema === 'string' ? info.schema : '';
+  } catch {
+    return undefined;
+  }
+}
+
+const SKIPPED_CANDIDATE_CODES = new Set(['file-size', 'total-size', 'binary']);
+const isSkippedCandidate = (diagnostic: CommittedSourceDiagnostic) =>
+  diagnostic.path !== undefined && isPostmanCandidate(diagnostic.path) && SKIPPED_CANDIDATE_CODES.has(diagnostic.code);
 
 function integrationTestSuites(lookup: B009IntegrationTestsLookup | undefined, policy: KaratePolicy): B009Suite[] {
   if (lookup?.outcome !== 'folder' || !lookup.featureFileCount) return [];
@@ -314,6 +344,10 @@ export function renderB009HumanDetails(analysis: B009Analysis): string {
   }
   if (analysis.unread.length) {
     lines.push('What the tool could not read:', ...analysis.unread.map(item => `  - ${item.path ? `${reportPath(item.path)} — ` : ''}${reportText(item.message)}`));
+  }
+  if (analysis.skipped?.length) {
+    lines.push('Skipped JSON files under postman/ or collections/ (too large to check for a Postman schema; they do not affect the result):',
+      ...analysis.skipped.map(item => `  - ${reportPath(item.path)} — ${reportText(item.message)}`));
   }
   lines.push(...renderFrontendChecklistLines(analysis.checklist));
   if (analysis.remoteEvidence.length) lines.push('Sources:', ...analysis.remoteEvidence.map(sourceLine));
