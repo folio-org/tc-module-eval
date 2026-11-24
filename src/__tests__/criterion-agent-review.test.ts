@@ -114,6 +114,8 @@ describe('criterion agent review', () => {
     delete process.env.OPENROUTER_MODEL;
     delete process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_MODEL;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_MODEL;
     repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-review-repo-'));
   });
 
@@ -1591,7 +1593,7 @@ else {
     expect(result.errors.join('\n')).toContain('debug output was not parseable JSON');
   });
 
-  it('copies trusted OpenCode auth material under the generated opencode data root', () => {
+  it('copies trusted OpenCode auth material and applies the endpoint to the model selector\'s provider', () => {
     const workspace = prepareCriterionReviewWorkspace({
       criterionId: 'S004',
       repositoryPath: repoPath,
@@ -1606,12 +1608,25 @@ else {
     try {
       const invocation = materializeOpenCodeInvocation(workspace, {
         ...opencodeConfig(),
+        modelLabel: 'anthropic/claude-sonnet-5-5',
+        endpoint: 'https://claude.example.test/v1',
         trustedAuthStorePath: authPath
       });
       const copiedAuthPath = path.join(invocation.env.XDG_DATA_HOME!, 'opencode', 'auth.json');
 
       expect(fs.existsSync(copiedAuthPath)).toBe(true);
       expect(fs.statSync(copiedAuthPath).mode & 0o777).toBe(0o600);
+      expect(JSON.parse(fs.readFileSync(invocation.env.OPENCODE_CONFIG!, 'utf-8')).provider).toEqual({
+        anthropic: { options: { baseURL: 'https://claude.example.test/v1' } }
+      });
+      removeRuntime(workspace);
+
+      expect(() => materializeOpenCodeInvocation(workspace, {
+        ...opencodeConfig(),
+        modelLabel: 'claude-sonnet-5-5',
+        endpoint: 'https://claude.example.test/v1',
+        trustedAuthStorePath: authPath
+      })).toThrow('--criterion-agent-endpoint needs a provider-prefixed model, such as anthropic/<model>, not claude-sonnet-5-5');
     } finally {
       removeRuntime(workspace);
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
@@ -1667,6 +1682,50 @@ else {
       expect(fs.statSync(generatedAuthPath).mode & 0o777).toBe(0o600);
       expect(JSON.stringify(generatedConfig)).not.toContain('sk-or-test-secret');
       expect(invocation.runtimeRootPath.startsWith(workspace.rootPath)).toBe(false);
+    } finally {
+      removeRuntime(workspace);
+      fs.rmSync(workspace.rootPath, { recursive: true, force: true });
+    }
+  });
+
+  it('generates Anthropic config with the endpoint as the provider base URL', () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-secret';
+    const workspace = prepareCriterionReviewWorkspace({
+      criterionId: 'S004',
+      repositoryPath: repoPath,
+      instructions: 'review',
+      files: [{ repoRelativePath: 'README.md', content: 'Configuration values.' }],
+      schemaDescription: 'schema'
+    });
+
+    try {
+      const invocation = materializeOpenCodeInvocation(workspace, {
+        ...opencodeConfig(),
+        modelLabel: 'anthropic/claude-sonnet-5-5',
+        endpoint: 'https://claude.example.test/v1',
+        endpointFamily: 'anthropic',
+        generatedProvider: {
+          name: 'anthropic',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+          modelEnv: 'ANTHROPIC_MODEL',
+          modelId: 'claude-sonnet-5-5',
+          modelSelector: 'anthropic/claude-sonnet-5-5'
+        },
+        providerEnvAllowlist: ['ANTHROPIC_API_KEY']
+      });
+      const generatedConfig = JSON.parse(fs.readFileSync(invocation.env.OPENCODE_CONFIG!, 'utf-8'));
+      const generatedAuth = JSON.parse(fs.readFileSync(path.join(invocation.env.XDG_DATA_HOME!, 'opencode', 'auth.json'), 'utf-8'));
+
+      expect(generatedConfig.provider).toEqual({
+        anthropic: {
+          options: { baseURL: 'https://claude.example.test/v1' },
+          models: { 'claude-sonnet-5-5': {} }
+        }
+      });
+      expect(generatedConfig.model).toBe('anthropic/claude-sonnet-5-5');
+      expect(generatedAuth).toEqual({ anthropic: { type: 'api', key: 'sk-ant-test-secret' } });
+      expect(invocation.env.ANTHROPIC_API_KEY).toBe('sk-ant-test-secret');
+      expect(JSON.stringify(generatedConfig)).not.toContain('sk-ant-test-secret');
     } finally {
       removeRuntime(workspace);
       fs.rmSync(workspace.rootPath, { recursive: true, force: true });
@@ -1743,7 +1802,6 @@ else {
       adapter: 'opencode',
       modelLabel: 'test-model',
       readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test',
       endpointFamily: 'openai-compatible'
     };
   }

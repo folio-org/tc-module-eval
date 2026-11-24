@@ -377,9 +377,9 @@ export interface CriterionAgentReviewConfig {
 }
 
 export interface CriterionAgentGeneratedProvider {
-  name: 'openrouter' | 'openai';
-  apiKeyEnv: 'OPENROUTER_API_KEY' | 'OPENAI_API_KEY';
-  modelEnv: 'OPENROUTER_MODEL' | 'OPENAI_MODEL';
+  name: 'openrouter' | 'openai' | 'anthropic';
+  apiKeyEnv: 'OPENROUTER_API_KEY' | 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY';
+  modelEnv: 'OPENROUTER_MODEL' | 'OPENAI_MODEL' | 'ANTHROPIC_MODEL';
   modelId: string;
   modelSelector: string;
 }

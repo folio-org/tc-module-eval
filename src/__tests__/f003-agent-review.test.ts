@@ -310,7 +310,7 @@ describe('F003 agent review', () => {
       evidenceReferences: ['src/Modal.js'], assessments: [missingId(), hardCoded({ evidenceReferences: ['src/Elsewhere.js'] })], reviewerActions: [action] };
     const review = await reviewF003WithAgent(repoPath, await analyze(), {
       enabled: true, adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test', endpointFamily: 'openai-compatible'
+      endpointFamily: 'openai-compatible'
     }, new AnsweringRunner(JSON.stringify(response)));
 
     expect(review.errors).toEqual([]);
@@ -326,7 +326,7 @@ describe('F003 agent review', () => {
     const runner = new TimedOutRunner();
     const review = await reviewF003WithAgent(repoPath, await analyze(), {
       enabled: true, adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test', endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {})
+      endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {})
     }, runner);
     expect(review.available).toBe(false);
     expect(runner.timeouts).toEqual([expected]);

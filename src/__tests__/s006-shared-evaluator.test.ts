@@ -353,7 +353,6 @@ describe('S006 shared evaluator', () => {
       adapter: 'opencode',
       modelLabel: 'test-model',
       readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test',
       endpointFamily: 'openai-compatible'
     }, new CompositeS006Runner(new FakeS006GitleaksRunner(), new FailingOpenCodeRunner()));
 

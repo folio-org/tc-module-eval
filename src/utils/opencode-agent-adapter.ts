@@ -460,12 +460,17 @@ function buildGeneratedOpenCodeConfig(config: CriterionAgentReviewConfig): Recor
     generated.small_model = modelLabel;
   }
 
-  if (config.generatedProvider) {
+  // OpenCode does not read OPENCODE_ENDPOINT; a provider takes its endpoint from options.baseURL, and the provider
+  // of a selector such as anthropic/claude-sonnet-5-5 is the part before the first slash.
+  const providerName = config.generatedProvider?.name ?? (modelLabel?.includes('/') ? modelLabel.split('/')[0] : undefined);
+  if (config.endpoint && !providerName) {
+    throw new Error(`--criterion-agent-endpoint needs a provider-prefixed model, such as anthropic/<model>, not ${modelLabel}`);
+  }
+  if (providerName && (config.endpoint || config.generatedProvider)) {
     generated.provider = {
-      [config.generatedProvider.name]: {
-        models: {
-          [config.generatedProvider.modelId]: {}
-        }
+      [providerName]: {
+        ...(config.endpoint ? { options: { baseURL: config.endpoint } } : {}),
+        ...(config.generatedProvider ? { models: { [config.generatedProvider.modelId]: {} } } : {})
       }
     };
   }

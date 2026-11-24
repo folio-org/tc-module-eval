@@ -145,7 +145,6 @@ describe('S004 agent review', () => {
       adapter: 'opencode',
       modelLabel: 'test-model',
       readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test',
       endpointFamily: 'openai-compatible',
       debugRetainWorkspace: true
     };

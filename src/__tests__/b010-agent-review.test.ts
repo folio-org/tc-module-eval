@@ -135,7 +135,7 @@ describe('B010 agent review', () => {
     const runner = new TimedOutRunner();
     const review = await reviewB010WithAgent(root, analysis, {
       enabled: true, adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer',
-      endpoint: 'https://api.example.test', endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {})
+      endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {})
     }, runner);
 
     expect(review.available).toBe(false);

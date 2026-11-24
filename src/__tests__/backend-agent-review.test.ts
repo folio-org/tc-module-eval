@@ -178,7 +178,7 @@ describe('backend agent review contract', () => {
     ])('caps the first OpenCode command, a local debug check, at 120 s or a shorter given timeout (%s)', async (timeoutMs, expected) => {
       const runner = new TimedOutRunner();
       const config: CriterionAgentReviewConfig = { enabled: true, adapter: 'opencode', modelLabel: 'test-model', readOnlyAgentName: 'reviewer',
-        endpoint: 'https://api.example.test', endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {}) };
+        endpointFamily: 'openai-compatible', ...(timeoutMs ? { timeoutMs } : {}) };
       const review = await runCriterionAgentReview(request(module()), config, runner);
       expect(review.available).toBe(false);
       expect(runner.timeouts).toEqual([expected]);

@@ -9,6 +9,8 @@ describe('criterion-agent CLI option parsing', () => {
     delete process.env.OPENROUTER_MODEL;
     delete process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_MODEL;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_MODEL;
   });
 
   afterEach(() => {
@@ -125,6 +127,34 @@ describe('criterion-agent CLI option parsing', () => {
       modelSelector: 'openai/gpt-4.1-mini'
     });
     expect(JSON.stringify(config)).not.toContain('sk-test-secret');
+  });
+
+  it('uses ANTHROPIC_API_KEY and ANTHROPIC_MODEL after complete OpenRouter and OpenAI env configs', () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test-secret';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-secret';
+    process.env.ANTHROPIC_MODEL = 'anthropic/claude-sonnet-5-5';
+
+    const config = buildCriterionAgentReviewConfig({
+      criterionAgentOpencode: true,
+      criterionAgentEndpoint: 'https://claude.example.test/v1'
+    });
+
+    expect(config?.modelLabel).toBe('anthropic/claude-sonnet-5-5');
+    expect(config?.providerEnvAllowlist).toEqual(['ANTHROPIC_API_KEY']);
+    expect(config?.endpoint).toBe('https://claude.example.test/v1');
+    expect(config?.endpointFamily).toBe('anthropic');
+    expect(config?.generatedProvider).toEqual({
+      name: 'anthropic',
+      apiKeyEnv: 'ANTHROPIC_API_KEY',
+      modelEnv: 'ANTHROPIC_MODEL',
+      modelId: 'claude-sonnet-5-5',
+      modelSelector: 'anthropic/claude-sonnet-5-5'
+    });
+    expect(config?.providerConfigError).toBeUndefined();
+
+    process.env.OPENAI_API_KEY = 'sk-test-secret';
+    process.env.OPENAI_MODEL = 'gpt-4.1-mini';
+    expect(buildCriterionAgentReviewConfig({ criterionAgentOpencode: true })?.generatedProvider?.name).toBe('openai');
   });
 
   it('uses an explicit provider-prefixed CLI model before unrelated provider env detection', () => {

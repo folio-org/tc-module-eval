@@ -49,6 +49,13 @@ const PROVIDERS: ProviderDefinition[] = [
     modelEnv: 'OPENAI_MODEL',
     selectorPrefix: 'openai/',
     keepNestedPrefix: false
+  },
+  {
+    name: 'anthropic',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+    modelEnv: 'ANTHROPIC_MODEL',
+    selectorPrefix: 'anthropic/',
+    keepNestedPrefix: false
   }
 ];
 

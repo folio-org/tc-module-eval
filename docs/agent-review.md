@@ -260,6 +260,22 @@ folio-eval evaluate <repo-url> \
 
 `OPENAI_MODEL=gpt-4.1-mini` is normalized to the OpenCode selector `openai/gpt-4.1-mini`.
 
+## Anthropic
+
+```bash
+export ANTHROPIC_API_KEY=...
+export ANTHROPIC_MODEL=claude-sonnet-5-5
+
+folio-eval evaluate <repo-url> \
+  --criteria <criterion-id> \
+  --criterion-agent-opencode \
+  --criterion-agent-criteria <criterion-id>
+```
+
+`ANTHROPIC_MODEL=claude-sonnet-5-5` is normalized to the OpenCode selector `anthropic/claude-sonnet-5-5`. OpenCode sends the key in the `x-api-key` header. For an Anthropic Messages-compatible endpoint, add `--criterion-agent-endpoint https://<host>/v1`; OpenCode posts to `<endpoint>/messages`.
+
+When several providers have both a key and a model set, OpenRouter is used first, then OpenAI, then Anthropic. A provider-prefixed `--criterion-agent-model`, such as `anthropic/claude-sonnet-5-5`, selects that provider.
+
 ## CLI Options
 
 Use `--criterion-agent-opencode` to enable OpenCode review. Use `--criterion-agent-criteria` to choose which criteria may invoke it; the list replaces the default set for the whole run, and B002, B008 and B012 review only when it names them.
@@ -282,7 +298,7 @@ Advanced options:
 - `--criterion-agent-auth-store <path>` uses a trusted OpenCode auth store outside the evaluated repository.
 - `--criterion-agent-provider-env <names>` allowlists additional provider credential environment variable names.
 - `--criterion-agent-proxy-env <names>` allowlists proxy environment variable names.
-- `--criterion-agent-endpoint <url>` configures a provider endpoint.
+- `--criterion-agent-endpoint <url>` sets the base URL (`provider.<name>.options.baseURL`) of the provider the model selector names, such as `anthropic` in `anthropic/claude-sonnet-5-5`, including with `--criterion-agent-auth-store`. With a model that names no provider, review is unavailable before OpenCode starts. With `--criterion-agent-trusted-config`, the trusted config must set the endpoint itself; it can read the value from `{env:OPENCODE_ENDPOINT}`.
 - `--criterion-agent-endpoint-allowlist <urls>` permits non-HTTPS explicitly trusted endpoint URLs on the same parsed origin.
 - `--criterion-agent-debug-retain-workspace` retains the temporary review workspace and a content-free `agent-debug.json` run trace for local debugging.
 
@@ -359,7 +375,7 @@ Malformed-response reports distinguish invalid transport records, unparseable or
 
 The evaluator masks its own credentials, not repository content. Wherever the exact current value of one of these variables appears in command output, agent output, error messages, the console error, or the JSON and HTML reports, it is replaced with `[REDACTED_<VARIABLE>]`, such as `[REDACTED_OPENROUTER_API_KEY]`:
 
-- `OPENROUTER_API_KEY` and `OPENAI_API_KEY` (agent review providers);
+- `OPENROUTER_API_KEY`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` (agent review providers);
 - `SONAR_TOKEN` and `GITHUB_TOKEN` (remote lookups);
 - `FOLIO_UI_USERNAME` and `FOLIO_UI_PASSWORD` (the runtime UI probe's test account, which the probe never writes anywhere; a short value such as `admin` is not masked, as below);
 - every variable named by `--criterion-agent-provider-env` or `--criterion-agent-proxy-env`.
