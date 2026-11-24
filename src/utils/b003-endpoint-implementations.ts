@@ -84,25 +84,11 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
       : `${reportPath(template.path)} provides no endpoints other than system interfaces.`, [], { endpointSource });
   }
 
-  const sources = new Map(evidence.snapshot.files.filter(file => SOURCE_FILE.test(file.path)).map(file => [file.path, withoutComments(file.content)]));
   const scan = sourceRoutes(evidence.snapshot.files);
   const routeIndex = pathIndex(scan.routes.filter(route => !route.path.includes('*')));
   const specIndex = pathIndex(apiSpecs.specs.flatMap(spec => spec.operations.map((operation): Entry =>
     ({ method: operation.method, path: operation.path, file: spec.file, operation, format: spec.format }))));
-  const implementations = implementedInterfaces(sources);
-  const buildSets = (option: RegExp) => evidence.snapshot.files.some(file => BUILD_FILE.test(file.path) && option.test(file.content));
-  const useTags = buildSets(USE_TAGS);
-  const wiring = endpointFramework(evidence);
-  const defaultMethods = wiring === 'spring' && !buildSets(SKIP_DEFAULT_INTERFACE);
-  const generated = generatedInterfaces(wiring, useTags);
-  const callables = new Map<string, Set<string>>();
-  const declares = (file: string, name: string) => {
-    if (!callables.has(file)) callables.set(file, new Set([...sources.get(file)!.matchAll(CALLABLE)].map(match => match[1])));
-    return callables.get(file)!.has(name);
-  };
-  const implementing = (entry: Entry) => generated(entry).flatMap(name => (implementations.get(name) ?? []).filter(implementation =>
-    (framework.name !== 'rmb' || RMB_IMPLEMENTATION.test(implementation.file))
-    && (!defaultMethods || (entry.operation.operationId !== undefined && declares(implementation.file, entry.operation.operationId)))));
+  const { wiring, useTags, defaultMethods, generated, implementing } = generatedInterfaceImplementations(evidence);
   const length = (paths: string[]) => paths.reduce((total, item) => total + item.length, 0);
   const wildcardPaths = matchers.filter(matcher => matcher.wildcard && !WHOLE_API.test(matcher.endpoint.path)).map(matcher => matcher.endpoint.path);
   const wildcardsMatched = length(wildcardPaths) * length([...specIndex.entries, ...routeIndex.entries].map(entry => entry.path)) <= MAX_WILDCARD_WORK;
@@ -391,6 +377,30 @@ function implementationSource(framework: BackendEvidence['framework']['name'], u
       : ''}, or ${routes}`;
   }
   return routes;
+}
+
+/**
+ * How a module wires spec operations to code through the interfaces its build generates: for each operation, the
+ * committed classes that implement its interface (and, where openapi-generator gives every operation a default
+ * method, declare the operation).
+ */
+export function generatedInterfaceImplementations(evidence: BackendEvidence) {
+  const sources = new Map(evidence.snapshot.files.filter(file => SOURCE_FILE.test(file.path)).map(file => [file.path, withoutComments(file.content)]));
+  const implementations = implementedInterfaces(sources);
+  const buildSets = (option: RegExp) => evidence.snapshot.files.some(file => BUILD_FILE.test(file.path) && option.test(file.content));
+  const useTags = buildSets(USE_TAGS);
+  const wiring = endpointFramework(evidence);
+  const defaultMethods = wiring === 'spring' && !buildSets(SKIP_DEFAULT_INTERFACE);
+  const generated = generatedInterfaces(wiring, useTags);
+  const callables = new Map<string, Set<string>>();
+  const declares = (file: string, name: string) => {
+    if (!callables.has(file)) callables.set(file, new Set([...sources.get(file)!.matchAll(CALLABLE)].map(match => match[1])));
+    return callables.get(file)!.has(name);
+  };
+  const implementing = (entry: Entry) => generated(entry).flatMap(name => (implementations.get(name) ?? []).filter(implementation =>
+    (evidence.framework.name !== 'rmb' || RMB_IMPLEMENTATION.test(implementation.file))
+    && (!defaultMethods || (entry.operation.operationId !== undefined && declares(implementation.file, entry.operation.operationId)))));
+  return { wiring, useTags, defaultMethods, generated, implementing };
 }
 
 /** The names of the interfaces the framework's build generates for a spec operation; none when it generates none. */

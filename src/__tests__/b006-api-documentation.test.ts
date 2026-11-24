@@ -381,8 +381,55 @@ describe('B006 API documentation', () => {
     expect(result.status).toBe(EvaluationStatus.FAIL);
     expect(result.details?.split('\n').slice(1, 3)).toEqual([
       'Framework: edge module; RAML does not count as documentation',
-      'Endpoints: 2 methods and paths from router routes and Spring mapping annotations in src/main'
+      'Endpoints: 2 methods and paths from router routes and Spring mapping annotations in src/main, and the OpenAPI operations of the generated interfaces committed classes implement'
     ]);
+  });
+
+  it('counts the operations an edge module\'s Spring controller serves through a generated interface, as edge-inventory does', async () => {
+    const root = repository({
+      'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}</dependencies>`),
+      ...springApp,
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}-1.0.0", "provides": []}',
+      'src/main/java/org/example/InventoryController.java': '@RestController\npublic class InventoryController implements InventoryApi {\n'
+        + '  @Override public ResponseEntity<String> getInstances(String query) { return null; }\n'
+        + '  @GetMapping("/inventory/extra") public String extra() { return null; }\n}\n',
+      // Okapi checks /admin/health itself, so B006 leaves it out however the module serves it.
+      'src/main/java/org/example/AdminController.java': '@RestController\npublic class AdminController implements AdminApi {\n'
+        + '  @Override public ResponseEntity<String> getHealth() { return null; }\n}\n',
+      // openapi-generator gives getItems a default method that answers 501, so the controller does not serve it.
+      'src/main/resources/swagger.api/edge-example.yaml': 'openapi: 3.0.0\npaths:\n  /inventory/instances:\n    get:\n      operationId: getInstances\n'
+        + '  /inventory/items:\n    get:\n      operationId: getItems\n'
+        + '  /admin/health:\n    get:\n      operationId: getHealth\n'
+    });
+
+    const { result, analysis } = await b006(root);
+
+    expect(documentation(analysis)).toEqual({ 'GET /inventory/extra': 'undocumented', 'GET /inventory/instances': 'openapi' });
+    expect(analysis.endpoints.find(endpoint => endpoint.path === '/inventory/instances')).toMatchObject({ file: 'src/main/java/org/example/InventoryController.java', line: 2 });
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+  });
+
+  it('leaves out the error path of an edge module\'s Spring ErrorController', async () => {
+    const controller = (name: string, body: string, implemented = '') =>
+      `@RestController\npublic class ${name}${implemented} {\n${body}\n}\n`;
+    const root = repository({
+      'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}</dependencies>`),
+      ...springApp,
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}-1.0.0", "provides": []}',
+      'src/main/java/org/example/AccountsController.java': controller('AccountsController', '  @GetMapping("/example/accounts") public String get() { return null; }'),
+      'src/main/java/org/example/ReadinessController.java': controller('ReadinessController', '  @GetMapping("/admin/ready") public String ready() { return null; }'),
+      'src/main/java/org/example/ErrorControllerImpl.java': controller('ErrorControllerImpl',
+        '  @GetMapping("/error") public String get() { return null; }\n  @PostMapping("/error") public String post() { return null; }', ' implements ErrorController'),
+      // Only the class Spring forwards errors to is left out; another mapping on /error is part of the API.
+      'src/main/java/org/example/LegacyController.java': controller('LegacyController',
+        '  @PutMapping("/error") public String put() { return null; }', ' /* implements ErrorController */'),
+      'src/main/resources/swagger.api/edge-example.yaml': 'openapi: 3.0.0\npaths:\n  /example/accounts:\n    get: {}\n'
+    });
+
+    const { result, analysis } = await b006(root);
+
+    expect(documentation(analysis)).toEqual({ 'GET /example/accounts': 'openapi', 'GET /admin/ready': 'undocumented', 'PUT /error': 'undocumented' });
+    expect(result.status).toBe(EvaluationStatus.FAIL);
   });
 
   it('ignores router routes in line and block comments', async () => {
