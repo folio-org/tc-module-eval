@@ -609,6 +609,18 @@ describe('B004 environment variables', () => {
       const without = await b004(springModule(dependency('folio-spring-web')));
       expect(without.result.evidence).toBe('B004 fail: The module uses 2 environment variables, but none is documented in ENV_VARS.md or a README table.');
     });
+
+    it('does not apply folio-spring-base to an edge module, even one built on Spring Boot', async () => {
+      const { result, analysis } = await b004(repository({
+        'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}${dependency('folio-spring-base')}</dependencies>`),
+        'src/main/java/org/folio/edge/example/Application.java': '@SpringBootApplication\npublic class Application {}\n',
+        'descriptors/ModuleDescriptor-template.json': template([{ name: 'DB_QUERYTIMEOUT' }]),
+        'README.md': '[folio-spring-base](https://github.com/folio-org/folio-spring-base/blob/master/doc/DB_CONNECTION_POOL_SETTINGS.md).\n'
+      }));
+
+      expect(result.status).toBe(EvaluationStatus.FAIL);
+      expect(analysis.variables.map(variable => [variable.name, variable.problems, variable.framework])).toEqual([['DB_QUERYTIMEOUT', ['undocumented'], undefined]]);
+    });
   });
 
   it('cites the pinned policy snapshot', () => {

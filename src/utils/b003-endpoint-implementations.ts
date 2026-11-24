@@ -18,7 +18,7 @@ import { backendBrowse, numberBackendObligations } from './backend-agent-review'
 import { FrontendChecklistItemDraft } from './frontend-agent-review';
 import { FRAMEWORK_LABELS } from './b001-descriptor-template';
 import { descriptorEndpoints, endpointLibraries, endpointMatcher, gapCovers, lookup, MAX_WILDCARD_WORK, pathIndex, PathItem, uniqueEndpoints } from './backend-endpoints';
-import { SOURCE_FILE, templateLineOf } from './backend-evidence';
+import { endpointFramework, SOURCE_FILE, templateLineOf } from './backend-evidence';
 import { lineCounter, sourceRoutes, withoutComments } from './backend-routes';
 import { RUNTIME_TENANTS, runtimeEvidenceLines, runtimeSummary } from './backend-runtime-harness';
 import { isSystemInterface } from './descriptor-handlers';
@@ -92,8 +92,9 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   const implementations = implementedInterfaces(sources);
   const buildSets = (option: RegExp) => evidence.snapshot.files.some(file => BUILD_FILE.test(file.path) && option.test(file.content));
   const useTags = buildSets(USE_TAGS);
-  const defaultMethods = framework.name === 'spring' && !buildSets(SKIP_DEFAULT_INTERFACE);
-  const generated = generatedInterfaces(framework.name, useTags);
+  const wiring = endpointFramework(evidence);
+  const defaultMethods = wiring === 'spring' && !buildSets(SKIP_DEFAULT_INTERFACE);
+  const generated = generatedInterfaces(wiring, useTags);
   const callables = new Map<string, Set<string>>();
   const declares = (file: string, name: string) => {
     if (!callables.has(file)) callables.set(file, new Set([...sources.get(file)!.matchAll(CALLABLE)].map(match => match[1])));
@@ -253,7 +254,7 @@ export function evaluateB003(evidence: BackendEvidence, apiSpecs: BackendApiSpec
   ];
   return result(status, 'endpoints-checked', sentences.join(' '), numberBackendObligations(items), {
     endpointSource,
-    implementationSource: implementationSource(framework.name, useTags, defaultMethods),
+    implementationSource: implementationSource(wiring, useTags, defaultMethods),
     endpoints,
     routeCount: scan.routes.length,
     unreadRoutes: scan.unreadRoutes,

@@ -365,6 +365,26 @@ describe('B006 API documentation', () => {
     ]);
   });
 
+  it('checks the Spring mappings of an edge-common-spring module', async () => {
+    const root = repository({
+      'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}</dependencies>`),
+      ...springApp,
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}-1.0.0", "provides": []}',
+      'src/main/java/org/example/AccountsController.java': '@RestController\n@RequestMapping("/example")\npublic class AccountsController {\n'
+        + '  @GetMapping("/accounts/{accountId}") public String get() { return null; }\n  @PostMapping("/accounts") public String post() { return null; }\n}\n',
+      'src/main/resources/swagger.api/edge-example.yaml': 'openapi: 3.0.0\npaths:\n  /example/accounts/{id}:\n    get: {}\n'
+    });
+
+    const { result, analysis } = await b006(root);
+
+    expect(documentation(analysis)).toEqual({ 'GET /example/accounts/{accountId}': 'openapi', 'POST /example/accounts': 'undocumented' });
+    expect(result.status).toBe(EvaluationStatus.FAIL);
+    expect(result.details?.split('\n').slice(1, 3)).toEqual([
+      'Framework: edge module; RAML does not count as documentation',
+      'Endpoints: 2 methods and paths from router routes and Spring mapping annotations in src/main'
+    ]);
+  });
+
   it('ignores router routes in line and block comments', async () => {
     const root = repository({
       'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}</dependencies>`),

@@ -271,6 +271,17 @@ async function buildProperties(templatePath: string, files: Map<string, Committe
 
 export const SOURCE_FILE = /(?:^|\/)src\/main\/(?:java|groovy|kotlin)\/.+\.(?:java|groovy|kt)$/;
 export const REST_VERTICLE = />\s*org\.folio\.rest\.RestVerticle\s*</;
+const SPRING_BOOT_APPLICATION = /^\s*@SpringBootApplication\b/m;
+
+/**
+ * The framework whose endpoint wiring B003 and B006 read: the evidence's framework, except that an edge module with
+ * a `@SpringBootApplication` class (built on edge-common-spring) serves its endpoints through Spring Boot.
+ */
+export function endpointFramework(evidence: Pick<BackendEvidence, 'kind' | 'framework' | 'snapshot'>): BackendFramework {
+  return evidence.kind === 'edge-module' && evidence.snapshot.files.some(file => SOURCE_FILE.test(file.path) && SPRING_BOOT_APPLICATION.test(file.content))
+    ? 'spring'
+    : evidence.framework.name;
+}
 
 function detectFramework(kind: BackendRepositoryKind, files: CommittedSourceFile[]): BackendEvidence['framework'] {
   const result = (name: BackendFramework, evidence: string[]) => ({ name, evidence });
@@ -291,7 +302,7 @@ function detectFramework(kind: BackendRepositoryKind, files: CommittedSourceFile
   }
 
   const sources = files.filter(file => SOURCE_FILE.test(file.path));
-  const spring = sources.find(file => /^\s*@SpringBootApplication\b/m.test(file.content));
+  const spring = sources.find(file => SPRING_BOOT_APPLICATION.test(file.content));
   if (spring) {
     const folioSpringBase = files.find(file => /(?:^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/.test(file.path) && /folio-spring-base/.test(file.content));
     return result('spring', [`@SpringBootApplication in ${spring.path}`,

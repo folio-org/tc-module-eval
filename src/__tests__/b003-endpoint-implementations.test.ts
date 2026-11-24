@@ -439,6 +439,22 @@ describe('B003 endpoint implementations', () => {
     expect(implementations(analysis)).toEqual({ 'GET /books/list': 'unconfirmed' });
   });
 
+  it('finds the Spring interfaces an edge-common-spring module implements', async () => {
+    const root = repository({
+      'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common-spring')}</dependencies>`),
+      ...springApp,
+      'descriptors/ModuleDescriptor-template.json': '{"id": "${artifactId}-1.0.0", "provides": []}',
+      'src/main/resources/swagger.api/edge-example.yaml': 'openapi: 3.0.0\npaths:\n  /inventory/instances:\n    get:\n      operationId: getInstances\n',
+      'src/main/java/org/example/InventoryController.java': '@RestController\npublic class InventoryController implements InventoryApi {\n  @Override\n  public ResponseEntity<String> getInstances() { return null; }\n}\n'
+    });
+
+    const { result, analysis } = await b003(root);
+
+    expect([analysis.kind, analysis.framework.name]).toEqual(['edge-module', 'edge']);
+    expect(implementations(analysis)).toEqual({ 'GET /inventory/instances': 'interface' });
+    expect(result.status).toBe(EvaluationStatus.PASS);
+  });
+
   it('checks an edge module\'s documented operations against its router routes', async () => {
     const files = {
       'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}</dependencies>`),
