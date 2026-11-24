@@ -137,6 +137,8 @@ const REVIEWABLE_DISCLOSURE_CATEGORIES = new Set<S005PersonalDataCategory>([
   'cache',
   'logging'
 ]);
+// A Java debugger option (-agentlib:jdwp=..., -Xrunjdwp:...) names a socket address, not a person's.
+const JDWP_OPTION = /jdwp[=:]\S*/gi;
 const CATEGORIES_WITHOUT_DETERMINISTIC_OVER_DISCLOSURE = new Set<S005PersonalDataCategory>([
   'processing'
 ]);
@@ -158,7 +160,7 @@ const S005_EVIDENCE_CATEGORY_PATTERNS: ReadonlyArray<{
   { category: 'profile_picture', label: 'profile picture or avatar data', pattern: /\b(?:profilePicture|profile_picture|profileImage|profile_image|avatar|photoUrl|photo_url|pictureUrl|picture_url)\b/i },
   { category: 'ip_or_mac_address', label: 'IP or MAC address field', pattern: /\b(?:ipAddress|ip_address|clientIp|client_ip|remoteAddr|remote_addr|macAddress|mac_address)\b/i },
   { category: 'financial_information', label: 'financial or payment data', pattern: /\b(?:payment|creditCard|credit_card|cardNumber|card_number|bankAccount|bank_account|invoice|fee|fine|financial)\b/i },
-  { category: 'circulation_transactions', label: 'circulation transaction data', pattern: /\b(?:circulation(?:Description|_description|-description)?|loan|checkout|checkin|check-in|checkin|renewal|holdRequest|hold_request|itemRequest|item_request)\b/i },
+  { category: 'circulation_transactions', label: 'circulation transaction data', pattern: /\b(?:circulation(?:Description|_description|-description)?|loan(?!-types?\b)|checkout|checkin|check-in|checkin|renewal|holdRequest|hold_request|itemRequest|item_request)\b/i },
   { category: 'custom_fields', label: 'custom field data', pattern: /\b(?:customFields?|custom_fields?|customFieldValues?|custom_field_values?|userDefined|user_defined)\b/i },
   { category: 'logging', label: 'logging of user or personal data', pattern: /\b(?:log(?:ger|ging)?|log\.(?:info|warn|error|debug)|auditLog|audit_log|log4j|logback)\b/i },
   { category: 'transmission', label: 'queue, event, API, or external transmission', pattern: /\b(?:kafka|queue|eventProducer|event_producer|publish(?:er)?|producer|webhook|externalSystem|external_system|thirdParty|third_party|httpClient|http_client|okapi|export|import|searchIndex|search_index)\b/i },
@@ -1102,14 +1104,15 @@ function extractS005EvidenceSignals(
       continue;
     }
 
+    const scanned = line.replace(JDWP_OPTION, ' ');
     const categoriesSeenOnLine = new Set<S005PersonalDataCategory>();
     for (const categoryPattern of S005_EVIDENCE_CATEGORY_PATTERNS) {
-      if (!categoryPattern.pattern.test(line) || categoriesSeenOnLine.has(categoryPattern.category)) {
+      if (!categoryPattern.pattern.test(scanned) || categoriesSeenOnLine.has(categoryPattern.category)) {
         continue;
       }
 
       categoriesSeenOnLine.add(categoryPattern.category);
-      const strength = isContextOnlyS005Match(categoryPattern.category, line)
+      const strength = isContextOnlyS005Match(categoryPattern.category, scanned)
         ? 'context'
         : sourceStrength;
       signals.push({
