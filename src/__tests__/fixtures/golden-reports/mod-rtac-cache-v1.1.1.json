@@ -15,7 +15,6 @@
       ".github/workflows/api-schema-lint.yml",
       ".github/workflows/maven.yml",
       ".github/workflows/postgres.yml",
-      "AGENTS.md",
       "CONTRIBUTING.md",
       "Dockerfile",
       "Jenkinsfile-disabled",
@@ -1708,13 +1707,34 @@
     {
       "criterionId": "S006",
       "status": "manual",
-      "evidence": "S006 manual: Found 1 possible secret or environment-specific value. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
-      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Review the email and URL domains and their source files for real personal or deployment data. Made-up examples are fine; names, phone numbers, and street addresses are not checked.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 1\n  - By type:\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n  - 1 email or URL candidate in src/main/resources/application.yml could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in AGENTS.md could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in descriptors/DeploymentDescriptor-template.json could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in pom.xml could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n  - Data, stylesheet, sample, and disabled files in configuration folders:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nEmail and URL domains (manual review only):\n  - Mailbox names, URL credentials, paths, and query strings are hidden. A domain alone never fails S006.\n  - Occurrences in scanned text: 2 email addresses, 147 URLs\n  - dev.folio.org: 0 email addresses, 7 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/uuid.json: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - CONTRIBUTING.md: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 1 URL\n  - ec.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - en.east-concord.com: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - eur-lex.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - folio-org.atlassian.net: 0 email addresses, 44 URLs in 2 files\n    - README.md: 0 email addresses, 2 URLs\n    - NEWS.md: 0 email addresses, 42 URLs\n  - github.com: 1 email address, 10 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - Dockerfile: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 3 URLs\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n    - pom.xml: 1 email address, 2 URLs\n  - ico.org.uk: 0 email addresses, 2 URLs in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 2 URLs\n  - jdbc.postgresql.org: 0 email addresses, 1 URL in 1 file\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n  - json-schema.org: 0 email addresses, 44 URLs in 44 files\n    - src/main/resources/swagger.api/schemas/circulation/loan.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/loans.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/request.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/requests.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/servicePoint.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/consortia/consortiaTenants.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-part.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-parts.json: 0 email addresses, 1 URL\n    - ... 36 more\n  - localhost: 0 email addresses, 4 URLs in 4 files\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n    - src/test/resources/application-test.yml: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - descriptors/ModuleDescriptor-template.json: 0 email addresses, 1 URL\n  - maven.apache.org: 0 email addresses, 3 URLs in 1 file\n    - pom.xml: 0 email addresses, 3 URLs\n  - oag.ca.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - pythonspeed.com: 0 email addresses, 1 URL in 1 file\n    - Dockerfile: 0 email addresses, 1 URL\n  - repository.folio.org: 0 email addresses, 4 URLs in 1 file\n    - pom.xml: 0 email addresses, 4 URLs\n  - v0.1.0: 1 email address, 0 URLs in 1 file\n    - .github/workflows/api-doc.yml: 1 email address, 0 URLs\n  - web.archive.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - wiki.folio.org: 0 email addresses, 8 URLs in 1 file\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 8 URLs\n  - www.apache.org: 0 email addresses, 1 URL in 1 file\n    - pom.xml: 0 email addresses, 1 URL\n  - www.dol.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.legislation.gov.uk: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.liquibase.org: 0 email addresses, 6 URLs in 2 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 3 URLs\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 3 URLs\n  - www.newamerica.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.prsindia.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.w3.org: 0 email addresses, 3 URLs in 3 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 1 URL\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 1 URL\n    - pom.xml: 0 email addresses, 1 URL\n  - Counts cover only the text the built-in scan read. The JSON report contains all retained source files.\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
+      "evidence": "S006 manual: Found 2 possible secrets or environment-specific values. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
+      "details": "What to do:\n  - Open each possible secret and decide whether it is real. Made-up values in tests, documentation, and examples are fine.\n  - Review the email and URL domains and their source files for real personal or deployment data. Made-up examples are fine; names, phone numbers, and street addresses are not checked.\n  - Check the files under Coverage gaps, which were not fully scanned.\n\nFindings:\n  - Values that fail S006: 0\n  - Values to check: 2\n  - By type:\n    - 1 password or secret value in production code or configuration\n    - 1 password or secret value in documentation\n\nStrongest examples (values hidden):\n  - src/main/resources/application.yml:14 [secret] Password or secret value assigned to password in production code or configuration\n  - README.md:51 [secret] Password or secret value assigned to DB_PASSWORD in documentation\n\nCoverage:\n  - Gitleaks: did not run, see Coverage gaps\n  - Built-in scan: read 290 of 290 files (744 KB read)\n  - Complete: no, see Coverage gaps\n\nCoverage gaps:\n  - Gitleaks did not run (failed): spawn gitleaks-unavailable-for-test ENOENT. Install Gitleaks or set GITLEAKS_PATH, then run the evaluation again.\n  - 1 email or URL candidate in src/main/resources/application.yml could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in descriptors/DeploymentDescriptor-template.json could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n  - 1 email or URL candidate in pom.xml could not be read by the domain review (invalid, or a URL longer than 8192 characters).\n\nSkipped (does not affect the result):\n  - Version control, build output, and report folders:\n    - .git\n    - target\n  - Data, stylesheet, sample, and disabled files in configuration folders:\n    - src/main/resources/swagger.api/examples/error.sample\n    - src/main/resources/swagger.api/examples/errors.sample\n\nEmail and URL domains (manual review only):\n  - Mailbox names, URL credentials, paths, and query strings are hidden. A domain alone never fails S006.\n  - Occurrences in scanned text: 2 email addresses, 147 URLs\n  - dev.folio.org: 0 email addresses, 7 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/uuid.json: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - CONTRIBUTING.md: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 1 URL\n  - ec.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - en.east-concord.com: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - eur-lex.europa.eu: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - folio-org.atlassian.net: 0 email addresses, 44 URLs in 2 files\n    - README.md: 0 email addresses, 2 URLs\n    - NEWS.md: 0 email addresses, 42 URLs\n  - github.com: 1 email address, 10 URLs in 7 files\n    - .github/workflows/api-doc.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-lint.yml: 0 email addresses, 1 URL\n    - .github/workflows/api-schema-lint.yml: 0 email addresses, 1 URL\n    - Dockerfile: 0 email addresses, 1 URL\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 3 URLs\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n    - pom.xml: 1 email address, 2 URLs\n  - ico.org.uk: 0 email addresses, 2 URLs in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 2 URLs\n  - jdbc.postgresql.org: 0 email addresses, 1 URL in 1 file\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n  - json-schema.org: 0 email addresses, 44 URLs in 44 files\n    - src/main/resources/swagger.api/schemas/circulation/loan.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/loans.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/request.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/requests.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/circulation/servicePoint.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/consortia/consortiaTenants.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-part.json: 0 email addresses, 1 URL\n    - src/main/resources/swagger.api/schemas/inventory/bound-with-parts.json: 0 email addresses, 1 URL\n    - ... 36 more\n  - localhost: 0 email addresses, 4 URLs in 4 files\n    - src/main/resources/application.yml: 0 email addresses, 1 URL\n    - src/test/resources/application-test.yml: 0 email addresses, 1 URL\n    - README.md: 0 email addresses, 1 URL\n    - descriptors/ModuleDescriptor-template.json: 0 email addresses, 1 URL\n  - maven.apache.org: 0 email addresses, 3 URLs in 1 file\n    - pom.xml: 0 email addresses, 3 URLs\n  - oag.ca.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - pythonspeed.com: 0 email addresses, 1 URL in 1 file\n    - Dockerfile: 0 email addresses, 1 URL\n  - repository.folio.org: 0 email addresses, 4 URLs in 1 file\n    - pom.xml: 0 email addresses, 4 URLs\n  - v0.1.0: 1 email address, 0 URLs in 1 file\n    - .github/workflows/api-doc.yml: 1 email address, 0 URLs\n  - web.archive.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - wiki.folio.org: 0 email addresses, 8 URLs in 1 file\n    - MODULE_SELF_EVALUATION.md: 0 email addresses, 8 URLs\n  - www.apache.org: 0 email addresses, 1 URL in 1 file\n    - pom.xml: 0 email addresses, 1 URL\n  - www.dol.gov: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.legislation.gov.uk: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.liquibase.org: 0 email addresses, 6 URLs in 2 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 3 URLs\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 3 URLs\n  - www.newamerica.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.prsindia.org: 0 email addresses, 1 URL in 1 file\n    - PERSONAL_DATA_DISCLOSURE.md: 0 email addresses, 1 URL\n  - www.w3.org: 0 email addresses, 3 URLs in 3 files\n    - src/main/resources/db/changelog/changelog-master.xml: 0 email addresses, 1 URL\n    - src/main/resources/db/changelog/changes/initial_schema.xml: 0 email addresses, 1 URL\n    - pom.xml: 0 email addresses, 1 URL\n  - Counts cover only the text the built-in scan read. The JSON report contains all retained source files.\n\nAgent review:\n  - Not applied: agent review is disabled or unconfigured",
       "criterionDetails": {
         "criterionId": "S006",
-        "findingCount": 1,
-        "retainedFindingCount": 1,
+        "findingCount": 2,
+        "retainedFindingCount": 2,
         "findings": [
+          {
+            "path": "src/main/resources/application.yml",
+            "line": 14,
+            "endLine": 14,
+            "detectorId": "password-secret-assignment",
+            "category": "password_or_secret_assignment",
+            "context": "production_source_or_configuration",
+            "confidence": "medium",
+            "severity": "high",
+            "disposition": "scanner_or_pattern_candidate",
+            "detectedBy": [
+              "built-in"
+            ],
+            "excerpt": {
+              "text": "password=[REDACTED]",
+              "multiline": false,
+              "startLine": 14,
+              "endLine": 14
+            },
+            "rationale": "A reviewer must decide whether this password or secret value in production code or configuration is real."
+          },
           {
             "path": "README.md",
             "line": 51,
@@ -2434,12 +2454,6 @@
             },
             {
               "kind": "domain-review-limit",
-              "message": "1 email or URL candidate in AGENTS.md could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
-              "path": "AGENTS.md",
-              "materialToCoverage": true
-            },
-            {
-              "kind": "domain-review-limit",
               "message": "1 email or URL candidate in descriptors/DeploymentDescriptor-template.json could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
               "path": "descriptors/DeploymentDescriptor-template.json",
               "materialToCoverage": true
@@ -2457,8 +2471,8 @@
         "coverageSummary": {
           "skippedFileCount": 4,
           "materialSkippedFileCount": 0,
-          "warningCount": 6,
-          "materialWarningCount": 6,
+          "warningCount": 5,
+          "materialWarningCount": 5,
           "skippedFileReasonCounts": {
             "generated-artifact": 2,
             "unsupported-file": 2
@@ -2478,12 +2492,6 @@
             },
             {
               "kind": "domain-review-limit",
-              "message": "1 email or URL candidate in AGENTS.md could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
-              "path": "AGENTS.md",
-              "materialToCoverage": true
-            },
-            {
-              "kind": "domain-review-limit",
               "message": "1 email or URL candidate in descriptors/DeploymentDescriptor-template.json could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
               "path": "descriptors/DeploymentDescriptor-template.json",
               "materialToCoverage": true
@@ -2498,8 +2506,9 @@
         },
         "classification": {
           "status": "manual",
-          "reason": "Found 1 possible secret or environment-specific value. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
+          "reason": "Found 2 possible secrets or environment-specific values. None is a clear real secret in production code or CI/deployment files, so a reviewer must decide whether any of them is real. Part of the repository was not fully scanned; see Coverage gaps.",
           "findingReferences": [
+            "src/main/resources/application.yml:14:password-secret-assignment",
             "README.md:51:password-secret-assignment"
           ],
           "materiallyWeakenedCoverage": true
@@ -2520,12 +2529,6 @@
             "kind": "domain-review-limit",
             "message": "1 email or URL candidate in src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
             "path": "src/main/java/org/folio/rtaccache/service/RtacCacheInvalidationService.java",
-            "materialToCoverage": true
-          },
-          {
-            "kind": "domain-review-limit",
-            "message": "1 email or URL candidate in AGENTS.md could not be read by the domain review (invalid, or a URL longer than 8192 characters).",
-            "path": "AGENTS.md",
             "materialToCoverage": true
           },
           {

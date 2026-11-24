@@ -5,6 +5,7 @@ const MAX_DOMAINS = 1000;
 const MAX_DOMAIN_FILES = 4000;
 const MAX_URL_LENGTH = 8192;
 const MAX_REJECTED_CANDIDATE_FILES = 20;
+const QUOTES = '\'`';
 
 export function collectS006DomainReview(files: ReadonlyArray<S006ScannedCandidateTextFile>): {
   domainReview?: S006DomainReview;
@@ -42,10 +43,11 @@ export function collectS006DomainReview(files: ReadonlyArray<S006ScannedCandidat
           reject();
           continue;
         }
-        const at = token.indexOf('@');
-        if (at < 1 || !token.slice(at + 1).includes('.')) continue;
-        const local = token.slice(0, at);
-        const host = token.slice(at + 1).replace(/\.$/, '').toLowerCase();
+        const address = withoutQuotes(token);
+        const at = address.indexOf('@');
+        if (at < 1 || !address.slice(at + 1).includes('.')) continue;
+        const local = address.slice(0, at);
+        const host = address.slice(at + 1).replace(/\.$/, '').toLowerCase();
         if (local.length <= 64 && !local.startsWith('.') && !local.endsWith('.') && !local.includes('..') &&
           isDomain(host)) {
           domain = host;
@@ -115,13 +117,21 @@ function* domainCandidates(text: string): Iterable<{ token: string; isUrl: boole
     ranges.push({ start: match.index, end: urls.lastIndex });
     yield { token: match[0], isUrl: true, end: urls.lastIndex };
   }
-  const emails = /[a-z0-9.!#$%&'*+/=?^_`{|}~@-]+/gi;
+  const emails = /[a-z0-9.!#$%&'*+/=?^_`{|}~-]*@[a-z0-9.!#$%&*+/=?^_{|}~@-]*|[a-z0-9.!#$%&'*+/=?^_`{|}~-]+/gi;
   let range = 0;
   while ((match = emails.exec(text)) !== null) {
     while (range < ranges.length && ranges[range].end <= match.index) range++;
     if (range < ranges.length && ranges[range].start < emails.lastIndex) continue;
     yield { token: match[0], isUrl: false, end: emails.lastIndex };
   }
+}
+
+function withoutQuotes(token: string): string {
+  let start = 0;
+  let end = token.length;
+  while (start < end && QUOTES.includes(token[start])) start++;
+  while (end > start && QUOTES.includes(token[end - 1])) end--;
+  return token.slice(start, end);
 }
 
 function isDomain(host: string): boolean {

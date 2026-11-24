@@ -71,6 +71,28 @@ describe('S006 email and URL domain review', () => {
   beforeEach(() => { repoPath = createTempRepo(); });
   afterEach(() => { fs.rmSync(repoPath, { recursive: true, force: true }); });
 
+  it('reads an email address inside single quotes or backticks', async () => {
+    writeRepoFile(repoPath, 'src/main/resources/application.properties', "mail.from='noreply@quoted.example.invalid'\n");
+    writeRepoFile(repoPath, 'src/main/js/notify.js', "const to = `ops@quoted.example.invalid`;\nconst cc = ''''x@quoted.example.invalid'''';\n");
+    writeRepoFile(repoPath, 'src/main/js/contact.js', "const to = 'ops@suffix.example.invalid'.trim();\nconst cc = \"o'brien@suffix.example.invalid\";\n");
+    writeRepoFile(repoPath, 'docs/contact.md', "Contact 'help@suffix.example.invalid'.\n");
+    const result = await analyzeRepo(repoPath);
+    expect(result.domainReview).toEqual({
+      emailCount: 6, urlCount: 0, omittedOccurrences: 0,
+      domains: [
+        { domain: 'quoted.example.invalid', emailCount: 3, urlCount: 0, fileCount: 2, files: [
+          { path: 'src/main/resources/application.properties', emailCount: 1, urlCount: 0 },
+          { path: 'src/main/js/notify.js', emailCount: 2, urlCount: 0 }
+        ] },
+        { domain: 'suffix.example.invalid', emailCount: 3, urlCount: 0, fileCount: 2, files: [
+          { path: 'src/main/js/contact.js', emailCount: 2, urlCount: 0 },
+          { path: 'docs/contact.md', emailCount: 1, urlCount: 0 }
+        ] }
+      ]
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
   it('groups occurrences and source files exactly without retaining mailbox names or URL payloads', async () => {
     writeRepoFile(repoPath, 'src/main/resources/sample-data/users-15.4.0/a.json', JSON.stringify({
       email: 'alpha+review@SHARED.example.invalid',
@@ -211,6 +233,15 @@ describe('S006 email and URL domain review', () => {
     expect(result.domainReview).toMatchObject({ emailCount: mode === 'long non-matches' ? 1 : 800,
       urlCount: mode === 'long non-matches' ? 0 : 800, omittedOccurrences: 0,
       domains: [{ domain: 'valid.invalid', fileCount: 1 }] });
+  }, 60_000);
+
+  it('collects quoted runs with and without @ in linear time', async () => {
+    const result = await expectLinearTime(3000, size => `${"a'".repeat(size)} ${"x@y'".repeat(size)}\na@valid.invalid`, async text => {
+      writeRepoFile(repoPath, 'src/linear.txt', text);
+      return analyzeRepo(repoPath);
+    });
+    expect(result.domainReview).toEqual({ emailCount: 1, urlCount: 0, omittedOccurrences: 0,
+      domains: [{ domain: 'valid.invalid', emailCount: 1, urlCount: 0, fileCount: 1, files: [{ path: 'src/linear.txt', emailCount: 1, urlCount: 0 }] }] });
   }, 60_000);
 });
 
@@ -399,6 +430,34 @@ describe('S006 bounded repository candidate scanning', () => {
 
     expect(result.files.map(file => file.path).sort()).toEqual(expectedPaths.sort());
     expect(result.coverage.complete).toBe(true);
+  });
+
+  it('skips build output only at the root of the repository or of a module, and reads source folders with the same names', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(repoPath, 'package.json', '{"name":"@folio/inventory"}\n');
+    writeRepoFile(repoPath, 'src/reports/InstancesReport.js', 'export const url = "/inventory";\n');
+    writeRepoFile(repoPath, 'src/gen/Ids.js', 'export const id = 1;\n');
+    writeRepoFile(repoPath, 'reports/summary.json', '{}\n');
+    writeRepoFile(repoPath, 'service/build.gradle', 'plugins {}\n');
+    writeRepoFile(repoPath, 'service/build/resources/main/application.yml', 'ignored: true\n');
+    writeRepoFile(repoPath, 'src/node_modules/pkg/index.js', 'ignored();\n');
+    writeRepoFile(repoPath, 'src/e2e/test-result/run.json', '{}\n');
+    writeRepoFile(repoPath, 'src/e2e/evaluation-report/run.json', '{}\n');
+    writeRepoFile(repoPath, 'src/e2e/generated-report/run.json', '{}\n');
+
+    const result = scanS006RepositoryCandidates(repoPath);
+
+    expect(result.files.map(file => file.path).sort()).toEqual([
+      'package.json', 'service/build.gradle', 'src/gen/Ids.js', 'src/reports/InstancesReport.js'
+    ]);
+    expect(result.coverage.skippedFiles.map(file => [file.path, file.reason])).toEqual([
+      ['reports', 'generated-artifact'],
+      ['service/build', 'generated-artifact'],
+      ['src/e2e/evaluation-report', 'generated-artifact'],
+      ['src/e2e/generated-report', 'generated-artifact'],
+      ['src/e2e/test-result', 'generated-artifact'],
+      ['src/node_modules', 'dependency-directory']
+    ]);
   });
 
   it('skips binary files, symlinks, dependency directories, build output, coverage output, VCS metadata, and generated reports', async () => {
@@ -795,7 +854,7 @@ describe('S006 sensitive information finding extraction', () => {
       [
         'spring:',
         '  datasource:',
-        '    password: ${DB_PASSWORD:folio_admin}',
+        '    password: ${DB_PASSWORD:}',
         '  kafka:',
         '    ssl:',
         '      key-store-password: ${KAFKA_SSL_KEYSTORE_PASSWORD:}',
@@ -810,6 +869,39 @@ describe('S006 sensitive information finding extraction', () => {
     const result = await analyzeRepo(repoPath);
 
     expect(result.findings.filter(finding => finding.detectorId === 'password-secret-assignment')).toEqual([]);
+  });
+
+  it('reviews the default of a property reference, which the application uses when the variable is not set', async () => {
+    repoPath = createTempRepo();
+    writeRepoFile(
+      repoPath,
+      'src/main/resources/application.yml',
+      [
+        'spring:',
+        '  datasource:',
+        '    password: ${DB_PASSWORD:folio_admin}',
+        'kafka:',
+        '  password: ${KAFKA_PASSWORD:s3cr3t}',
+        '  token: ${KAFKA_TOKEN:-Zq8vT2mKp4LxW9nR}',
+        '  secret: ${KAFKA_SECRET:}',
+        '  api-key: ${KAFKA_API_KEY}',
+        'lookups:',
+        '  password: ${env:DB_PASSWORD}',
+        '  secret: ${sys:folio.client.secret}',
+        '  token: ${file:/run/secrets/okapi-token}',
+        '  passwd: ${DB_PASSWORD:?DB_PASSWORD must be set}',
+        '  pwd: ${DB_PASSWORD:+configured}'
+      ].join('\n')
+    );
+
+    const result = await analyzeRepo(repoPath);
+
+    expect(result.findings.filter(finding => finding.detectorId === 'password-secret-assignment')
+      .map(finding => [finding.line, finding.valueClassification, finding.statusImpact])).toEqual([
+      [3, 'live-looking', 'manual_review'],
+      [5, 'synthetic', 'manual_review'],
+      [6, 'live-looking', 'manual_review']
+    ]);
   });
 
   it('retains bearer token assignments as matched excerpts', async () => {
@@ -1998,6 +2090,9 @@ describe('S006 context labels and type exports', () => {
     expect(classifyS006SourceContext('descriptors/ModuleDescriptor-template.json')).toBe('sample_or_example');
     expect(classifyS006SourceContext('docker-compose.yml')).toBe('local_docker_defaults');
     expect(classifyS006SourceContext('generated/openapi.json')).toBe('generated_content');
+    expect(classifyS006SourceContext('grails-app/conf/application.yml', 'grails:\n  codegen:\n    defaultPackage: org.folio\ngrails.codegen.defaultPackage: org.folio\n')).not.toBe('generated_content');
+    expect(classifyS006SourceContext('src/main/java/Api.java', '// Generated with swagger-codegen\n')).toBe('generated_content');
+    expect(classifyS006SourceContext('src/main/java/Tables.java', '// Built by jooq-codegen 3.19\n')).toBe('generated_content');
     expect(classifyS006SourceContext('unclassified.file')).toBe('unknown');
   });
 
@@ -2440,6 +2535,7 @@ describe('S006 reviewer decisions', () => {
     for (let index = 0; index < 260; index++) {
       writeRepoFile(repoPath, `config/data/a${String(index).padStart(3, '0')}.csv`, 'a,b\n');
     }
+    writeRepoFile(repoPath, 'config/zz/pom.xml', '<project/>\n');
     writeRepoFile(repoPath, 'config/zz/build/app.yml', 'name: app\n');
 
     const result = await analyzeWithGitleaksReport();

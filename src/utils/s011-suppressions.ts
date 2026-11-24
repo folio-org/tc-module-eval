@@ -12,7 +12,7 @@ import {
   SharedWorkflowUse,
   SonarRule
 } from '../types';
-import { findCandidateFiles, isBinaryBuffer, readBoundedFileBytes, relativePosixPath } from './repo-files';
+import { findCandidateFiles, isBinaryBuffer, isBuildModuleRoot, readBoundedFileBytes, relativePosixPath } from './repo-files';
 import { lineLookup } from './s010-evidence';
 import { isSonarTestPath } from './sonarcloud-snapshot';
 import { errorMessage } from './type-guards';
@@ -30,7 +30,6 @@ const MAX_COMMENT_CHARS = 200;
 const SKIPPED_DIRS: ReadonlySet<string> = new Set(['.git', 'node_modules']);
 /** Build output, skipped only at the root of the repository or of a module; a source package can be named build. */
 const OUTPUT_DIRS: ReadonlySet<string> = new Set(['target', 'build', 'dist', '.gradle', 'coverage', 'artifacts']);
-const MODULE_FILES = ['pom.xml', 'build.gradle', 'build.gradle.kts', 'package.json'];
 const ANNOTATED_SOURCE = /\.(java|groovy|kt|kts|scala)$/;
 /** Build files that can set the Sonar analysis scope; pom.xml has its own reader. */
 const SCOPE_FILES: ReadonlySet<string> = new Set(['pom.xml', 'sonar-project.properties', '.sonarcloud.properties', 'gradle.properties']);
@@ -75,7 +74,7 @@ export function scanS011Suppressions(
     const moduleRoots = new Map<string, boolean>();
     const isModuleRoot = (directory: string) => {
       if (!moduleRoots.has(directory)) {
-        moduleRoots.set(directory, directory === '' || MODULE_FILES.some(file => fs.existsSync(path.join(repoPath, directory, file))));
+        moduleRoots.set(directory, isBuildModuleRoot(repoPath, path.join(repoPath, directory)));
       }
       return moduleRoots.get(directory)!;
     };

@@ -5,6 +5,13 @@ import { errorMessage } from './type-guards';
 
 const DEFAULT_SKIPPED_REPO_DIRS: ReadonlySet<string> = new Set(['node_modules', '.git']);
 
+const BUILD_MODULE_FILES = ['pom.xml', 'build.gradle', 'build.gradle.kts', 'package.json'];
+
+/** Whether the folder is the repository root or the root of a Maven, Gradle or npm module, where build output is written. */
+export function isBuildModuleRoot(repoPath: string, directory: string): boolean {
+  return path.resolve(directory) === path.resolve(repoPath) || BUILD_MODULE_FILES.some(file => fs.existsSync(path.join(directory, file)));
+}
+
 export const GENERATED_REPORT_DIRECTORY_PATTERN = /(?:^|\/)(?:reports?|evaluation-reports?|generated-reports?|coverage|html-report|test-results?)(?:\/|$)/i;
 
 export function findCandidateFiles(

@@ -18,6 +18,9 @@ const PRIVATE_KEY_BLOCK_PATTERN = /-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]
 // [] is an empty list, as in an OpenAPI security requirement (accessToken: []).
 const PLACEHOLDER_VALUE_PATTERN =
   /^(?:|""|''|``|todo|tbd|n\/a|null|undefined|none|changeme|change[_-]?me|replace[_-]?me|your[_-]?(?:key|token|secret|password)|<[^>]+>|\$\{[^}]+}|%[^%]+%|%[sd]|\{\}|\[\]|\{[A-Za-z_][A-Za-z0-9_.-]*\}|\{\{[^}]+}}|\*{3,}|x{3,})$/i;
+// A Spring `${name:default}` or shell `${NAME:-default}`. Log4j lookups (`${env:NAME}`) and the shell's `${NAME:?error}`
+// and `${NAME:+alternative}` give no default.
+const PROPERTY_DEFAULT = /^\$\{(?!(?:env|sys|file|ctx|java|jndi|main|map|sd|bundle|date|docker|k8s|spring|lower|upper|web|event|marker|base64|log4j|vault|aws):)[A-Za-z_][\w.-]*:-?(?![?+])([^}]*)\}$/;
 const SYNTHETIC_VALUE_PATTERN = /\b(?:example|sample|dummy|fake|test|fixture|mock|localhost|localdev|changeme|replace-me)\b/i;
 const DEFAULT_CREDENTIAL_VALUE_PATTERN = /^(?:admin|postgres|password|root|guest|test|demo)$/i;
 // The key is a whole run of [A-Za-z0-9_.-] from its first letter, digit, or underscore to its end, contains a keyword, and ends
@@ -386,9 +389,13 @@ function classifySyntheticOrLive(rawMatch: string): S006ValueClassification {
   return 'live-looking';
 }
 
-/** The assigned value without the name, operator, or surrounding quotes. */
+/**
+ * The assigned value without the name, operator, or surrounding quotes; for a `${NAME:default}` or `${NAME:-default}`
+ * reference, its default, which the application uses when NAME is not set.
+ */
 export function s006AssignedValue(rawMatch: string): string {
-  return rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '').replace(/^["']|["']$/g, '').trim();
+  const value = rawMatch.replace(/^[^:=]+(?::=|[:=])\s*/, '').replace(/^["']|["']$/g, '').trim();
+  return PROPERTY_DEFAULT.exec(value)?.[1].trim() ?? value;
 }
 
 /** True when the value is marked as made up, including inside camelCase or snake_case words such as dummyToken. */
