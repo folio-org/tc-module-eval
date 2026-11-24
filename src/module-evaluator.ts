@@ -45,7 +45,8 @@ export function citedTrackedFiles(criteria: CriterionResult[], trackedFiles: str
  * MANUAL only when the evidence is inconclusive; B007 returns MANUAL whenever it applies and does not fail, B010
  * whenever the repository stores data, B013 for every repository that is not a shared library, B015 always, listing
  * the sites a reviewer checks, and F004, F006 and F007 whenever the package renders a user interface. The one other of
- * the 38 criteria, A001, always returns MANUAL: it is a manual review by design.
+ * the 38 criteria, A001, returns MANUAL for a new module: it is a manual review by design, and not applicable to an
+ * existing module.
  */
 export class ModuleEvaluator {
   private gitUtils: GitUtils;

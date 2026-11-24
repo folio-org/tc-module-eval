@@ -11,6 +11,10 @@ This file records criterion behavior not covered in the [Criteria Overview](crit
 - Agent review never changes a status. An invalid review item is dropped on its own instead of rejecting the whole review, structured JSON is never truncated, and a review that did not run is not shown as unavailable.
 - FOLIO shared workflows are modelled from their upstream YAML. A workflow or ref missing from `config/folio-shared-workflows.json` is unknown, not empty.
 
+## A001 Product Council Listing
+
+A001 needs manual review for a new module, since the tool cannot see the Product Council's evaluation. With `--existing-module` it is not applicable, as the criteria say ("For existing module evaluation: This criterion is inapplicable").
+
 ## S001 Open-Source License
 
 S001 reads up to 20 top-level license files: `LICENSE`, `LICENCE` and `COPYING` in any case, with an optional single suffix and extension such as `.md`, `-MIT` or `-2.0.txt` (multi-word names such as `LICENSE-THIRD-PARTY.txt` are notices, not the module's license). Only the first 64 KB of each is read. A file counts as the Apache License 2.0 only when a line among its first ten non-empty lines names it as the file's own license (the title and version, a "licensed/distributed under the Apache License, Version 2.0" notice, or an `Apache-2.0` SPDX id) before any line naming another license. Third-party notices appended after the Apache text do not matter; an MIT or other license file that merely mentions Apache-2.0 code does not pass.
