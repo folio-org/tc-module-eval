@@ -25,8 +25,8 @@ type Resolved =
 
 /**
  * Every request a UI package's production code sends to the backend: stripes-connect manifest resources of type
- * `okapi` (`path` and per-method `path`), calls on a ky instance (`useOkapiKy()`, a variable named `ky`, and
- * `.extend({ prefixUrl })` of one), and `fetch` on the Okapi URL. A path may be a string or template literal, a
+ * `okapi` (`path` and per-method `path`) and the `path` a resource mutator passes to `GET`, calls on a ky instance
+ * (`useOkapiKy()`, a variable named `ky`, and `.extend({ prefixUrl })` of one), and `fetch` on the Okapi URL. A path may be a string or template literal, a
  * concatenation, or a constant, object property or one-expression function from the same file or a relative import
  * inside the production source; segments the code fills in at run time become `{}`, and the query string is dropped.
  */
@@ -41,28 +41,28 @@ class PathResolver {
 
   sitesOf(file: FrontendSourceFile): UiRequestSite[] {
     const sites: UiRequestSite[] = [];
-    const add = (node: ts.Node, kind: UiRequestSiteKind, method: string | undefined, expression: ts.Expression | undefined, prefix: Part[] = [], hops = 0): void => {
+    const add = (node: ts.Node, kind: UiRequestSiteKind, method: string | undefined, expression: ts.Expression | undefined, prefix: Part[] = [], hops = 0, from = file): void => {
       const value = expression && hops <= MAX_DEPTH ? unwrap(expression) : undefined;
       if (value && ts.isConditionalExpression(value)) {
         for (const branch of [value.whenTrue, value.whenFalse]) {
-          if (!isNothing(branch)) add(node, kind, method, branch, prefix, hops + 1);
+          if (!isNothing(branch)) add(node, kind, method, branch, prefix, hops + 1, from);
         }
         return;
       }
       // A stripes-connect path function sends the request each of its return statements names, if any.
-      const fn = value && this.functionOf(value, file);
+      const fn = value && this.functionOf(value, from);
       const returned = fn ? returnedExpressions(fn).filter(item => !isNothing(item) && !ts.isObjectLiteralExpression(unwrap(item))) : [];
-      if (returned.length) return returned.forEach(item => add(node, kind, method, item, prefix, hops + 1));
+      if (returned.length) return returned.forEach(item => add(node, kind, method, item, prefix, hops + 1, from));
       const site: UiRequestSite = {
         path: file.path,
         line: lineOf(file.sourceFile, node.getStart(file.sourceFile)),
         kind,
         ...(method ? { method } : {}),
-        expression: expression ? oneLine(expression.getText(file.sourceFile)) : '(none)'
+        expression: expression ? oneLine(expression.getText(from.sourceFile)) : '(none)'
       };
       const built = !expression ? { unresolved: 'the request names no path' }
         : fn ? { unresolved: 'the path is computed by a function that returns no path the tool can read' }
-          : requestPath([...prefix, ...(prefix.length ? ['/'] : []), ...this.evaluate(expression, file, 0)]);
+          : requestPath([...prefix, ...(prefix.length ? ['/'] : []), ...this.evaluate(expression, from, 0)]);
       if (built.external) return;
       sites.push({ ...site, ...(built.requestPath !== undefined ? { requestPath: built.requestPath } : {}),
         ...(built.openEnd ? { openEnd: true } : {}), ...(built.unresolved ? { unresolved: built.unresolved } : {}) });
@@ -81,7 +81,15 @@ class PathResolver {
       if (ts.isCallExpression(node)) {
         const callee = node.expression;
         const [first, options] = node.arguments;
-        if (ts.isPropertyAccessExpression(callee) && KY_METHODS.has(callee.name.text)) {
+        if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'GET' && isMutatorResource(callee.expression)) {
+          const paths = first ? this.optionsPaths(first, file, 0) : [];
+          if ('unresolved' in paths) {
+            sites.push({ path: file.path, line: lineOf(file.sourceFile, node.getStart(file.sourceFile)), kind: 'stripes-connect', method: 'GET',
+              expression: oneLine(first.getText(file.sourceFile)), unresolved: paths.unresolved });
+          } else {
+            for (const path of paths) add(node, 'stripes-connect', 'GET', path.expression, [], 0, path.file);
+          }
+        } else if (ts.isPropertyAccessExpression(callee) && KY_METHODS.has(callee.name.text)) {
           const prefix = this.kyPrefix(callee.expression, file, 0);
           if (prefix) add(node, 'ky', callee.name.text.toUpperCase(), first, prefix);
         } else if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'extend') {
@@ -121,6 +129,40 @@ class PathResolver {
       if (prefix) return prefix;
     }
     return KY_INSTANCE_NAMES.has(node.text) ? [] : undefined;
+  }
+
+  /** The paths a mutator GET's options name: none when they name no path, so the manifest path is requested. */
+  private optionsPaths(expression: ts.Expression, file: FrontendSourceFile, depth: number):
+    Array<{ expression: ts.Expression; file: FrontendSourceFile }> | { unresolved: string } {
+    const unreadable = { unresolved: 'the options passed to GET could not be read' };
+    const node = unwrap(expression);
+    if (depth > MAX_DEPTH) return { unresolved: 'its constants refer to each other too deeply' };
+    if (node.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(node) && node.text === 'undefined')) return [];
+    if (ts.isConditionalExpression(node)) {
+      const whenTrue = this.optionsPaths(node.whenTrue, file, depth + 1);
+      const whenFalse = this.optionsPaths(node.whenFalse, file, depth + 1);
+      if ('unresolved' in whenTrue) return whenTrue;
+      return 'unresolved' in whenFalse ? whenFalse : [...whenTrue, ...whenFalse];
+    }
+    if (ts.isIdentifier(node)) {
+      const resolved = this.resolveIdentifier(node, file, depth);
+      if (resolved.kind === 'unresolved') return { unresolved: resolved.reason };
+      return resolved.kind === 'value' ? this.optionsPaths(resolved.node, resolved.file, depth + 1) : unreadable;
+    }
+    if (!ts.isObjectLiteralExpression(node)) return unreadable;
+    let paths: ReturnType<PathResolver['optionsPaths']> = [];
+    for (const item of node.properties) {
+      if (ts.isSpreadAssignment(item)) {
+        const spread = this.optionsPaths(item.expression, file, depth + 1);
+        if ('unresolved' in spread || spread.length) paths = spread;
+      } else if (item.name && (ts.isIdentifier(item.name) || ts.isStringLiteral(item.name)) && item.name.text === 'path') {
+        if (ts.isPropertyAssignment(item)) paths = [{ expression: item.initializer, file }];
+        else if (ts.isShorthandPropertyAssignment(item)) paths = [{ expression: item.name, file }];
+      } else if (item.name && ts.isComputedPropertyName(item.name)) {
+        paths = unreadable;
+      }
+    }
+    return paths;
   }
 
   private functionOf(node: ts.Expression, file: FrontendSourceFile): ts.FunctionLikeDeclaration | undefined {
@@ -365,6 +407,13 @@ function property(object: ts.ObjectLiteralExpression, name: string): ts.Expressi
     if (ts.isShorthandPropertyAssignment(item)) return item.name;
   }
   return undefined;
+}
+
+function isMutatorResource(expression: ts.Expression): boolean {
+  const resource = unwrap(expression);
+  if (!ts.isPropertyAccessExpression(resource)) return false;
+  const owner = unwrap(resource.expression);
+  return (ts.isIdentifier(owner) ? owner.text : ts.isPropertyAccessExpression(owner) ? owner.name.text : undefined) === 'mutator';
 }
 
 function isOkapiResource(object: ts.ObjectLiteralExpression): boolean {
