@@ -60,6 +60,25 @@ const NPM_BUILD_FILES = ['package.json'];
 const FOLIO_NPM_REGISTRY_URL = 'https://repository.folio.org/repository/npm-folio';
 const MAX_SPDX_ALTERNATIVES = 64;
 
+/** Points the @folio scope at the FOLIO registry unless the repository has its own .npmrc; returns whether it wrote one. */
+export function writeFolioNpmrcIfMissing(repoPath: string): boolean {
+  const npmrcPath = path.join(repoPath, '.npmrc');
+  if (fs.existsSync(npmrcPath)) {
+    return false;
+  }
+
+  getLogger().info('Creating .npmrc with FOLIO registry configuration...');
+  try {
+    // 'wx' never follows an existing path, so a dangling symlink cannot redirect this write outside the repository.
+    fs.writeFileSync(npmrcPath, `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`, { encoding: 'utf-8', flag: 'wx' });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    getLogger().warn('.npmrc is a symlink to a missing file; leaving it unchanged');
+    return false;
+  }
+}
+
 function createNpmToolEnv(repoPath: string): NodeJS.ProcessEnv {
   const npmToolDir = path.join(repoPath, '.folio-eval-npm');
   const npmPrefix = path.join(npmToolDir, 'prefix');
@@ -239,17 +258,7 @@ export async function getNpmDependencies(
   }
 
   try {
-    const npmrcPath = path.join(validatedPath, '.npmrc');
-    if (!fs.existsSync(npmrcPath)) {
-      getLogger().info('Creating .npmrc with FOLIO registry configuration...');
-      try {
-        // 'wx' never follows an existing path, so a dangling symlink cannot redirect this write outside the repository.
-        fs.writeFileSync(npmrcPath, `@folio:registry=${FOLIO_NPM_REGISTRY_URL}\n`, { encoding: 'utf-8', flag: 'wx' });
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-        getLogger().warn('.npmrc is a symlink to a missing file; leaving it unchanged');
-      }
-    }
+    writeFolioNpmrcIfMissing(validatedPath);
 
     // SECURITY: --ignore-scripts prevents execution of preinstall/postinstall/etc scripts
     // --ignore-engines bypasses Node.js engine compatibility checks that can cause

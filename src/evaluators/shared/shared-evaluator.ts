@@ -97,21 +97,37 @@ export abstract class SharedEvaluator extends CatalogSectionEvaluator {
 
   private async evaluateS002(repoPath: string, evaluationRun?: EvaluationRun): Promise<CriterionResult> {
     const run = this.runFor(repoPath, 'S002', evaluationRun);
+    const moduleKind = await getModuleKind(run, repoPath);
+    if (moduleKind.kind === 'library') {
+      return {
+        criterionId: 'S002',
+        status: EvaluationStatus.NOT_APPLICABLE,
+        evidence: 'S002 does not apply to explicit FOLIO library repositories',
+        details: this.formatModuleKindDetails('Nothing; S002 does not apply to FOLIO libraries.', moduleKind)
+      };
+    }
+
     const artifact = await run.getOrCreateArtifact('moduleDescriptor', () => produceModuleDescriptorArtifact(repoPath, run));
 
     if (artifact.status !== 'produced' && artifact.status !== 'discovered') {
       return s002ArtifactFailureResult(artifact);
     }
 
-    if (!artifact.absolutePath || !artifact.descriptorPath) {
+    if (artifact.readError !== undefined) {
+      return s002ReadFailureResult(artifact, artifact.readError);
+    }
+
+    if (!artifact.descriptorPath || (artifact.content === undefined && !artifact.absolutePath)) {
       return s002MissingPathResult(artifact);
     }
 
-    let descriptorContent: string;
-    try {
-      descriptorContent = fs.readFileSync(artifact.absolutePath, 'utf-8');
-    } catch (error) {
-      return s002ReadFailureResult(artifact, errorMessage(error));
+    let descriptorContent = artifact.content;
+    if (descriptorContent === undefined) {
+      try {
+        descriptorContent = fs.readFileSync(artifact.absolutePath!, 'utf-8');
+      } catch (error) {
+        return s002ReadFailureResult(artifact, errorMessage(error));
+      }
     }
 
     return s002ValidationResult(artifact, validateModuleDescriptorJson(descriptorContent));

@@ -29,14 +29,22 @@ When a license file exists, `pom.xml` and `package.json` declarations are not co
 
 S002 checks the final `ModuleDescriptor.json` against the Okapi schema. It picks the descriptor source in this order:
 
-1. A Maven project (`pom.xml`): run `mvn process-resources -DskipTests` and use the `ModuleDescriptor.json` generated under a `target/` directory. When several are generated, use the one whose `id` is the module name or `<module name>-<version>`, where the module name is the `package.json` name without `@folio/`, or else the `pom.xml` `artifactId`. If not exactly one matches, S002 needs manual review.
+1. A Maven project (`pom.xml`): run `mvn -B -ntp process-resources -DskipTests` (keeping the last 64 KB of its output, where Maven reports a failure) and use the `ModuleDescriptor.json` generated under a `target/` directory. When several are generated, use the one whose `id` is the module name or `<module name>-<version>`, where the module name is the `package.json` name without `@folio/`, or else the `pom.xml` `artifactId`. If not exactly one matches, S002 needs manual review.
 2. A Gradle project (`build.gradle` or `build.gradle.kts` at the repository root or in `service/`): run the wrapper's `processResources` and use the `ModuleDescriptor.json` generated under that project's `build/resources/main/`. See [Gradle Modules](#gradle-modules).
-3. A `package.json` script named `build-mod-descriptor`, `build-module-descriptor`, or `generate-module-descriptor`: run it with `yarn run` and use the `ModuleDescriptor.json` it writes at the repository root.
+3. A `package.json` script named `build-mod-descriptor`, `build-module-descriptor`, or `generate-module-descriptor`: install the dependencies, then run the script with `yarn run` and use the `ModuleDescriptor.json` or `module-descriptor.json` it writes or rewrites at the repository root; a file the script left unchanged is not used. See [Stripes descriptor scripts](#stripes-descriptor-scripts).
 4. Otherwise, a committed `ModuleDescriptor.json` at the repository root.
+
+S002 does not apply to libraries, using the same module-kind classification as S004 and S005; for a library it runs no build.
 
 When a repository has a Maven or Gradle project or a descriptor script, the build always runs, even if a `ModuleDescriptor.json` is also committed; the committed file is not used as a fallback. If the build is blocked because local commands are off, or the build fails, S002 needs manual review. Enable local commands only for trusted repositories and runners.
 
 Files whose repository path contains `template` are never used as the final descriptor. A repository with no descriptor source but with a descriptor template (a `*ModuleDescriptor*.json` file under a path containing `template`, such as `descriptors/ModuleDescriptor-template.json`) fails with a message naming the templates.
+
+### Stripes descriptor scripts
+
+Stripes modules generate their descriptor with the Stripes CLI, a devDependency, usually as `stripes mod descriptor --full | jq '.[]' > module-descriptor.json`. Before the script, S002 runs `yarn install --ignore-scripts --ignore-engines --pure-lockfile`: devDependencies are installed, dependency lifecycle scripts never run, and `yarn.lock` is left as committed. Like S003's install, it is gated behind `--allow-local-commands` and is not sandboxed: it runs on the host with the host's network access. Without an `.npmrc`, the `@folio` scope uses the FOLIO registry, as for S003; the file is written only when the install is allowed to run. S003's own install is production-only, so S002 never reuses it. Before installing, S002 backs up each root `ModuleDescriptor.json` or `module-descriptor.json` that is already there. If one is a symbolic link, dangling or not, or cannot be backed up in full (it is not a regular file, is larger than 8 MiB, or cannot be read), S002 runs nothing and needs manual review. Afterwards, whether the script succeeded, failed, or the evaluator stopped with an error, S002 keeps the descriptor's content, removes the `node_modules` directory, `.npmrc` and descriptor file it created, and writes the backed-up bytes back to the root path itself, so later criteria see the checkout as it was. A removal or restore that fails is listed under Notes. One gap remains: on a timeout the runner stops only the process it started, so a process the script started that outlives it can still write to the checkout afterwards.
+
+A failed or blocked install needs manual review, like a failed or blocked script. A script that exits successfully but leaves an empty descriptor fails: in a pipeline, the exit code is the last command's, so a missing `stripes` command still writes an empty file. A descriptor that is not JSON fails with the JSON error, and one that is not a regular file or is larger than 8 MiB fails as unreadable.
 
 ## Gradle Modules
 

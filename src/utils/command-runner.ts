@@ -88,7 +88,7 @@ export class LocalCommandRunner implements CommandRunner {
     const cwd = path.resolve(request.cwd);
     const maxOutputBytes = request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
-    if (this.requiresPolicyEnforcement(request) && !this.allowLocalCommands) {
+    if (!this.canRun(request)) {
       const blocked = this.result(request, identity, cwd, args, started, {
         status: 'blocked',
         errorMessage: 'Command requires build-tool execution, but local commands are not allowed'
@@ -109,6 +109,10 @@ export class LocalCommandRunner implements CommandRunner {
     const result = await this.spawnCommand(request, identity, cwd, args, started, maxOutputBytes);
     evaluationRun?.commandObservations.set(identity, result);
     return result;
+  }
+
+  canRun(request: CommandExecutionRequest): boolean {
+    return this.allowLocalCommands || !this.requiresPolicyEnforcement(request);
   }
 
   private requiresPolicyEnforcement(request: CommandExecutionRequest): boolean {

@@ -9,7 +9,7 @@ const GRADLE_TEMPLATE_HINT = 'usually service/src/main/okapi/ModuleDescriptor-te
 const MAX_BUILD_ERROR_LINES = 40;
 const MAX_BUILD_ERROR_LINE_LENGTH = 500;
 const LOG_LEVEL_TAG = /^\s*\[[A-Z]+\]/;
-const TRUNCATION_MARKER = /^\[output truncated to \d+ bytes\]$/;
+const TRUNCATION_MARKER = /^\[output truncated(?: to \d+ bytes|: kept the last \d+ of \d+ bytes)\]$/;
 // Maven "[ERROR]", yarn/npm "error"/"ERR!", and Node exception lines such as "TypeError: ...".
 const ERROR_LINE = /^\s*(?:\[(?:ERROR|FATAL)\]|(?:npm )?ERR!|error\b|\w*Error:)/i;
 const UNCERTAIN_ARTIFACT_STATUSES = new Set<ModuleDescriptorArtifact['status']>([
@@ -86,11 +86,13 @@ function artifactFailureEvidence(artifact: ModuleDescriptorArtifact): string {
   const problem = artifact.errors.join(' ');
   switch (artifact.status) {
     case 'unsafe-to-run':
-      return artifact.command?.status === 'blocked' && !artifact.command.localCommandsAllowed
+      return commandsTurnedOff(artifact)
         ? `The module descriptor is ${describeSource(artifact)}, which was not run because build commands are turned off for this evaluation. Rerun with --allow-local-commands on a trusted machine, or check the descriptor by hand.`
         : `The evaluator could not safely look for the module descriptor. ${sentence(problem)} A reviewer needs to check it by hand.`;
     case 'command-failed':
-      return `The ${buildName(artifact)} that generates the module descriptor ${commandFailure(artifact.command)}, so the descriptor could not be checked. A reviewer needs to check whether the build works and its descriptor is valid.`;
+      return !artifact.command && artifact.installCommand
+        ? `Installing the dependencies of the ${buildName(artifact)} ${commandFailure(artifact.installCommand)}, so the module descriptor could not be generated or checked. A reviewer needs to check whether the build works and its descriptor is valid.`
+        : `The ${buildName(artifact)} that generates the module descriptor ${commandFailure(artifact.command)}, so the descriptor could not be checked. A reviewer needs to check whether the build works and its descriptor is valid.`;
     case 'ambiguous-candidates':
       return `${problem} A reviewer needs to pick the module's descriptor and check it against the Okapi schema.`;
     case 'missing':
@@ -104,7 +106,7 @@ function artifactFailureEvidence(artifact: ModuleDescriptorArtifact): string {
 function artifactFailureAction(artifact: ModuleDescriptorArtifact): string {
   switch (artifact.status) {
     case 'unsafe-to-run':
-      return artifact.command?.status === 'blocked' && !artifact.command.localCommandsAllowed
+      return commandsTurnedOff(artifact)
         ? 'Rerun the evaluation with --allow-local-commands on a trusted machine, or check the module descriptor against the Okapi ModuleDescriptor schema by hand.'
         : 'Check the module descriptor against the Okapi ModuleDescriptor schema by hand.';
     case 'command-failed':
@@ -137,7 +139,7 @@ function missingDescriptorFix(artifact: ModuleDescriptorArtifact): string {
     case 'gradle-generation':
       return `Make the build's processResources task generate it, ${GRADLE_TEMPLATE_HINT}.`;
     case 'frontend-script':
-      return `Fix the ${scriptName(artifact)} script so it writes ${DESCRIPTOR_NAME}.`;
+      return `Fix the ${scriptName(artifact)} script so it writes the module descriptor to ${DESCRIPTOR_NAME} or module-descriptor.json at the repository root.`;
     default:
       return `Commit a ${DESCRIPTOR_NAME} at the repository root, or add a build step that generates it.`;
   }
@@ -148,6 +150,7 @@ function formatS002Details(artifact: ModuleDescriptorArtifact, whatToDo: string,
     `What to do: ${whatToDo}`,
     artifact.descriptorPath ? `Descriptor: ${reportText(artifact.descriptorPath)}` : undefined,
     artifact.strategy ? `Source: ${sourceLabel(artifact)}` : undefined,
+    artifact.installCommand ? `Install command: ${reportText(formatCommand(artifact.installCommand))}` : undefined,
     artifact.command ? `Build command: ${reportText(formatCommand(artifact.command))}` : undefined,
     !artifact.strategy && artifact.status !== 'unsafe-to-run'
       ? `Looked for: a ${DESCRIPTOR_NAME} at the repository root, a Maven build (pom.xml), a Gradle build (build.gradle at the root or in service/), or a package.json script named ${FRONTEND_DESCRIPTOR_SCRIPTS.join(', ')}`
@@ -167,8 +170,9 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
   }
 
   // Maven reports failures on stdout, and Gradle and yarn on stderr; put that stream last so the tail keeps the failure.
-  const command = artifact.command;
-  const streams = artifact.strategy === 'maven-generation'
+  const command = artifact.command ?? artifact.installCommand;
+  const maven = artifact.strategy === 'maven-generation';
+  const streams = maven
     ? [command?.stderr, command?.stdout]
     : [command?.stdout, command?.stderr];
   const printed = streams
@@ -183,7 +187,8 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
   if (!output.length) {
     return [];
   }
-  const cutOff = Boolean(command?.stdoutTruncated || command?.stderrTruncated);
+  // module-descriptor-artifact.ts runs Maven with keepStdoutTail, so only a cut to any other stream loses the end of the build.
+  const cutOff = Boolean((!maven && command?.stdoutTruncated) || command?.stderrTruncated);
 
   // The end of the output usually holds the actual failure.
   // The report shows long lists collapsed to their first few items, so list only the error lines when there are any.
@@ -192,7 +197,6 @@ function formatBuildErrorLines(artifact: ModuleDescriptorArtifact): string[] {
   const shown = (errorLines.length ? errorLines : tail).map(line =>
     line.length > MAX_BUILD_ERROR_LINE_LENGTH ? `${line.slice(0, MAX_BUILD_ERROR_LINE_LENGTH)}… (line shortened)` : line
   );
-  // The runner keeps the start of each stream, so when it cut the output off, the true end of the build is missing.
   const cutOffNote = 'the build printed more than the evaluator keeps, so the final lines are missing';
   const heading = errorLines.length
     ? cutOff
@@ -265,7 +269,12 @@ function buildName(artifact: ModuleDescriptorArtifact): string {
 }
 
 function scriptName(artifact: ModuleDescriptorArtifact): string {
-  return artifact.command?.args[1] ?? 'package.json descriptor';
+  return artifact.descriptorScript ?? 'package.json descriptor';
+}
+
+function commandsTurnedOff(artifact: ModuleDescriptorArtifact): boolean {
+  const command = artifact.command ?? artifact.installCommand;
+  return command?.status === 'blocked' && !command.localCommandsAllowed;
 }
 
 function formatCommand(command: CommandExecutionResult): string {

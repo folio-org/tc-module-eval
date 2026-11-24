@@ -21,6 +21,15 @@ describe('CommandRunner', () => {
     expect(result.errorMessage).toContain('local commands are not allowed');
   });
 
+  it('should say in advance whether a command would be blocked by its policy', () => {
+    const isolated = { command: 'yarn', args: ['install'], cwd: process.cwd(), requiresIsolation: true };
+    const denied = { command: 'yarn', args: ['install'], cwd: process.cwd(), networkPolicy: { default: 'deny' as const } };
+    const plain = { command: 'git', args: ['status'], cwd: process.cwd() };
+
+    expect([isolated, denied, plain].map(request => new LocalCommandRunner(false).canRun(request))).toEqual([false, false, true]);
+    expect([isolated, denied, plain].map(request => new LocalCommandRunner(true).canRun(request))).toEqual([true, true, true]);
+  });
+
   it('should cache equivalent normalized commands in one EvaluationRun', async () => {
     const runner = new LocalCommandRunner(true);
     const run = createEvaluationRun({

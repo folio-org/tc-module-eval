@@ -5,11 +5,13 @@
 - **Local CLI usage**: Malicious build files (`pom.xml`, `build.gradle`, `package.json`) can execute arbitrary code with your local user permissions.
 - **GitHub Actions usage**: Malicious build files execute in the runner environment with `GITHUB_TOKEN` permissions. Use least-privilege [job level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and/or [workflow level](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) `permissions` to reduce risk.
 
-By default, local CLI runs use strict command execution and block build-tool commands that require isolation or network-policy enforcement. To run those commands in a trusted local environment, opt in explicitly:
+By default, local CLI runs block build-tool commands. Their isolation and network policies only gate them behind `--allow-local-commands`; once allowed, they run on the host with the current user's permissions and network access, not in a sandbox. To run those commands in a trusted local environment, opt in explicitly:
 
 ```bash
 folio-eval evaluate <repo-url> --allow-local-commands
 ```
+
+Dependency installs (S003, and S002 before a Stripes descriptor script) pass `--ignore-scripts`, so dependencies' install scripts never run; the repository's own descriptor script still does.
 
 When this flag is used, reports record where commands ran: `github-actions` in GitHub Actions and `local` elsewhere.
 

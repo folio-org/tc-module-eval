@@ -12,10 +12,15 @@ import { GRADLE_NETWORK_POLICY, MAVEN_NETWORK_POLICY, NPM_NETWORK_POLICY } from 
 import { defaultCommandRunner } from '../command-runner';
 import { hasMavenProject } from '../parsers/maven-dependency-parser';
 import { findGradleProjectDir, getGradleCommand } from '../parsers/gradle-dependency-parser';
+import { writeFolioNpmrcIfMissing } from '../parsers/npm-dependency-parser';
 import { validateRepoPath } from '../parsers/common';
-import { findCandidateFiles, isWithinRepo, relativePosixPath, walkDirectories } from '../repo-files';
+import { findCandidateFiles, isWithinRepo, readBoundedFileBytes, relativePosixPath, walkDirectories } from '../repo-files';
+import { errorMessage } from '../type-guards';
 
 const DESCRIPTOR_NAME = 'ModuleDescriptor.json';
+const MAX_GENERATED_DESCRIPTOR_BYTES = 8 * 1024 * 1024;
+// Stripes modules usually redirect `stripes mod descriptor` output to module-descriptor.json.
+const FRONTEND_DESCRIPTOR_NAMES = [DESCRIPTOR_NAME, 'module-descriptor.json'];
 export const FRONTEND_DESCRIPTOR_SCRIPTS = ['build-mod-descriptor', 'build-module-descriptor', 'generate-module-descriptor'];
 
 export async function produceModuleDescriptorArtifact(
@@ -38,10 +43,11 @@ export async function produceModuleDescriptorArtifact(
       findCandidates: () => findGeneratedDescriptorCandidates(validatedPath),
       request: {
         command: 'mvn',
-        args: ['process-resources', '-DskipTests'],
+        args: ['-B', '-ntp', 'process-resources', '-DskipTests'],
         cwd: validatedPath,
         timeoutMs: 300000,
         maxOutputBytes: 64 * 1024,
+        keepStdoutTail: true,
         requiresIsolation: true,
         networkPolicy: MAVEN_NETWORK_POLICY
       }
@@ -134,7 +140,64 @@ async function runFrontendDescriptorStrategy(
   evaluationRun: EvaluationRun | undefined,
   commandRunner: CommandRunner
 ): Promise<ModuleDescriptorArtifact> {
-  const before = snapshotRootDescriptorPath(repoPath);
+  // Descriptor scripts call the Stripes CLI, a devDependency, so devDependencies are installed too.
+  const installRequest: CommandExecutionRequest = {
+    command: 'yarn',
+    args: ['install', '--ignore-scripts', '--ignore-engines', '--pure-lockfile'],
+    cwd: repoPath,
+    timeoutMs: 300000,
+    maxOutputBytes: 64 * 1024,
+    requiresIsolation: true,
+    networkPolicy: NPM_NETWORK_POLICY
+  };
+  const before = backUpRootDescriptors(repoPath, scriptName);
+  if (typeof before === 'string') {
+    return artifact('unsafe-to-run', { strategy: 'frontend-script', descriptorScript: scriptName, errors: [before] });
+  }
+
+  const hadNodeModules = pathExists(path.join(repoPath, 'node_modules'));
+  let wroteNpmrc = false;
+  let result: ModuleDescriptorArtifact | undefined;
+  try {
+    if (commandRunner.canRun?.(installRequest) ?? true) {
+      try {
+        wroteNpmrc = writeFolioNpmrcIfMissing(repoPath);
+      } catch (error) {
+        result = artifact('unsafe-to-run', {
+          strategy: 'frontend-script',
+          descriptorScript: scriptName,
+          errors: [`The evaluator could not write the .npmrc the dependency install needs: ${errorMessage(error)}`]
+        });
+        return result;
+      }
+    }
+    result = await generateFrontendDescriptor(repoPath, scriptName, installRequest, before, evaluationRun, commandRunner);
+    return result;
+  } finally {
+    const created = [
+      ...(hadNodeModules ? [] : ['node_modules']),
+      ...(wroteNpmrc ? ['.npmrc'] : []),
+      ...FRONTEND_DESCRIPTOR_NAMES.filter(name => !before.has(name))
+    ];
+    const problems = [...restoreRootDescriptors(repoPath, before), ...removeCreatedPaths(repoPath, created)];
+    result?.warnings.push(...problems);
+  }
+}
+
+async function generateFrontendDescriptor(
+  repoPath: string,
+  scriptName: string,
+  installRequest: CommandExecutionRequest,
+  before: Map<string, RootDescriptorBackup>,
+  evaluationRun: EvaluationRun | undefined,
+  commandRunner: CommandRunner
+): Promise<ModuleDescriptorArtifact> {
+  const installCommand = await commandRunner.run(installRequest, evaluationRun);
+  const source = { strategy: 'frontend-script' as const, descriptorScript: scriptName, installCommand };
+  if (installCommand.status !== 'success') {
+    return commandProblemArtifact(installCommand, source, `Installing the dependencies of the ${scriptName} script`);
+  }
+
   const command = await commandRunner.run({
     command: 'yarn',
     args: ['run', scriptName],
@@ -144,33 +207,83 @@ async function runFrontendDescriptorStrategy(
     requiresIsolation: true,
     networkPolicy: NPM_NETWORK_POLICY
   }, evaluationRun);
-
-  if (command.status === 'blocked') {
-    return artifact('unsafe-to-run', {
-      strategy: 'frontend-script',
-      command,
-      errors: [command.errorMessage ?? 'Frontend descriptor generation was blocked']
-    });
-  }
-
   if (command.status !== 'success') {
-    return artifact('command-failed', {
-      strategy: 'frontend-script',
-      command,
-      errors: [command.errorMessage ?? `Frontend descriptor generation ${command.status}`]
-    });
+    return commandProblemArtifact(command, { ...source, command }, 'Frontend descriptor generation');
   }
 
-  const rootDescriptor = path.join(repoPath, DESCRIPTOR_NAME);
-  if (!isSafeFinalDescriptor(repoPath, rootDescriptor) || !fs.existsSync(rootDescriptor)) {
+  const selected = FRONTEND_DESCRIPTOR_NAMES
+    .map(name => path.join(repoPath, name))
+    .find(candidate => pathSignature(candidate) !== before.get(path.basename(candidate))?.signature && isSafeFinalDescriptor(repoPath, candidate));
+  if (!selected) {
     return artifact('missing', {
-      strategy: 'frontend-script',
+      ...source,
       command,
-      errors: [`The ${scriptName} script ran, but it did not create ${DESCRIPTOR_NAME} at the repository root.`]
+      errors: [`The ${scriptName} script ran, but it did not write ${FRONTEND_DESCRIPTOR_NAMES.join(' or ')} at the repository root.`]
     });
   }
 
-  return selectedArtifact(repoPath, rootDescriptor, 'frontend-script', command, before);
+  const name = path.basename(selected);
+  const produced: ModuleDescriptorArtifact = {
+    ...selectedArtifact(repoPath, selected, 'frontend-script', command, new Set(before.keys())),
+    // The script's output is removed or restored afterwards, so only its content is kept.
+    absolutePath: undefined,
+    descriptorScript: scriptName,
+    installCommand
+  };
+  let content: string;
+  try {
+    content = readDescriptorText(selected);
+  } catch (error) {
+    return { ...produced, readError: errorMessage(error) };
+  }
+
+  if (content.trim() === '') {
+    return artifact('invalid-candidate', {
+      ...source,
+      command,
+      descriptorPath: name,
+      errors: [`The ${scriptName} script exited successfully, but the ${name} it left at the repository root is empty; a command earlier in the script may have failed without failing the script.`]
+    });
+  }
+
+  return { ...produced, content };
+}
+
+function readDescriptorText(descriptorPath: string): string {
+  return readDescriptorBytes(descriptorPath).toString('utf-8');
+}
+
+function readDescriptorBytes(descriptorPath: string): Buffer {
+  if (!fs.statSync(descriptorPath).isFile()) {
+    throw new Error('it is not a regular file');
+  }
+  const bytes = readBoundedFileBytes(descriptorPath, MAX_GENERATED_DESCRIPTOR_BYTES + 1);
+  if (bytes.length > MAX_GENERATED_DESCRIPTOR_BYTES) {
+    throw new Error(`it is larger than ${MAX_GENERATED_DESCRIPTOR_BYTES / (1024 * 1024)} MiB`);
+  }
+  return bytes;
+}
+
+function removeCreatedPaths(repoPath: string, names: string[]): string[] {
+  const problems: string[] = [];
+  for (const name of names) {
+    try {
+      fs.rmSync(path.join(repoPath, name), { recursive: true, force: true, maxRetries: 3 });
+    } catch (error) {
+      problems.push(`The evaluator could not remove ${name}, which it created while generating the descriptor: ${errorMessage(error)}`);
+    }
+  }
+  return problems;
+}
+
+function commandProblemArtifact(
+  command: CommandExecutionResult,
+  values: Partial<ModuleDescriptorArtifact>,
+  action: string
+): ModuleDescriptorArtifact {
+  return command.status === 'blocked'
+    ? artifact('unsafe-to-run', { ...values, errors: [command.errorMessage ?? `${action} was blocked`] })
+    : artifact('command-failed', { ...values, errors: [command.errorMessage ?? `${action} ${command.status}`] });
 }
 
 function discoverStaticRootDescriptor(repoPath: string): ModuleDescriptorArtifact {
@@ -319,11 +432,60 @@ function isDescriptorTemplateName(fileName: string): boolean {
   return /moduledescriptor.*\.json$/i.test(fileName);
 }
 
-function snapshotRootDescriptorPath(repoPath: string): Set<string> {
-  const rootDescriptor = path.join(repoPath, DESCRIPTOR_NAME);
-  return fs.existsSync(rootDescriptor) && isSafeFinalDescriptor(repoPath, rootDescriptor)
-    ? new Set([DESCRIPTOR_NAME])
-    : new Set();
+interface RootDescriptorBackup {
+  signature: string;
+  bytes: Buffer;
+}
+
+/** Backs up the root descriptors the script may overwrite, or explains why the script cannot run safely. */
+function backUpRootDescriptors(repoPath: string, scriptName: string): Map<string, RootDescriptorBackup> | string {
+  const backups = new Map<string, RootDescriptorBackup>();
+  for (const name of FRONTEND_DESCRIPTOR_NAMES) {
+    const candidate = path.join(repoPath, name);
+    const stats = fs.lstatSync(candidate, { throwIfNoEntry: false });
+    if (!stats) {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      return `${name} at the repository root is a symbolic link, and a committed descriptor symlink cannot be safely regenerated, so the ${scriptName} script was not run.`;
+    }
+    try {
+      backups.set(name, { signature: pathSignature(candidate) ?? '', bytes: readDescriptorBytes(candidate) });
+    } catch (error) {
+      return `${name} at the repository root could not be backed up (${errorMessage(error)}), so the ${scriptName} script was not run.`;
+    }
+  }
+  return backups;
+}
+
+function restoreRootDescriptors(repoPath: string, before: Map<string, RootDescriptorBackup>): string[] {
+  const problems: string[] = [];
+  for (const [name, backup] of before) {
+    const candidate = path.join(repoPath, name);
+    try {
+      if (pathSignature(candidate) === backup.signature) {
+        continue;
+      }
+      const current = fs.lstatSync(candidate, { throwIfNoEntry: false });
+      if (current?.isFile() && readBoundedFileBytes(candidate, backup.bytes.length + 1).equals(backup.bytes)) {
+        continue;
+      }
+      fs.rmSync(candidate, { recursive: true, force: true, maxRetries: 3 });
+      fs.writeFileSync(candidate, backup.bytes, { flag: 'wx' });
+    } catch (error) {
+      problems.push(`The evaluator could not restore ${name}, which the descriptor script changed: ${errorMessage(error)}`);
+    }
+  }
+  return problems;
+}
+
+function pathSignature(candidatePath: string): string | undefined {
+  const stats = fs.lstatSync(candidatePath, { throwIfNoEntry: false });
+  return stats && `${stats.ino}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`;
+}
+
+function pathExists(candidatePath: string): boolean {
+  return pathSignature(candidatePath) !== undefined;
 }
 
 function relative(repoPath: string, candidatePath: string): string {
@@ -339,6 +501,10 @@ function artifact(
     strategy: values.strategy,
     descriptorPath: values.descriptorPath,
     absolutePath: values.absolutePath,
+    content: values.content,
+    readError: values.readError,
+    descriptorScript: values.descriptorScript,
+    installCommand: values.installCommand,
     command: values.command,
     warnings: values.warnings ?? [],
     errors: values.errors ?? []
