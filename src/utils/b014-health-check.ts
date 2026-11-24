@@ -28,7 +28,7 @@ const MAX_PROBLEMS = 50;
 const ACTUATOR_ARTIFACTS = new Set(['spring-boot-starter-actuator', 'spring-boot-actuator', 'spring-boot-actuator-autoconfigure', 'folio-spring-base']);
 const GRADLE_DEPENDENCY = /^[ \t]*(?:implementation|api|compile|runtime|runtimeOnly)\b[^\n{]*?\b(?:spring-boot-(?:starter-)?actuator(?:-autoconfigure)?|folio-spring-base)\b(?!-)/m;
 const POM_IGNORED: Array<[string, string]> = [['<!--', '-->'], ['<exclusions>', '</exclusions>'], ['<dependencyManagement>', '</dependencyManagement>'], ['<build>', '</build>'], ['<profiles>', '</profiles>']];
-const DOCKER_SETTING = /(?:(?<=-D)|\b)(?:management[_.][\w.-]+|server[_.](?:servlet|context)[\w.-]*|server[_.]port[ \t=:]+["']?-1\b|spring[_.](?:mvc|webflux|main|config)[\w.-]*|spring_application_json)/i;
+const DOCKER_SETTING = /(?:(?<=(?:^|[^\w-])(?:-D|--))|(?<![\w-]))(?:management[_.][\w.-]+|server[_.](?:servlet|context)[\w.-]*|server[_.]port[ \t=:]+["']?-1\b|spring[_.](?:mvc|webflux|main|config)[\w.-]*|spring_application_json)/i;
 const FALSE_VALUES = new Set(['false', 'off', 'no', '0']);
 const TRUE_VALUES = new Set(['true', 'on', 'yes', '1']);
 const ACTIVATION_KEYS = new Set(['spring.config.activate.onprofile', 'spring.profiles', 'spring.config.activate.oncloudplatform']);

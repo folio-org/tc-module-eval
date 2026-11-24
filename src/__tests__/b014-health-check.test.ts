@@ -422,6 +422,16 @@ describe('B014 health check endpoint', () => {
     expect(analysis.actuator[0].problems).toEqual([{ path: 'Dockerfile', line: 3, note: 'the Dockerfile sets MANAGEMENT_SERVER_PORT, which the tool does not read' }]);
   });
 
+  it('reads a setting name only where it starts, not inside a file name such as mod-serials-management.war', async () => {
+    const { analysis } = await b014(springModule({
+      [YML]: ADMIN_YAML,
+      Dockerfile: 'FROM eclipse-temurin:21\nCOPY service/build/libs/mod-serials-management.war service/build/libs/x--management.war /app/\n'
+        + 'ENTRYPOINT ["java", "-jar", "/app/mod-serials-management.war", "--management.server.port=9090"]\n'
+    }));
+
+    expect(analysis.actuator[0].problems).toEqual([{ path: 'Dockerfile', line: 3, note: 'the Dockerfile sets management.server.port, which the tool does not read' }]);
+  });
+
   it('passes an RMB module from its main verticle, not from an RMB schema alone', async () => {
     const rmb = await b014({ ...TEMPLATE, 'pom.xml': pom('mod-example', restVerticleBuild) });
     const schemaOnly = await b014({ ...TEMPLATE, 'pom.xml': pom('mod-example'), 'src/main/resources/templates/db_scripts/schema.json': '{}' });
