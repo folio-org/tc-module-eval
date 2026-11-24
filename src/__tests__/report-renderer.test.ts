@@ -18,14 +18,14 @@ describe('EvaluationReportRenderer', () => {
     return JSON.parse(match![1]);
   }
 
-  // Runs the report script against a minimal DOM and returns its root element.
+  // Runs the report script against a minimal DOM and returns its root element, with its keydown listener as `keydown`.
   function rendered(html: string): any {
     const scripts: Record<string, string> = {
       'report-data': html.match(/<script id="report-data" type="application\/json">([\s\S]+?)<\/script>/)![1],
       'download-data': '{}'
     };
-    const element = (): any => {
-      const node: any = { children: [], textContent: '', dataset: {}, style: { setProperty() {} },
+    const element = (tagName?: string): any => {
+      const node: any = { tagName, children: [], textContent: '', dataset: {}, style: { setProperty() {} },
         setAttribute() {}, addEventListener() {}, appendChild: (child: any) => { node.children.push(child); return child; },
         append: (...children: any[]) => { node.children.push(...children); },
         replaceChildren: (...children: any[]) => { node.children = children; } };
@@ -33,7 +33,8 @@ describe('EvaluationReportRenderer', () => {
     };
     const root = element();
     runInNewContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)![1], {
-      window: { addEventListener() {} },
+      window: { addEventListener: (type: string, listener: unknown) => { if (type === 'keydown') root.keydown = listener; } },
+      requestAnimationFrame() {},
       document: { activeElement: null, createElement: element, createElementNS: element,
         createTextNode: (text: string) => ({ ...element(), textContent: text }),
         getElementById: (id: string) => id === 'report' ? root : { textContent: scripts[id] } }
@@ -169,6 +170,23 @@ describe('EvaluationReportRenderer', () => {
 
     expect(json).toContain('\n  "moduleName": "test-module"');
     expect(JSON.parse(json).criteria).toHaveLength(6);
+  });
+
+  it('groups not-applicable criteria on their own and moves through the groups in on-screen order with j and k', () => {
+    const human = 'This criterion requires manual evaluation by a human reviewer';
+    const root = rendered(new EvaluationReportRenderer().renderHtml({ ...result, criteria: [
+      { criterionId: 'B014', status: EvaluationStatus.NOT_APPLICABLE, evidence: 'Shared library', details: 'Health check: not applicable to a shared library' },
+      { criterionId: 'A001', status: EvaluationStatus.MANUAL, evidence: 'Listed', details: human },
+      { criterionId: 'S001', status: EvaluationStatus.PASS, evidence: 'Apache 2.0', details: 'Line one' },
+      { criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'S004 manual: Docs need review', details: 'What to do: Check.' }
+    ] }));
+    const headings = descendants(root).filter(node => node.tagName === 'h2').map(node => node.textContent);
+    expect(headings).toEqual(['Needs review', 'Passed', 'Not applicable', 'No automated check']);
+    const selected = () => descendants(root).filter(node => /^jump\b/.test(node.className ?? '') && / selected/.test(node.className))
+      .map(node => descendants(node).find(child => child.className === 'jump-id')?.textContent);
+    const press = (key: string) => root.keydown({ key, target: { tagName: 'BODY' }, preventDefault() {} });
+    const visited = ['j', 'j', 'j', 'j', 'k', 'k', 'k'].map(key => { press(key); return selected()[0]; });
+    expect(visited).toEqual(['S004', 'S001', 'B014', 'A001', 'B014', 'S001', 'S004']);
   });
 
   it('renders a self-contained interactive report with structured criterion data', () => {

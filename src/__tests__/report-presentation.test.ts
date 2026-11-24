@@ -123,14 +123,16 @@ describe('prepareHtmlReport', () => {
       { criterionId: 'A001', status: EvaluationStatus.MANUAL, evidence: 'Listed by Product Council', details: human },
       { criterionId: 'S001', status: EvaluationStatus.PASS, evidence: 'Apache 2.0', details: 'Line one' },
       { criterionId: 'S004', status: EvaluationStatus.MANUAL, evidence: 'S004 manual: Docs need review', details: `${human}.` },
-      { criterionId: 'B016', status: EvaluationStatus.FAIL, evidence: 'Unsupported', details: 'Errors:\n  - bad' }
+      { criterionId: 'B016', status: EvaluationStatus.FAIL, evidence: 'Unsupported', details: 'Errors:\n  - bad' },
+      { criterionId: 'B014', status: EvaluationStatus.NOT_APPLICABLE, evidence: 'Shared library', details: 'Health check: not applicable to a shared library' }
     ]).view.items;
 
     expect(items.map(item => [item.id, item.triage, item.category, item.subtitle, item.open, item.tree.length, item.evidence])).toEqual([
       ['A001', 'human', 'Administrative', 'Listed by Product Council', undefined, 0, 'Listed by Product Council'],
       ['S001', 'passed', 'Shared', '', undefined, 1, 'Apache 2.0'],
       ['S004', 'review', 'Shared', '', true, 1, 'Docs need review'],
-      ['B016', 'review', 'Backend', '', undefined, 1, 'Unsupported']
+      ['B016', 'review', 'Backend', '', undefined, 1, 'Unsupported'],
+      ['B014', 'not-applicable', 'Backend', '', undefined, 1, 'Shared library']
     ]);
     expect(items[2].search).toBe(`s004 installation documentation ${items[2].description!.toLowerCase()} s004 manual: docs need review ${human.toLowerCase()}.`);
   });

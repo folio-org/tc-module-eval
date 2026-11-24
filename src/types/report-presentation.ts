@@ -35,8 +35,8 @@ export interface HtmlReportItem {
   /** The evidence shown under the title of a criterion without an automated check. */
   subtitle: string;
   category: string;
-  /** The report group: automated findings to review, passed, or no automated check. */
-  triage: 'review' | 'passed' | 'human';
+  /** The report group: automated findings to review, passed, not applicable, or no automated check. */
+  triage: 'review' | 'passed' | 'not-applicable' | 'human';
   /** Lowercase text the report search matches. */
   search: string;
   /** Whether the criterion's card is open when the report opens. */

@@ -126,7 +126,7 @@ function htmlReportItem(criterion: CriterionResult, links: SourceLinks): HtmlRep
     evidence,
     subtitle: id === 'A001' ? criterion.evidence : '',
     category: CATEGORIES[id.charAt(0)] || '',
-    triage: criterion.status === EvaluationStatus.PASS ? 'passed' : human ? 'human' : 'review',
+    triage: criterion.status === EvaluationStatus.PASS ? 'passed' : criterion.status === EvaluationStatus.NOT_APPLICABLE ? 'not-applicable' : human ? 'human' : 'review',
     search: `${id} ${title} ${description || ''} ${criterion.evidence} ${rows.join(' ')}`.toLowerCase(),
     // The agent badge comes only from the structured review, never from details text.
     recommendation: criterion.agentReview?.available ? criterion.agentReview.recommendation : undefined,

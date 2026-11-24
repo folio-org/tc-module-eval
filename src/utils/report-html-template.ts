@@ -71,6 +71,7 @@ export function createHtmlReport(result: EvaluationResult): string {
     var groupDefs = [
       {key:'review',title:'Needs review',note:'Automated checks ran and produced findings for a reviewer to judge.'},
       {key:'passed',title:'Passed',note:''},
+      {key:'not-applicable',title:'Not applicable',note:'These criteria do not apply to this repository.'},
       {key:'human',title:'No automated check',note:'Each of these requires evaluation by a human reviewer.'}
     ];
     var state = {filter:'all',query:'',cards:{},nodes:{},clamps:{},groups:{},notes:{},focus:null,keyboard:false};
@@ -291,7 +292,7 @@ export function createHtmlReport(result: EvaluationResult): string {
       if(activeKey){var replacement=Array.from(document.querySelectorAll('[data-focus-key]')).find(function(node){return node.dataset.focusKey===activeKey;});if(replacement){replacement.focus();if(selection)replacement.setSelectionRange(selection.start,selection.end,selection.direction);}}
     }
     function move(direction) {
-      var order={review:0,passed:1,human:2};var list=visible().filter(function(item){return !state.groups[item.triage];}).sort(function(a,b){return order[a.triage]-order[b.triage];});if(!list.length)return;var index=list.findIndex(function(item){return item.id===state.focus;});var next=list[Math.max(0,Math.min(list.length-1,index<0?0:index+direction))];setFocus(next.id,true);render();scrollToCard(next.id);
+      var order={};groupDefs.forEach(function(group,index){order[group.key]=index;});var list=visible().filter(function(item){return !state.groups[item.triage];}).sort(function(a,b){return order[a.triage]-order[b.triage];});if(!list.length)return;var index=list.findIndex(function(item){return item.id===state.focus;});var next=list[Math.max(0,Math.min(list.length-1,index<0?0:index+direction))];setFocus(next.id,true);render();scrollToCard(next.id);
     }
     window.addEventListener('keydown',function(event){var typing=/INPUT|TEXTAREA/.test(event.target.tagName);if(event.key==='Escape'&&typing){clearTimeout(searchTimer);searchTimer=null;event.target.blur();render();return;}var interactive=event.target.closest&&event.target.closest('a,button,input,textarea,select,[contenteditable="true"]');if(interactive||event.metaKey||event.ctrlKey||event.altKey)return;if(event.key==='/'){event.preventDefault();document.querySelector('.search').focus();}else if(event.key==='j'||event.key==='k'){event.preventDefault();move(event.key==='j'?1:-1);}else if((event.key==='o'||event.key==='Enter')&&state.focus){event.preventDefault();var item=items.find(function(candidate){return candidate.id===state.focus;});if(item&&item.triage!=='human'){state.cards[item.id]=!state.cards[item.id];render();}}});
     render();
