@@ -70,7 +70,9 @@ const MAPPING_ANNOTATIONS = new Map([
 const ROUTER_METHODS = new Set(['route', 'get', 'post', 'put', 'delete', 'patch', 'head', 'options']);
 const NOT_SENT_BY = new Set([
   'startsWith', 'endsWith', 'equals', 'equalsIgnoreCase', 'contains', 'matches', 'indexOf', 'lastIndexOf', 'replace', 'replaceAll',
-  'replaceFirst', 'split', 'compile', 'getResource', 'getResourceAsStream', 'File', 'resolveTemplate', 'trace', 'debug', 'info', 'warn', 'error', 'fatal'
+  'replaceFirst', 'split', 'compile', 'getResource', 'getResourceAsStream', 'File', 'resolveTemplate', 'trace', 'debug', 'info', 'warn', 'error', 'fatal',
+  // Jackson JSON Pointer lookups.
+  'at', 'with', 'withArray', 'withObject'
 ]);
 const KEPT_BY = new Set(['formatted', 'trim', 'toString', 'intern']);
 
@@ -87,8 +89,8 @@ const KEPT_BY = new Set(['formatted', 'trim', 'toString', 'intern']);
  * Constants are read from the same file, a static import, the superclass, or the class `Name.CONSTANT` names in the
  * same package or through an import; a name defined twice in one file is not read. A constant's definition is not a
  * request; each use is. A constant whose value is an interface path, and whose uses the tool did not read as
- * requests, is a request the tool could not map, at its definition. Paths compared, logged, read as files or
- * registered as router routes, inside annotations, in `case` labels, absolute URLs with a host, and paths to files (a
+ * requests, is a request the tool could not map, at its definition. Paths compared, logged, read as files or JSON
+ * pointers, or registered as router routes (directly or through `format(...)`), inside annotations, in `case` labels, absolute URLs with a host, and paths to files (a
  * last segment with an extension) are not requests. Kotlin files are listed, not read.
  */
 export function outboundRequests(
@@ -537,9 +539,13 @@ function formatArgumentAfter(file: ParsedFile, start: number, end: number): stri
     ? argumentText(file, end + 1) : undefined;
 }
 
-/** Whether the expression at `start` is an argument of a call that compares, logs, reads it as a file or registers it as a route. */
+/**
+ * Whether the expression at `start` is an argument of a call that compares, logs, reads it as a file, reads it as a
+ * JSON pointer or registers it as a route, directly or through one `format(...)`.
+ */
 function notSent(file: ParsedFile, start: number): boolean {
-  const open = file.enclosing[start];
+  let open = file.enclosing[start];
+  if (open > 0 && file.tokens[open - 1].text === 'format') open = file.enclosing[open - 1];
   if (open < 0) return false;
   const name = file.tokens[open - 1];
   if (!name || name.kind !== 'word') return false;

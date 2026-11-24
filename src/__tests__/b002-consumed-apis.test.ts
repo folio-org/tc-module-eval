@@ -353,6 +353,33 @@ describe('B002 consumed APIs declared in requires or optional', () => {
     expect(analysis.kotlinFiles).toEqual(['src/main/kotlin/org/folio/example/Client.kt']);
   });
 
+  it('leaves out router routes built with format(...) and Jackson JSON pointers', async () => {
+    const { analysis } = await b002(backendModule(template(['users']), {
+      [`${JAVA}/RequestQueueResource.java`]: [
+        'package org.folio.example;',
+        '',
+        'public class RequestQueueResource {',
+        '  void register(Router router, String okapiURL, String id, ObjectNode node) {',
+        '    router.put(String.format("/circulation/requests/queue/%s/%s/reorder", "instance", ":id")).handler(this::reorder);',
+        '    router.get(format("/circulation/requests/queue/%s", ":id")).handler(this::queue);',
+        '    node.withObject("/patron/personal");',
+        '    node.withArray("/patron/addresses");',
+        '    node.with("/patron");',
+        '    node.at("/patron/personal/email").asText();',
+        '    get(format("%s/users/%s", okapiURL, id));',
+        '  }',
+        '}'
+      ].join('\n')
+    }));
+
+    expect(analysis.status).toBe(EvaluationStatus.PASS);
+    expect(analysis.siteCount).toBe(1);
+    expect(analysis.declaredAndUsed.map(use => [use.id, use.sites.map(site => [site.requestPath, site.line, site.expression])])).toEqual([
+      ['users', [['users/{}', 11, '"%s/users/%s"']]]
+    ]);
+    expect([analysis.undeclared, analysis.unresolvedSites]).toEqual([[], []]);
+  });
+
   it('counts an edge module\'s requests to the paths it serves, but not its router routes', async () => {
     const { result, analysis } = await b002({
       'pom.xml': pom('edge-example', `<dependencies>${dependency('edge-common')}</dependencies>`),
