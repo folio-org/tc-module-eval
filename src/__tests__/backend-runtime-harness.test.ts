@@ -505,6 +505,20 @@ describe('backend runtime harness isolation rules', () => {
     const { evidence } = await collect(docker);
     expect(evidence.outcome).toBe('start-failed');
     expect(evidence.problem).toBe('the module container stopped running (exit code 137, out of memory)');
+    expect(evidence.health).toEqual({ method: 'GET', path: '/admin/health', status: 200, body: '{"status":"UP"}', attempts: 1, waitedMs: 0 });
+  });
+
+  it('records no health check when the evaluation is stopped while the module is still starting', async () => {
+    const signals = new FakeSignals();
+    const docker = new FakeDocker();
+    docker.health = () => ({ method: 'GET', path: '/admin/health', status: 503, body: '{"status":"DOWN"}', attempts: 10 });
+    const answers = docker.probe;
+    docker.probe = input => {
+      if (input.phase === 'health') signals.emit('SIGINT', 'SIGINT');
+      return answers(input);
+    };
+    const { evidence } = await collect(docker, signals);
+    expect([evidence.outcome, evidence.problem, 'health' in evidence]).toEqual(['not-run', 'the evaluation was stopped by SIGINT', false]);
   });
 });
 
@@ -557,7 +571,7 @@ describe('backend runtime evidence in the evaluation', () => {
       '  - Cleanup left Docker resources of this run behind; remove them by hand:',
       '    - network 7b2b710f1bd2',
       '    - docker network rm 7b2b710f1bd2: network has active endpoints',
-      '  - The module ran in Docker. GET requests in tenant tcevala to each provided path without parameters; 404 or 405 means no implementation answered:',
+      '  - The module ran in Docker. GET requests in tenant tcevala to each provided path without parameters; 404 or 405 may mean no implementation answered, but a 404 may also come from a call the module forwarded to the Okapi stub, which answers 404 to everything:',
       '    - GET /examples answered 200',
       '    - GET /example-missing answered 404',
       '    - GET /slow ↵ row answered nothing (no response within 15000 ms)',
@@ -576,6 +590,19 @@ describe('backend runtime evidence in the evaluation', () => {
     const lines = result.details!.split('\n');
     const at = lines.indexOf('Runtime evidence (informational; it does not change the status):');
     expect(lines.slice(at, at + 2)).toEqual(['Runtime evidence (informational; it does not change the status):', row]);
+  });
+
+  it('shows the last 20 lines of a failed build under the outcome in every runtime section', async () => {
+    const output = [...Array.from({ length: 23 }, (_, index) => `[INFO] line ${index + 1}`), '', '[ERROR] Failed\rto compile'].join('\n');
+    const harness = new CannedHarness({ outcome: 'build-failed', problem: 'the build exited with 1', buildOutput: output });
+    const tail = Array.from({ length: 19 }, (_, index) => `    - [INFO] line ${index + 5}`).concat('    - [ERROR] Failed ↵ to compile');
+    const { result, analysis } = await b003(moduleRepository(), harness);
+    expect(analysis.runtime!.buildOutput!.split('\n')).toHaveLength(20);
+    expect(section(result.details!.split('\n'), RUNTIME)).toEqual([RUNTIME, '  - The module could not be built in Docker: the build exited with 1',
+      '  - The end of the build output:', ...tail]);
+    const b014 = await evaluate<B014Analysis>('B014', moduleRepository({ 'pom.xml': pom('mod-example', restVerticleBuild) }), harness);
+    expect(section(b014.lines, 'Runtime check:')).toEqual(['Runtime check:',
+      '  - The module could not be built in Docker: the build exited with 1; the result comes from the committed files', '  - The end of the build output:', ...tail]);
   });
 
   async function evaluate<T>(criterionId: string, root: string, backendRuntime?: BackendRuntimeHarness) {
@@ -688,6 +715,24 @@ describe('backend runtime evidence in the evaluation', () => {
     expect([analysis.status, analysis.basis]).toEqual([EvaluationStatus.PASS, 'runtime-200']);
     const noContent = await evaluate<B014Analysis>('B014', moduleRepository(), new CannedHarness({ health: health(204) }));
     expect([noContent.analysis.status, noContent.analysis.basis]).toEqual([EvaluationStatus.MANUAL, 'runtime-not-200']);
+  });
+
+  it('keeps B014\'s static result, and shows the health answers, when the module stopped running during its health check', async () => {
+    const root = moduleRepository({ 'pom.xml': pom('mod-example', restVerticleBuild) });
+    const without = await evaluate<B014Analysis>('B014', root);
+    const { result, analysis, lines } = await evaluate<B014Analysis>('B014', root, new CannedHarness({ outcome: 'start-failed',
+      problem: 'the module container stopped running (exit code 137)', health: health(200), module: { running: false } as BackendRuntimeEvidence['module'] }));
+    expect([result.status, analysis.basis, analysis.endpointCalled]).toEqual([EvaluationStatus.PASS, 'mechanism-found', false]);
+    expect(result.evidence).toBe('B014 pass: RMB\'s RestVerticle, the main verticle in pom.xml:1, serves GET /admin/health. '
+      + 'The module stopped running in Docker during its health check, so the result comes from the committed files.');
+    expect(lines.slice(0, 5)).toEqual([
+      'Health check: GET /admin/health was called, but the result comes from the committed files',
+      'What to do: Nothing; the module has a mechanism that serves GET /admin/health.',
+      'Runtime check:',
+      '  - GET /admin/health answered 200 after 3 attempts over 42 s',
+      '  - The module did not start in Docker: the module container stopped running (exit code 137); the result comes from the committed files'
+    ]);
+    expect(lines.slice(5)).toEqual(without.lines.slice(2));
   });
 
   it.each([

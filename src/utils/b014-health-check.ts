@@ -14,7 +14,7 @@ import {
 import { CommittedSourceDiagnostic, CommittedSourceFile } from './committed-source';
 import { REST_VERTICLE, SOURCE_FILE } from './backend-evidence';
 import { HEALTH_ROUTE, lineCounter, sourceRoutes, withoutComments } from './backend-routes';
-import { runtimeDockerLines, runtimeOutcomeText, runtimeSummary } from './backend-runtime-harness';
+import { runtimeBuildOutputLines, runtimeDockerLines, runtimeOutcomeText, runtimeSummary } from './backend-runtime-harness';
 import { frontendChecklist, renderFrontendChecklistLines } from './frontend-checklist';
 import { count, listText, overflowLine, reportPath, reportText } from './report-text';
 
@@ -81,14 +81,15 @@ interface ConfigSource {
  * B014 (GET /admin/health returns 200) decides from the mechanism the framework uses to serve it: RMB's RestVerticle as
  * the main verticle, Spring Boot actuator configured at /admin, or a route in the source. With `runtime` from the
  * runtime harness, a module whose health check was called is decided by its answer: 200 passes, anything else is
- * manual; when the module never reached the health check, the committed files decide.
+ * manual; when the module never reached the health check or stopped running during it, the committed files decide.
  */
 export function evaluateB014(evidence: BackendEvidence, runtime?: BackendRuntimeEvidence): B014Analysis {
-  const analysis = staticB014(evidence);
+  const health = runtime?.health;
+  const stopped = health !== undefined && runtime?.module?.running === false;
+  const analysis = staticB014(evidence, stopped);
   if (!runtime) return analysis;
-  const summary: B014Runtime = { ...runtimeSummary(runtime), ...(runtime.health ? { health: runtime.health } : {}) };
-  const health = runtime.health;
-  if (!health || analysis.basis === 'library' || analysis.basis === 'ambiguous') return { ...analysis, runtime: summary };
+  const summary: B014Runtime = { ...runtimeSummary(runtime), ...(health ? { health } : {}) };
+  if (!health || stopped || analysis.basis === 'library' || analysis.basis === 'ambiguous') return { ...analysis, runtime: summary };
   if (health.status === 200) {
     return { ...analysis, status: EvaluationStatus.PASS, basis: 'runtime-200', endpointCalled: true, runtime: summary,
       summary: `B014 pass: GET ${HEALTH_ROUTE} answered 200 when the tool ran the module in Docker.`, checklist: frontendChecklist(EvaluationStatus.PASS, []) };
@@ -104,7 +105,7 @@ export function evaluateB014(evidence: BackendEvidence, runtime?: BackendRuntime
     }]) };
 }
 
-function staticB014(evidence: BackendEvidence): B014Analysis {
+function staticB014(evidence: BackendEvidence, stopped: boolean): B014Analysis {
   const { kind, snapshot } = evidence;
   const sourceDiagnostics = snapshot.diagnostics.filter(diagnostic => diagnostic.material);
   const base = { criterionId: 'B014' as const, kind, endpointCalled: false, sourceDiagnostics };
@@ -175,7 +176,7 @@ function staticB014(evidence: BackendEvidence): B014Analysis {
   }
 
   if (mechanisms.length) {
-    return result(EvaluationStatus.PASS, 'mechanism-found', `${passSentence(mechanisms[0])} ${NOT_CALLED[mechanisms[0].kind]}`, facts);
+    return result(EvaluationStatus.PASS, 'mechanism-found', `${passSentence(mechanisms[0])} ${stopped ? STOPPED : NOT_CALLED[mechanisms[0].kind]}`, facts);
   }
 
   const missing = ['no RMB RestVerticle main verticle', ...(actuator.length ? [] : ['no Spring Boot or Grails application']),
@@ -192,10 +193,10 @@ function staticB014(evidence: BackendEvidence): B014Analysis {
 
 export function renderB014HumanDetails(analysis: B014Analysis): string {
   if (analysis.basis === 'library') {
-    return ['Health check: not applicable to a shared library', `What to do: ${WHAT_TO_DO.library}`, ...runtimeLines(analysis.runtime)].join('\n');
+    return ['Health check: not applicable to a shared library', `What to do: ${WHAT_TO_DO.library}`, ...runtimeLines(analysis.runtime, false)].join('\n');
   }
-  const lines = [`Health check: GET ${HEALTH_ROUTE} was ${analysis.endpointCalled ? 'called' : 'not called; the result comes from the committed files'}`,
-    `What to do: ${WHAT_TO_DO[analysis.basis]}`, ...runtimeLines(analysis.runtime)];
+  const called = analysis.endpointCalled ? 'called' : analysis.runtime?.health ? 'called, but the result comes from the committed files' : 'not called; the result comes from the committed files';
+  const lines = [`Health check: GET ${HEALTH_ROUTE} was ${called}`, `What to do: ${WHAT_TO_DO[analysis.basis]}`, ...runtimeLines(analysis.runtime, analysis.endpointCalled)];
   if (analysis.mechanisms.length) {
     lines.push('Found:', ...analysis.mechanisms.slice(0, MAX_ROWS).map(mechanism =>
       `  - ${MECHANISM_NAMES[mechanism.kind]}: ${location(mechanism.path, mechanism.line)} — ${reportText(mechanism.note)}`),
@@ -229,12 +230,13 @@ const WHAT_TO_DO: Record<B014Basis, string> = {
   'runtime-not-200': `Check that GET ${HEALTH_ROUTE} answers 200 once the module's dependencies are available (the checklist below).`
 };
 
-function runtimeLines(runtime: B014Runtime | undefined): string[] {
+function runtimeLines(runtime: B014Runtime | undefined, endpointCalled: boolean): string[] {
   if (!runtime) return [];
   const health = runtime.health;
-  return ['Runtime check:', ...runtimeDockerLines(runtime.docker, runtime.cleanup), health
-    ? `  - GET ${HEALTH_ROUTE} ${healthAnswer(health)} after ${count(health.attempts, 'attempt')} over ${Math.round(health.waitedMs / 1000)} s${health.status !== 200 && health.body ? `: ${reportText(health.body)}` : ''}`
-    : `  - ${runtimeOutcomeText(runtime.outcome, runtime.problem)}; the result comes from the committed files`];
+  return ['Runtime check:', ...runtimeDockerLines(runtime.docker, runtime.cleanup),
+    ...(health ? [`  - GET ${HEALTH_ROUTE} ${healthAnswer(health)} after ${count(health.attempts, 'attempt')} over ${Math.round(health.waitedMs / 1000)} s${health.status !== 200 && health.body ? `: ${reportText(health.body)}` : ''}`] : []),
+    ...(!health || (!endpointCalled && runtime.outcome !== 'collected')
+      ? [`  - ${runtimeOutcomeText(runtime.outcome, runtime.problem)}; the result comes from the committed files`, ...runtimeBuildOutputLines(runtime)] : [])];
 }
 
 function healthAnswer(health: NonNullable<B014Runtime['health']>): string {
@@ -252,6 +254,8 @@ const NOT_CALLED: Record<B014Mechanism['kind'], string> = {
   actuator: 'The tool found the mechanism in configuration and did not call the endpoint.',
   route: 'The tool found the mechanism in the source and did not call the endpoint.'
 };
+
+const STOPPED = 'The module stopped running in Docker during its health check, so the result comes from the committed files.';
 
 function passSentence(mechanism: B014Mechanism): string {
   const where = location(mechanism.path, mechanism.line);

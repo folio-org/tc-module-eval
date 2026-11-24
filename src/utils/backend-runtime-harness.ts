@@ -67,6 +67,7 @@ const MODULE_ID = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/;
 const VOLUME_PATH = /^\/[\w./-]{0,255}$/;
 const EXPOSED_TCP_PORT = /^(\d{1,5})\/tcp$/;
 const MAX_ENV = 200;
+const BUILD_OUTPUT_ROWS = 20;
 const CLEANUP_PASSES = 3;
 const MAX_ENV_VALUE_CHARS = 4096;
 const MAX_GET_PATHS = 25;
@@ -224,12 +225,21 @@ export function runtimeDockerLines(docker: BackendRuntimeEvidence['docker'], cle
 }
 
 export function runtimeSummary(runtime: BackendRuntimeEvidence): BackendRuntimeSummary {
+  const buildOutput = runtime.buildOutput?.split(/\r?\n/).filter(line => line.trim()).slice(-BUILD_OUTPUT_ROWS).join('\n');
   return {
     outcome: runtime.outcome,
     ...(runtime.problem ? { problem: runtime.problem } : {}),
+    ...(buildOutput ? { buildOutput } : {}),
     ...(runtime.docker ? { docker: runtime.docker } : {}),
     cleanup: runtime.cleanup
   };
+}
+
+/** Rows with the end of the output of a failed build, or nothing. */
+export function runtimeBuildOutputLines(summary: BackendRuntimeSummary): string[] {
+  return summary.buildOutput
+    ? ['  - The end of the build output:', ...summary.buildOutput.split('\n').map(line => `    - ${reportText(line)}`)]
+    : [];
 }
 
 /** An informational runtime section: the outcome when the harness collected nothing, else `collected`. */
@@ -237,7 +247,9 @@ export function runtimeEvidenceLines(summary: BackendRuntimeSummary, collected: 
   return [
     'Runtime evidence (informational; it does not change the status):',
     ...runtimeDockerLines(summary.docker, summary.cleanup),
-    ...(summary.outcome !== 'collected' || summary.problem ? [`  - ${runtimeOutcomeText(summary.outcome, summary.problem)}`] : collected())
+    ...(summary.outcome !== 'collected' || summary.problem
+      ? [`  - ${runtimeOutcomeText(summary.outcome, summary.problem)}`, ...runtimeBuildOutputLines(summary)]
+      : collected())
   ];
 }
 
@@ -585,6 +597,7 @@ export class DockerBackendRuntimeHarness implements BackendRuntimeHarness {
       const state = await this.inspectModule(context, moduleName, moduleImage, port);
       evidence.module = { ...evidence.module, running: state.running, ...(state.exitCode !== undefined ? { exitCode: state.exitCode } : {}), ...(state.oomKilled ? { oomKilled: true } : {}) };
       if (!state.running) {
+        evidence.health = { ...health, attempts, waitedMs: this.now() - healthStarted };
         throw new Stop('start-failed', `the module container stopped running (exit code ${state.exitCode ?? 'unknown'}${state.oomKilled ? ', out of memory' : ''})`);
       }
       if (health?.status === 200) break;

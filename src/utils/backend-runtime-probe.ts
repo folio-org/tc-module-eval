@@ -93,8 +93,9 @@ export async function runtimeProbe(input: ProbeInput): Promise<ProbeOutput> {
     sent.on('error', error => resolve({ text: '', complete: false, error: error.message.slice(0, 200) }));
     sent.end(body);
   });
+  const succeeded = (response: Response) => response.status !== undefined && response.status >= 200 && response.status < 300;
   const parse = (response: Response): unknown => {
-    if (!response.complete) return undefined;
+    if (!response.complete || !succeeded(response)) return undefined;
     try {
       return JSON.parse(response.text);
     } catch {
@@ -214,10 +215,11 @@ export async function runtimeProbe(input: ProbeInput): Promise<ProbeOutput> {
       crossTenant.problem = 'the time budget ran out';
       break;
     }
-    const listed = records(parse(await step('GET', `${collection.path}?limit=1`, own)));
-    const template = listed?.[0];
+    const listing = await step('GET', `${collection.path}?limit=1`, own);
+    const template = records(parse(listing))?.[0];
     if (!template) {
-      crossTenant.problem = `${collection.path} listed no record in ${own} to copy`;
+      crossTenant.problem = succeeded(listing) ? `${collection.path} listed no record in ${own} to copy`
+        : `GET ${collection.path} in ${own} answered ${listing.status ?? listing.error}`;
       continue;
     }
     const recordId = crypto.randomUUID();
@@ -227,7 +229,7 @@ export async function runtimeProbe(input: ProbeInput): Promise<ProbeOutput> {
       if (typeof copy[key] === 'string') copy[key] = `${copy[key]} tc-module-eval ${recordId.slice(0, 8)}`;
     }
     const created = await step('POST', collection.path, own, JSON.stringify(copy));
-    if (created.status === undefined || created.status < 200 || created.status >= 300) {
+    if (!succeeded(created)) {
       crossTenant.problem = `POST ${collection.path} in ${own} answered ${created.status ?? created.error}`;
       continue;
     }

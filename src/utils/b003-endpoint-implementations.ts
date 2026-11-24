@@ -354,7 +354,7 @@ function whatToDo(analysis: B003Analysis): string[] {
 function runtimeLines(runtime: B003Runtime | undefined): string[] {
   if (!runtime) return [];
   return runtimeEvidenceLines(runtime, () => runtime.requests.length ? [
-    `  - The module ran in Docker. GET requests in tenant ${runtime.tenant} to each provided path without parameters; 404 or 405 means no implementation answered:`,
+    `  - The module ran in Docker. GET requests in tenant ${runtime.tenant} to each provided path without parameters; 404 or 405 may mean no implementation answered, but a 404 may also come from a call the module forwarded to the Okapi stub, which answers 404 to everything:`,
     ...runtime.requests.map(request => `    - GET ${reportText(request.path)} answered ${request.status ?? `nothing (${reportText(request.error ?? 'no response')})`}`),
     ...overflowLine(runtime.requests.length + runtime.requestsCut, runtime.requests.length)
   ] : ['  - The module ran in Docker; the descriptor provides no GET path without parameters to call']);

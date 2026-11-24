@@ -280,6 +280,8 @@ export type B003Basis = 'library' | 'no-descriptor' | 'no-endpoints' | 'endpoint
 export interface BackendRuntimeSummary {
   outcome: BackendRuntimeOutcome;
   problem?: string;
+  /** The last non-blank lines of the build output, when the build failed. */
+  buildOutput?: string;
   docker?: BackendRuntimeEvidence['docker'];
   cleanup: BackendRuntimeEvidence['cleanup'];
 }

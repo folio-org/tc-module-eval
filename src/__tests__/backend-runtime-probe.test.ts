@@ -119,6 +119,20 @@ describe('backend runtime probe', () => {
     expect(new Set(server.hits.map(hit => hit.okapiUrl))).toEqual(new Set(['http://okapi-stub:9130']));
   });
 
+  it('reads records only from a successful answer, and names the status of a failed listing', async () => {
+    const server = await serve((_hit, response) => json(response, 500, { errors: [{ message: 'database down' }] }));
+    const output = await runtimeProbe(input(server.url, { getPaths: ['/types'], collections: [{ path: '/types' }] }));
+    await server.close();
+    expect(output).toEqual({
+      getRequests: [
+        { method: 'GET', path: '/types', tenant: 'tcevala', status: 500 },
+        { method: 'GET', path: '/types', tenant: 'tcevalb', status: 500 }
+      ],
+      crossTenant: { problem: 'GET /types in tcevala answered 500', requests: [{ method: 'GET', path: '/types', tenant: 'tcevala', status: 500 }] }
+    });
+    expect(server.hits.filter(hit => hit.method !== 'GET')).toEqual([]);
+  });
+
   it('records a missing response and stops reading a response at the byte limit', async () => {
     const server = await serve((hit, response) => {
       if (hit.url === '/big') return json(response, 200, { items: Array(10_000).fill({ id: 'x' }) });
